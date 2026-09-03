@@ -1,0 +1,120 @@
+import React from 'react';
+import { View, Text, ScrollView, TouchableOpacity, Alert } from 'react-native';
+import { useRouter } from 'expo-router';
+import { SafeAreaView } from 'react-native-safe-area-context';
+import { useAuthStore } from '@/store/useAuthStore';
+import { Avatar } from '@/components/ui/Avatar';
+import { Badge } from '@/components/ui/Badge';
+import {
+  User,
+  Heart,
+  Activity,
+  AlertCircle,
+  Phone,
+  Mail,
+  LogOut,
+  ShieldCheck,
+  ChevronRight,
+} from 'lucide-react-native';
+
+export default function PatientProfileScreen() {
+  const router = useRouter();
+  const { user, logout } = useAuthStore();
+
+  const handleLogout = () => {
+    logout();
+    router.replace('/(auth)/login');
+  };
+
+  return (
+    <SafeAreaView className="flex-1 bg-slate-50" edges={['top']}>
+      {/* Header */}
+      <View className="px-6 py-3.5 bg-white border-b border-slate-100 shadow-sm flex-row items-center justify-between">
+        <Text className="text-lg font-black text-slate-900">Patient Profile</Text>
+        <View className="bg-teal-50 px-2.5 py-1 rounded-xl border border-teal-200">
+          <Text className="text-[11px] font-bold text-[#00B39B]">Patient Account</Text>
+        </View>
+      </View>
+
+      <ScrollView
+        contentContainerStyle={{ padding: 20, paddingBottom: 120, gap: 20 }}
+        showsVerticalScrollIndicator={false}
+      >
+        {/* User Card */}
+        <View className="bg-white p-5 rounded-3xl border border-slate-200/80 shadow-sm flex-row items-center" style={{ gap: 16 }}>
+          <Avatar uri={user?.avatar} name={user?.name || 'Patient'} size="lg" />
+          <View className="flex-1">
+            <Text className="text-lg font-black text-slate-900">{user?.name || 'Aarav Mehta'}</Text>
+            <Text className="text-xs text-slate-500 font-medium mt-0.5">{user?.email || 'patient@fiydoc.app'}</Text>
+            <View className="flex-row items-center mt-2" style={{ gap: 8 }}>
+              <Badge label="Verified Patient" variant="teal" size="sm" />
+            </View>
+          </View>
+        </View>
+
+        {/* Health Vitals Summary */}
+        <View className="bg-white p-5 rounded-3xl border border-slate-200/80 shadow-sm" style={{ gap: 16 }}>
+          <Text className="text-[11px] font-bold text-slate-400 uppercase tracking-wider">
+            Health Profile Summary
+          </Text>
+
+          <View className="flex-row justify-around py-3 bg-slate-50 rounded-2xl border border-slate-100">
+            <View className="items-center">
+              <Text className="text-[11px] text-slate-400 font-semibold uppercase">Age</Text>
+              <Text className="text-base font-black text-slate-900 mt-0.5">32 Yrs</Text>
+            </View>
+            <View className="w-px h-8 bg-slate-200 self-center" />
+            <View className="items-center">
+              <Text className="text-[11px] text-slate-400 font-semibold uppercase">Blood Group</Text>
+              <Text className="text-base font-black text-[#00B39B] mt-0.5">O+</Text>
+            </View>
+            <View className="w-px h-8 bg-slate-200 self-center" />
+            <View className="items-center">
+              <Text className="text-[11px] text-slate-400 font-semibold uppercase">Gender</Text>
+              <Text className="text-base font-black text-slate-900 mt-0.5">Male</Text>
+            </View>
+          </View>
+
+          <View style={{ gap: 10, paddingTop: 4 }}>
+            <View className="flex-row items-center justify-between">
+              <Text className="text-xs text-slate-500 font-medium">Known Allergies</Text>
+              <Text className="text-xs font-bold text-red-600">Penicillin, Dust Mites</Text>
+            </View>
+            <View className="flex-row items-center justify-between">
+              <Text className="text-xs text-slate-500 font-medium">Chronic Conditions</Text>
+              <Text className="text-xs font-bold text-slate-800">Mild Hypertension</Text>
+            </View>
+            <View className="flex-row items-center justify-between">
+              <Text className="text-xs text-slate-500 font-medium">Emergency Contact</Text>
+              <Text className="text-xs font-bold text-[#1E58C8]">+91 98765 12345</Text>
+            </View>
+          </View>
+        </View>
+
+        {/* Security & Sign Out Section */}
+        <View className="bg-white p-5 rounded-3xl border border-slate-200/80 shadow-sm" style={{ gap: 12 }}>
+          <Text className="text-[11px] font-bold text-slate-400 uppercase tracking-wider">
+            Account Management
+          </Text>
+
+          <TouchableOpacity
+            onPress={handleLogout}
+            activeOpacity={0.8}
+            className="flex-row items-center justify-between py-2"
+          >
+            <View className="flex-row items-center" style={{ gap: 12 }}>
+              <View className="bg-red-50 p-2.5 rounded-2xl border border-red-100">
+                <LogOut size={18} color="#EF4444" />
+              </View>
+              <View>
+                <Text className="text-sm font-bold text-red-600">Sign Out</Text>
+                <Text className="text-[10px] text-slate-400">Log out of FiYDoc on this device</Text>
+              </View>
+            </View>
+            <ChevronRight size={18} color="#94A3B8" />
+          </TouchableOpacity>
+        </View>
+      </ScrollView>
+    </SafeAreaView>
+  );
+}
