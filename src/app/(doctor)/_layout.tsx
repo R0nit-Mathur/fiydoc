@@ -25,7 +25,7 @@ export default function DoctorLayout() {
       <Tabs.Screen
         name="home"
         options={{
-          title: 'Queue Home',
+          title: 'Queue',
           tabBarIcon: ({ color, size }) => <Home size={size} color={color} />,
         }}
       />
@@ -53,7 +53,7 @@ export default function DoctorLayout() {
       <Tabs.Screen
         name="profile"
         options={{
-          title: 'Verification',
+          title: 'Profile',
           tabBarIcon: ({ color, size }) => <Stethoscope size={size} color={color} />,
         }}
       />

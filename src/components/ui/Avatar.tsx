@@ -8,6 +8,13 @@ interface AvatarProps {
   className?: string;
 }
 
+const SIZE_MAP = {
+  sm: { size: 36, text: 12, radius: 12 },
+  md: { size: 44, text: 15, radius: 14 },
+  lg: { size: 56, text: 18, radius: 18 },
+  xl: { size: 72, text: 22, radius: 22 },
+};
+
 export function Avatar({ uri, name = 'User', size = 'md', className = '' }: AvatarProps) {
   const [hasError, setHasError] = useState(false);
 
@@ -20,21 +27,25 @@ export function Avatar({ uri, name = 'User', size = 'md', className = '' }: Avat
     return (clean.slice(0, 2) || 'FD').toUpperCase();
   };
 
-  const sizeClasses = {
-    sm: 'w-9 h-9 text-xs',
-    md: 'w-12 h-12 text-sm',
-    lg: 'w-16 h-16 text-base',
-    xl: 'w-20 h-20 text-lg',
-  }[size];
-
+  const config = SIZE_MAP[size] || SIZE_MAP.md;
   const initials = getInitials(name);
 
   if (!uri || hasError) {
     return (
       <View
-        className={`${sizeClasses} rounded-2xl bg-teal-600 items-center justify-center border border-teal-500 shadow-sm ${className}`}
+        style={{
+          width: config.size,
+          height: config.size,
+          borderRadius: config.radius,
+          flexShrink: 0,
+        }}
+        className={`bg-teal-600 items-center justify-center border border-teal-500 shadow-sm ${className}`}
       >
-        <Text className="font-extrabold text-white tracking-wider">{initials}</Text>
+        <Text
+          style={{ fontSize: config.text, fontWeight: '800', color: '#FFFFFF', letterSpacing: 0.5 }}
+        >
+          {initials}
+        </Text>
       </View>
     );
   }
@@ -43,7 +54,13 @@ export function Avatar({ uri, name = 'User', size = 'md', className = '' }: Avat
     <Image
       source={{ uri }}
       onError={() => setHasError(true)}
-      className={`${sizeClasses} rounded-2xl bg-slate-100 border border-slate-200 ${className}`}
+      style={{
+        width: config.size,
+        height: config.size,
+        borderRadius: config.radius,
+        flexShrink: 0,
+      }}
+      className={`bg-slate-100 border border-slate-200 ${className}`}
       resizeMode="cover"
     />
   );

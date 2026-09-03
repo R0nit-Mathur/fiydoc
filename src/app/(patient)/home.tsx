@@ -34,19 +34,33 @@ export default function PatientHomeScreen() {
   return (
     <SafeAreaView className="flex-1 bg-slate-50" edges={['top']}>
       {/* Top Bar Header */}
-      <View className="px-6 py-3.5 bg-white flex-row items-center justify-between border-b border-slate-100 shadow-sm">
+      <View
+        style={{
+          paddingHorizontal: 16,
+          paddingVertical: 12,
+          backgroundColor: '#FFFFFF',
+          flexDirection: 'row',
+          alignItems: 'center',
+          justifyContent: 'space-between',
+          borderBottomWidth: 1,
+          borderBottomColor: '#F1F5F9',
+        }}
+      >
         <TouchableOpacity
           onPress={() => router.push('/(patient)/profile')}
           activeOpacity={0.8}
-          className="flex-row items-center"
-          style={{ gap: 12 }}
+          style={{ flexDirection: 'row', alignItems: 'center', flex: 1, minWidth: 0, marginRight: 12, gap: 10 }}
         >
           <Avatar uri={user?.avatar} name={user?.name || 'Patient'} size="md" />
-          <View>
-            <Text className="text-[11px] text-slate-500 font-semibold tracking-wide uppercase">
+          <View style={{ flex: 1, minWidth: 0 }}>
+            <Text className="text-[10px] text-slate-500 font-bold tracking-wider uppercase">
               Welcome back
             </Text>
-            <Text className="text-base font-black text-slate-900" numberOfLines={1}>
+            <Text
+              style={{ fontSize: 15, fontWeight: '800', color: '#0F172A' }}
+              numberOfLines={1}
+              ellipsizeMode="tail"
+            >
               {user?.name || 'Patient User'}
             </Text>
           </View>
@@ -56,10 +70,11 @@ export default function PatientHomeScreen() {
         <TouchableOpacity
           onPress={() => router.push('/(patient)/notifications')}
           activeOpacity={0.8}
-          className="w-10 h-10 rounded-2xl bg-slate-50 border border-slate-200/80 items-center justify-center relative"
+          className="w-9 h-9 rounded-xl bg-slate-50 border border-slate-200/80 items-center justify-center relative"
+          style={{ flexShrink: 0 }}
         >
-          <Bell size={19} color="#0F172A" />
-          <View className="w-2.5 h-2.5 rounded-full bg-[#00B39B] absolute top-2 right-2 border-2 border-white" />
+          <Bell size={18} color="#0F172A" />
+          <View className="w-2.5 h-2.5 rounded-full bg-[#00B39B] absolute top-1.5 right-1.5 border-2 border-white" />
         </TouchableOpacity>
       </View>
 

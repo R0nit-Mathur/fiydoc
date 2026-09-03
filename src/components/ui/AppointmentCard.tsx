@@ -24,55 +24,77 @@ export function AppointmentCard({ appointment, onPress }: AppointmentCardProps) 
     <TouchableOpacity
       onPress={onPress}
       activeOpacity={0.88}
-      className="bg-white rounded-3xl p-4.5 mb-4 border border-slate-200/90 shadow-sm"
-      style={{ marginVertical: 4 }}
+      className="bg-white/95 rounded-2xl p-3.5 mb-3 border border-slate-200/80 shadow-sm"
     >
-      <View className="flex-row items-center justify-between mb-3.5 pb-2.5 border-b border-slate-100">
-        <View className="flex-row items-center" style={{ gap: 8 }}>
-          <View className="bg-blue-50 p-1.5 rounded-lg">
-            <Building2 size={14} color="#1E58C8" />
+      <View
+        style={{
+          flexDirection: 'row',
+          alignItems: 'center',
+          justifyContent: 'space-between',
+          marginBottom: 10,
+          paddingBottom: 8,
+          borderBottomWidth: 1,
+          borderBottomColor: '#F1F5F9',
+        }}
+      >
+        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, flex: 1, minWidth: 0, marginRight: 8 }}>
+          <View style={{ backgroundColor: '#EFF6FF', padding: 5, borderRadius: 8, flexShrink: 0 }}>
+            <Building2 size={13} color="#1E58C8" />
           </View>
-          <Text className="text-xs font-bold text-slate-800">
+          <Text style={{ fontSize: 11, fontWeight: '700', color: '#1E293B', flex: 1 }} numberOfLines={1}>
             In-Clinic Consultation
           </Text>
         </View>
-        <Badge label={statusBadge.label} variant={statusBadge.variant} size="sm" />
+        <View style={{ flexShrink: 0 }}>
+          <Badge label={statusBadge.label} variant={statusBadge.variant} size="sm" />
+        </View>
       </View>
 
-      <View className="flex-row items-center" style={{ gap: 14 }}>
+      <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10 }}>
         <Avatar uri={appointment.doctorAvatar} name={appointment.doctorName} size="md" />
 
-        <View className="flex-1" style={{ minWidth: 0 }}>
-          <Text className="text-base font-black text-slate-900" numberOfLines={1}>
+        <View style={{ flex: 1, minWidth: 0 }}>
+          <Text style={{ fontSize: 14, fontWeight: '800', color: '#0F172A' }} numberOfLines={1}>
             {appointment.doctorName}
           </Text>
-          <Text className="text-xs font-bold text-[#00B39B] mt-0.5" numberOfLines={1}>
+          <Text style={{ fontSize: 11, fontWeight: '700', color: '#00B39B', marginTop: 1 }} numberOfLines={1}>
             {appointment.doctorSpecialty}
           </Text>
-          <Text className="text-xs text-slate-500 font-medium mt-0.5" numberOfLines={1}>
+          <Text style={{ fontSize: 11, fontWeight: '500', color: '#64748B', marginTop: 1 }} numberOfLines={1}>
             {appointment.hospital}
           </Text>
         </View>
 
-        <ChevronRight size={18} color="#94A3B8" />
+        <ChevronRight size={16} color="#94A3B8" style={{ flexShrink: 0 }} />
       </View>
 
       <View
-        className="flex-row items-center justify-between mt-3.5 pt-2.5 bg-slate-50 rounded-2xl px-3.5 py-2.5 border border-slate-100"
+        style={{
+          flexDirection: 'row',
+          alignItems: 'center',
+          justifyContent: 'space-between',
+          marginTop: 10,
+          backgroundColor: '#F8FAFC',
+          borderRadius: 12,
+          paddingHorizontal: 12,
+          paddingVertical: 8,
+          borderWidth: 1,
+          borderColor: '#F1F5F9',
+        }}
       >
-        <View className="flex-row items-center" style={{ gap: 6 }}>
-          <Calendar size={13} color="#64748B" />
-          <Text className="text-xs font-bold text-slate-700">
+        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4 }}>
+          <Calendar size={12} color="#64748B" />
+          <Text style={{ fontSize: 11, fontWeight: '700', color: '#334155' }}>
             {appointment.date}
           </Text>
         </View>
-        <View className="flex-row items-center" style={{ gap: 6 }}>
-          <Clock size={13} color="#64748B" />
-          <Text className="text-xs font-bold text-slate-700">
+        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4 }}>
+          <Clock size={12} color="#64748B" />
+          <Text style={{ fontSize: 11, fontWeight: '700', color: '#334155' }}>
             {appointment.time}
           </Text>
         </View>
-        <Text className="text-xs font-black text-[#1E58C8]">
+        <Text style={{ fontSize: 12, fontWeight: '800', color: '#1E58C8' }}>
           ₹{appointment.fee}
         </Text>
       </View>

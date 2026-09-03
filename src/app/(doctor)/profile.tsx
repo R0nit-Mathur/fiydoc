@@ -28,33 +28,50 @@ export default function DoctorProfileScreen() {
   return (
     <SafeAreaView className="flex-1 bg-slate-50" edges={['top']}>
       {/* Top Header */}
-      <View className="px-6 py-3.5 bg-white border-b border-slate-100 shadow-sm flex-row items-center justify-between">
-        <Text className="text-lg font-black text-slate-900">Doctor Profile</Text>
+      <View
+        style={{
+          paddingHorizontal: 16,
+          paddingVertical: 12,
+          backgroundColor: '#FFFFFF',
+          flexDirection: 'row',
+          alignItems: 'center',
+          justifyContent: 'space-between',
+          borderBottomWidth: 1,
+          borderBottomColor: '#F1F5F9',
+        }}
+      >
+        <Text style={{ fontSize: 18, fontWeight: '800', color: '#0F172A' }}>Doctor Profile</Text>
         <View className="bg-blue-50 px-2.5 py-1 rounded-xl border border-blue-200">
-          <Text className="text-[11px] font-bold text-[#1E58C8]">Practitioner Workspace</Text>
+          <Text style={{ fontSize: 10, fontWeight: '700', color: '#1E58C8' }}>Practitioner Portal</Text>
         </View>
       </View>
 
       <ScrollView
-        contentContainerStyle={{ padding: 20, paddingBottom: 120, gap: 20 }}
+        contentContainerStyle={{ padding: 16, paddingBottom: 110, gap: 16 }}
         showsVerticalScrollIndicator={false}
       >
         {/* Doctor Identity Card */}
-        <View className="bg-white p-5 rounded-3xl border border-slate-200/80 shadow-sm flex-row items-center" style={{ gap: 16 }}>
+        <View className="bg-white/95 p-4 rounded-2xl border border-slate-200/80 shadow-sm flex-row items-center" style={{ gap: 14 }}>
           <Avatar uri={user?.avatar} name={user?.name || 'Dr. Specialist'} size="lg" />
-          <View className="flex-1">
-            <Text className="text-lg font-black text-slate-900">{user?.name || 'Dr. Priya Sharma'}</Text>
-            <Text className="text-xs font-bold text-[#00B39B]">Senior Consultant Cardiologist</Text>
-            <Text className="text-xs text-slate-500 font-medium mt-0.5">{user?.email || 'doctor@fiydoc.app'}</Text>
+          <View style={{ flex: 1, minWidth: 0 }}>
+            <Text style={{ fontSize: 16, fontWeight: '800', color: '#0F172A' }} numberOfLines={1}>
+              {user?.name || 'Dr. Priya Sharma'}
+            </Text>
+            <Text style={{ fontSize: 11, fontWeight: '700', color: '#00B39B', marginTop: 1 }} numberOfLines={1}>
+              Senior Consultant Cardiologist
+            </Text>
+            <Text style={{ fontSize: 11, fontWeight: '500', color: '#64748B', marginTop: 1 }} numberOfLines={1}>
+              {user?.email || 'doctor@fiydoc.app'}
+            </Text>
             <View className="mt-2 flex-row items-center">
-              <Badge label="MCI VERIFIED PRACTITIONER" variant="success" size="sm" />
+              <Badge label="MCI VERIFIED" variant="success" size="sm" />
             </View>
           </View>
         </View>
 
         {/* Clinical Registration & Credentials */}
-        <View className="bg-white p-5 rounded-3xl border border-slate-200/80 shadow-sm" style={{ gap: 14 }}>
-          <Text className="text-[11px] font-bold text-slate-400 uppercase tracking-wider">
+        <View className="bg-white/95 p-4 rounded-2xl border border-slate-200/80 shadow-sm" style={{ gap: 12 }}>
+          <Text className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">
             Clinical Credentials & Registration
           </Text>
 

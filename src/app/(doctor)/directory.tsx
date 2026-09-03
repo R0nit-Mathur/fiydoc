@@ -6,6 +6,7 @@ import { Patient } from '@/types/index';
 import { Input } from '@/components/ui/Input';
 import { Modal } from '@/components/ui/Modal';
 import { Badge } from '@/components/ui/Badge';
+import { Avatar } from '@/components/ui/Avatar';
 import { Search, UserCheck, AlertCircle, Phone, Mail, ChevronRight, Activity } from 'lucide-react-native';
 
 export default function PatientDirectoryScreen() {
@@ -20,8 +21,8 @@ export default function PatientDirectoryScreen() {
 
   return (
     <SafeAreaView className="flex-1 bg-slate-50">
-      <View className="px-5 py-3.5 bg-white border-b border-slate-100 shadow-sm" style={{ gap: 12 }}>
-        <Text className="text-xl font-black text-slate-900">Patient Directory</Text>
+      <View className="px-4 py-3 bg-white/95 border-b border-slate-100 shadow-sm" style={{ gap: 10 }}>
+        <Text style={{ fontSize: 18, fontWeight: '800', color: '#0F172A' }}>Patient Directory</Text>
         <Input
           placeholder="Search patient by name, mobile, or ID..."
           value={searchQuery}
@@ -30,28 +31,29 @@ export default function PatientDirectoryScreen() {
         />
       </View>
 
-      <ScrollView contentContainerStyle={{ padding: 20, paddingBottom: 120, gap: 14 }}>
+      <ScrollView contentContainerStyle={{ padding: 16, paddingBottom: 110, gap: 12 }}>
         {filtered.map((pat) => (
           <TouchableOpacity
             key={pat.id}
             onPress={() => setSelectedPatient(pat)}
             activeOpacity={0.88}
-            className="bg-white p-4.5 rounded-3xl border border-slate-200/90 shadow-sm flex-row items-center justify-between"
+            className="bg-white/95 p-3.5 rounded-2xl border border-slate-200/80 shadow-sm flex-row items-center justify-between"
           >
-            <View className="flex-row items-center flex-1 mr-2" style={{ gap: 14 }}>
-              <Image
-                source={{ uri: pat.avatar }}
-                className="w-14 h-14 rounded-2xl bg-slate-100 border border-slate-200"
-              />
-              <View className="flex-1">
-                <Text className="text-base font-bold text-slate-900">{pat.name}</Text>
-                <Text className="text-xs text-slate-500">{pat.gender} • {pat.age} Yrs • Blood: {pat.bloodGroup}</Text>
-                <Text className="text-[11px] font-semibold text-teal-600 mt-0.5">
+            <View style={{ flexDirection: 'row', alignItems: 'center', flex: 1, minWidth: 0, marginRight: 8, gap: 10 }}>
+              <Avatar uri={pat.avatar} name={pat.name} size="md" />
+              <View style={{ flex: 1, minWidth: 0 }}>
+                <Text style={{ fontSize: 14, fontWeight: '800', color: '#0F172A' }} numberOfLines={1}>
+                  {pat.name}
+                </Text>
+                <Text style={{ fontSize: 11, fontWeight: '500', color: '#64748B', marginTop: 1 }} numberOfLines={1}>
+                  {pat.gender} • {pat.age} Yrs • Blood: {pat.bloodGroup}
+                </Text>
+                <Text style={{ fontSize: 10, fontWeight: '700', color: '#00B39B', marginTop: 1 }} numberOfLines={1}>
                   Allergies: {(pat.allergies || []).join(', ')}
                 </Text>
               </View>
             </View>
-            <ChevronRight size={18} color="#94A3B8" />
+            <ChevronRight size={16} color="#94A3B8" style={{ flexShrink: 0 }} />
           </TouchableOpacity>
         ))}
       </ScrollView>

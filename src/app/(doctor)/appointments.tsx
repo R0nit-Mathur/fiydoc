@@ -17,16 +17,16 @@ export default function DoctorAppointmentsQueueScreen() {
   return (
     <SafeAreaView className="flex-1 bg-slate-50">
       {/* Header */}
-      <View className="px-5 py-3.5 bg-white border-b border-slate-100 shadow-sm" style={{ gap: 12 }}>
-        <Text className="text-xl font-black text-slate-900">Appointments Schedule</Text>
+      <View className="px-4 py-3 bg-white/95 border-b border-slate-100 shadow-sm" style={{ gap: 10 }}>
+        <Text style={{ fontSize: 18, fontWeight: '800', color: '#0F172A' }}>Appointments Schedule</Text>
 
         {/* Tab Filters */}
-        <View className="flex-row" style={{ gap: 8 }}>
+        <View style={{ flexDirection: 'row', gap: 6 }}>
           {(['upcoming', 'completed', 'cancelled'] as const).map((tab) => (
             <TouchableOpacity
               key={tab}
               onPress={() => setActiveTab(tab)}
-              className={`flex-1 py-2.5 rounded-xl border items-center capitalize ${
+              className={`flex-1 py-2 rounded-xl border items-center capitalize ${
                 activeTab === tab ? 'bg-[#1E58C8] border-[#1E58C8]' : 'bg-slate-50 border-slate-200'
               }`}
             >
@@ -38,24 +38,24 @@ export default function DoctorAppointmentsQueueScreen() {
         </View>
       </View>
 
-      <ScrollView contentContainerStyle={{ padding: 20, paddingBottom: 120, gap: 14 }}>
+      <ScrollView contentContainerStyle={{ padding: 16, paddingBottom: 110, gap: 12 }}>
         {filtered?.map((apt) => (
           <TouchableOpacity
             key={apt.id}
             onPress={() => router.push(`/(doctor)/consultation/${apt.id}`)}
             activeOpacity={0.88}
-            className="bg-white p-4.5 rounded-3xl border border-slate-200/90 shadow-sm"
-            style={{ gap: 12 }}
+            className="bg-white/95 p-3.5 rounded-2xl border border-slate-200/80 shadow-sm"
+            style={{ gap: 10 }}
           >
-            <View className="flex-row items-center justify-between pb-2.5 border-b border-slate-100">
-              <View className="flex-row items-center" style={{ gap: 6 }}>
-                <Clock size={14} color="#1E58C8" />
-                <Text className="text-xs font-bold text-slate-800">{apt.date} at {apt.time}</Text>
+            <View className="flex-row items-center justify-between pb-2 border-b border-slate-100">
+              <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+                <Clock size={13} color="#1E58C8" />
+                <Text style={{ fontSize: 11, fontWeight: '700', color: '#1E293B' }}>{apt.date} at {apt.time}</Text>
               </View>
               <Badge label="In-Clinic" variant="blue" size="sm" />
             </View>
 
-            <View className="flex-row items-center" style={{ gap: 14 }}>
+            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10 }}>
               <Avatar
                 uri={apt.patientAvatar}
                 name={apt.patientName}

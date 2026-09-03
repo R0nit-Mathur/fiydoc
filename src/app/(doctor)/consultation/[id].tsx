@@ -206,17 +206,34 @@ export default function DoctorConsultationWorkspaceScreen() {
   return (
     <SafeAreaView className="flex-1 bg-slate-50 justify-between">
       {/* Top Navigation Bar */}
-      <View className="px-5 py-3.5 bg-white border-b border-slate-100 flex-row items-center justify-between shadow-sm">
+      <View
+        style={{
+          paddingHorizontal: 16,
+          paddingVertical: 12,
+          backgroundColor: '#FFFFFF',
+          flexDirection: 'row',
+          alignItems: 'center',
+          justifyContent: 'space-between',
+          borderBottomWidth: 1,
+          borderBottomColor: '#F1F5F9',
+        }}
+      >
         <TouchableOpacity
           onPress={() => router.back()}
-          className="p-1 -ml-1 flex-row items-center"
-          style={{ gap: 6 }}
+          style={{ flexDirection: 'row', alignItems: 'center', gap: 4, flexShrink: 0 }}
         >
-          <ArrowLeft size={22} color="#0F172A" />
-          <Text className="text-xs font-bold text-slate-500">Back</Text>
+          <ArrowLeft size={20} color="#0F172A" />
+          <Text style={{ fontSize: 12, fontWeight: '700', color: '#64748B' }}>Back</Text>
         </TouchableOpacity>
-        <Text className="text-base font-black text-slate-900">Clinical Consultation</Text>
-        <Badge label="IN-CLINIC" variant="blue" size="sm" />
+        <Text
+          style={{ fontSize: 15, fontWeight: '800', color: '#0F172A', flex: 1, textAlign: 'center', marginHorizontal: 8 }}
+          numberOfLines={1}
+        >
+          Clinical Suite
+        </Text>
+        <View style={{ flexShrink: 0 }}>
+          <Badge label="IN-CLINIC" variant="blue" size="sm" />
+        </View>
       </View>
 
       <ScrollView

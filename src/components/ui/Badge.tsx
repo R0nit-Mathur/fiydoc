@@ -10,24 +10,49 @@ interface BadgeProps {
 
 export function Badge({ label, variant = 'teal', size = 'md', icon }: BadgeProps) {
   const variantStyles = {
-    teal: 'bg-teal-50 text-teal-700 border-teal-200',
-    blue: 'bg-blue-50 text-blue-700 border-blue-200',
-    success: 'bg-emerald-50 text-emerald-700 border-emerald-200',
-    warning: 'bg-amber-50 text-amber-700 border-amber-200',
-    danger: 'bg-red-50 text-red-700 border-red-200',
-    purple: 'bg-purple-50 text-purple-700 border-purple-200',
-    slate: 'bg-slate-100 text-slate-700 border-slate-200',
+    teal: { bg: '#F0FAF8', border: '#B8EFE7', text: '#008C7A' },
+    blue: { bg: '#EFF6FF', border: '#BFDBFE', text: '#1E58C8' },
+    success: { bg: '#ECFDF5', border: '#A7F3D0', text: '#047857' },
+    warning: { bg: '#FFFBEB', border: '#FDE68A', text: '#B45309' },
+    danger: { bg: '#FEF2F2', border: '#FECACA', text: '#B91C1C' },
+    purple: { bg: '#FAF5FF', border: '#E9D5FF', text: '#6B21A8' },
+    slate: { bg: '#F8FAFC', border: '#E2E8F0', text: '#475569' },
   };
 
-  const textStyles = {
-    sm: 'text-xs font-semibold px-2 py-0.5 rounded-lg border',
-    md: 'text-xs font-bold px-2.5 py-1 rounded-xl border',
-  };
+  const current = variantStyles[variant] || variantStyles.teal;
+
+  const sizeStyle = size === 'sm'
+    ? { paddingHorizontal: 7, paddingVertical: 2, borderRadius: 8, fontSize: 10 }
+    : { paddingHorizontal: 9, paddingVertical: 3, borderRadius: 10, fontSize: 11 };
 
   return (
-    <View className={`flex-row items-center self-start space-x-1 ${variantStyles[variant]} ${textStyles[size]}`}>
-      {icon}
-      <Text className={`font-semibold ${variantStyles[variant].split(' ')[1]}`}>{label}</Text>
+    <View
+      style={{
+        flexDirection: 'row',
+        alignItems: 'center',
+        alignSelf: 'flex-start',
+        backgroundColor: current.bg,
+        borderColor: current.border,
+        borderWidth: 1,
+        borderRadius: sizeStyle.borderRadius,
+        paddingHorizontal: sizeStyle.paddingHorizontal,
+        paddingVertical: sizeStyle.paddingVertical,
+        gap: 4,
+        flexShrink: 0,
+      }}
+    >
+      {icon && <View style={{ flexShrink: 0 }}>{icon}</View>}
+      <Text
+        numberOfLines={1}
+        style={{
+          fontSize: sizeStyle.fontSize,
+          fontWeight: '800',
+          color: current.text,
+          letterSpacing: 0.3,
+        }}
+      >
+        {label}
+      </Text>
     </View>
   );
 }

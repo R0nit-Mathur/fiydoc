@@ -29,32 +29,47 @@ export default function PatientProfileScreen() {
   return (
     <SafeAreaView className="flex-1 bg-slate-50" edges={['top']}>
       {/* Header */}
-      <View className="px-6 py-3.5 bg-white border-b border-slate-100 shadow-sm flex-row items-center justify-between">
-        <Text className="text-lg font-black text-slate-900">Patient Profile</Text>
+      <View
+        style={{
+          paddingHorizontal: 16,
+          paddingVertical: 12,
+          backgroundColor: '#FFFFFF',
+          flexDirection: 'row',
+          alignItems: 'center',
+          justifyContent: 'space-between',
+          borderBottomWidth: 1,
+          borderBottomColor: '#F1F5F9',
+        }}
+      >
+        <Text style={{ fontSize: 18, fontWeight: '800', color: '#0F172A' }}>Patient Profile</Text>
         <View className="bg-teal-50 px-2.5 py-1 rounded-xl border border-teal-200">
-          <Text className="text-[11px] font-bold text-[#00B39B]">Patient Account</Text>
+          <Text style={{ fontSize: 10, fontWeight: '700', color: '#00B39B' }}>Patient Portal</Text>
         </View>
       </View>
 
       <ScrollView
-        contentContainerStyle={{ padding: 20, paddingBottom: 120, gap: 20 }}
+        contentContainerStyle={{ padding: 16, paddingBottom: 110, gap: 16 }}
         showsVerticalScrollIndicator={false}
       >
         {/* User Card */}
-        <View className="bg-white p-5 rounded-3xl border border-slate-200/80 shadow-sm flex-row items-center" style={{ gap: 16 }}>
+        <View className="bg-white/95 p-4 rounded-2xl border border-slate-200/80 shadow-sm flex-row items-center" style={{ gap: 14 }}>
           <Avatar uri={user?.avatar} name={user?.name || 'Patient'} size="lg" />
-          <View className="flex-1">
-            <Text className="text-lg font-black text-slate-900">{user?.name || 'Aarav Mehta'}</Text>
-            <Text className="text-xs text-slate-500 font-medium mt-0.5">{user?.email || 'patient@fiydoc.app'}</Text>
-            <View className="flex-row items-center mt-2" style={{ gap: 8 }}>
-              <Badge label="Verified Patient" variant="teal" size="sm" />
+          <View style={{ flex: 1, minWidth: 0 }}>
+            <Text style={{ fontSize: 16, fontWeight: '800', color: '#0F172A' }} numberOfLines={1}>
+              {user?.name || 'Aarav Mehta'}
+            </Text>
+            <Text style={{ fontSize: 11, fontWeight: '500', color: '#64748B', marginTop: 1 }} numberOfLines={1}>
+              {user?.email || 'patient@fiydoc.app'}
+            </Text>
+            <View className="flex-row items-center mt-2">
+              <Badge label="VERIFIED PATIENT" variant="teal" size="sm" />
             </View>
           </View>
         </View>
 
         {/* Health Vitals Summary */}
-        <View className="bg-white p-5 rounded-3xl border border-slate-200/80 shadow-sm" style={{ gap: 16 }}>
-          <Text className="text-[11px] font-bold text-slate-400 uppercase tracking-wider">
+        <View className="bg-white/95 p-4 rounded-2xl border border-slate-200/80 shadow-sm" style={{ gap: 12 }}>
+          <Text className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">
             Health Profile Summary
           </Text>
 

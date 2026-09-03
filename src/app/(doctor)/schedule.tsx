@@ -32,33 +32,33 @@ export default function DoctorScheduleScreen() {
   return (
     <SafeAreaView className="flex-1 bg-white justify-between">
       <View>
-        <View className="px-5 py-3 border-b border-slate-100 shadow-sm">
-          <Text className="text-xl font-black text-slate-900">Availability & Slots</Text>
+        <View className="px-4 py-3 border-b border-slate-100 shadow-sm">
+          <Text style={{ fontSize: 18, fontWeight: '800', color: '#0F172A' }}>Availability & Slots</Text>
         </View>
 
-        <ScrollView contentContainerClassName="p-5 space-y-5">
+        <ScrollView contentContainerStyle={{ padding: 16, gap: 16 }}>
           {savedToast && (
-            <View className="bg-emerald-50 p-3.5 rounded-2xl border border-emerald-200 flex-row items-center space-x-2">
-              <CheckCircle2 size={18} color="#10B981" />
+            <View className="bg-emerald-50 p-3 rounded-xl border border-emerald-200 flex-row items-center" style={{ gap: 8 }}>
+              <CheckCircle2 size={16} color="#10B981" />
               <Text className="text-xs font-bold text-emerald-800">Weekly Slot Schedule Updated!</Text>
             </View>
           )}
 
           {/* Working Days Selector */}
           <View>
-            <Text className="text-base font-bold text-slate-900 mb-2">Available Consultation Days</Text>
-            <View className="flex-row justify-between space-x-1">
+            <Text className="text-sm font-bold text-slate-900 mb-2">Available Consultation Days</Text>
+            <View style={{ flexDirection: 'row', gap: 4 }}>
               {DAYS.map((d) => {
                 const active = selectedDays.includes(d);
                 return (
                   <TouchableOpacity
                     key={d}
                     onPress={() => toggleDay(d)}
-                    className={`flex-1 py-3 rounded-xl border items-center ${
+                    className={`flex-1 py-2.5 rounded-xl border items-center ${
                       active ? 'bg-[#1E58C8] border-[#1E58C8]' : 'bg-slate-50 border-slate-200'
                     }`}
                   >
-                    <Text className={`text-xs font-bold ${active ? 'text-white' : 'text-slate-700'}`}>
+                    <Text style={{ fontSize: 11, fontWeight: '700', color: active ? '#FFFFFF' : '#334155' }}>
                       {d}
                     </Text>
                   </TouchableOpacity>

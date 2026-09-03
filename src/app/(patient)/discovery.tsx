@@ -31,17 +31,33 @@ export default function DoctorDiscoveryScreen() {
   return (
     <SafeAreaView className="flex-1 bg-slate-50" edges={['top']}>
       {/* Search Header */}
-      <View className="px-5 py-3.5 bg-white border-b border-slate-100 shadow-sm" style={{ gap: 12 }}>
-        <View className="flex-row items-center justify-between">
-          <View className="flex-row items-center" style={{ gap: 10 }}>
+      <View className="px-4 py-3 bg-white/95 border-b border-slate-100 shadow-sm" style={{ gap: 10 }}>
+        <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }}>
+          <View style={{ flexDirection: 'row', alignItems: 'center', flex: 1, minWidth: 0, marginRight: 8, gap: 8 }}>
             <TouchableOpacity onPress={() => router.back()} className="p-1 -ml-1">
-              <ArrowLeft size={22} color="#0F172A" />
+              <ArrowLeft size={20} color="#0F172A" />
             </TouchableOpacity>
-            <Text className="text-lg font-black text-slate-900">Find Specialists</Text>
+            <Text style={{ fontSize: 17, fontWeight: '800', color: '#0F172A' }} numberOfLines={1}>
+              Find Specialists
+            </Text>
           </View>
-          <View className="flex-row items-center bg-blue-50 px-2.5 py-1 rounded-xl border border-blue-100">
-            <Building2 size={12} color="#1E58C8" />
-            <Text className="text-[11px] font-bold text-[#1E58C8] ml-1">In-Clinic Consults</Text>
+          <View
+            style={{
+              flexDirection: 'row',
+              alignItems: 'center',
+              backgroundColor: '#EFF6FF',
+              paddingHorizontal: 8,
+              paddingVertical: 3,
+              borderRadius: 8,
+              borderWidth: 1,
+              borderColor: '#BFDBFE',
+              flexShrink: 0,
+            }}
+          >
+            <Building2 size={11} color="#1E58C8" />
+            <Text style={{ fontSize: 10, fontWeight: '700', color: '#1E58C8', marginLeft: 4 }}>
+              In-Clinic
+            </Text>
           </View>
         </View>
 

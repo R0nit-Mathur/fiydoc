@@ -47,37 +47,77 @@ export default function DoctorProfileScreen() {
   return (
     <SafeAreaView className="flex-1 bg-white" edges={['top']}>
       {/* Header Bar */}
-      <View className="px-5 py-3.5 flex-row items-center justify-between border-b border-slate-100">
+      <View
+        style={{
+          paddingHorizontal: 16,
+          paddingVertical: 12,
+          backgroundColor: '#FFFFFF',
+          flexDirection: 'row',
+          alignItems: 'center',
+          justifyContent: 'space-between',
+          borderBottomWidth: 1,
+          borderBottomColor: '#F1F5F9',
+        }}
+      >
         <TouchableOpacity onPress={() => router.back()} className="p-1 -ml-1">
-          <ArrowLeft size={24} color="#0F172A" />
+          <ArrowLeft size={22} color="#0F172A" />
         </TouchableOpacity>
-        <Text className="text-base font-black text-slate-900">Doctor Profile</Text>
+        <Text style={{ fontSize: 16, fontWeight: '800', color: '#0F172A' }}>Doctor Profile</Text>
         <View className="w-6" />
       </View>
 
       <ScrollView
-        contentContainerStyle={{ padding: 20, paddingBottom: 120, gap: 20 }}
+        contentContainerStyle={{ padding: 16, paddingBottom: 110, gap: 16 }}
         showsVerticalScrollIndicator={false}
       >
         {/* Doctor Identity Header */}
-        <View className="flex-row items-start" style={{ gap: 16 }}>
-          <View className="relative">
-            <Avatar uri={doctor.avatar} name={doctor.name} size="xl" className="w-24 h-24" />
-            <View className="absolute -bottom-1 -right-1 bg-white rounded-full p-0.5 shadow-sm">
-              <CheckCircle2 size={18} color="#00B39B" fill="#E0F7F4" />
+        <View style={{ flexDirection: 'row', alignItems: 'flex-start', gap: 14 }}>
+          <View style={{ position: 'relative', flexShrink: 0 }}>
+            <Avatar uri={doctor.avatar} name={doctor.name} size="lg" />
+            <View
+              style={{
+                position: 'absolute',
+                bottom: -2,
+                right: -2,
+                backgroundColor: '#FFFFFF',
+                borderRadius: 99,
+                padding: 2,
+                shadowColor: '#000',
+                shadowOpacity: 0.1,
+                shadowRadius: 2,
+              }}
+            >
+              <CheckCircle2 size={15} color="#00B39B" fill="#E0F7F4" />
             </View>
           </View>
 
-          <View className="flex-1">
-            <Text className="text-xl font-black text-slate-900">{doctor.name}</Text>
-            <Text className="text-sm font-bold text-[#00B39B] mt-0.5">{doctor.specialty}</Text>
-            <Text className="text-xs text-slate-500 mt-1 font-medium">{doctor.qualification}</Text>
+          <View style={{ flex: 1, minWidth: 0 }}>
+            <Text style={{ fontSize: 18, fontWeight: '800', color: '#0F172A' }} numberOfLines={1}>
+              {doctor.name}
+            </Text>
+            <Text style={{ fontSize: 12, fontWeight: '700', color: '#00B39B', marginTop: 2 }} numberOfLines={1}>
+              {doctor.specialty}
+            </Text>
+            <Text style={{ fontSize: 11, fontWeight: '500', color: '#64748B', marginTop: 2 }} numberOfLines={1}>
+              {doctor.qualification}
+            </Text>
 
-            <View className="flex-row items-center mt-2" style={{ gap: 8 }}>
-              <View className="flex-row items-center bg-amber-50 px-2 py-0.5 rounded-lg border border-amber-200">
-                <Star size={12} color="#F59E0B" fill="#F59E0B" />
-                <Text className="text-xs font-bold text-amber-800 ml-1">
-                  {doctor.rating || 4.9} ({doctor.reviewCount || 120} reviews)
+            <View style={{ flexDirection: 'row', alignItems: 'center', marginTop: 6, gap: 6 }}>
+              <View
+                style={{
+                  flexDirection: 'row',
+                  alignItems: 'center',
+                  backgroundColor: '#FEF3C7',
+                  paddingHorizontal: 7,
+                  paddingVertical: 2,
+                  borderRadius: 8,
+                  gap: 3,
+                  flexShrink: 0,
+                }}
+              >
+                <Star size={11} color="#F59E0B" fill="#F59E0B" />
+                <Text style={{ fontSize: 11, fontWeight: '700', color: '#92400E' }}>
+                  {doctor.rating || 4.9} ({doctor.reviewCount || 120})
                 </Text>
               </View>
             </View>
@@ -85,26 +125,57 @@ export default function DoctorProfileScreen() {
         </View>
 
         {/* Quick Stats Strip */}
-        <View className="flex-row justify-around bg-slate-50 p-4 rounded-3xl border border-slate-200/80">
-          <View className="items-center">
-            <Text className="text-[11px] text-slate-400 font-semibold uppercase">Experience</Text>
-            <Text className="text-base font-black text-slate-900 mt-0.5">
+        <View
+          style={{
+            flexDirection: 'row',
+            alignItems: 'center',
+            backgroundColor: '#F8FAFC',
+            paddingVertical: 12,
+            paddingHorizontal: 8,
+            borderRadius: 16,
+            borderWidth: 1,
+            borderColor: '#E2E8F0',
+          }}
+        >
+          <View style={{ flex: 1, alignItems: 'center', justifyContent: 'center' }}>
+            <Text style={{ fontSize: 10, fontWeight: '800', color: '#94A3B8', textTransform: 'uppercase', letterSpacing: 0.5 }}>
+              Experience
+            </Text>
+            <Text style={{ fontSize: 15, fontWeight: '800', color: '#0F172A', marginTop: 2 }}>
               {doctor.experienceYears || 12}+ Yrs
             </Text>
           </View>
-          <View className="w-px h-8 bg-slate-200 self-center" />
-          <View className="items-center">
-            <Text className="text-[11px] text-slate-400 font-semibold uppercase">Consultation Fee</Text>
-            <Text className="text-base font-black text-[#1E58C8] mt-0.5">
+          <View style={{ width: 1, height: 28, backgroundColor: '#CBD5E1' }} />
+          <View style={{ flex: 1, alignItems: 'center', justifyContent: 'center' }}>
+            <Text style={{ fontSize: 10, fontWeight: '800', color: '#94A3B8', textTransform: 'uppercase', letterSpacing: 0.5 }}>
+              Fee
+            </Text>
+            <Text style={{ fontSize: 15, fontWeight: '800', color: '#1E58C8', marginTop: 2 }}>
               ₹{doctor.consultationFee}
             </Text>
           </View>
-          <View className="w-px h-8 bg-slate-200 self-center" />
-          <View className="items-center">
-            <Text className="text-[11px] text-slate-400 font-semibold uppercase">Verification</Text>
-            <View className="flex-row items-center mt-1 bg-teal-50 px-2 py-0.5 rounded-md border border-teal-200">
+          <View style={{ width: 1, height: 28, backgroundColor: '#CBD5E1' }} />
+          <View style={{ flex: 1, alignItems: 'center', justifyContent: 'center' }}>
+            <Text style={{ fontSize: 10, fontWeight: '800', color: '#94A3B8', textTransform: 'uppercase', letterSpacing: 0.5 }}>
+              Status
+            </Text>
+            <View
+              style={{
+                flexDirection: 'row',
+                alignItems: 'center',
+                backgroundColor: '#ECFDF5',
+                paddingHorizontal: 6,
+                paddingVertical: 2,
+                borderRadius: 6,
+                borderWidth: 1,
+                borderColor: '#A7F3D0',
+                marginTop: 2,
+              }}
+            >
               <ShieldCheck size={11} color="#00B39B" />
-              <Text className="text-xs font-bold text-teal-800 ml-1">Verified</Text>
+              <Text style={{ fontSize: 10, fontWeight: '700', color: '#047857', marginLeft: 3 }}>
+                Verified
+              </Text>
             </View>
           </View>
         </View>

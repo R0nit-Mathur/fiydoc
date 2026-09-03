@@ -18,65 +18,123 @@ export function DoctorCard({ doctor, onPress, onBookPress }: DoctorCardProps) {
     <TouchableOpacity
       onPress={onPress}
       activeOpacity={0.85}
-      className="bg-white rounded-3xl p-4.5 mb-4 border border-slate-200/90 shadow-sm"
-      style={{ marginVertical: 4 }}
+      className="bg-white/95 rounded-2xl p-4 mb-3 border border-slate-200/80 shadow-sm"
     >
-      <View className="flex-row items-start" style={{ gap: 14 }}>
-        <View className="relative">
-          <Avatar uri={doctor.avatar} name={doctor.name} size="xl" />
-          <View className="absolute -bottom-1 -right-1 bg-white rounded-full p-0.5 shadow-sm">
-            <CheckCircle2 size={16} color="#00B39B" fill="#E0F7F4" />
+      <View style={{ flexDirection: 'row', alignItems: 'flex-start', gap: 12 }}>
+        <View style={{ position: 'relative', flexShrink: 0 }}>
+          <Avatar uri={doctor.avatar} name={doctor.name} size="lg" />
+          <View
+            style={{
+              position: 'absolute',
+              bottom: -2,
+              right: -2,
+              backgroundColor: '#FFFFFF',
+              borderRadius: 99,
+              padding: 2,
+              shadowColor: '#000',
+              shadowOpacity: 0.1,
+              shadowRadius: 2,
+            }}
+          >
+            <CheckCircle2 size={14} color="#00B39B" fill="#E0F7F4" />
           </View>
         </View>
 
-        <View className="flex-1 justify-between" style={{ minWidth: 0 }}>
+        <View style={{ flex: 1, minWidth: 0, justifyContent: 'space-between' }}>
           <View>
-            <View className="flex-row items-center justify-between">
-              <Text className="text-base font-black text-slate-900 flex-1 mr-2" numberOfLines={1}>
+            <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: 6 }}>
+              <Text
+                style={{ fontSize: 15, fontWeight: '800', color: '#0F172A', flex: 1 }}
+                numberOfLines={1}
+              >
                 {doctor.name}
               </Text>
-              <View className="flex-row items-center bg-amber-50 px-2 py-0.5 rounded-lg border border-amber-200" style={{ gap: 4 }}>
-                <Star size={11} color="#F59E0B" fill="#F59E0B" />
-                <Text className="text-xs font-bold text-amber-800">{doctor.rating || 4.9}</Text>
+              <View
+                style={{
+                  flexDirection: 'row',
+                  alignItems: 'center',
+                  backgroundColor: '#FEF3C7',
+                  paddingHorizontal: 7,
+                  paddingVertical: 2,
+                  borderRadius: 8,
+                  gap: 3,
+                  flexShrink: 0,
+                }}
+              >
+                <Star size={10} color="#F59E0B" fill="#F59E0B" />
+                <Text style={{ fontSize: 11, fontWeight: '700', color: '#92400E' }}>
+                  {doctor.rating || 4.9}
+                </Text>
               </View>
             </View>
 
-            <Text className="text-xs font-bold text-[#00B39B] mt-1" numberOfLines={1}>
+            <Text
+              style={{ fontSize: 12, fontWeight: '700', color: '#00B39B', marginTop: 2 }}
+              numberOfLines={1}
+            >
               {doctor.specialty} • {doctor.experienceYears || 12} yrs exp
             </Text>
-            <Text className="text-xs text-slate-500 font-medium mt-1" numberOfLines={1}>
+            <Text
+              style={{ fontSize: 11, fontWeight: '500', color: '#64748B', marginTop: 2 }}
+              numberOfLines={1}
+            >
               {qualification}
             </Text>
           </View>
 
-          <View className="flex-row items-center mt-2.5" style={{ gap: 8 }}>
-            <View className="flex-row items-center bg-blue-50 px-2.5 py-1 rounded-lg border border-blue-100" style={{ gap: 6 }}>
-              <Building2 size={12} color="#1E58C8" />
-              <Text className="text-[11px] font-bold text-[#1E58C8]">In-Clinic Visit</Text>
+          <View style={{ flexDirection: 'row', alignItems: 'center', marginTop: 8, gap: 6 }}>
+            <View
+              style={{
+                flexDirection: 'row',
+                alignItems: 'center',
+                backgroundColor: '#EEF2FF',
+                paddingHorizontal: 8,
+                paddingVertical: 3,
+                borderRadius: 8,
+                gap: 4,
+              }}
+            >
+              <Building2 size={11} color="#1E58C8" />
+              <Text style={{ fontSize: 10, fontWeight: '700', color: '#1E58C8' }}>In-Clinic Visit</Text>
             </View>
           </View>
         </View>
       </View>
 
       {/* Hospital Location & Fee Bar */}
-      <View className="flex-row items-center justify-between pt-3 mt-3.5 border-t border-slate-100">
-        <View className="flex-row items-center flex-1 mr-3" style={{ gap: 6, minWidth: 0 }}>
-          <MapPin size={13} color="#64748B" />
-          <Text className="text-xs text-slate-600 font-medium flex-1" numberOfLines={1}>
+      <View
+        style={{
+          flexDirection: 'row',
+          alignItems: 'center',
+          justifyContent: 'space-between',
+          paddingTop: 10,
+          marginTop: 10,
+          borderTopWidth: 1,
+          borderTopColor: '#F1F5F9',
+        }}
+      >
+        <View style={{ flexDirection: 'row', alignItems: 'center', flex: 1, minWidth: 0, marginRight: 8, gap: 4 }}>
+          <MapPin size={12} color="#64748B" style={{ flexShrink: 0 }} />
+          <Text style={{ fontSize: 11, fontWeight: '500', color: '#475569', flex: 1 }} numberOfLines={1}>
             {doctor.hospital ? `${doctor.hospital}, ` : ''}{doctor.location}
           </Text>
         </View>
 
-        <View className="flex-row items-center" style={{ gap: 10 }}>
-          <Text className="text-sm font-black text-slate-900">
+        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8, flexShrink: 0 }}>
+          <Text style={{ fontSize: 14, fontWeight: '800', color: '#0F172A' }}>
             ₹{doctor.consultationFee}
           </Text>
           <TouchableOpacity
             onPress={onBookPress || onPress}
             activeOpacity={0.8}
-            className="bg-[#00B39B] px-3.5 py-1.5 rounded-xl shadow-sm"
+            style={{
+              backgroundColor: '#00B39B',
+              paddingHorizontal: 12,
+              paddingVertical: 6,
+              borderRadius: 10,
+            }}
           >
-            <Text className="text-xs font-extrabold text-white">Book Visit</Text>
+            <Text style={{ fontSize: 11, fontWeight: '800', color: '#FFFFFF' }}>Book Visit</Text>
           </TouchableOpacity>
         </View>
       </View>
