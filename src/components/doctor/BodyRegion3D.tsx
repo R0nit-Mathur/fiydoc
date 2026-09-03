@@ -1,8 +1,8 @@
 import React, { useState } from 'react';
 import { View, Text, TouchableOpacity } from 'react-native';
-import Svg, { Path, Circle, Rect, G } from 'react-native-svg';
+import Svg, { Circle, Rect } from 'react-native-svg';
 import { Badge } from '@/components/ui/Badge';
-import { Sparkles, CheckCircle2 } from 'lucide-react-native';
+import { Sparkles, Activity } from 'lucide-react-native';
 
 export interface BodyRegionMarker {
   id: string;
@@ -18,14 +18,11 @@ interface BodyRegion3DProps {
 export function BodyRegion3D({ onSelectRegion }: BodyRegion3DProps) {
   const [selectedRegionId, setSelectedRegionId] = useState<string>('chest');
   const [painLevel, setPainLevel] = useState<number>(7);
-  const [markers, setMarkers] = useState<Record<string, BodyRegionMarker>>({
-    chest: { id: 'chest', name: 'Chest / Thorax', painLevel: 7, clinicalNote: 'Tightness on exertion' },
-  });
 
   const REGIONS = [
     { id: 'head', name: 'Head & Cranium', color: '#8B5CF6' },
     { id: 'chest', name: 'Chest / Cardiac', color: '#EF4444' },
-    { id: 'abdomen', name: 'Abdomen & Gastro', color: '#F59E0B' },
+    { id: 'abdomen', name: 'Abdomen & GI', color: '#F59E0B' },
     { id: 'spine', name: 'Spine & Lumbar', color: '#10B981' },
     { id: 'arms', name: 'Upper Extremity', color: '#00B39B' },
     { id: 'legs', name: 'Lower Extremity', color: '#1E58C8' },
@@ -39,27 +36,34 @@ export function BodyRegion3D({ onSelectRegion }: BodyRegion3DProps) {
         id: reg.id,
         name: reg.name,
         painLevel,
-        clinicalNote: markers[id]?.clinicalNote || 'Annotated by Dr. Ananya Roy',
+        clinicalNote: `Focus clinical examination on ${reg.name}`,
       });
     }
   };
 
+  const selectedRegion = REGIONS.find((r) => r.id === selectedRegionId) || REGIONS[1];
+
   return (
-    <View className="bg-slate-900 p-4 rounded-3xl border border-slate-800 space-y-4">
+    <View className="bg-slate-900 p-4 rounded-3xl border border-slate-800" style={{ gap: 14 }}>
+      {/* Header */}
       <View className="flex-row items-center justify-between">
-        <View className="flex-row items-center space-x-2">
-          <View className="w-2.5 h-2.5 rounded-full bg-teal-400 animate-pulse" />
-          <Text className="text-xs font-bold text-white uppercase tracking-wider">
-            3D Anatomical Body Region Annotator
+        <View className="flex-row items-center" style={{ gap: 8 }}>
+          <View className="w-2.5 h-2.5 rounded-full bg-teal-400" />
+          <Text className="text-xs font-black text-white uppercase tracking-wider">
+            Anatomical Exam Focus
           </Text>
         </View>
-        <Badge label="Conceptual 3D" variant="teal" size="sm" />
+        <Badge label={selectedRegion.name} variant="teal" size="sm" />
       </View>
 
-      <View className="flex-row items-center space-x-4">
-        {/* Vector Human Body Silhouette */}
-        <View className="w-36 h-64 bg-slate-950 rounded-2xl items-center justify-center border border-slate-800 relative">
-          <Svg width="120" height="220" viewBox="0 0 100 200" fill="none">
+      {/* Main Interactive Area */}
+      <View className="flex-row items-center" style={{ gap: 14 }}>
+        {/* Silhouette Vector */}
+        <View
+          className="bg-slate-950 rounded-2xl items-center justify-center border border-slate-800"
+          style={{ width: 100, height: 170 }}
+        >
+          <Svg width="80" height="150" viewBox="0 0 100 200" fill="none">
             {/* Head */}
             <Circle
               cx="50"
@@ -71,7 +75,7 @@ export function BodyRegion3D({ onSelectRegion }: BodyRegion3DProps) {
             />
             {/* Neck */}
             <Rect x="46" y="40" width="8" height="8" fill="#334155" />
-            {/* Chest / Thorax */}
+            {/* Chest */}
             <Rect
               x="30"
               y="48"
@@ -93,7 +97,7 @@ export function BodyRegion3D({ onSelectRegion }: BodyRegion3DProps) {
               stroke="#64748B"
               strokeWidth="1.5"
             />
-            {/* Arms Left/Right */}
+            {/* Arms */}
             <Rect
               x="12"
               y="48"
@@ -114,7 +118,7 @@ export function BodyRegion3D({ onSelectRegion }: BodyRegion3DProps) {
               stroke="#64748B"
               strokeWidth="1.5"
             />
-            {/* Legs Left/Right */}
+            {/* Legs */}
             <Rect
               x="32"
               y="118"
@@ -136,51 +140,63 @@ export function BodyRegion3D({ onSelectRegion }: BodyRegion3DProps) {
               strokeWidth="1.5"
             />
           </Svg>
-
-          {/* Holographic grid lines overlay */}
-          <View className="absolute inset-0 border border-teal-500/20 rounded-2xl pointer-events-none" />
         </View>
 
-        {/* Region Selector Pills & Pain Level Slider */}
-        <View className="flex-1 space-y-2">
-          <Text className="text-[11px] font-bold text-slate-400 uppercase">Target Body Part</Text>
-          <View className="flex-row flex-wrap gap-1.5">
+        {/* Region Pills List */}
+        <View className="flex-1" style={{ gap: 6, minWidth: 0 }}>
+          <Text className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">
+            Select Focus Area
+          </Text>
+          <View className="flex-row flex-wrap" style={{ gap: 6 }}>
             {REGIONS.map((r) => {
               const isSel = selectedRegionId === r.id;
               return (
                 <TouchableOpacity
                   key={r.id}
                   onPress={() => handleSelect(r.id)}
-                  className={`px-2.5 py-1 rounded-xl border ${
-                    isSel ? 'bg-teal-900/80 border-teal-500' : 'bg-slate-800 border-slate-700'
+                  activeOpacity={0.8}
+                  className={`px-2.5 py-1.5 rounded-xl border ${
+                    isSel ? 'bg-teal-950 border-teal-400' : 'bg-slate-800/80 border-slate-700/60'
                   }`}
                 >
-                  <Text className={`text-[11px] font-bold ${isSel ? 'text-teal-300' : 'text-slate-300'}`}>
+                  <Text
+                    className={`text-[11px] font-bold ${isSel ? 'text-teal-300' : 'text-slate-300'}`}
+                    numberOfLines={1}
+                  >
                     {r.name.split(' ')[0]}
                   </Text>
                 </TouchableOpacity>
               );
             })}
           </View>
+        </View>
+      </View>
 
-          <View className="pt-2">
-            <Text className="text-[11px] font-bold text-slate-400 uppercase mb-1">
-              Pain Scale Marker: <Text className="text-red-400 font-extrabold">{painLevel} / 10</Text>
-            </Text>
-            <View className="flex-row space-x-1">
-              {[1, 2, 3, 4, 5, 6, 7, 8, 9, 10].map((num) => (
-                <TouchableOpacity
-                  key={num}
-                  onPress={() => setPainLevel(num)}
-                  className={`flex-1 h-7 rounded justify-center items-center ${
-                    painLevel >= num ? 'bg-red-500' : 'bg-slate-800'
-                  }`}
-                >
-                  <Text className="text-[10px] font-bold text-white">{num}</Text>
-                </TouchableOpacity>
-              ))}
-            </View>
-          </View>
+      {/* Responsive Pain Severity Scale (2 rows of 5 or 1 clean slider) */}
+      <View style={{ gap: 6 }}>
+        <View className="flex-row items-center justify-between">
+          <Text className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">
+            Patient Pain / Severity Scale
+          </Text>
+          <Text className="text-xs font-black text-red-400">{painLevel} / 10</Text>
+        </View>
+
+        <View className="flex-row" style={{ gap: 4 }}>
+          {[1, 2, 3, 4, 5, 6, 7, 8, 9, 10].map((num) => {
+            const active = painLevel >= num;
+            return (
+              <TouchableOpacity
+                key={num}
+                onPress={() => setPainLevel(num)}
+                activeOpacity={0.8}
+                className={`flex-1 h-7 rounded-lg items-center justify-center ${
+                  active ? 'bg-red-500' : 'bg-slate-800'
+                }`}
+              >
+                <Text className="text-[10px] font-black text-white">{num}</Text>
+              </TouchableOpacity>
+            );
+          })}
         </View>
       </View>
     </View>

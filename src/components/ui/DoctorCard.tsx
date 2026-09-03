@@ -29,7 +29,7 @@ export function DoctorCard({ doctor, onPress, onBookPress }: DoctorCardProps) {
           </View>
         </View>
 
-        <View className="flex-1 justify-between">
+        <View className="flex-1 justify-between" style={{ minWidth: 0 }}>
           <View>
             <View className="flex-row items-center justify-between">
               <Text className="text-base font-black text-slate-900 flex-1 mr-2" numberOfLines={1}>
@@ -41,7 +41,7 @@ export function DoctorCard({ doctor, onPress, onBookPress }: DoctorCardProps) {
               </View>
             </View>
 
-            <Text className="text-xs font-bold text-[#00B39B] mt-1">
+            <Text className="text-xs font-bold text-[#00B39B] mt-1" numberOfLines={1}>
               {doctor.specialty} • {doctor.experienceYears || 12} yrs exp
             </Text>
             <Text className="text-xs text-slate-500 font-medium mt-1" numberOfLines={1}>
@@ -60,7 +60,7 @@ export function DoctorCard({ doctor, onPress, onBookPress }: DoctorCardProps) {
 
       {/* Hospital Location & Fee Bar */}
       <View className="flex-row items-center justify-between pt-3 mt-3.5 border-t border-slate-100">
-        <View className="flex-row items-center flex-1 mr-3" style={{ gap: 6 }}>
+        <View className="flex-row items-center flex-1 mr-3" style={{ gap: 6, minWidth: 0 }}>
           <MapPin size={13} color="#64748B" />
           <Text className="text-xs text-slate-600 font-medium flex-1" numberOfLines={1}>
             {doctor.hospital ? `${doctor.hospital}, ` : ''}{doctor.location}

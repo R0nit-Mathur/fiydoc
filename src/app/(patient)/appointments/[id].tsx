@@ -15,6 +15,7 @@ import {
   MapPin,
   FileCheck,
   CheckCircle2,
+  FileText,
 } from 'lucide-react-native';
 
 export default function AppointmentDetailScreen() {
@@ -123,6 +124,35 @@ export default function AppointmentDetailScreen() {
               </View>
             </View>
           )}
+
+          {/* Digital Prescription (Rx) Section */}
+          <View className="bg-emerald-50/70 p-4.5 rounded-3xl border border-emerald-200/90" style={{ gap: 8 }}>
+            <View className="flex-row items-center justify-between">
+              <View className="flex-row items-center" style={{ gap: 8 }}>
+                <View className="bg-[#00B39B] p-2 rounded-xl">
+                  <FileText size={16} color="#FFFFFF" />
+                </View>
+                <View>
+                  <Text className="text-xs font-black text-slate-900 uppercase tracking-wider">
+                    Digital Prescription (Rx)
+                  </Text>
+                  <Text className="text-[11px] text-emerald-800 font-semibold">
+                    Direct from {apt.doctorName} (MCI Verified)
+                  </Text>
+                </View>
+              </View>
+              <Badge label="VERIFIED Rx" variant="success" size="sm" />
+            </View>
+            <Text className="text-xs text-slate-600 mt-1">
+              Active medicines & prescribed lab investigations are synced to your Medical Records.
+            </Text>
+            <TouchableOpacity
+              onPress={() => router.push('/(patient)/health/index')}
+              className="bg-[#00B39B] py-2.5 px-4 rounded-xl items-center mt-1"
+            >
+              <Text className="text-xs font-black text-white">View Full Rx & Lab Orders</Text>
+            </TouchableOpacity>
+          </View>
 
           {/* Payment Status Box */}
           <View className="flex-row justify-between items-center bg-slate-50 p-4 rounded-3xl border border-slate-200/80">

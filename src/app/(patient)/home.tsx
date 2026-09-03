@@ -166,8 +166,10 @@ export default function PatientHomeScreen() {
         {/* Verified Specialists Section */}
         <View>
           <View className="flex-row justify-between items-center mb-3.5">
-            <View className="flex-row items-center" style={{ gap: 6 }}>
-              <Text className="text-base font-black text-slate-900">Verified Medical Specialists</Text>
+            <View className="flex-row items-center flex-1 mr-2" style={{ gap: 6 }}>
+              <Text className="text-base font-black text-slate-900 flex-1" numberOfLines={1}>
+                Verified Specialists
+              </Text>
               <ShieldCheck size={16} color="#00B39B" />
             </View>
             <TouchableOpacity onPress={() => router.push('/(patient)/discovery')}>

@@ -70,19 +70,19 @@ export default function DoctorHomeScreen() {
         <View className="flex-row justify-around bg-white p-4.5 rounded-3xl border border-slate-200/80 shadow-sm">
           <View className="items-center">
             <Text className="text-[11px] text-slate-400 font-semibold uppercase">Total Today</Text>
-            <Text className="text-xl font-black text-slate-900 mt-0.5">
-              {appointments?.length ? `${appointments.length} Patients` : '5 Patients'}
+            <Text className="text-lg font-black text-slate-900 mt-0.5" numberOfLines={1}>
+              {appointments?.length ? `${appointments.length}` : '5'}
             </Text>
           </View>
           <View className="w-px h-8 bg-slate-200 self-center" />
           <View className="items-center">
             <Text className="text-[11px] text-slate-400 font-semibold uppercase">Completed</Text>
-            <Text className="text-xl font-black text-emerald-600 mt-0.5">3</Text>
+            <Text className="text-lg font-black text-emerald-600 mt-0.5">3</Text>
           </View>
           <View className="w-px h-8 bg-slate-200 self-center" />
           <View className="items-center">
             <Text className="text-[11px] text-slate-400 font-semibold uppercase">Next Slot</Text>
-            <Text className="text-xl font-black text-[#1E58C8] mt-0.5">
+            <Text className="text-lg font-black text-[#1E58C8] mt-0.5" numberOfLines={1}>
               {nextPatient?.time || '11:00 AM'}
             </Text>
           </View>
@@ -91,10 +91,10 @@ export default function DoctorHomeScreen() {
         {/* Next Patient Card */}
         <View className="bg-white p-5 rounded-3xl border border-slate-200/80 shadow-sm" style={{ gap: 16 }}>
           <View className="flex-row justify-between items-center pb-3 border-b border-slate-100">
-            <View className="flex-row items-center" style={{ gap: 8 }}>
+            <View className="flex-row items-center flex-1 mr-2" style={{ gap: 8 }}>
               <Clock size={16} color="#1E58C8" />
-              <Text className="text-xs font-black text-slate-900 uppercase tracking-wide">
-                NEXT PATIENT IN CLINIC QUEUE
+              <Text className="text-xs font-black text-slate-900 uppercase tracking-wide flex-1" numberOfLines={1}>
+                Next Patient in Queue
               </Text>
             </View>
             <Badge label={nextPatient?.time || '11:00 AM Slot'} variant="teal" size="sm" />

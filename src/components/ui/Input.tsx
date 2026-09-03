@@ -22,7 +22,7 @@ export function Input({
   return (
     <View className={`w-full ${containerClassName}`}>
       {label && (
-        <Text className="text-sm font-semibold text-slate-700 mb-1.5">
+        <Text className="text-xs font-bold text-slate-700 uppercase tracking-wider mb-1.5">
           {label}
         </Text>
       )}
@@ -33,15 +33,18 @@ export function Input({
             : 'border-slate-200 focus:border-[#1E58C8]'
         }`}
         style={{
-          minHeight: multiline ? 96 : 52,
+          minHeight: multiline ? 84 : 48,
           alignItems: multiline ? 'flex-start' : 'center',
-          paddingVertical: multiline ? 12 : 0,
+          paddingVertical: multiline ? 10 : 2,
         }}
       >
         {leftIcon && (
           <View
             className="mr-2.5"
-            style={{ marginTop: multiline ? (Platform.OS === 'ios' ? 2 : 4) : 0 }}
+            style={{
+              justifyContent: 'center',
+              marginTop: multiline ? (Platform.OS === 'ios' ? 2 : 4) : 0,
+            }}
           >
             {leftIcon}
           </View>
@@ -49,15 +52,16 @@ export function Input({
         <TextInput
           placeholderTextColor="#94A3B8"
           multiline={multiline}
-          className="flex-1 text-base text-slate-900 font-medium"
+          className="flex-1 text-sm text-slate-900 font-medium"
           style={[
             {
               textAlignVertical: multiline ? 'top' : 'center',
               includeFontPadding: false,
-              paddingVertical: 0,
+              paddingVertical: Platform.OS === 'ios' ? 4 : 0,
               paddingHorizontal: 0,
-              height: multiline ? 80 : 50,
-              fontSize: 15,
+              minHeight: multiline ? 60 : 40,
+              fontSize: 14,
+              lineHeight: 20,
             },
             style,
           ]}
@@ -66,7 +70,10 @@ export function Input({
         {rightIcon && (
           <View
             className="ml-2.5"
-            style={{ marginTop: multiline ? (Platform.OS === 'ios' ? 2 : 4) : 0 }}
+            style={{
+              justifyContent: 'center',
+              marginTop: multiline ? (Platform.OS === 'ios' ? 2 : 4) : 0,
+            }}
           >
             {rightIcon}
           </View>

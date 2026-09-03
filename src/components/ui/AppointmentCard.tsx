@@ -42,11 +42,11 @@ export function AppointmentCard({ appointment, onPress }: AppointmentCardProps) 
       <View className="flex-row items-center" style={{ gap: 14 }}>
         <Avatar uri={appointment.doctorAvatar} name={appointment.doctorName} size="md" />
 
-        <View className="flex-1">
+        <View className="flex-1" style={{ minWidth: 0 }}>
           <Text className="text-base font-black text-slate-900" numberOfLines={1}>
             {appointment.doctorName}
           </Text>
-          <Text className="text-xs font-bold text-[#00B39B] mt-0.5">
+          <Text className="text-xs font-bold text-[#00B39B] mt-0.5" numberOfLines={1}>
             {appointment.doctorSpecialty}
           </Text>
           <Text className="text-xs text-slate-500 font-medium mt-0.5" numberOfLines={1}>
