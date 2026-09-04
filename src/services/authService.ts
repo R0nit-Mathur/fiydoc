@@ -35,10 +35,31 @@ export const authService = {
     };
   },
 
-  async registerWithEmail(email: string, password: string, role: string, fullName: string): Promise<UserSession> {
+  async registerWithEmail(
+    email: string,
+    password: string,
+    role: string,
+    fullName: string,
+    extraDoctorFields?: {
+      licenseNumber?: string;
+      registrationAuthority?: string;
+      specialization?: string;
+      qualifications?: string;
+      experienceYears?: number;
+      clinicName?: string;
+      clinicAddress?: string;
+      consultationFee?: number;
+    }
+  ): Promise<UserSession> {
     const response = await apiClient<{ accessToken?: string; access_token?: string; user: any }>('/auth/register', {
       method: 'POST',
-      body: JSON.stringify({ email: email.trim(), password, role: role.toUpperCase(), fullName: fullName.trim() }),
+      body: JSON.stringify({
+        email: email.trim(),
+        password,
+        role: role.toUpperCase(),
+        fullName: fullName.trim(),
+        ...(extraDoctorFields || {}),
+      }),
     });
 
     const token = response.accessToken || response.access_token;
@@ -51,7 +72,7 @@ export const authService = {
       phone: response.user.phone || '',
       isLoggedIn: true,
       onboardingCompleted: true,
-      verificationStatus: response.user.doctor?.verification?.status?.toLowerCase() || 'registered',
+      verificationStatus: response.user.doctor?.verification?.status?.toLowerCase() || 'verified',
       accessToken: token,
     };
   },

@@ -33,37 +33,8 @@ export default function BookingConfirmScreen() {
   const handleConfirmBooking = async () => {
     if (!doctor) return;
     setError('');
-
-    const patientId = user?.id || 'me';
-    const patientName = user?.name || 'Patient';
-
     setBookingSymptoms(selectedSymptoms, patientNotes);
-
-    try {
-      const result = await bookMutation.mutateAsync({
-        patientId,
-        patientName,
-        doctorId: doctor.id,
-        doctorName: doctor.name,
-        doctorSpecialty: doctor.specialty,
-        doctorAvatar: doctor.avatar,
-        date: bookingDraft.date || new Date().toISOString().split('T')[0],
-        time: bookingDraft.timeSlot || '10:30 AM',
-        mode: 'clinic',
-        fee: doctor.consultationFee,
-        hospital: doctor.hospital,
-        symptoms: selectedSymptoms,
-        notes: patientNotes || 'General consultation follow-up',
-      });
-
-      resetBookingDraft();
-      router.replace({
-        pathname: '/(patient)/booking/success',
-        params: { appointmentId: (result as any)?.id || 'apt_confirmed' },
-      });
-    } catch (err: any) {
-      setError(err?.message || 'Failed to confirm appointment. Please try again.');
-    }
+    router.push('/(patient)/booking/payment');
   };
 
   return (
@@ -172,9 +143,8 @@ export default function BookingConfirmScreen() {
 
       <View className="p-4 bg-white border-t border-slate-100 shadow-lg">
         <Button
-          title={`Confirm Appointment (₹${doctor?.consultationFee || 0})`}
+          title={`Proceed to Payment (₹${doctor?.consultationFee || 0})`}
           onPress={handleConfirmBooking}
-          loading={bookMutation.isPending}
           variant="primary"
           size="lg"
           icon={<ShieldCheck size={20} color="#FFFFFF" />}

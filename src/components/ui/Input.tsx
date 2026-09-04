@@ -34,25 +34,27 @@ export function Input({
       )}
       <View
         style={{
-          minHeight: multiline ? 88 : 50,
+          height: multiline ? undefined : 48,
+          minHeight: multiline ? 84 : 48,
+          maxHeight: multiline ? 160 : 48,
           flexDirection: 'row',
           alignItems: multiline ? 'flex-start' : 'center',
-          backgroundColor: 'rgba(248, 250, 252, 0.92)',
+          backgroundColor: 'rgba(248, 250, 252, 0.95)',
           borderWidth: 1.5,
           borderColor: error
             ? '#EF4444'
             : isFocused
             ? activeColor
             : '#E2E8F0',
-          borderRadius: 16,
-          paddingHorizontal: 14,
+          borderRadius: 14,
+          paddingHorizontal: 12,
           paddingVertical: multiline ? 10 : 0,
         }}
       >
         {leftIcon && (
           <View
             style={{
-              marginRight: 10,
+              marginRight: 8,
               justifyContent: 'center',
               alignItems: 'center',
               flexShrink: 0,
@@ -76,10 +78,12 @@ export function Input({
           style={[
             {
               flex: 1,
-              minHeight: multiline ? 68 : '100%',
+              height: multiline ? undefined : 48,
+              minHeight: multiline ? 64 : undefined,
+              maxHeight: multiline ? 140 : undefined,
               textAlignVertical: multiline ? 'top' : 'center',
               includeFontPadding: false,
-              paddingVertical: multiline ? 2 : 0,
+              paddingVertical: 0,
               paddingHorizontal: 0,
               margin: 0,
               fontSize: 14,
@@ -93,7 +97,7 @@ export function Input({
         {rightIcon && (
           <View
             style={{
-              marginLeft: 10,
+              marginLeft: 8,
               justifyContent: 'center',
               alignItems: 'center',
               flexShrink: 0,

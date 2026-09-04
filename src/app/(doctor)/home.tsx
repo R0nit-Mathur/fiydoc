@@ -227,6 +227,96 @@ export default function DoctorHomeScreen() {
           </TouchableOpacity>
         </View>
 
+        {/* Live OPD Queue Timeline (Indian Clinic Queue) */}
+        <View style={{ gap: 10 }}>
+          <View className="flex-row justify-between items-center">
+            <View className="flex-row items-center" style={{ gap: 6 }}>
+              <Clock size={16} color="#1E58C8" />
+              <Text className="text-sm font-black text-slate-900 uppercase tracking-wide">
+                Today's OPD Queue Timeline
+              </Text>
+            </View>
+            <TouchableOpacity onPress={() => router.push('/(doctor)/appointments')}>
+              <Text className="text-xs font-bold text-[#1E58C8]">View All →</Text>
+            </TouchableOpacity>
+          </View>
+
+          {/* Timeline Nodes */}
+          <View className="bg-white p-4 rounded-3xl border border-slate-200/90 shadow-sm" style={{ gap: 10 }}>
+            {[
+              {
+                token: 'Token #01',
+                time: '09:30 AM',
+                name: 'Rohit Joshi',
+                age: '45 M',
+                symptoms: 'Mild Angina Checkup',
+                status: 'COMPLETED',
+                badgeVariant: 'teal',
+              },
+              {
+                token: 'Token #02',
+                time: '10:00 AM',
+                name: nextPatient?.patientName || 'Aarav Mehta',
+                age: '32 M',
+                symptoms: nextPatient?.symptoms?.join(', ') || 'Chest Discomfort',
+                status: 'IN PROGRESS',
+                badgeVariant: 'blue',
+                isCurrent: true,
+              },
+              {
+                token: 'Token #03',
+                time: '10:30 AM',
+                name: 'Kavita Rao',
+                age: '58 F',
+                symptoms: 'Hypertension & Dizziness',
+                status: 'WAITING',
+                badgeVariant: 'warning',
+              },
+              {
+                token: 'Token #04',
+                time: '11:00 AM',
+                name: 'Rajesh Verma',
+                age: '50 M',
+                symptoms: 'Lipid Profile Review',
+                status: 'SCHEDULED',
+                badgeVariant: 'slate',
+              },
+            ].map((q, idx) => (
+              <View
+                key={idx}
+                className={`p-3 rounded-2xl border flex-row items-center justify-between ${
+                  q.isCurrent
+                    ? 'bg-blue-50/80 border-[#1E58C8]'
+                    : 'bg-slate-50 border-slate-200/80'
+                }`}
+              >
+                <View style={{ gap: 2 }}>
+                  <View className="flex-row items-center" style={{ gap: 6 }}>
+                    <Text className="text-xs font-black text-[#1E58C8]">{q.token}</Text>
+                    <Text className="text-[11px] text-slate-400 font-bold">• {q.time}</Text>
+                  </View>
+                  <Text className="text-sm font-black text-slate-900">{q.name} ({q.age})</Text>
+                  <Text className="text-[11px] text-slate-500">{q.symptoms}</Text>
+                </View>
+
+                <View className="items-end" style={{ gap: 6 }}>
+                  <Badge label={q.status} variant={q.badgeVariant as any} size="sm" />
+                  {q.isCurrent ? (
+                    <TouchableOpacity
+                      onPress={() => router.push(`/(doctor)/consultation/${nextPatient?.id || 'apt_live'}`)}
+                      className="bg-[#1E58C8] px-3 py-1 rounded-lg"
+                    >
+                      <Text className="text-[11px] font-bold text-white">Consult</Text>
+                    </TouchableOpacity>
+                  ) : (
+                    <Text className="text-[10px] text-slate-400 font-medium">OPD Room 4</Text>
+                  )}
+                </View>
+              </View>
+            ))}
+          </View>
+        </View>
+
         {/* Clinical Suite Shortcuts */}
         <View style={{ gap: 10 }}>
           <Text className="text-sm font-black text-slate-900">Clinical Suite</Text>

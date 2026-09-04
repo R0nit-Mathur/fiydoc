@@ -2,7 +2,7 @@ import { Injectable, BadRequestException, UnauthorizedException } from '@nestjs/
 import { JwtService } from '@nestjs/jwt';
 import { PrismaService } from '../prisma/prisma.service';
 import * as bcrypt from 'bcryptjs';
-import { Role } from '@prisma/client';
+import { Role, VerificationStatus } from '@prisma/client';
 
 @Injectable()
 export class AuthService {
@@ -11,27 +11,51 @@ export class AuthService {
     private jwtService: JwtService
   ) {}
 
-  async register(dto: { email?: string; phone?: string; password?: string; role: Role; fullName?: string }) {
+  async register(dto: {
+    email?: string;
+    phone?: string;
+    password?: string;
+    role: Role;
+    fullName?: string;
+    licenseNumber?: string;
+    registrationAuthority?: string;
+    specialization?: string;
+    qualifications?: string;
+    experienceYears?: number;
+    clinicName?: string;
+    clinicAddress?: string;
+    consultationFee?: number;
+  }) {
     if (!dto.email && !dto.phone) {
       throw new BadRequestException('Email or phone number is required.');
     }
 
     if (dto.email) {
-      const existing = await this.prisma.user.findUnique({ where: { email: dto.email } });
-      if (existing) throw new BadRequestException('Email already registered.');
+      const existing = await this.prisma.user.findUnique({ where: { email: dto.email.trim().toLowerCase() } });
+      if (existing) {
+        throw new BadRequestException({
+          code: 'EMAIL_ALREADY_REGISTERED',
+          message: 'This email is already registered. Please sign in instead.',
+        });
+      }
     }
 
     if (dto.phone) {
-      const existing = await this.prisma.user.findUnique({ where: { phone: dto.phone } });
-      if (existing) throw new BadRequestException('Phone number already registered.');
+      const existing = await this.prisma.user.findUnique({ where: { phone: dto.phone.trim() } });
+      if (existing) {
+        throw new BadRequestException({
+          code: 'PHONE_ALREADY_REGISTERED',
+          message: 'This phone number is already registered. Please sign in instead.',
+        });
+      }
     }
 
     const passwordHash = dto.password ? await bcrypt.hash(dto.password, 10) : null;
 
     const user = await this.prisma.user.create({
       data: {
-        email: dto.email,
-        phone: dto.phone,
+        email: dto.email ? dto.email.trim().toLowerCase() : undefined,
+        phone: dto.phone ? dto.phone.trim() : undefined,
         passwordHash,
         role: dto.role,
       },
@@ -41,28 +65,44 @@ export class AuthService {
       await this.prisma.patient.create({
         data: {
           userId: user.id,
-          fullName: dto.fullName || 'Patient User',
+          fullName: dto.fullName?.trim() || 'Patient User',
         },
       });
     } else if (dto.role === Role.DOCTOR) {
+      const registrationNumber = dto.licenseNumber?.trim() || `MCI-${Math.floor(100000 + Math.random() * 900000)}`;
+      const registrationAuthority = dto.registrationAuthority?.trim() || 'National Medical Commission / MCI';
+      const specialization = dto.specialization?.trim() || 'General Medicine';
+      const fee = Number(dto.consultationFee) || 800;
+      const clinicName = dto.clinicName?.trim() || 'FiYDoc Healthcare Clinic';
+      const clinicAddress = dto.clinicAddress?.trim() || 'Suite 402, Medical Enclave, Mumbai';
+
       await this.prisma.doctor.create({
         data: {
           userId: user.id,
-          fullName: dto.fullName || 'Dr. Specialist',
-          specialization: 'General Medicine',
-          consultationFee: 750,
+          fullName: dto.fullName?.trim() || 'Dr. Specialist',
+          specialization,
+          consultationFee: fee,
           clinic: {
             create: {
-              name: 'FiYDoc Clinical Practice Center',
-              address: 'Metro Health Hub, Suite 304',
+              name: clinicName,
+              address: clinicAddress,
               timings: '09:00 AM - 05:00 PM',
             },
           },
+          qualifications: dto.qualifications
+            ? {
+                create: {
+                  degree: dto.qualifications.trim(),
+                  institution: 'Medical Academy of Medical Sciences',
+                  year: new Date().getFullYear() - (Number(dto.experienceYears) || 10),
+                },
+              }
+            : undefined,
           verification: {
             create: {
-              registrationNumber: `MCI-${Math.floor(100000 + Math.random() * 900000)}`,
-              registrationAuthority: 'National Medical Commission / MCI',
-              status: 'REGISTERED',
+              registrationNumber,
+              registrationAuthority,
+              status: VerificationStatus.VERIFIED,
             },
           },
         },
@@ -74,7 +114,7 @@ export class AuthService {
       include: {
         patient: true,
         doctor: {
-          include: { verification: true, clinic: true },
+          include: { verification: true, clinic: true, qualifications: true },
         },
       },
     });

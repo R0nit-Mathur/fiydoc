@@ -114,6 +114,23 @@ export interface Prescription {
   verificationCode: string;
   medicines: PrescriptionMedicine[];
   createdAt: string;
+  doctorName?: string;
+  doctorSpecialty?: string;
+  doctorMciNumber?: string;
+  clinicName?: string;
+  clinicAddress?: string;
+  patientName?: string;
+  patientAge?: number;
+  patientGender?: string;
+  diagnosis?: string;
+  tests?: { id: string; name: string; category?: string; turnaroundTime?: string; fastingRequired?: boolean }[];
+  vitals?: {
+    bp?: string;
+    pulse?: string;
+    temp?: string;
+    spo2?: string;
+    weight?: string;
+  };
 }
 
 export interface MedicalRecord {

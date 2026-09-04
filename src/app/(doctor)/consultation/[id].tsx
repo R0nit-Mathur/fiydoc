@@ -18,6 +18,9 @@ import { Modal } from '@/components/ui/Modal';
 import { Badge } from '@/components/ui/Badge';
 import { Avatar } from '@/components/ui/Avatar';
 import { useAuthStore } from '@/store/useAuthStore';
+import { useHealthStore } from '@/store/useHealthStore';
+import { useNotificationStore } from '@/store/useNotificationStore';
+import { useAppointmentStore } from '@/store/useAppointmentStore';
 import {
   MEDICINES_DIRECTORY,
   DIAGNOSTIC_TESTS_DIRECTORY,
@@ -38,6 +41,10 @@ import {
   Building2,
   Calendar,
   ClipboardList,
+  History,
+  FileText,
+  ChevronDown,
+  ChevronUp,
 } from 'lucide-react-native';
 
 interface PrescribedMedicine {
@@ -216,7 +223,79 @@ export default function DoctorConsultationWorkspaceScreen() {
     setPrescribedTests(prescribedTests.filter((t) => t.id !== id));
   };
 
+  const [showPatientHistory, setShowPatientHistory] = useState(false);
+
   const handleSignPrescription = () => {
+    const rxId = `rx_${Date.now()}`;
+    const verificationCode = `FYD-RX-${Math.floor(100000 + Math.random() * 900000)}-MH`;
+    const formattedDate = new Date().toLocaleDateString('en-IN', {
+      day: '2-digit',
+      month: 'short',
+      year: 'numeric',
+    });
+
+    const newPrescription = {
+      id: rxId,
+      consultationId: (id as string) || 'apt_live',
+      patientId: apt?.patientId || 'pat_1',
+      doctorId: user?.id || 'doc_live',
+      doctorName,
+      doctorSpecialty: 'Senior Consultant Cardiologist',
+      doctorMciNumber: 'MCI-847291',
+      clinicName: 'HeartCare Specialty Clinic',
+      clinicAddress: 'Suite 402, Medical Enclave, Bandra West, Mumbai',
+      patientName: apt?.patientName || 'Aarav Mehta',
+      patientAge: 32,
+      patientGender: 'Male',
+      diagnosis: assessment || 'Essential Stage-1 Hypertension & Tachycardia',
+      doctorNotes: objective || 'Patient evaluated for cardiovascular checkup. Vitals evaluated.',
+      followUpInstructions: `Review in 7 days in clinic or SOS if symptoms persist. Patient advised low salt diet and regular BP logging.`,
+      verificationCode,
+      signedAt: new Date().toISOString(),
+      createdAt: formattedDate,
+      vitals: {
+        bp: '128/82 mmHg',
+        pulse: '74 bpm',
+        temp: '98.4°F',
+        spo2: '99%',
+      },
+      medicines: prescribedMeds.map((m) => ({
+        id: m.id,
+        name: m.name,
+        dosage: m.dosage,
+        frequency: m.frequency,
+        durationDays: parseInt(m.duration) || 5,
+        instructions: m.instructions,
+      })),
+      tests: prescribedTests.map((t) => ({
+        id: t.id,
+        name: t.name,
+        category: t.category,
+        turnaroundTime: t.turnaroundTime,
+        fastingRequired: t.fastingRequired,
+      })),
+    };
+
+    // 1. Add prescription to patient health records
+    useHealthStore.getState().addPrescription(newPrescription);
+
+    // 2. Dispatch high-priority patient notification
+    useNotificationStore.getState().addNotification({
+      title: 'Digital Prescription (Rx) Issued',
+      message: `${doctorName} has issued your official digital prescription with ${prescribedMeds.length} medication(s). Tap to review dosage instructions.`,
+      type: 'prescription',
+      link: '/(patient)/health',
+    });
+
+    // 3. Mark appointment as completed in appointment store if found
+    if (apt?.id) {
+      const aptStore = useAppointmentStore.getState();
+      const existing = aptStore.appointments.find((a) => a.id === apt.id);
+      if (existing) {
+        aptStore.addAppointment({ ...existing, status: 'completed' });
+      }
+    }
+
     setShowPrescriptionPass(true);
   };
 
@@ -277,6 +356,113 @@ export default function DoctorConsultationWorkspaceScreen() {
               </View>
             </View>
           </View>
+        </View>
+
+        {/* Patient Longitudinal Medical History & EHR Card (Indian MedTech EHR) */}
+        <View className="bg-white rounded-3xl border border-slate-200/90 shadow-sm overflow-hidden">
+          <TouchableOpacity
+            onPress={() => setShowPatientHistory(!showPatientHistory)}
+            activeOpacity={0.8}
+            className="p-4 flex-row items-center justify-between bg-slate-50/80 border-b border-slate-100"
+          >
+            <View className="flex-row items-center" style={{ gap: 8 }}>
+              <View className="w-8 h-8 rounded-xl bg-blue-50 items-center justify-center border border-blue-200">
+                <History size={16} color="#1E58C8" />
+              </View>
+              <View>
+                <View className="flex-row items-center" style={{ gap: 6 }}>
+                  <Text className="text-xs font-black text-slate-900 uppercase tracking-wide">
+                    Patient Longitudinal History (EHR)
+                  </Text>
+                  <Badge label="ABDM CONNECTED" variant="teal" size="sm" />
+                </View>
+                <Text className="text-[11px] text-slate-500 font-medium">
+                  Past visits, chronic conditions, prescriptions & lab records
+                </Text>
+              </View>
+            </View>
+            {showPatientHistory ? (
+              <ChevronUp size={18} color="#64748B" />
+            ) : (
+              <ChevronDown size={18} color="#64748B" />
+            )}
+          </TouchableOpacity>
+
+          {showPatientHistory && (
+            <View className="p-4" style={{ gap: 12 }}>
+              {/* Chronic Conditions & Allergies */}
+              <View className="bg-slate-50 p-3 rounded-2xl border border-slate-200/70" style={{ gap: 6 }}>
+                <Text className="text-[10px] font-black text-slate-400 uppercase tracking-wider">
+                  Active Clinical Conditions & Vitals Baseline
+                </Text>
+                <View className="flex-row flex-wrap gap-2">
+                  <View className="bg-blue-50 px-2.5 py-1 rounded-lg border border-blue-200">
+                    <Text className="text-xs font-bold text-[#1E58C8]">Stage-1 Hypertension (2 yrs)</Text>
+                  </View>
+                  <View className="bg-teal-50 px-2.5 py-1 rounded-lg border border-teal-200">
+                    <Text className="text-xs font-bold text-teal-700">Type-2 Diabetes Borderline (3 yrs)</Text>
+                  </View>
+                  <View className="bg-rose-50 px-2.5 py-1 rounded-lg border border-rose-200">
+                    <Text className="text-xs font-bold text-rose-700">Allergy: Penicillin (Rash)</Text>
+                  </View>
+                </View>
+              </View>
+
+              {/* Past Consultations & Prescriptions */}
+              <View style={{ gap: 6 }}>
+                <Text className="text-[10px] font-black text-slate-400 uppercase tracking-wider">
+                  Past Prescriptions & Encounters (Timeline)
+                </Text>
+
+                <View className="bg-slate-50 p-3 rounded-xl border border-slate-200/80" style={{ gap: 4 }}>
+                  <View className="flex-row justify-between items-center">
+                    <Text className="text-xs font-black text-slate-900">Dr. Priya Sharma • OPD Review</Text>
+                    <Text className="text-[10px] font-bold text-slate-500">12 Aug 2026</Text>
+                  </View>
+                  <Text className="text-[11px] text-slate-600">
+                    Rx: Tab Telmisartan 40mg (1-0-0), Tab Atorvastatin 10mg (0-0-1). Good response, BP controlled at 128/84.
+                  </Text>
+                </View>
+
+                <View className="bg-slate-50 p-3 rounded-xl border border-slate-200/80" style={{ gap: 4 }}>
+                  <View className="flex-row justify-between items-center">
+                    <Text className="text-xs font-black text-slate-900">Dr. Ananya Roy • Chest Clinic</Text>
+                    <Text className="text-[10px] font-bold text-slate-500">02 Jun 2026</Text>
+                  </View>
+                  <Text className="text-[11px] text-slate-600">
+                    Diagnosis: Viral Bronchitis. Rx: Azithromycin 500mg, Paracetamol 650mg SOS. Resolved in 5 days.
+                  </Text>
+                </View>
+              </View>
+
+              {/* Recent Diagnostic Biomarkers */}
+              <View style={{ gap: 6 }}>
+                <Text className="text-[10px] font-black text-slate-400 uppercase tracking-wider">
+                  Verified Diagnostic Biomarkers
+                </Text>
+
+                <View className="bg-emerald-50/70 p-3 rounded-xl border border-emerald-200" style={{ gap: 4 }}>
+                  <View className="flex-row justify-between items-center">
+                    <Text className="text-xs font-black text-emerald-900">Metropolis Lipid Panel (OCR Verified)</Text>
+                    <Badge label="NORMAL" variant="teal" size="sm" />
+                  </View>
+                  <Text className="text-[11px] text-emerald-800">
+                    Total Chol: 178 mg/dL (Normal &lt;200) • HDL: 52 mg/dL • LDL: 98 mg/dL • Triglycerides: 140 mg/dL
+                  </Text>
+                </View>
+
+                <View className="bg-blue-50/70 p-3 rounded-xl border border-blue-200" style={{ gap: 4 }}>
+                  <View className="flex-row justify-between items-center">
+                    <Text className="text-xs font-black text-[#1E58C8]">Dr. Lal PathLabs Glucose & HbA1c</Text>
+                    <Badge label="OPTIMAL" variant="blue" size="sm" />
+                  </View>
+                  <Text className="text-[11px] text-blue-900">
+                    Fasting Glucose: 94 mg/dL (70-99) • HbA1c: 5.4% (Optimal Glycemic Control &lt;5.7%)
+                  </Text>
+                </View>
+              </View>
+            </View>
+          )}
         </View>
 
         {/* Anatomical Examination Focus (Responsive 3D Annotator) */}
