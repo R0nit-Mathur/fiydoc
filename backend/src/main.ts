@@ -1,5 +1,13 @@
 import * as dotenv from 'dotenv';
+import * as path from 'path';
+
+// Load .env with fallbacks for local and production deployment environments
 dotenv.config();
+dotenv.config({ path: path.resolve(__dirname, '../.env') });
+dotenv.config({ path: path.resolve(__dirname, '../.env.production') });
+dotenv.config({ path: path.resolve(process.cwd(), '.env') });
+dotenv.config({ path: path.resolve(process.cwd(), '.env.production') });
+dotenv.config({ path: path.resolve(process.cwd(), '../.env') });
 
 import { NestFactory } from '@nestjs/core';
 import { AppModule } from './app.module';

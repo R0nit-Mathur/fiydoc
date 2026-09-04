@@ -44,5 +44,5 @@ example
 /android
 
 # Backend secrets / local IDE
+.idea/git
 backend/.env
-.idea/git 
