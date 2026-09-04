@@ -9,11 +9,34 @@ import { ShieldCheck, HeartPulse, Stethoscope, Sparkles } from 'lucide-react-nat
 import { authService } from '@/services/authService';
 import { useAuthStore } from '@/store/useAuthStore';
 import { GoogleAccountPickerModal } from '@/components/auth/GoogleAccountPickerModal';
+import { googleAuthService } from '@/services/googleAuth';
 
 export default function WelcomeScreen() {
   const router = useRouter();
   const setSession = useAuthStore((s) => s.setSession);
   const [googleModalVisible, setGoogleModalVisible] = useState(false);
+  const [googleLoading, setGoogleLoading] = useState(false);
+
+  const handleGooglePress = async () => {
+    setGoogleLoading(true);
+    try {
+      const session = await googleAuthService.signInWithGoogle();
+      if (session) {
+        setSession(session);
+        if (session.role === 'doctor') {
+          router.replace('/(doctor)/home');
+        } else {
+          router.replace('/(patient)/home');
+        }
+        return;
+      }
+      setGoogleModalVisible(true);
+    } catch {
+      setGoogleModalVisible(true);
+    } finally {
+      setGoogleLoading(false);
+    }
+  };
 
   const handleSelectGoogleAccount = async (account: { email: string; name: string }) => {
     const session = await authService.loginWithGoogle(account.email, account.name);
@@ -91,14 +114,19 @@ export default function WelcomeScreen() {
           />
 
           <TouchableOpacity
-            onPress={() => setGoogleModalVisible(true)}
+            onPress={handleGooglePress}
             activeOpacity={0.85}
+            disabled={googleLoading}
             className="flex-row items-center justify-center bg-white py-3 px-4 rounded-2xl border border-slate-200 shadow-sm"
             style={{ gap: 10 }}
           >
-            <GoogleLogo size={18} />
+            {googleLoading ? (
+              <ActivityIndicator size="small" color="#1E58C8" />
+            ) : (
+              <GoogleLogo size={18} />
+            )}
             <Text className="text-sm font-bold text-slate-800">
-              Continue with Google
+              {googleLoading ? 'Connecting to Google...' : 'Continue with Google'}
             </Text>
           </TouchableOpacity>
 

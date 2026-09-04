@@ -181,7 +181,7 @@ export default function DoctorProfileScreen() {
         </View>
 
         {/* Practice Clinic Location */}
-        <View className="bg-slate-50 p-4.5 rounded-3xl border border-slate-200/80 flex-row items-center" style={{ gap: 14 }}>
+        <View className="bg-slate-50 p-4 rounded-3xl border border-slate-200/80 flex-row items-center" style={{ gap: 14 }}>
           <View className="bg-blue-100 p-3 rounded-2xl">
             <Building2 size={22} color="#1E58C8" />
           </View>

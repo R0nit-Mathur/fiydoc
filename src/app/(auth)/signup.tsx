@@ -10,6 +10,7 @@ import { User, Mail, Lock, Phone, ArrowLeft, UserCheck, Stethoscope } from 'luci
 import { authService } from '@/services/authService';
 import { useAuthStore } from '@/store/useAuthStore';
 import { GoogleAccountPickerModal } from '@/components/auth/GoogleAccountPickerModal';
+import { googleAuthService } from '@/services/googleAuth';
 
 export default function SignupScreen() {
   const router = useRouter();
@@ -22,7 +23,16 @@ export default function SignupScreen() {
   const [password, setPassword] = useState('');
   const [loading, setLoading] = useState(false);
   const [googleModalVisible, setGoogleModalVisible] = useState(false);
+  const [googleLoading, setGoogleLoading] = useState(false);
   const [error, setError] = useState('');
+
+  const handleSafeBack = () => {
+    if (router.canGoBack()) {
+      router.back();
+    } else {
+      router.replace('/(auth)/welcome');
+    }
+  };
 
   const handleSignup = async () => {
     setError('');
@@ -48,6 +58,28 @@ export default function SignupScreen() {
     }
   };
 
+  const handleGooglePress = async () => {
+    setError('');
+    setGoogleLoading(true);
+    try {
+      const session = await googleAuthService.signInWithGoogle();
+      if (session) {
+        setSession(session);
+        if (session.role === 'doctor') {
+          router.replace('/(doctor)/home');
+        } else {
+          router.replace('/(patient)/home');
+        }
+        return;
+      }
+      setGoogleModalVisible(true);
+    } catch {
+      setGoogleModalVisible(true);
+    } finally {
+      setGoogleLoading(false);
+    }
+  };
+
   const handleSelectGoogleAccount = async (account: { email: string; name: string }) => {
     setError('');
     const session = await authService.loginWithGoogle(account.email, account.name);
@@ -68,7 +100,7 @@ export default function SignupScreen() {
       >
         <View>
           <TouchableOpacity
-            onPress={() => router.back()}
+            onPress={handleSafeBack}
             className="w-10 h-10 rounded-2xl bg-slate-100 items-center justify-center -ml-1 mb-3"
           >
             <ArrowLeft size={20} color="#0F172A" />
@@ -175,14 +207,19 @@ export default function SignupScreen() {
 
           {/* Google Sign In Button */}
           <TouchableOpacity
-            onPress={() => setGoogleModalVisible(true)}
+            onPress={handleGooglePress}
             activeOpacity={0.85}
+            disabled={googleLoading}
             className="flex-row items-center justify-center bg-white py-3 px-4 rounded-2xl border border-slate-200 shadow-sm"
             style={{ gap: 10 }}
           >
-            <GoogleLogo size={18} />
+            {googleLoading ? (
+              <ActivityIndicator size="small" color="#1E58C8" />
+            ) : (
+              <GoogleLogo size={18} />
+            )}
             <Text className="text-sm font-bold text-slate-800">
-              Continue with Google
+              {googleLoading ? 'Connecting to Google...' : 'Continue with Google'}
             </Text>
           </TouchableOpacity>
 

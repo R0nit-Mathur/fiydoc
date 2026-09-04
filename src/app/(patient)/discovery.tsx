@@ -69,48 +69,67 @@ export default function DoctorDiscoveryScreen() {
 
   return (
     <SafeAreaView className="flex-1 bg-slate-50" edges={['top']}>
-      {/* Premium Header */}
-      <View className="px-4 pt-3 pb-2.5 bg-white border-b border-slate-100 shadow-xs" style={{ gap: 10 }}>
-        <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }}>
-          <View style={{ flexDirection: 'row', alignItems: 'center', flex: 1, minWidth: 0, marginRight: 8, gap: 10 }}>
-            <TouchableOpacity
-              onPress={handleSafeBack}
-              activeOpacity={0.7}
-              className="w-9 h-9 rounded-xl bg-slate-100 items-center justify-center -ml-1"
-            >
-              <ArrowLeft size={18} color="#0F172A" />
-            </TouchableOpacity>
-            <View style={{ flex: 1, minWidth: 0 }}>
-              <Text style={{ fontSize: 18, fontWeight: '800', color: '#0F172A' }} numberOfLines={1}>
-                Verified Specialists
-              </Text>
-              <Text style={{ fontSize: 11, fontWeight: '500', color: '#64748B' }}>
-                Book In-Clinic Physical Consultations
-              </Text>
-            </View>
-          </View>
-          <View
+      {/* 1. Top Navigation Bar */}
+      <View
+        style={{
+          paddingHorizontal: 16,
+          paddingVertical: 12,
+          backgroundColor: '#FFFFFF',
+          flexDirection: 'row',
+          alignItems: 'center',
+          justifyContent: 'space-between',
+          borderBottomWidth: 1,
+          borderBottomColor: '#F1F5F9',
+        }}
+      >
+        <View style={{ flexDirection: 'row', alignItems: 'center', flex: 1, minWidth: 0, gap: 10 }}>
+          <TouchableOpacity
+            onPress={handleSafeBack}
+            activeOpacity={0.7}
             style={{
-              flexDirection: 'row',
+              width: 36,
+              height: 36,
+              borderRadius: 12,
+              backgroundColor: '#F1F5F9',
               alignItems: 'center',
-              backgroundColor: '#F0FAF8',
-              paddingHorizontal: 8,
-              paddingVertical: 4,
-              borderRadius: 10,
-              borderWidth: 1,
-              borderColor: '#B8EFE7',
-              flexShrink: 0,
-              gap: 4,
+              justifyContent: 'center',
             }}
           >
-            <View className="w-1.5 h-1.5 rounded-full bg-[#00B39B]" />
-            <Text style={{ fontSize: 10, fontWeight: '800', color: '#00B39B' }}>
-              MCI Accredited
+            <ArrowLeft size={18} color="#0F172A" />
+          </TouchableOpacity>
+          <View style={{ flex: 1, minWidth: 0 }}>
+            <Text style={{ fontSize: 18, fontWeight: '800', color: '#0F172A' }} numberOfLines={1}>
+              Verified Specialists
+            </Text>
+            <Text style={{ fontSize: 11, fontWeight: '500', color: '#64748B' }}>
+              Book In-Clinic Physical Consultations
             </Text>
           </View>
         </View>
 
-        {/* Search Bar */}
+        <View
+          style={{
+            flexDirection: 'row',
+            alignItems: 'center',
+            backgroundColor: '#F0FAF8',
+            paddingHorizontal: 10,
+            paddingVertical: 5,
+            borderRadius: 12,
+            borderWidth: 1,
+            borderColor: '#B8EFE7',
+            gap: 5,
+            flexShrink: 0,
+          }}
+        >
+          <View style={{ width: 6, height: 6, borderRadius: 3, backgroundColor: '#00B39B' }} />
+          <Text style={{ fontSize: 11, fontWeight: '800', color: '#00B39B' }}>
+            MCI Accredited
+          </Text>
+        </View>
+      </View>
+
+      {/* 2. Spaced Out Search Bar */}
+      <View style={{ paddingHorizontal: 16, paddingTop: 12, paddingBottom: 8, backgroundColor: '#FFFFFF' }}>
         <Input
           placeholder="Search by doctor name, specialty, or clinic..."
           value={searchQuery}
@@ -118,91 +137,137 @@ export default function DoctorDiscoveryScreen() {
           leftIcon={<Search size={18} color="#00B39B" />}
           rightIcon={
             searchQuery ? (
-              <TouchableOpacity onPress={() => setSearchQuery('')}>
+              <TouchableOpacity onPress={() => setSearchQuery('')} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}>
                 <X size={16} color="#94A3B8" />
               </TouchableOpacity>
             ) : undefined
           }
         />
+      </View>
 
-        {/* Specialty Filter Scrollable Chips with Icons */}
-        <ScrollView horizontal showsHorizontalScrollIndicator={false} className="py-0.5">
-          <View className="flex-row" style={{ gap: 6 }}>
-            {SPECIALTIES.map((item) => {
-              const IconComp = item.icon;
-              const isSelected = selectedSpecialty === item.name;
-              return (
-                <TouchableOpacity
-                  key={item.name}
-                  onPress={() => setSelectedSpecialty(item.name)}
-                  activeOpacity={0.8}
-                  className={`flex-row items-center px-3 py-2 rounded-xl border ${
-                    isSelected
-                      ? 'bg-[#00B39B] border-[#00B39B] shadow-xs'
-                      : 'bg-slate-50 border-slate-200'
-                  }`}
-                  style={{ gap: 5 }}
-                >
-                  <IconComp size={13} color={isSelected ? '#FFFFFF' : '#64748B'} />
-                  <Text
-                    style={{
-                      fontSize: 11,
-                      fontWeight: isSelected ? '800' : '600',
-                      color: isSelected ? '#FFFFFF' : '#334155',
-                    }}
-                  >
-                    {item.name}
-                  </Text>
-                </TouchableOpacity>
-              );
-            })}
+      {/* 3. Specialty Focus Filter Section */}
+      <View style={{ backgroundColor: '#FFFFFF', paddingBottom: 12, borderBottomWidth: 1, borderBottomColor: '#F1F5F9' }}>
+        <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: 16, marginBottom: 8 }}>
+          <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+            <SlidersHorizontal size={13} color="#64748B" />
+            <Text style={{ fontSize: 11, fontWeight: '800', color: '#64748B', textTransform: 'uppercase', letterSpacing: 0.5 }}>
+              Medical Specialties
+            </Text>
           </View>
+          {selectedSpecialty !== 'All' && (
+            <TouchableOpacity onPress={() => setSelectedSpecialty('All')}>
+              <Text style={{ fontSize: 11, fontWeight: '700', color: '#00B39B' }}>Reset to All</Text>
+            </TouchableOpacity>
+          )}
+        </View>
+
+        <ScrollView
+          horizontal
+          showsHorizontalScrollIndicator={false}
+          contentContainerStyle={{ paddingHorizontal: 16, gap: 8 }}
+        >
+          {SPECIALTIES.map((item) => {
+            const IconComp = item.icon;
+            const isSelected = selectedSpecialty === item.name;
+            return (
+              <TouchableOpacity
+                key={item.name}
+                onPress={() => setSelectedSpecialty(item.name)}
+                activeOpacity={0.8}
+                style={{
+                  flexDirection: 'row',
+                  alignItems: 'center',
+                  paddingHorizontal: 14,
+                  paddingVertical: 9,
+                  borderRadius: 14,
+                  borderWidth: 1,
+                  backgroundColor: isSelected ? '#00B39B' : '#F8FAFC',
+                  borderColor: isSelected ? '#00B39B' : '#E2E8F0',
+                  gap: 6,
+                  shadowColor: isSelected ? '#00B39B' : 'transparent',
+                  shadowOffset: { width: 0, height: 2 },
+                  shadowOpacity: isSelected ? 0.2 : 0,
+                  shadowRadius: 4,
+                }}
+              >
+                <IconComp size={14} color={isSelected ? '#FFFFFF' : '#64748B'} />
+                <Text
+                  style={{
+                    fontSize: 12,
+                    fontWeight: isSelected ? '800' : '600',
+                    color: isSelected ? '#FFFFFF' : '#334155',
+                  }}
+                >
+                  {item.name}
+                </Text>
+              </TouchableOpacity>
+            );
+          })}
         </ScrollView>
       </View>
 
-      {/* Secondary Sort & Count Filter Strip */}
+      {/* 4. Secondary Sort Bar with Proper Margins */}
       <View
         style={{
-          paddingHorizontal: 16,
-          paddingVertical: 8,
-          backgroundColor: '#FFFFFF',
+          marginHorizontal: 16,
+          marginTop: 12,
+          marginBottom: 4,
           flexDirection: 'row',
           alignItems: 'center',
           justifyContent: 'space-between',
-          borderBottomWidth: 1,
-          borderBottomColor: '#F8FAFC',
         }}
       >
-        <Text style={{ fontSize: 11, fontWeight: '700', color: '#64748B' }}>
-          {sortedDoctors.length} Specialists Available
-        </Text>
+        <View
+          style={{
+            flexDirection: 'row',
+            alignItems: 'center',
+            backgroundColor: '#F0FDFA',
+            paddingHorizontal: 10,
+            paddingVertical: 5,
+            borderRadius: 10,
+            borderWidth: 1,
+            borderColor: '#CCFBF1',
+          }}
+        >
+          <Text style={{ fontSize: 11, fontWeight: '800', color: '#00B39B' }}>
+            {sortedDoctors.length} Specialists
+          </Text>
+        </View>
 
-        <ScrollView horizontal showsHorizontalScrollIndicator={false} style={{ flexGrow: 0 }}>
-          <View className="flex-row" style={{ gap: 4 }}>
-            {SORT_OPTIONS.map((opt) => {
-              const isSel = selectedSort === opt;
-              return (
-                <TouchableOpacity
-                  key={opt}
-                  onPress={() => setSelectedSort(opt)}
-                  activeOpacity={0.8}
-                  className={`px-2.5 py-1 rounded-lg border ${
-                    isSel ? 'bg-slate-900 border-slate-900' : 'bg-slate-100 border-slate-200'
-                  }`}
+        <ScrollView
+          horizontal
+          showsHorizontalScrollIndicator={false}
+          style={{ flexGrow: 0 }}
+          contentContainerStyle={{ gap: 6 }}
+        >
+          {SORT_OPTIONS.map((opt) => {
+            const isSel = selectedSort === opt;
+            return (
+              <TouchableOpacity
+                key={opt}
+                onPress={() => setSelectedSort(opt)}
+                activeOpacity={0.8}
+                style={{
+                  paddingHorizontal: 11,
+                  paddingVertical: 6,
+                  borderRadius: 10,
+                  borderWidth: 1,
+                  backgroundColor: isSel ? '#0F172A' : '#FFFFFF',
+                  borderColor: isSel ? '#0F172A' : '#E2E8F0',
+                }}
+              >
+                <Text
+                  style={{
+                    fontSize: 11,
+                    fontWeight: isSel ? '800' : '600',
+                    color: isSel ? '#FFFFFF' : '#475569',
+                  }}
                 >
-                  <Text
-                    style={{
-                      fontSize: 10,
-                      fontWeight: isSel ? '800' : '600',
-                      color: isSel ? '#FFFFFF' : '#475569',
-                    }}
-                  >
-                    {opt}
-                  </Text>
-                </TouchableOpacity>
-              );
-            })}
-          </View>
+                  {opt}
+                </Text>
+              </TouchableOpacity>
+            );
+          })}
         </ScrollView>
       </View>
 

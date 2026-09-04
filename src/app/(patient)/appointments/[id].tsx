@@ -59,7 +59,7 @@ export default function AppointmentDetailScreen() {
 
         <ScrollView contentContainerStyle={{ padding: 20, paddingBottom: 40, gap: 18 }} showsVerticalScrollIndicator={false}>
           {/* Doctor Header */}
-          <View className="bg-slate-50 p-4.5 rounded-3xl border border-slate-200/80 flex-row items-center" style={{ gap: 14 }}>
+          <View className="bg-slate-50 p-4 rounded-3xl border border-slate-200/80 flex-row items-center" style={{ gap: 14 }}>
             <Avatar uri={apt.doctorAvatar} name={apt.doctorName} size="lg" />
             <View className="flex-1">
               <Text className="text-lg font-black text-slate-900">{apt.doctorName}</Text>
@@ -100,7 +100,7 @@ export default function AppointmentDetailScreen() {
           </View>
 
           {/* Clinic Location & Instructions */}
-          <View className="bg-slate-50 p-4.5 rounded-3xl border border-slate-200/80" style={{ gap: 6 }}>
+          <View className="bg-slate-50 p-4 rounded-3xl border border-slate-200/80" style={{ gap: 6 }}>
             <View className="flex-row items-center" style={{ gap: 8 }}>
               <MapPin size={18} color="#1E58C8" />
               <Text className="text-xs font-black text-slate-900 uppercase">Clinic Address</Text>
@@ -126,7 +126,7 @@ export default function AppointmentDetailScreen() {
           )}
 
           {/* Digital Prescription (Rx) Section */}
-          <View className="bg-emerald-50/70 p-4.5 rounded-3xl border border-emerald-200/90" style={{ gap: 8 }}>
+          <View className="bg-emerald-50/70 p-4 rounded-3xl border border-emerald-200/90" style={{ gap: 8 }}>
             <View className="flex-row items-center justify-between">
               <View className="flex-row items-center" style={{ gap: 8 }}>
                 <View className="bg-[#00B39B] p-2 rounded-xl">

@@ -86,7 +86,7 @@ export default function BookingConfirmScreen() {
           ) : null}
 
           {/* Appointment Clinic Summary */}
-          <View className="bg-slate-50 p-4.5 rounded-3xl border border-slate-200/80">
+          <View className="bg-slate-50 p-4 rounded-3xl border border-slate-200/80">
             <Text className="text-[11px] font-bold text-slate-400 uppercase tracking-wider mb-2">
               Appointment Summary
             </Text>
@@ -153,7 +153,7 @@ export default function BookingConfirmScreen() {
           </View>
 
           {/* Price Breakdown */}
-          <View className="bg-slate-50 p-4.5 rounded-3xl border border-slate-200/80" style={{ gap: 8 }}>
+          <View className="bg-slate-50 p-4 rounded-3xl border border-slate-200/80" style={{ gap: 8 }}>
             <View className="flex-row justify-between">
               <Text className="text-xs text-slate-500 font-medium">Consultation Fee</Text>
               <Text className="text-xs font-bold text-slate-900">₹{doctor?.consultationFee}</Text>

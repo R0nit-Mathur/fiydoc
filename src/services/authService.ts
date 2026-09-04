@@ -56,10 +56,15 @@ export const authService = {
     };
   },
 
-  async loginWithGoogle(customEmail: string, customName: string): Promise<UserSession> {
+  async loginWithGoogle(
+    customEmail: string,
+    customName: string,
+    customGoogleId?: string,
+    avatarUrl?: string
+  ): Promise<UserSession> {
     const email = customEmail.trim();
     const name = customName.trim();
-    const googleId = 'google_' + email.replace(/[^a-zA-Z0-9]/g, '_');
+    const googleId = customGoogleId || 'google_' + email.replace(/[^a-zA-Z0-9]/g, '_');
 
     try {
       const response = await apiClient<{ accessToken?: string; access_token?: string; user: any }>('/auth/google', {
@@ -77,7 +82,7 @@ export const authService = {
         name: response.user.patient?.fullName || response.user.doctor?.fullName || name,
         email: response.user.email,
         role: (response.user.role || 'PATIENT').toLowerCase() as 'patient' | 'doctor',
-        avatar: response.user.patient?.profilePhoto || response.user.doctor?.profilePhoto || 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=400&q=80',
+        avatar: response.user.patient?.profilePhoto || response.user.doctor?.profilePhoto || avatarUrl || 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=400&q=80',
         phone: response.user.phone || '+91 98765 43210',
         isLoggedIn: true,
         onboardingCompleted: true,

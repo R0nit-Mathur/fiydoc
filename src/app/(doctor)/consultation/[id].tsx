@@ -37,6 +37,7 @@ import {
   ShieldCheck,
   Building2,
   Calendar,
+  ClipboardList,
 } from 'lucide-react-native';
 
 interface PrescribedMedicine {
@@ -282,38 +283,107 @@ export default function DoctorConsultationWorkspaceScreen() {
         <BodyRegion3D />
 
         {/* SOAP Clinical Evaluation Section */}
-        <View className="bg-white p-4.5 rounded-3xl border border-slate-200/90 shadow-sm" style={{ gap: 14 }}>
-          <Text className="text-sm font-black text-slate-900 uppercase tracking-wider">
-            SOAP Clinical Evaluation
-          </Text>
+        <View
+          style={{
+            backgroundColor: '#FFFFFF',
+            padding: 16,
+            borderRadius: 24,
+            borderWidth: 1,
+            borderColor: '#E2E8F0',
+            gap: 16,
+            shadowColor: '#000',
+            shadowOffset: { width: 0, height: 2 },
+            shadowOpacity: 0.04,
+            shadowRadius: 6,
+          }}
+        >
+          <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }}>
+            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+              <View style={{ width: 32, height: 32, borderRadius: 10, backgroundColor: '#EFF6FF', alignItems: 'center', justifyContent: 'center' }}>
+                <ClipboardList size={17} color="#1E58C8" />
+              </View>
+              <Text style={{ fontSize: 14, fontWeight: '800', color: '#0F172A', textTransform: 'uppercase', letterSpacing: 0.5 }}>
+                SOAP Clinical Evaluation
+              </Text>
+            </View>
+            <Badge label="CLINICAL NOTES" variant="blue" size="sm" />
+          </View>
 
-          <Input
-            label="Subjective (Chief Complaints)"
-            value={subjective}
-            onChangeText={setSubjective}
-            multiline
-          />
+          {/* Subjective */}
+          <View style={{ gap: 6 }}>
+            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+              <View style={{ backgroundColor: '#1E58C8', paddingHorizontal: 6, paddingVertical: 2, borderRadius: 6 }}>
+                <Text style={{ fontSize: 10, fontWeight: '900', color: '#FFFFFF' }}>S</Text>
+              </View>
+              <Text style={{ fontSize: 12, fontWeight: '700', color: '#334155' }}>
+                Subjective — Chief Complaints & Symptoms
+              </Text>
+            </View>
+            <Input
+              placeholder="Record patient complaints, symptoms onset, severity..."
+              value={subjective}
+              onChangeText={setSubjective}
+              multiline
+            />
+          </View>
 
-          <Input
-            label="Objective (Vitals & Clinical Examination)"
-            value={objective}
-            onChangeText={setObjective}
-            multiline
-          />
+          {/* Objective */}
+          <View style={{ gap: 6 }}>
+            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+              <View style={{ backgroundColor: '#00B39B', paddingHorizontal: 6, paddingVertical: 2, borderRadius: 6 }}>
+                <Text style={{ fontSize: 10, fontWeight: '900', color: '#FFFFFF' }}>O</Text>
+              </View>
+              <Text style={{ fontSize: 12, fontWeight: '700', color: '#334155' }}>
+                Objective — Vitals & Physical Examination
+              </Text>
+            </View>
+            <Input
+              placeholder="Record BP, Pulse, SpO2, Heart/Lung sounds, physical exam..."
+              value={objective}
+              onChangeText={setObjective}
+              multiline
+            />
+          </View>
 
-          <Input
-            label="Assessment & Clinical Diagnosis"
-            value={assessment}
-            onChangeText={setAssessment}
-          />
+          {/* Assessment */}
+          <View style={{ gap: 6 }}>
+            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+              <View style={{ backgroundColor: '#8B5CF6', paddingHorizontal: 6, paddingVertical: 2, borderRadius: 6 }}>
+                <Text style={{ fontSize: 10, fontWeight: '900', color: '#FFFFFF' }}>A</Text>
+              </View>
+              <Text style={{ fontSize: 12, fontWeight: '700', color: '#334155' }}>
+                Assessment — Clinical Impression & Diagnosis
+              </Text>
+            </View>
+            <Input
+              placeholder="Enter confirmed diagnosis or clinical differential..."
+              value={assessment}
+              onChangeText={setAssessment}
+            />
+          </View>
         </View>
 
         {/* Prescribed Medications Section with Medical Directory Picker */}
-        <View className="bg-white p-4.5 rounded-3xl border border-slate-200/90 shadow-sm" style={{ gap: 14 }}>
-          <View className="flex-row items-center justify-between">
-            <View className="flex-row items-center" style={{ gap: 8 }}>
-              <Pill size={18} color="#00B39B" />
-              <Text className="text-sm font-black text-slate-900 uppercase tracking-wider">
+        <View
+          style={{
+            backgroundColor: '#FFFFFF',
+            padding: 16,
+            borderRadius: 24,
+            borderWidth: 1,
+            borderColor: '#E2E8F0',
+            gap: 14,
+            shadowColor: '#000',
+            shadowOffset: { width: 0, height: 2 },
+            shadowOpacity: 0.04,
+            shadowRadius: 6,
+          }}
+        >
+          <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }}>
+            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+              <View style={{ width: 32, height: 32, borderRadius: 10, backgroundColor: '#F0FDF4', alignItems: 'center', justifyContent: 'center' }}>
+                <Pill size={17} color="#00B39B" />
+              </View>
+              <Text style={{ fontSize: 14, fontWeight: '800', color: '#0F172A', textTransform: 'uppercase', letterSpacing: 0.5 }}>
                 Prescribed Medicines (Rx)
               </Text>
             </View>
@@ -322,49 +392,71 @@ export default function DoctorConsultationWorkspaceScreen() {
 
           {/* Medicines List */}
           {prescribedMeds.length === 0 ? (
-            <View className="bg-slate-50 p-4 rounded-2xl border border-dashed border-slate-300 items-center">
-              <Text className="text-xs text-slate-500 font-medium">No medications added yet.</Text>
+            <View style={{ backgroundColor: '#F8FAFC', padding: 18, borderRadius: 16, borderWidth: 1, borderColor: '#CBD5E1', borderStyle: 'dashed', alignItems: 'center' }}>
+              <Text style={{ fontSize: 12, color: '#64748B', fontWeight: '500' }}>No medications prescribed yet.</Text>
             </View>
           ) : (
             <View style={{ gap: 10 }}>
               {prescribedMeds.map((med) => (
                 <View
                   key={med.id}
-                  className="bg-slate-50 p-3.5 rounded-2xl border border-slate-200/80 flex-row items-start justify-between"
+                  style={{
+                    backgroundColor: '#F8FAFC',
+                    padding: 14,
+                    borderRadius: 18,
+                    borderWidth: 1,
+                    borderColor: '#E2E8F0',
+                    gap: 8,
+                  }}
                 >
-                  <View className="flex-1 mr-2" style={{ minWidth: 0 }}>
-                    <Text className="text-sm font-black text-slate-900" numberOfLines={1}>
-                      {med.name}
-                    </Text>
-                    <Text className="text-xs text-slate-500 font-medium mt-0.5" numberOfLines={1}>
-                      {med.generic}
-                    </Text>
-
-                    <View className="flex-row flex-wrap items-center mt-2" style={{ gap: 6 }}>
-                      <View className="bg-teal-50 px-2 py-0.5 rounded-md border border-teal-200">
-                        <Text className="text-[11px] font-bold text-[#00B39B]">{med.dosage}</Text>
-                      </View>
-                      <View className="bg-blue-50 px-2 py-0.5 rounded-md border border-blue-200">
-                        <Text className="text-[11px] font-bold text-[#1E58C8]">{med.frequency}</Text>
-                      </View>
-                      <View className="bg-slate-200 px-2 py-0.5 rounded-md">
-                        <Text className="text-[11px] font-bold text-slate-700">{med.duration}</Text>
-                      </View>
+                  <View style={{ flexDirection: 'row', alignItems: 'flex-start', justifyContent: 'space-between', gap: 8 }}>
+                    <View style={{ flex: 1, minWidth: 0 }}>
+                      <Text style={{ fontSize: 14, fontWeight: '800', color: '#0F172A' }} numberOfLines={1}>
+                        {med.name}
+                      </Text>
+                      <Text style={{ fontSize: 11, fontWeight: '600', color: '#64748B', marginTop: 1 }} numberOfLines={1}>
+                        {med.generic}
+                      </Text>
                     </View>
 
-                    {med.instructions ? (
-                      <Text className="text-[11px] text-slate-500 mt-1.5 font-medium italic">
-                        Note: {med.instructions}
-                      </Text>
-                    ) : null}
+                    <TouchableOpacity
+                      onPress={() => removeMedicine(med.id)}
+                      hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+                      style={{
+                        width: 32,
+                        height: 32,
+                        borderRadius: 10,
+                        backgroundColor: '#FEF2F2',
+                        borderWidth: 1,
+                        borderColor: '#FEE2E2',
+                        alignItems: 'center',
+                        justifyContent: 'center',
+                        flexShrink: 0,
+                      }}
+                    >
+                      <Trash2 size={15} color="#EF4444" />
+                    </TouchableOpacity>
                   </View>
 
-                  <TouchableOpacity
-                    onPress={() => removeMedicine(med.id)}
-                    className="p-1.5 bg-red-50 rounded-xl border border-red-100"
-                  >
-                    <Trash2 size={15} color="#EF4444" />
-                  </TouchableOpacity>
+                  <View style={{ flexDirection: 'row', flexWrap: 'wrap', alignItems: 'center', gap: 6 }}>
+                    <View style={{ backgroundColor: '#F0FDFA', paddingHorizontal: 8, paddingVertical: 3, borderRadius: 8, borderWidth: 1, borderColor: '#CCFBF1' }}>
+                      <Text style={{ fontSize: 11, fontWeight: '700', color: '#00B39B' }}>{med.dosage}</Text>
+                    </View>
+                    <View style={{ backgroundColor: '#EFF6FF', paddingHorizontal: 8, paddingVertical: 3, borderRadius: 8, borderWidth: 1, borderColor: '#DBEAFE' }}>
+                      <Text style={{ fontSize: 11, fontWeight: '700', color: '#1E58C8' }}>{med.frequency}</Text>
+                    </View>
+                    <View style={{ backgroundColor: '#F1F5F9', paddingHorizontal: 8, paddingVertical: 3, borderRadius: 8, borderWidth: 1, borderColor: '#E2E8F0' }}>
+                      <Text style={{ fontSize: 11, fontWeight: '700', color: '#475569' }}>{med.duration}</Text>
+                    </View>
+                  </View>
+
+                  {med.instructions ? (
+                    <View style={{ backgroundColor: '#FFFBEB', paddingHorizontal: 10, paddingVertical: 6, borderRadius: 10, borderWidth: 1, borderColor: '#FEF3C7', marginTop: 2 }}>
+                      <Text style={{ fontSize: 11, color: '#92400E', fontWeight: '500' }}>
+                        Note: {med.instructions}
+                      </Text>
+                    </View>
+                  ) : null}
                 </View>
               ))}
             </View>
@@ -374,22 +466,46 @@ export default function DoctorConsultationWorkspaceScreen() {
           <TouchableOpacity
             onPress={() => setShowMedicineModal(true)}
             activeOpacity={0.8}
-            className="bg-teal-50 border border-teal-300 py-3 rounded-2xl flex-row items-center justify-center"
-            style={{ gap: 6 }}
+            style={{
+              height: 48,
+              backgroundColor: '#F0FDFA',
+              borderWidth: 1.5,
+              borderColor: '#5EEAD4',
+              borderRadius: 16,
+              flexDirection: 'row',
+              alignItems: 'center',
+              justifyContent: 'center',
+              gap: 6,
+            }}
           >
             <Plus size={16} color="#00B39B" />
-            <Text className="text-xs font-black text-[#00B39B] uppercase tracking-wider">
+            <Text style={{ fontSize: 12, fontWeight: '800', color: '#00B39B', textTransform: 'uppercase', letterSpacing: 0.5 }}>
               Add Medicine (Rx)
             </Text>
           </TouchableOpacity>
         </View>
 
         {/* Prescribed Diagnostic Tests & Labs with Directory Picker */}
-        <View className="bg-white p-4.5 rounded-3xl border border-slate-200/90 shadow-sm" style={{ gap: 14 }}>
-          <View className="flex-row items-center justify-between">
-            <View className="flex-row items-center" style={{ gap: 8 }}>
-              <Activity size={18} color="#1E58C8" />
-              <Text className="text-sm font-black text-slate-900 uppercase tracking-wider">
+        <View
+          style={{
+            backgroundColor: '#FFFFFF',
+            padding: 16,
+            borderRadius: 24,
+            borderWidth: 1,
+            borderColor: '#E2E8F0',
+            gap: 14,
+            shadowColor: '#000',
+            shadowOffset: { width: 0, height: 2 },
+            shadowOpacity: 0.04,
+            shadowRadius: 6,
+          }}
+        >
+          <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }}>
+            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+              <View style={{ width: 32, height: 32, borderRadius: 10, backgroundColor: '#EFF6FF', alignItems: 'center', justifyContent: 'center' }}>
+                <Activity size={17} color="#1E58C8" />
+              </View>
+              <Text style={{ fontSize: 14, fontWeight: '800', color: '#0F172A', textTransform: 'uppercase', letterSpacing: 0.5 }}>
                 Diagnostic Investigations & Labs
               </Text>
             </View>
@@ -398,54 +514,79 @@ export default function DoctorConsultationWorkspaceScreen() {
 
           {/* Tests List */}
           {prescribedTests.length === 0 ? (
-            <View className="bg-slate-50 p-4 rounded-2xl border border-dashed border-slate-300 items-center">
-              <Text className="text-xs text-slate-500 font-medium">No diagnostic investigations added.</Text>
+            <View style={{ backgroundColor: '#F8FAFC', padding: 18, borderRadius: 16, borderWidth: 1, borderColor: '#CBD5E1', borderStyle: 'dashed', alignItems: 'center' }}>
+              <Text style={{ fontSize: 12, color: '#64748B', fontWeight: '500' }}>No diagnostic investigations added.</Text>
             </View>
           ) : (
             <View style={{ gap: 10 }}>
               {prescribedTests.map((test) => (
                 <View
                   key={test.id}
-                  className="bg-slate-50 p-3.5 rounded-2xl border border-slate-200/80 flex-row items-start justify-between"
+                  style={{
+                    backgroundColor: '#F8FAFC',
+                    padding: 14,
+                    borderRadius: 18,
+                    borderWidth: 1,
+                    borderColor: '#E2E8F0',
+                    gap: 8,
+                  }}
                 >
-                  <View className="flex-1 mr-2" style={{ minWidth: 0 }}>
-                    <Text className="text-sm font-black text-slate-900" numberOfLines={1}>
-                      {test.name}
-                    </Text>
-                    <Text className="text-xs text-slate-500 font-medium mt-0.5">
-                      Category: {test.category}
-                    </Text>
-
-                    <View className="flex-row items-center mt-2" style={{ gap: 6 }}>
-                      <View className="bg-slate-200 px-2 py-0.5 rounded-md">
-                        <Text className="text-[10px] font-bold text-slate-700">
-                          Turnaround: {test.turnaroundTime}
-                        </Text>
-                      </View>
-                      <View
-                        className={`px-2 py-0.5 rounded-md border ${
-                          test.fastingRequired
-                            ? 'bg-amber-50 border-amber-200'
-                            : 'bg-emerald-50 border-emerald-200'
-                        }`}
-                      >
-                        <Text
-                          className={`text-[10px] font-bold ${
-                            test.fastingRequired ? 'text-amber-800' : 'text-emerald-700'
-                          }`}
-                        >
-                          {test.fastingRequired ? 'Fasting Required' : 'Non-Fasting'}
-                        </Text>
-                      </View>
+                  <View style={{ flexDirection: 'row', alignItems: 'flex-start', justifyContent: 'space-between', gap: 8 }}>
+                    <View style={{ flex: 1, minWidth: 0 }}>
+                      <Text style={{ fontSize: 14, fontWeight: '800', color: '#0F172A' }} numberOfLines={1}>
+                        {test.name}
+                      </Text>
+                      <Text style={{ fontSize: 11, fontWeight: '600', color: '#64748B', marginTop: 1 }}>
+                        Category: {test.category}
+                      </Text>
                     </View>
+
+                    <TouchableOpacity
+                      onPress={() => removeTest(test.id)}
+                      hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+                      style={{
+                        width: 32,
+                        height: 32,
+                        borderRadius: 10,
+                        backgroundColor: '#FEF2F2',
+                        borderWidth: 1,
+                        borderColor: '#FEE2E2',
+                        alignItems: 'center',
+                        justifyContent: 'center',
+                        flexShrink: 0,
+                      }}
+                    >
+                      <Trash2 size={15} color="#EF4444" />
+                    </TouchableOpacity>
                   </View>
 
-                  <TouchableOpacity
-                    onPress={() => removeTest(test.id)}
-                    className="p-1.5 bg-red-50 rounded-xl border border-red-100"
-                  >
-                    <Trash2 size={15} color="#EF4444" />
-                  </TouchableOpacity>
+                  <View style={{ flexDirection: 'row', flexWrap: 'wrap', alignItems: 'center', gap: 6 }}>
+                    <View style={{ backgroundColor: '#F1F5F9', paddingHorizontal: 8, paddingVertical: 3, borderRadius: 8, borderWidth: 1, borderColor: '#E2E8F0' }}>
+                      <Text style={{ fontSize: 10, fontWeight: '700', color: '#475569' }}>
+                        Turnaround: {test.turnaroundTime}
+                      </Text>
+                    </View>
+                    <View
+                      style={{
+                        paddingHorizontal: 8,
+                        paddingVertical: 3,
+                        borderRadius: 8,
+                        borderWidth: 1,
+                        backgroundColor: test.fastingRequired ? '#FFFBEB' : '#F0FDF4',
+                        borderColor: test.fastingRequired ? '#FEF3C7' : '#DCFCE7',
+                      }}
+                    >
+                      <Text
+                        style={{
+                          fontSize: 10,
+                          fontWeight: '700',
+                          color: test.fastingRequired ? '#92400E' : '#166534',
+                        }}
+                      >
+                        {test.fastingRequired ? 'Fasting Required' : 'Non-Fasting (Routine)'}
+                      </Text>
+                    </View>
+                  </View>
                 </View>
               ))}
             </View>
@@ -455,11 +596,20 @@ export default function DoctorConsultationWorkspaceScreen() {
           <TouchableOpacity
             onPress={() => setShowTestModal(true)}
             activeOpacity={0.8}
-            className="bg-blue-50 border border-blue-300 py-3 rounded-2xl flex-row items-center justify-center"
-            style={{ gap: 6 }}
+            style={{
+              height: 48,
+              backgroundColor: '#EFF6FF',
+              borderWidth: 1.5,
+              borderColor: '#93C5FD',
+              borderRadius: 16,
+              flexDirection: 'row',
+              alignItems: 'center',
+              justifyContent: 'center',
+              gap: 6,
+            }}
           >
             <Plus size={16} color="#1E58C8" />
-            <Text className="text-xs font-black text-[#1E58C8] uppercase tracking-wider">
+            <Text style={{ fontSize: 12, fontWeight: '800', color: '#1E58C8', textTransform: 'uppercase', letterSpacing: 0.5 }}>
               Add Diagnostic Test / Lab
             </Text>
           </TouchableOpacity>
@@ -526,29 +676,43 @@ export default function DoctorConsultationWorkspaceScreen() {
           </ScrollView>
 
           {/* Results List */}
-          <ScrollView style={{ maxHeight: 340 }} showsVerticalScrollIndicator={false}>
+          <ScrollView style={{ maxHeight: 360 }} showsVerticalScrollIndicator={false} nestedScrollEnabled>
             <View style={{ gap: 10 }}>
               {filteredMedicines.map((med) => (
                 <TouchableOpacity
                   key={med.id}
                   onPress={() => addMedicineFromDirectory(med)}
                   activeOpacity={0.8}
-                  className="p-3.5 bg-slate-50 rounded-2xl border border-slate-200/90 flex-row items-center justify-between"
+                  style={{
+                    backgroundColor: '#F8FAFC',
+                    padding: 14,
+                    borderRadius: 18,
+                    borderWidth: 1,
+                    borderColor: '#E2E8F0',
+                    gap: 8,
+                  }}
                 >
-                  <View className="flex-1 mr-2" style={{ minWidth: 0 }}>
-                    <View className="flex-row items-center" style={{ gap: 6 }}>
-                      <Text className="text-sm font-black text-slate-900">{med.name}</Text>
-                      <Badge label={med.dosageForm} variant="blue" size="sm" />
+                  <View style={{ flexDirection: 'row', alignItems: 'flex-start', justifyContent: 'space-between', gap: 10 }}>
+                    <View style={{ flex: 1, minWidth: 0 }}>
+                      <Text style={{ fontSize: 14, fontWeight: '800', color: '#0F172A' }} numberOfLines={1}>
+                        {med.name}
+                      </Text>
+                      <Text style={{ fontSize: 11, fontWeight: '500', color: '#64748B', marginTop: 1 }} numberOfLines={1}>
+                        {med.generic}
+                      </Text>
                     </View>
-                    <Text className="text-xs text-slate-500 font-medium mt-0.5" numberOfLines={1}>
-                      {med.generic}
-                    </Text>
-                    <Text className="text-[11px] font-bold text-[#00B39B] mt-1">
-                      {med.defaultDosage} • {med.defaultFrequency} • {med.defaultDuration}
-                    </Text>
+                    <View style={{ backgroundColor: '#00B39B', paddingHorizontal: 12, paddingVertical: 6, borderRadius: 10, flexShrink: 0 }}>
+                      <Text style={{ fontSize: 11, fontWeight: '800', color: '#FFFFFF' }}>+ Add Rx</Text>
+                    </View>
                   </View>
-                  <View className="bg-[#00B39B] px-3 py-1.5 rounded-xl">
-                    <Text className="text-xs font-extrabold text-white">Add Rx</Text>
+
+                  <View style={{ flexDirection: 'row', flexWrap: 'wrap', alignItems: 'center', gap: 6 }}>
+                    <Badge label={med.dosageForm} variant="blue" size="sm" />
+                    <View style={{ backgroundColor: '#F0FDFA', paddingHorizontal: 8, paddingVertical: 2.5, borderRadius: 6, borderWidth: 1, borderColor: '#CCFBF1' }}>
+                      <Text style={{ fontSize: 10, fontWeight: '700', color: '#00B39B' }}>
+                        {med.defaultDosage} • {med.defaultFrequency} • {med.defaultDuration}
+                      </Text>
+                    </View>
                   </View>
                 </TouchableOpacity>
               ))}
@@ -606,32 +770,62 @@ export default function DoctorConsultationWorkspaceScreen() {
           </ScrollView>
 
           {/* Results List */}
-          <ScrollView style={{ maxHeight: 340 }} showsVerticalScrollIndicator={false}>
+          <ScrollView style={{ maxHeight: 360 }} showsVerticalScrollIndicator={false} nestedScrollEnabled>
             <View style={{ gap: 10 }}>
               {filteredTests.map((test) => (
                 <TouchableOpacity
                   key={test.id}
                   onPress={() => addTestFromDirectory(test)}
                   activeOpacity={0.8}
-                  className="p-3.5 bg-slate-50 rounded-2xl border border-slate-200/90 flex-row items-center justify-between"
+                  style={{
+                    backgroundColor: '#F8FAFC',
+                    padding: 14,
+                    borderRadius: 18,
+                    borderWidth: 1,
+                    borderColor: '#E2E8F0',
+                    gap: 8,
+                  }}
                 >
-                  <View className="flex-1 mr-2" style={{ minWidth: 0 }}>
-                    <Text className="text-sm font-black text-slate-900" numberOfLines={1}>
-                      {test.name}
-                    </Text>
-                    <Text className="text-xs text-slate-500 font-medium mt-0.5">
-                      Category: {test.category} • Turnaround: {test.turnaroundTime}
-                    </Text>
-                    <Text
-                      className={`text-[11px] font-bold mt-1 ${
-                        test.fastingRequired ? 'text-amber-700' : 'text-emerald-600'
-                      }`}
-                    >
-                      {test.fastingRequired ? '• Fasting Required' : '• Routine (Non-Fasting)'}
-                    </Text>
+                  <View style={{ flexDirection: 'row', alignItems: 'flex-start', justifyContent: 'space-between', gap: 10 }}>
+                    <View style={{ flex: 1, minWidth: 0 }}>
+                      <Text style={{ fontSize: 14, fontWeight: '800', color: '#0F172A' }} numberOfLines={1}>
+                        {test.name}
+                      </Text>
+                      <Text style={{ fontSize: 11, fontWeight: '500', color: '#64748B', marginTop: 1 }}>
+                        Category: {test.category}
+                      </Text>
+                    </View>
+                    <View style={{ backgroundColor: '#1E58C8', paddingHorizontal: 12, paddingVertical: 6, borderRadius: 10, flexShrink: 0 }}>
+                      <Text style={{ fontSize: 11, fontWeight: '800', color: '#FFFFFF' }}>+ Order</Text>
+                    </View>
                   </View>
-                  <View className="bg-[#1E58C8] px-3 py-1.5 rounded-xl">
-                    <Text className="text-xs font-extrabold text-white">Order</Text>
+
+                  <View style={{ flexDirection: 'row', flexWrap: 'wrap', alignItems: 'center', gap: 6 }}>
+                    <View style={{ backgroundColor: '#F1F5F9', paddingHorizontal: 8, paddingVertical: 2.5, borderRadius: 6, borderWidth: 1, borderColor: '#E2E8F0' }}>
+                      <Text style={{ fontSize: 10, fontWeight: '700', color: '#475569' }}>
+                        Turnaround: {test.turnaroundTime}
+                      </Text>
+                    </View>
+                    <View
+                      style={{
+                        paddingHorizontal: 8,
+                        paddingVertical: 2.5,
+                        borderRadius: 6,
+                        borderWidth: 1,
+                        backgroundColor: test.fastingRequired ? '#FFFBEB' : '#F0FDF4',
+                        borderColor: test.fastingRequired ? '#FEF3C7' : '#DCFCE7',
+                      }}
+                    >
+                      <Text
+                        style={{
+                          fontSize: 10,
+                          fontWeight: '700',
+                          color: test.fastingRequired ? '#92400E' : '#166534',
+                        }}
+                      >
+                        {test.fastingRequired ? 'Fasting Required' : 'Non-Fasting (Routine)'}
+                      </Text>
+                    </View>
                   </View>
                 </TouchableOpacity>
               ))}

@@ -34,7 +34,7 @@ export function Input({
       )}
       <View
         style={{
-          height: multiline ? 90 : 50,
+          minHeight: multiline ? 88 : 50,
           flexDirection: 'row',
           alignItems: multiline ? 'flex-start' : 'center',
           backgroundColor: 'rgba(248, 250, 252, 0.92)',
@@ -76,10 +76,10 @@ export function Input({
           style={[
             {
               flex: 1,
-              height: multiline ? 70 : '100%',
+              minHeight: multiline ? 68 : '100%',
               textAlignVertical: multiline ? 'top' : 'center',
               includeFontPadding: false,
-              paddingVertical: 0,
+              paddingVertical: multiline ? 2 : 0,
               paddingHorizontal: 0,
               margin: 0,
               fontSize: 14,
