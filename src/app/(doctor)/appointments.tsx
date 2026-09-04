@@ -3,14 +3,16 @@ import { View, Text, ScrollView, TouchableOpacity, Image } from 'react-native';
 import { useRouter } from 'expo-router';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useAppointmentsQuery } from '@/hooks/queries/useAppointmentsQuery';
+import { useAuthStore } from '@/store/useAuthStore';
 import { Badge } from '@/components/ui/Badge';
 import { Avatar } from '@/components/ui/Avatar';
 import { Calendar, Clock, Video, Building2, ChevronRight, ArrowLeft } from 'lucide-react-native';
 
 export default function DoctorAppointmentsQueueScreen() {
   const router = useRouter();
+  const { user } = useAuthStore();
   const [activeTab, setActiveTab] = useState<'upcoming' | 'completed' | 'cancelled'>('upcoming');
-  const { data: appointments } = useAppointmentsQuery(undefined, 'doc_1');
+  const { data: appointments } = useAppointmentsQuery(undefined, user?.id);
 
   const filtered = appointments?.filter((a) => a.status === activeTab);
 

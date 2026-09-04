@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useState } from 'react';
 import { View, Text, TextInput, TextInputProps, Platform } from 'react-native';
 
 interface InputProps extends TextInputProps {
@@ -7,6 +7,7 @@ interface InputProps extends TextInputProps {
   leftIcon?: React.ReactNode;
   rightIcon?: React.ReactNode;
   containerClassName?: string;
+  activeColor?: string;
 }
 
 export function Input({
@@ -15,10 +16,15 @@ export function Input({
   leftIcon,
   rightIcon,
   containerClassName = '',
+  activeColor = '#1E58C8',
   multiline,
   style,
+  onFocus,
+  onBlur,
   ...props
 }: InputProps) {
+  const [isFocused, setIsFocused] = useState(false);
+
   return (
     <View className={`w-full ${containerClassName}`}>
       {label && (
@@ -27,22 +33,29 @@ export function Input({
         </Text>
       )}
       <View
-        className={`flex-row border rounded-2xl bg-slate-50 px-3.5 ${
-          error
-            ? 'border-red-500 bg-red-50/50'
-            : 'border-slate-200 focus:border-[#1E58C8]'
-        }`}
         style={{
-          minHeight: multiline ? 84 : 48,
+          height: multiline ? 90 : 50,
+          flexDirection: 'row',
           alignItems: multiline ? 'flex-start' : 'center',
-          paddingVertical: multiline ? 10 : 2,
+          backgroundColor: 'rgba(248, 250, 252, 0.92)',
+          borderWidth: 1.5,
+          borderColor: error
+            ? '#EF4444'
+            : isFocused
+            ? activeColor
+            : '#E2E8F0',
+          borderRadius: 16,
+          paddingHorizontal: 14,
+          paddingVertical: multiline ? 10 : 0,
         }}
       >
         {leftIcon && (
           <View
-            className="mr-2.5"
             style={{
+              marginRight: 10,
               justifyContent: 'center',
+              alignItems: 'center',
+              flexShrink: 0,
               marginTop: multiline ? (Platform.OS === 'ios' ? 2 : 4) : 0,
             }}
           >
@@ -52,16 +65,26 @@ export function Input({
         <TextInput
           placeholderTextColor="#94A3B8"
           multiline={multiline}
-          className="flex-1 text-sm text-slate-900 font-medium"
+          onFocus={(e) => {
+            setIsFocused(true);
+            onFocus?.(e);
+          }}
+          onBlur={(e) => {
+            setIsFocused(false);
+            onBlur?.(e);
+          }}
           style={[
             {
+              flex: 1,
+              height: multiline ? 70 : '100%',
               textAlignVertical: multiline ? 'top' : 'center',
               includeFontPadding: false,
-              paddingVertical: Platform.OS === 'ios' ? 4 : 0,
+              paddingVertical: 0,
               paddingHorizontal: 0,
-              minHeight: multiline ? 60 : 40,
+              margin: 0,
               fontSize: 14,
-              lineHeight: 20,
+              fontWeight: '600',
+              color: '#0F172A',
             },
             style,
           ]}
@@ -69,9 +92,11 @@ export function Input({
         />
         {rightIcon && (
           <View
-            className="ml-2.5"
             style={{
+              marginLeft: 10,
               justifyContent: 'center',
+              alignItems: 'center',
+              flexShrink: 0,
               marginTop: multiline ? (Platform.OS === 'ios' ? 2 : 4) : 0,
             }}
           >

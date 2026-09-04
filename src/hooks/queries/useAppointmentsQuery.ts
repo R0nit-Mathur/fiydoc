@@ -1,21 +1,35 @@
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { appointmentService, BookAppointmentInput } from '@/services/appointmentService';
 import { useAppointmentStore } from '@/store/useAppointmentStore';
+import { useAuthStore } from '@/store/useAuthStore';
 
 export function useAppointmentsQuery(patientId?: string, doctorId?: string) {
   const storeAppointments = useAppointmentStore((s) => s.appointments);
+  const currentUser = useAuthStore((s) => s.user);
+
+  const effectivePatientId = patientId || (currentUser?.role === 'patient' ? currentUser.id : undefined);
+  const effectiveDoctorId = doctorId || (currentUser?.role === 'doctor' ? currentUser.id : undefined);
 
   return useQuery({
-    queryKey: ['appointments', patientId, doctorId, storeAppointments.length],
+    queryKey: ['appointments', effectivePatientId, effectiveDoctorId, storeAppointments.length],
     queryFn: async () => {
-      const fetched = doctorId
-        ? await appointmentService.getDoctorQueue(doctorId)
-        : await appointmentService.getPatientAppointments(patientId || 'pat_1');
-      // Combine store appointments with mock seed appointments
+      let fetched: any[] = [];
+      try {
+        if (effectiveDoctorId) {
+          fetched = await appointmentService.getDoctorQueue(effectiveDoctorId);
+        } else if (effectivePatientId) {
+          fetched = await appointmentService.getPatientAppointments(effectivePatientId);
+        }
+      } catch (err) {
+        console.warn('[useAppointmentsQuery] Failed to fetch server appointments, using local state:', err);
+      }
+
+      // Combine store appointments with fetched appointments
       const ids = new Set(fetched.map((a) => a.id));
       const custom = storeAppointments.filter((a) => !ids.has(a.id));
       return [...custom, ...fetched];
     },
+    enabled: Boolean(effectiveDoctorId || effectivePatientId),
   });
 }
 

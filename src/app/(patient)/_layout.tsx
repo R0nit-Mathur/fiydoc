@@ -1,4 +1,5 @@
 import React from 'react';
+import { Platform } from 'react-native';
 import { Tabs } from 'expo-router';
 import { Home, Stethoscope, FileText, User } from 'lucide-react-native';
 
@@ -10,20 +11,27 @@ export default function PatientLayout() {
         tabBarActiveTintColor: '#00B39B',
         tabBarInactiveTintColor: '#94A3B8',
         tabBarStyle: {
-          backgroundColor: '#FFFFFF',
-          borderTopColor: '#F1F5F9',
+          position: 'absolute',
+          bottom: Platform.OS === 'ios' ? 24 : 16,
+          left: 16,
+          right: 16,
           height: 64,
+          backgroundColor: 'rgba(255, 255, 255, 0.92)',
+          borderRadius: 28,
+          borderWidth: 1.5,
+          borderColor: 'rgba(255, 255, 255, 0.95)',
           paddingBottom: 8,
           paddingTop: 8,
-          elevation: 8,
-          shadowColor: '#000000',
-          shadowOffset: { width: 0, height: -2 },
-          shadowOpacity: 0.05,
-          shadowRadius: 8,
+          shadowColor: '#0F2454',
+          shadowOffset: { width: 0, height: 10 },
+          shadowOpacity: 0.12,
+          shadowRadius: 20,
+          elevation: 10,
         },
         tabBarLabelStyle: {
-          fontSize: 11,
-          fontWeight: '700',
+          fontSize: 10,
+          fontWeight: '800',
+          marginTop: 2,
         },
       }}
     >
@@ -31,28 +39,28 @@ export default function PatientLayout() {
         name="home"
         options={{
           title: 'Home',
-          tabBarIcon: ({ color, size }) => <Home size={size} color={color} />,
+          tabBarIcon: ({ color, size }) => <Home size={size - 2} color={color} />,
         }}
       />
       <Tabs.Screen
         name="discovery"
         options={{
-          title: 'Find Doctors',
-          tabBarIcon: ({ color, size }) => <Stethoscope size={size} color={color} />,
+          title: 'Doctors',
+          tabBarIcon: ({ color, size }) => <Stethoscope size={size - 2} color={color} />,
         }}
       />
       <Tabs.Screen
         name="health/index"
         options={{
-          title: 'Medical Records',
-          tabBarIcon: ({ color, size }) => <FileText size={size} color={color} />,
+          title: 'Records',
+          tabBarIcon: ({ color, size }) => <FileText size={size - 2} color={color} />,
         }}
       />
       <Tabs.Screen
         name="profile"
         options={{
           title: 'Profile',
-          tabBarIcon: ({ color, size }) => <User size={size} color={color} />,
+          tabBarIcon: ({ color, size }) => <User size={size - 2} color={color} />,
         }}
       />
 

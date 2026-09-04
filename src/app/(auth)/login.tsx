@@ -1,10 +1,11 @@
 import React, { useState } from 'react';
-import { View, Text, TouchableOpacity, ScrollView } from 'react-native';
+import { View, Text, TouchableOpacity, ScrollView, ActivityIndicator } from 'react-native';
 import { useRouter } from 'expo-router';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { FiYLogo } from '@/components/ui/FiYLogo';
 import { Input } from '@/components/ui/Input';
 import { Button } from '@/components/ui/Button';
+import { GoogleLogo } from '@/components/ui/GoogleLogo';
 import { Mail, Lock, ArrowLeft, Eye, EyeOff, ShieldCheck, UserCheck, Stethoscope } from 'lucide-react-native';
 import { authService } from '@/services/authService';
 import { useAuthStore } from '@/store/useAuthStore';
@@ -17,6 +18,7 @@ export default function LoginScreen() {
   const [password, setPassword] = useState('');
   const [showPassword, setShowPassword] = useState(false);
   const [loading, setLoading] = useState(false);
+  const [googleLoading, setGoogleLoading] = useState(false);
   const [error, setError] = useState('');
 
   const handleLogin = async () => {
@@ -31,7 +33,6 @@ export default function LoginScreen() {
       const session = await authService.loginWithEmail(email.trim(), password);
       setSession(session);
 
-      // Direct role-based navigation
       if (session.role === 'doctor') {
         router.replace('/(doctor)/home');
       } else {
@@ -44,6 +45,25 @@ export default function LoginScreen() {
     }
   };
 
+  const handleGoogleLogin = async () => {
+    setError('');
+    try {
+      setGoogleLoading(true);
+      const session = await authService.loginWithGoogle();
+      setSession(session);
+
+      if (session.role === 'doctor') {
+        router.replace('/(doctor)/home');
+      } else {
+        router.replace('/(patient)/home');
+      }
+    } catch (err: any) {
+      setError(err.message || 'Google sign-in failed. Please try again.');
+    } finally {
+      setGoogleLoading(false);
+    }
+  };
+
   const setTestAccount = (accountEmail: string) => {
     setEmail(accountEmail);
     setPassword('password123');
@@ -53,65 +73,68 @@ export default function LoginScreen() {
   return (
     <SafeAreaView className="flex-1 bg-white" edges={['top']}>
       <ScrollView
-        contentContainerStyle={{ padding: 24, flexGrow: 1, justifyContent: 'space-between' }}
+        contentContainerStyle={{ padding: 20, flexGrow: 1, justifyContent: 'space-between' }}
         showsVerticalScrollIndicator={false}
       >
         <View>
-          <TouchableOpacity onPress={() => router.back()} className="p-2 -ml-2 mb-3 self-start">
-            <ArrowLeft size={24} color="#0F172A" />
+          <TouchableOpacity
+            onPress={() => router.back()}
+            className="w-10 h-10 rounded-2xl bg-slate-100 items-center justify-center -ml-1 mb-3"
+          >
+            <ArrowLeft size={20} color="#0F172A" />
           </TouchableOpacity>
 
           <FiYLogo size="lg" />
-          <Text className="text-2xl font-black text-slate-900 mt-4">Welcome to FiYDoc</Text>
-          <Text className="text-xs text-slate-500 font-medium mt-1 mb-6 leading-5">
+          <Text className="text-2xl font-black text-slate-900 mt-3">Welcome to FiYDoc</Text>
+          <Text className="text-xs text-slate-500 font-medium mt-1 mb-5 leading-5">
             Sign in to access your clinic appointments, verified specialist network, and health records.
           </Text>
 
           {/* Quick Test Accounts Bar */}
-          <View className="bg-slate-50 p-4 rounded-3xl border border-slate-200/90 mb-5">
-            <Text className="text-[11px] font-black text-slate-400 uppercase tracking-wider mb-2.5">
+          <View className="bg-slate-50/90 p-3.5 rounded-2xl border border-slate-200/90 mb-4">
+            <Text className="text-[10px] font-black text-slate-400 uppercase tracking-wider mb-2">
               ⚡ Quick Test Credentials:
             </Text>
-            <View className="flex-row" style={{ gap: 8 }}>
+            <View className="flex-row" style={{ gap: 6 }}>
               <TouchableOpacity
                 onPress={() => setTestAccount('patient@fiydoc.app')}
                 activeOpacity={0.8}
-                className="flex-1 bg-teal-50 border border-teal-200/90 p-2.5 rounded-2xl items-center flex-row justify-center"
-                style={{ gap: 6 }}
+                className="flex-1 bg-teal-50 border border-teal-200/90 p-2 rounded-xl items-center flex-row justify-center"
+                style={{ gap: 4 }}
               >
-                <UserCheck size={14} color="#00B39B" />
+                <UserCheck size={13} color="#00B39B" />
                 <Text className="text-xs font-bold text-teal-800">Patient</Text>
               </TouchableOpacity>
 
               <TouchableOpacity
                 onPress={() => setTestAccount('doctor@fiydoc.app')}
                 activeOpacity={0.8}
-                className="flex-1 bg-blue-50 border border-blue-200/90 p-2.5 rounded-2xl items-center flex-row justify-center"
-                style={{ gap: 6 }}
+                className="flex-1 bg-blue-50 border border-blue-200/90 p-2 rounded-xl items-center flex-row justify-center"
+                style={{ gap: 4 }}
               >
-                <Stethoscope size={14} color="#1E58C8" />
+                <Stethoscope size={13} color="#1E58C8" />
                 <Text className="text-xs font-bold text-blue-800">Doctor</Text>
               </TouchableOpacity>
 
               <TouchableOpacity
                 onPress={() => setTestAccount('admin@fiydoc.app')}
                 activeOpacity={0.8}
-                className="flex-1 bg-slate-100 border border-slate-300 p-2.5 rounded-2xl items-center flex-row justify-center"
-                style={{ gap: 6 }}
+                className="flex-1 bg-slate-100 border border-slate-300 p-2 rounded-xl items-center flex-row justify-center"
+                style={{ gap: 4 }}
               >
-                <ShieldCheck size={14} color="#0F172A" />
+                <ShieldCheck size={13} color="#0F172A" />
                 <Text className="text-xs font-bold text-slate-800">Admin</Text>
               </TouchableOpacity>
             </View>
           </View>
 
           {error ? (
-            <View className="bg-red-50 p-3.5 rounded-2xl border border-red-200 mb-4">
+            <View className="bg-red-50 p-3 rounded-xl border border-red-200 mb-4">
               <Text className="text-xs font-bold text-red-600">{error}</Text>
             </View>
           ) : null}
 
-          <View style={{ gap: 16 }}>
+          <View style={{ gap: 14 }}>
             <Input
               label="Email Address"
               placeholder="name@example.com"
@@ -119,7 +142,7 @@ export default function LoginScreen() {
               autoCapitalize="none"
               value={email}
               onChangeText={setEmail}
-              leftIcon={<Mail size={18} color="#94A3B8" />}
+              leftIcon={<Mail size={16} color="#94A3B8" />}
             />
 
             <Input
@@ -128,21 +151,21 @@ export default function LoginScreen() {
               secureTextEntry={!showPassword}
               value={password}
               onChangeText={setPassword}
-              leftIcon={<Lock size={18} color="#94A3B8" />}
+              leftIcon={<Lock size={16} color="#94A3B8" />}
               rightIcon={
                 <TouchableOpacity onPress={() => setShowPassword(!showPassword)}>
-                  {showPassword ? <EyeOff size={18} color="#94A3B8" /> : <Eye size={18} color="#94A3B8" />}
+                  {showPassword ? <EyeOff size={16} color="#94A3B8" /> : <Eye size={16} color="#94A3B8" />}
                 </TouchableOpacity>
               }
             />
 
-            <TouchableOpacity onPress={() => router.push('/(auth)/forgot-password')} className="self-end pt-1">
+            <TouchableOpacity onPress={() => router.push('/(auth)/forgot-password')} className="self-end pt-0.5">
               <Text className="text-xs font-bold text-[#1E58C8]">Forgot Password?</Text>
             </TouchableOpacity>
           </View>
         </View>
 
-        <View style={{ gap: 16, paddingTop: 24, paddingBottom: 8 }}>
+        <View style={{ gap: 12, paddingTop: 20, paddingBottom: 6 }}>
           <Button
             title="Sign In to FiYDoc"
             onPress={handleLogin}
@@ -151,7 +174,27 @@ export default function LoginScreen() {
             size="lg"
           />
 
-          <View className="flex-row justify-center items-center">
+          {/* Google Sign In Button */}
+          <TouchableOpacity
+            onPress={handleGoogleLogin}
+            disabled={googleLoading || loading}
+            activeOpacity={0.85}
+            className="flex-row items-center justify-center bg-white py-3 px-4 rounded-2xl border border-slate-200 shadow-sm"
+            style={{ gap: 10 }}
+          >
+            {googleLoading ? (
+              <ActivityIndicator size="small" color="#1E58C8" />
+            ) : (
+              <>
+                <GoogleLogo size={18} />
+                <Text className="text-sm font-bold text-slate-800">
+                  Continue with Google
+                </Text>
+              </>
+            )}
+          </TouchableOpacity>
+
+          <View className="flex-row justify-center items-center pt-1">
             <Text className="text-xs text-slate-500">Don't have an account yet? </Text>
             <TouchableOpacity onPress={() => router.push('/(auth)/signup')}>
               <Text className="text-xs font-bold text-[#00B39B]">Create an Account</Text>
