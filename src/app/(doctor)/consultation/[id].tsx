@@ -1,4 +1,4 @@
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, useEffect } from 'react';
 import {
   View,
   Text,
@@ -6,6 +6,7 @@ import {
   TouchableOpacity,
   TextInput,
   Platform,
+  BackHandler,
 } from 'react-native';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { SafeAreaView } from 'react-native-safe-area-context';
@@ -61,6 +62,23 @@ export default function DoctorConsultationWorkspaceScreen() {
   const { user } = useAuthStore();
   const { id } = useLocalSearchParams<{ id: string }>();
   const { data: apt } = useAppointmentDetailQuery(id as string);
+
+  const handleSafeBack = () => {
+    if (router.canGoBack()) {
+      router.back();
+    } else {
+      router.replace('/(doctor)/home');
+    }
+  };
+
+  useEffect(() => {
+    const onBackPress = () => {
+      handleSafeBack();
+      return true;
+    };
+    const sub = BackHandler.addEventListener('hardwareBackPress', onBackPress);
+    return () => sub.remove();
+  }, []);
 
   // SOAP Clinical Evaluation State
   const [subjective, setSubjective] = useState(
@@ -219,14 +237,16 @@ export default function DoctorConsultationWorkspaceScreen() {
         }}
       >
         <TouchableOpacity
-          onPress={() => router.back()}
-          style={{ flexDirection: 'row', alignItems: 'center', gap: 4, flexShrink: 0 }}
+          onPress={handleSafeBack}
+          activeOpacity={0.7}
+          style={{ flexDirection: 'row', alignItems: 'center', gap: 6, flexShrink: 0 }}
         >
-          <ArrowLeft size={20} color="#0F172A" />
-          <Text style={{ fontSize: 12, fontWeight: '700', color: '#64748B' }}>Back</Text>
+          <View className="w-8 h-8 rounded-xl bg-slate-100 items-center justify-center">
+            <ArrowLeft size={18} color="#0F172A" />
+          </View>
         </TouchableOpacity>
         <Text
-          style={{ fontSize: 15, fontWeight: '800', color: '#0F172A', flex: 1, textAlign: 'center', marginHorizontal: 8 }}
+          style={{ fontSize: 16, fontWeight: '800', color: '#0F172A', flex: 1, textAlign: 'center', marginHorizontal: 8 }}
           numberOfLines={1}
         >
           Clinical Suite
@@ -237,7 +257,7 @@ export default function DoctorConsultationWorkspaceScreen() {
       </View>
 
       <ScrollView
-        contentContainerStyle={{ padding: 18, paddingBottom: 80, gap: 18 }}
+        contentContainerStyle={{ paddingHorizontal: 16, paddingTop: 14, paddingBottom: 100, gap: 14 }}
         showsVerticalScrollIndicator={false}
       >
         {/* Patient Identity Header Card */}
@@ -355,11 +375,11 @@ export default function DoctorConsultationWorkspaceScreen() {
             onPress={() => setShowMedicineModal(true)}
             activeOpacity={0.8}
             className="bg-teal-50 border border-teal-300 py-3 rounded-2xl flex-row items-center justify-center"
-            style={{ gap: 8 }}
+            style={{ gap: 6 }}
           >
             <Plus size={16} color="#00B39B" />
             <Text className="text-xs font-black text-[#00B39B] uppercase tracking-wider">
-              Add Medicine From Clinical Directory
+              Add Medicine (Rx)
             </Text>
           </TouchableOpacity>
         </View>
@@ -436,11 +456,11 @@ export default function DoctorConsultationWorkspaceScreen() {
             onPress={() => setShowTestModal(true)}
             activeOpacity={0.8}
             className="bg-blue-50 border border-blue-300 py-3 rounded-2xl flex-row items-center justify-center"
-            style={{ gap: 8 }}
+            style={{ gap: 6 }}
           >
             <Plus size={16} color="#1E58C8" />
             <Text className="text-xs font-black text-[#1E58C8] uppercase tracking-wider">
-              Add Lab / Diagnostic Test From Directory
+              Add Diagnostic Test / Lab
             </Text>
           </TouchableOpacity>
         </View>
@@ -449,7 +469,7 @@ export default function DoctorConsultationWorkspaceScreen() {
       {/* Bottom Sticky Action Bar */}
       <View className="p-4 bg-white border-t border-slate-100 shadow-lg">
         <Button
-          title="Sign & Issue Digital Prescription (Rx)"
+          title="Sign Digital Prescription (Rx)"
           onPress={handleSignPrescription}
           variant="teal"
           size="lg"

@@ -19,11 +19,22 @@ import {
   Users,
   Settings,
 } from 'lucide-react-native';
+import { BackHandler } from 'react-native';
 
 export default function DoctorHomeScreen() {
   const router = useRouter();
   const { user } = useAuthStore();
   const { data: appointments } = useAppointmentsQuery(undefined, user?.id);
+
+  // Consume hardware back on doctor home so React Navigation never throws GO_BACK unhandled
+  React.useEffect(() => {
+    const onBackPress = () => {
+      // Stay on doctor home or exit app safely
+      return true;
+    };
+    const sub = BackHandler.addEventListener('hardwareBackPress', onBackPress);
+    return () => sub.remove();
+  }, []);
 
   const nextPatient = appointments?.[0];
 

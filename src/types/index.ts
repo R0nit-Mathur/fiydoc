@@ -155,5 +155,11 @@ export interface Patient {
   avatar?: string;
   lastVisit?: string;
   condition?: string;
+  conditions?: string[];
   allergies?: string[];
+  emergencyContact?: {
+    name: string;
+    phone: string;
+    relation: string;
+  };
 }

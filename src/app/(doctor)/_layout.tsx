@@ -1,9 +1,13 @@
 import React from 'react';
 import { Platform } from 'react-native';
 import { Tabs } from 'expo-router';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Home, Calendar, Users, Stethoscope, Clock } from 'lucide-react-native';
 
 export default function DoctorLayout() {
+  const insets = useSafeAreaInsets();
+  const bottomInset = Math.max(insets.bottom, Platform.OS === 'ios' ? 16 : 8);
+
   return (
     <Tabs
       screenOptions={{
@@ -11,26 +15,21 @@ export default function DoctorLayout() {
         tabBarActiveTintColor: '#1E58C8',
         tabBarInactiveTintColor: '#94A3B8',
         tabBarStyle: {
-          position: 'absolute',
-          bottom: Platform.OS === 'ios' ? 24 : 16,
-          left: 16,
-          right: 16,
-          height: 64,
-          backgroundColor: 'rgba(255, 255, 255, 0.92)',
-          borderRadius: 28,
-          borderWidth: 1.5,
-          borderColor: 'rgba(255, 255, 255, 0.95)',
-          paddingBottom: 8,
-          paddingTop: 8,
-          shadowColor: '#0F2454',
-          shadowOffset: { width: 0, height: 10 },
-          shadowOpacity: 0.12,
-          shadowRadius: 20,
-          elevation: 10,
+          backgroundColor: '#FFFFFF',
+          borderTopWidth: 1,
+          borderTopColor: '#F1F5F9',
+          height: 52 + bottomInset,
+          paddingBottom: bottomInset,
+          paddingTop: 6,
+          elevation: 8,
+          shadowColor: '#000000',
+          shadowOffset: { width: 0, height: -2 },
+          shadowOpacity: 0.05,
+          shadowRadius: 6,
         },
         tabBarLabelStyle: {
           fontSize: 10,
-          fontWeight: '800',
+          fontWeight: '700',
           marginTop: 2,
         },
       }}

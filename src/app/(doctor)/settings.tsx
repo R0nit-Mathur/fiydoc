@@ -1,5 +1,5 @@
-import React, { useState } from 'react';
-import { View, Text, ScrollView, TouchableOpacity, Switch } from 'react-native';
+import React, { useState, useEffect } from 'react';
+import { View, Text, ScrollView, TouchableOpacity, Switch, BackHandler } from 'react-native';
 import { useRouter } from 'expo-router';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Button } from '@/components/ui/Button';
@@ -16,20 +16,37 @@ export default function DoctorSettingsScreen() {
   const [ifsc, setIfsc] = useState('HDFC0001234');
   const [saved, setSaved] = useState(false);
 
+  const handleSafeBack = () => {
+    if (router.canGoBack()) {
+      router.back();
+    } else {
+      router.replace('/(doctor)/home');
+    }
+  };
+
+  useEffect(() => {
+    const backAction = () => {
+      handleSafeBack();
+      return true;
+    };
+    const backHandler = BackHandler.addEventListener('hardwareBackPress', backAction);
+    return () => backHandler.remove();
+  }, []);
+
   const handleSave = () => {
     setSaved(true);
     setTimeout(() => setSaved(false), 2000);
   };
 
   return (
-    <SafeAreaView className="flex-1 bg-white justify-between">
+    <SafeAreaView className="flex-1 bg-white justify-between" edges={['top']}>
       <View>
-        <View className="px-5 py-3 flex-row items-center justify-between border-b border-slate-100 shadow-sm">
-          <TouchableOpacity onPress={() => router.back()} className="p-1 -ml-1">
-            <ArrowLeft size={24} color="#0F172A" />
+        <View className="px-4 py-3 flex-row items-center justify-between border-b border-slate-100 shadow-xs">
+          <TouchableOpacity onPress={handleSafeBack} activeOpacity={0.7} className="w-9 h-9 rounded-xl bg-slate-100 items-center justify-center -ml-1">
+            <ArrowLeft size={18} color="#0F172A" />
           </TouchableOpacity>
-          <Text className="text-base font-bold text-slate-900">Doctor Practice Settings</Text>
-          <View className="w-6" />
+          <Text className="text-base font-extrabold text-slate-900">Doctor Practice Settings</Text>
+          <View className="w-9" />
         </View>
 
         <ScrollView contentContainerClassName="p-5 space-y-5">

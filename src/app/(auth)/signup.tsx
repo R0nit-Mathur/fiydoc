@@ -9,6 +9,7 @@ import { GoogleLogo } from '@/components/ui/GoogleLogo';
 import { User, Mail, Lock, Phone, ArrowLeft, UserCheck, Stethoscope } from 'lucide-react-native';
 import { authService } from '@/services/authService';
 import { useAuthStore } from '@/store/useAuthStore';
+import { GoogleAccountPickerModal } from '@/components/auth/GoogleAccountPickerModal';
 
 export default function SignupScreen() {
   const router = useRouter();
@@ -20,7 +21,7 @@ export default function SignupScreen() {
   const [phone, setPhone] = useState('');
   const [password, setPassword] = useState('');
   const [loading, setLoading] = useState(false);
-  const [googleLoading, setGoogleLoading] = useState(false);
+  const [googleModalVisible, setGoogleModalVisible] = useState(false);
   const [error, setError] = useState('');
 
   const handleSignup = async () => {
@@ -32,7 +33,11 @@ export default function SignupScreen() {
 
     try {
       setLoading(true);
-      const session = await authService.registerWithEmail(email.trim(), password, role, name.trim());
+      const formattedName = role === 'DOCTOR' && !name.trim().toLowerCase().startsWith('dr.')
+        ? `Dr. ${name.trim()}`
+        : name.trim();
+
+      const session = await authService.registerWithEmail(email.trim(), password, role, formattedName);
       session.phone = phone || '+91 98765 43210';
       setSession(session);
       router.push('/(auth)/otp');
@@ -43,17 +48,15 @@ export default function SignupScreen() {
     }
   };
 
-  const handleGoogleSignup = async () => {
+  const handleSelectGoogleAccount = async (account: { email: string; name: string }) => {
     setError('');
-    try {
-      setGoogleLoading(true);
-      const session = await authService.loginWithGoogle();
-      setSession(session);
+    const session = await authService.loginWithGoogle(account.email, account.name);
+    setSession(session);
+
+    if (session.role === 'doctor') {
+      router.replace('/(doctor)/home');
+    } else {
       router.replace('/(patient)/home');
-    } catch (err: any) {
-      setError(err.message || 'Google sign-up failed.');
-    } finally {
-      setGoogleLoading(false);
     }
   };
 
@@ -172,22 +175,15 @@ export default function SignupScreen() {
 
           {/* Google Sign In Button */}
           <TouchableOpacity
-            onPress={handleGoogleSignup}
-            disabled={googleLoading || loading}
+            onPress={() => setGoogleModalVisible(true)}
             activeOpacity={0.85}
             className="flex-row items-center justify-center bg-white py-3 px-4 rounded-2xl border border-slate-200 shadow-sm"
             style={{ gap: 10 }}
           >
-            {googleLoading ? (
-              <ActivityIndicator size="small" color="#00B39B" />
-            ) : (
-              <>
-                <GoogleLogo size={18} />
-                <Text className="text-sm font-bold text-slate-800">
-                  Continue with Google
-                </Text>
-              </>
-            )}
+            <GoogleLogo size={18} />
+            <Text className="text-sm font-bold text-slate-800">
+              Continue with Google
+            </Text>
           </TouchableOpacity>
 
           <View className="flex-row justify-center items-center pt-1">
@@ -198,6 +194,13 @@ export default function SignupScreen() {
           </View>
         </View>
       </ScrollView>
+
+      {/* Google Account Picker Modal */}
+      <GoogleAccountPickerModal
+        visible={googleModalVisible}
+        onClose={() => setGoogleModalVisible(false)}
+        onSelectAccount={handleSelectGoogleAccount}
+      />
     </SafeAreaView>
   );
 }

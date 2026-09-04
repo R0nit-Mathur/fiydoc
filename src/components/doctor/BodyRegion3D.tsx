@@ -172,7 +172,7 @@ export function BodyRegion3D({ onSelectRegion }: BodyRegion3DProps) {
         </View>
       </View>
 
-      {/* Responsive Pain Severity Scale (2 rows of 5 or 1 clean slider) */}
+      {/* Responsive Pain Severity Scale (2 rows of 5) */}
       <View style={{ gap: 6 }}>
         <View className="flex-row items-center justify-between">
           <Text className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">
@@ -181,22 +181,41 @@ export function BodyRegion3D({ onSelectRegion }: BodyRegion3DProps) {
           <Text className="text-xs font-black text-red-400">{painLevel} / 10</Text>
         </View>
 
-        <View className="flex-row" style={{ gap: 4 }}>
-          {[1, 2, 3, 4, 5, 6, 7, 8, 9, 10].map((num) => {
-            const active = painLevel >= num;
-            return (
-              <TouchableOpacity
-                key={num}
-                onPress={() => setPainLevel(num)}
-                activeOpacity={0.8}
-                className={`flex-1 h-7 rounded-lg items-center justify-center ${
-                  active ? 'bg-red-500' : 'bg-slate-800'
-                }`}
-              >
-                <Text className="text-[10px] font-black text-white">{num}</Text>
-              </TouchableOpacity>
-            );
-          })}
+        <View style={{ gap: 4 }}>
+          <View className="flex-row" style={{ gap: 4 }}>
+            {[1, 2, 3, 4, 5].map((num) => {
+              const active = painLevel >= num;
+              return (
+                <TouchableOpacity
+                  key={num}
+                  onPress={() => setPainLevel(num)}
+                  activeOpacity={0.8}
+                  className={`flex-1 h-7 rounded-lg items-center justify-center ${
+                    active ? 'bg-amber-500' : 'bg-slate-800'
+                  }`}
+                >
+                  <Text className="text-[10px] font-black text-white">{num}</Text>
+                </TouchableOpacity>
+              );
+            })}
+          </View>
+          <View className="flex-row" style={{ gap: 4 }}>
+            {[6, 7, 8, 9, 10].map((num) => {
+              const active = painLevel >= num;
+              return (
+                <TouchableOpacity
+                  key={num}
+                  onPress={() => setPainLevel(num)}
+                  activeOpacity={0.8}
+                  className={`flex-1 h-7 rounded-lg items-center justify-center ${
+                    active ? 'bg-red-500' : 'bg-slate-800'
+                  }`}
+                >
+                  <Text className="text-[10px] font-black text-white">{num}</Text>
+                </TouchableOpacity>
+              );
+            })}
+          </View>
         </View>
       </View>
     </View>

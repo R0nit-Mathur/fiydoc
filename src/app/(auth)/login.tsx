@@ -9,6 +9,7 @@ import { GoogleLogo } from '@/components/ui/GoogleLogo';
 import { Mail, Lock, ArrowLeft, Eye, EyeOff, ShieldCheck, UserCheck, Stethoscope } from 'lucide-react-native';
 import { authService } from '@/services/authService';
 import { useAuthStore } from '@/store/useAuthStore';
+import { GoogleAccountPickerModal } from '@/components/auth/GoogleAccountPickerModal';
 
 export default function LoginScreen() {
   const router = useRouter();
@@ -18,7 +19,7 @@ export default function LoginScreen() {
   const [password, setPassword] = useState('');
   const [showPassword, setShowPassword] = useState(false);
   const [loading, setLoading] = useState(false);
-  const [googleLoading, setGoogleLoading] = useState(false);
+  const [googleModalVisible, setGoogleModalVisible] = useState(false);
   const [error, setError] = useState('');
 
   const handleLogin = async () => {
@@ -45,22 +46,15 @@ export default function LoginScreen() {
     }
   };
 
-  const handleGoogleLogin = async () => {
+  const handleSelectGoogleAccount = async (account: { email: string; name: string }) => {
     setError('');
-    try {
-      setGoogleLoading(true);
-      const session = await authService.loginWithGoogle();
-      setSession(session);
+    const session = await authService.loginWithGoogle(account.email, account.name);
+    setSession(session);
 
-      if (session.role === 'doctor') {
-        router.replace('/(doctor)/home');
-      } else {
-        router.replace('/(patient)/home');
-      }
-    } catch (err: any) {
-      setError(err.message || 'Google sign-in failed. Please try again.');
-    } finally {
-      setGoogleLoading(false);
+    if (session.role === 'doctor') {
+      router.replace('/(doctor)/home');
+    } else {
+      router.replace('/(patient)/home');
     }
   };
 
@@ -176,22 +170,15 @@ export default function LoginScreen() {
 
           {/* Google Sign In Button */}
           <TouchableOpacity
-            onPress={handleGoogleLogin}
-            disabled={googleLoading || loading}
+            onPress={() => setGoogleModalVisible(true)}
             activeOpacity={0.85}
             className="flex-row items-center justify-center bg-white py-3 px-4 rounded-2xl border border-slate-200 shadow-sm"
             style={{ gap: 10 }}
           >
-            {googleLoading ? (
-              <ActivityIndicator size="small" color="#1E58C8" />
-            ) : (
-              <>
-                <GoogleLogo size={18} />
-                <Text className="text-sm font-bold text-slate-800">
-                  Continue with Google
-                </Text>
-              </>
-            )}
+            <GoogleLogo size={18} />
+            <Text className="text-sm font-bold text-slate-800">
+              Continue with Google
+            </Text>
           </TouchableOpacity>
 
           <View className="flex-row justify-center items-center pt-1">
@@ -202,6 +189,13 @@ export default function LoginScreen() {
           </View>
         </View>
       </ScrollView>
+
+      {/* Google Account Picker Modal */}
+      <GoogleAccountPickerModal
+        visible={googleModalVisible}
+        onClose={() => setGoogleModalVisible(false)}
+        onSelectAccount={handleSelectGoogleAccount}
+      />
     </SafeAreaView>
   );
 }

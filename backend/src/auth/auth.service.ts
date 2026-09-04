@@ -45,38 +45,61 @@ export class AuthService {
         },
       });
     } else if (dto.role === Role.DOCTOR) {
-      const doc = await this.prisma.doctor.create({
+      await this.prisma.doctor.create({
         data: {
           userId: user.id,
-          fullName: dto.fullName || 'Dr. Medical User',
+          fullName: dto.fullName || 'Dr. Specialist',
           specialization: 'General Medicine',
-          consultationFee: 500,
-        },
-      });
-      await this.prisma.doctorVerification.create({
-        data: {
-          doctorId: doc.id,
-          registrationNumber: 'PENDING-REG',
-          registrationAuthority: 'State Medical Council',
-          status: 'REGISTERED',
+          consultationFee: 750,
+          clinic: {
+            create: {
+              name: 'FiYDoc Clinical Practice Center',
+              address: 'Metro Health Hub, Suite 304',
+              timings: '09:00 AM - 05:00 PM',
+            },
+          },
+          verification: {
+            create: {
+              registrationNumber: `MCI-${Math.floor(100000 + Math.random() * 900000)}`,
+              registrationAuthority: 'National Medical Commission / MCI',
+              status: 'REGISTERED',
+            },
+          },
         },
       });
     }
 
-    return this.generateTokenResponse(user);
+    const fullUser = await this.prisma.user.findUnique({
+      where: { id: user.id },
+      include: {
+        patient: true,
+        doctor: {
+          include: { verification: true, clinic: true },
+        },
+      },
+    });
+
+    return this.generateTokenResponse(fullUser);
   }
 
   async login(dto: { email?: string; phone?: string; password?: string }) {
     let user;
+    const includeRelations = {
+      patient: true,
+      doctor: {
+        include: { verification: true, clinic: true },
+      },
+    };
+
     if (dto.email) {
       user = await this.prisma.user.findUnique({
         where: { email: dto.email },
-        include: { patient: true, doctor: true },
+        include: includeRelations,
       });
     } else if (dto.phone) {
       user = await this.prisma.user.findUnique({
         where: { phone: dto.phone },
-        include: { patient: true, doctor: true },
+        include: includeRelations,
       });
     }
 
@@ -93,6 +116,13 @@ export class AuthService {
   }
 
   async googleOAuthLogin(googleUser: { googleId: string; email: string; name: string }) {
+    const includeRelations = {
+      patient: true,
+      doctor: {
+        include: { verification: true, clinic: true },
+      },
+    };
+
     let user = await this.prisma.user.findFirst({
       where: {
         OR: [
@@ -100,7 +130,7 @@ export class AuthService {
           { email: googleUser.email },
         ],
       },
-      include: { patient: true, doctor: true },
+      include: includeRelations,
     });
 
     if (!user) {
@@ -115,13 +145,13 @@ export class AuthService {
             },
           },
         },
-        include: { patient: true, doctor: true },
+        include: includeRelations,
       });
     } else if (!user.googleId) {
       user = await this.prisma.user.update({
         where: { id: user.id },
         data: { googleId: googleUser.googleId },
-        include: { patient: true, doctor: true },
+        include: includeRelations,
       });
     }
 

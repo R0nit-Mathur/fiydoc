@@ -79,52 +79,130 @@ export default function PatientHomeScreen() {
       </View>
 
       <ScrollView
-        contentContainerStyle={{ padding: 20, paddingBottom: 120, gap: 24 }}
+        contentContainerStyle={{ paddingHorizontal: 16, paddingTop: 16, paddingBottom: 100, gap: 20 }}
         showsVerticalScrollIndicator={false}
       >
         {/* Search Trigger Bar */}
         <TouchableOpacity
           onPress={() => router.push('/(patient)/discovery')}
           activeOpacity={0.9}
-          className="bg-white px-4 py-3.5 rounded-2xl border border-slate-200/90 shadow-sm flex-row items-center"
-          style={{ gap: 12 }}
+          className="bg-white px-4 py-3 rounded-2xl border border-slate-200/90 shadow-sm flex-row items-center"
+          style={{ gap: 10 }}
         >
           <Search size={18} color="#00B39B" />
-          <Text className="text-xs font-semibold text-slate-400 flex-1">
-            Search specialists, clinic names, or conditions...
+          <Text className="text-xs font-semibold text-slate-400 flex-1" numberOfLines={1}>
+            Search specialists, clinics, or conditions...
           </Text>
         </TouchableOpacity>
 
         {/* Core Services Action Grid */}
         <View>
-          <Text className="text-base font-black text-slate-900 mb-3.5">Healthcare Services</Text>
-          <View className="flex-row justify-between" style={{ gap: 14 }}>
+          <Text style={{ fontSize: 15, fontWeight: '800', color: '#0F172A', marginBottom: 10 }}>
+            Healthcare Services
+          </Text>
+          <View style={{ flexDirection: 'row', gap: 10 }}>
             <TouchableOpacity
               onPress={() => router.push('/(patient)/discovery')}
               activeOpacity={0.85}
-              className="flex-1 bg-white p-4.5 rounded-3xl border border-slate-200/80 shadow-sm"
+              style={{
+                flex: 1,
+                minWidth: 0,
+                backgroundColor: '#FFFFFF',
+                borderRadius: 18,
+                paddingHorizontal: 12,
+                paddingVertical: 12,
+                borderWidth: 1,
+                borderColor: '#E2E8F0',
+                justifyContent: 'space-between',
+                minHeight: 106,
+                shadowColor: '#000',
+                shadowOpacity: 0.03,
+                shadowRadius: 5,
+                elevation: 1,
+              }}
             >
-              <View className="bg-teal-50 w-11 h-11 rounded-2xl items-center justify-center mb-3 border border-teal-100">
-                <Stethoscope size={22} color="#00B39B" />
+              <View
+                style={{
+                  backgroundColor: '#F0FAF8',
+                  width: 36,
+                  height: 36,
+                  borderRadius: 10,
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  borderWidth: 1,
+                  borderColor: '#B8EFE7',
+                }}
+              >
+                <Stethoscope size={18} color="#00B39B" />
               </View>
-              <Text className="text-sm font-black text-slate-900">Find Specialists</Text>
-              <Text className="text-[11px] text-slate-500 mt-1 leading-4">
-                Book Verified In-Clinic Consultations
-              </Text>
+              <View style={{ marginTop: 8 }}>
+                <Text
+                  style={{ fontSize: 13, fontWeight: '800', color: '#0F172A' }}
+                  numberOfLines={1}
+                  ellipsizeMode="tail"
+                >
+                  Find Specialists
+                </Text>
+                <Text
+                  style={{ fontSize: 10, fontWeight: '600', color: '#64748B', marginTop: 2 }}
+                  numberOfLines={1}
+                  ellipsizeMode="tail"
+                >
+                  In-Clinic Bookings
+                </Text>
+              </View>
             </TouchableOpacity>
 
             <TouchableOpacity
               onPress={() => router.push('/(patient)/health/index')}
               activeOpacity={0.85}
-              className="flex-1 bg-white p-4.5 rounded-3xl border border-slate-200/80 shadow-sm"
+              style={{
+                flex: 1,
+                minWidth: 0,
+                backgroundColor: '#FFFFFF',
+                borderRadius: 18,
+                paddingHorizontal: 12,
+                paddingVertical: 12,
+                borderWidth: 1,
+                borderColor: '#E2E8F0',
+                justifyContent: 'space-between',
+                minHeight: 106,
+                shadowColor: '#000',
+                shadowOpacity: 0.03,
+                shadowRadius: 5,
+                elevation: 1,
+              }}
             >
-              <View className="bg-purple-50 w-11 h-11 rounded-2xl items-center justify-center mb-3 border border-purple-100">
-                <FileText size={22} color="#8B5CF6" />
+              <View
+                style={{
+                  backgroundColor: '#FAF5FF',
+                  width: 36,
+                  height: 36,
+                  borderRadius: 10,
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  borderWidth: 1,
+                  borderColor: '#E9D5FF',
+                }}
+              >
+                <FileText size={18} color="#8B5CF6" />
               </View>
-              <Text className="text-sm font-black text-slate-900">Medical Records</Text>
-              <Text className="text-[11px] text-slate-500 mt-1 leading-4">
-                Prescriptions & Clinical Summary
-              </Text>
+              <View style={{ marginTop: 8 }}>
+                <Text
+                  style={{ fontSize: 13, fontWeight: '800', color: '#0F172A' }}
+                  numberOfLines={1}
+                  ellipsizeMode="tail"
+                >
+                  Medical Records
+                </Text>
+                <Text
+                  style={{ fontSize: 10, fontWeight: '600', color: '#64748B', marginTop: 2 }}
+                  numberOfLines={1}
+                  ellipsizeMode="tail"
+                >
+                  Prescriptions & OCR
+                </Text>
+              </View>
             </TouchableOpacity>
           </View>
         </View>

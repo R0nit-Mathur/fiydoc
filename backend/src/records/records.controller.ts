@@ -16,4 +16,9 @@ export class RecordsController {
   async upload(@Body() body: any) {
     return this.recordsService.uploadRecord(body);
   }
+
+  @Post('process')
+  async processOcr(@Body() body: { patientId: string; title: string; type: string; rawText?: string }) {
+    return this.recordsService.processOcrDocument(body);
+  }
 }

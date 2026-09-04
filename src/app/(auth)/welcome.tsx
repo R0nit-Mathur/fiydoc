@@ -8,26 +8,20 @@ import { GoogleLogo } from '@/components/ui/GoogleLogo';
 import { ShieldCheck, HeartPulse, Stethoscope, Sparkles } from 'lucide-react-native';
 import { authService } from '@/services/authService';
 import { useAuthStore } from '@/store/useAuthStore';
+import { GoogleAccountPickerModal } from '@/components/auth/GoogleAccountPickerModal';
 
 export default function WelcomeScreen() {
   const router = useRouter();
   const setSession = useAuthStore((s) => s.setSession);
-  const [loading, setLoading] = useState(false);
+  const [googleModalVisible, setGoogleModalVisible] = useState(false);
 
-  const handleGoogleLogin = async () => {
-    try {
-      setLoading(true);
-      const session = await authService.loginWithGoogle();
-      setSession(session);
-      if (session.role === 'doctor') {
-        router.replace('/(doctor)/home');
-      } else {
-        router.replace('/(patient)/home');
-      }
-    } catch (err) {
-      console.error(err);
-    } finally {
-      setLoading(false);
+  const handleSelectGoogleAccount = async (account: { email: string; name: string }) => {
+    const session = await authService.loginWithGoogle(account.email, account.name);
+    setSession(session);
+    if (session.role === 'doctor') {
+      router.replace('/(doctor)/home');
+    } else {
+      router.replace('/(patient)/home');
     }
   };
 
@@ -97,22 +91,15 @@ export default function WelcomeScreen() {
           />
 
           <TouchableOpacity
-            onPress={handleGoogleLogin}
-            disabled={loading}
+            onPress={() => setGoogleModalVisible(true)}
             activeOpacity={0.85}
             className="flex-row items-center justify-center bg-white py-3 px-4 rounded-2xl border border-slate-200 shadow-sm"
             style={{ gap: 10 }}
           >
-            {loading ? (
-              <ActivityIndicator size="small" color="#1E58C8" />
-            ) : (
-              <>
-                <GoogleLogo size={18} />
-                <Text className="text-sm font-bold text-slate-800">
-                  Continue with Google
-                </Text>
-              </>
-            )}
+            <GoogleLogo size={18} />
+            <Text className="text-sm font-bold text-slate-800">
+              Continue with Google
+            </Text>
           </TouchableOpacity>
 
           <View className="flex-row justify-center items-center pt-1">
@@ -123,6 +110,13 @@ export default function WelcomeScreen() {
           </View>
         </View>
       </ScrollView>
+
+      {/* Interactive Google Account Picker Modal */}
+      <GoogleAccountPickerModal
+        visible={googleModalVisible}
+        onClose={() => setGoogleModalVisible(false)}
+        onSelectAccount={handleSelectGoogleAccount}
+      />
     </SafeAreaView>
   );
 }

@@ -9,12 +9,66 @@ import { Badge } from '@/components/ui/Badge';
 import { Avatar } from '@/components/ui/Avatar';
 import { Search, UserCheck, AlertCircle, Phone, Mail, ChevronRight, Activity } from 'lucide-react-native';
 
+const DEFAULT_PATIENTS: Patient[] = [
+  {
+    id: 'pat_1',
+    name: 'Aarav Mehta',
+    email: 'aarav.mehta@gmail.com',
+    phone: '+91 98765 43210',
+    gender: 'Male',
+    age: 32,
+    bloodGroup: 'O+',
+    allergies: ['Penicillin', 'Sulfa drugs'],
+    conditions: ['Mild Hypertension', 'Asthma'],
+    avatar: 'https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?w=400&q=80',
+    emergencyContact: {
+      name: 'Pooja Mehta (Spouse)',
+      phone: '+91 98765 43211',
+      relation: 'Spouse',
+    },
+  },
+  {
+    id: 'pat_2',
+    name: 'Ananya Roy',
+    email: 'ananya.roy@gmail.com',
+    phone: '+91 98234 56789',
+    gender: 'Female',
+    age: 28,
+    bloodGroup: 'B+',
+    allergies: ['Peanuts'],
+    conditions: ['Dermatitis'],
+    avatar: 'https://images.unsplash.com/photo-1494790108377-be9c29b29330?w=400&q=80',
+    emergencyContact: {
+      name: 'Rahul Roy (Brother)',
+      phone: '+91 98234 56780',
+      relation: 'Brother',
+    },
+  },
+  {
+    id: 'pat_3',
+    name: 'Vikram Malhotra',
+    email: 'vikram.m@gmail.com',
+    phone: '+91 98111 22334',
+    gender: 'Male',
+    age: 45,
+    bloodGroup: 'A+',
+    allergies: ['None reported'],
+    conditions: ['Type 2 Diabetes', 'Hyperlipidemia'],
+    avatar: 'https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?w=400&q=80',
+    emergencyContact: {
+      name: 'Sunita Malhotra',
+      phone: '+91 98111 22335',
+      relation: 'Spouse',
+    },
+  },
+];
+
 export default function PatientDirectoryScreen() {
   const router = useRouter();
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedPatient, setSelectedPatient] = useState<Patient | null>(null);
 
-  const [patients, setPatients] = useState<Patient[]>([]);
+  const [patients, setPatients] = useState<Patient[]>(DEFAULT_PATIENTS);
   const filtered = patients.filter(
     (p) => p.name.toLowerCase().includes(searchQuery.toLowerCase()) || (p.email && p.email.toLowerCase().includes(searchQuery.toLowerCase()))
   );
