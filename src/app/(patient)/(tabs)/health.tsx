@@ -43,6 +43,20 @@ export default function HealthHubScreen() {
   const { user } = useAuthStore();
   const { records, prescriptions, addRecord } = useHealthStore();
 
+  const patientPrescriptions = React.useMemo(() => {
+    return prescriptions.filter((p) => {
+      if (!user) return true;
+      if (user.role === 'patient') {
+        return (
+          !p.patientId ||
+          p.patientId === user.id ||
+          (p.patientName && user.name && p.patientName.toLowerCase() === user.name.toLowerCase())
+        );
+      }
+      return true;
+    });
+  }, [prescriptions, user]);
+
   const [activeTab, setActiveTab] = useState<'ALL' | 'PRESCRIPTIONS' | 'LABS'>('ALL');
   const [selectedPrescription, setSelectedPrescription] = useState<Prescription | null>(null);
   const [rxModalVisible, setRxModalVisible] = useState(false);
@@ -104,7 +118,7 @@ export default function HealthHubScreen() {
       title: docTitle.trim(),
       type: docType,
       createdAt: 'Just now',
-      doctorName: 'Dr. Priya Sharma (Reviewing Specialist)',
+      doctorName: 'FiYDoc AI Diagnostics',
       facility: 'FiYDoc Healthcare Diagnostics',
       ocrConfidence: 98.8,
       summary,
@@ -213,7 +227,7 @@ export default function HealthHubScreen() {
         <View className="flex-row bg-white p-1.5 rounded-2xl border border-slate-200/90 shadow-sm" style={{ gap: 6 }}>
           {[
             { id: 'ALL', label: 'All Timeline', icon: <FileText size={14} /> },
-            { id: 'PRESCRIPTIONS', label: `Prescriptions (${prescriptions.length})`, icon: <Pill size={14} /> },
+            { id: 'PRESCRIPTIONS', label: `Prescriptions (${patientPrescriptions.length})`, icon: <Pill size={14} /> },
             { id: 'LABS', label: 'Lab Reports', icon: <Activity size={14} /> },
           ].map((tab) => {
             const active = activeTab === tab.id;
@@ -255,7 +269,7 @@ export default function HealthHubScreen() {
               <Badge label="MCI VERIFIED" variant="teal" size="sm" />
             </View>
 
-            {prescriptions.length === 0 ? (
+            {patientPrescriptions.length === 0 ? (
               <View className="bg-white p-8 rounded-3xl border border-slate-200 items-center justify-center" style={{ gap: 8 }}>
                 <Pill size={32} color="#94A3B8" />
                 <Text className="text-sm font-black text-slate-800">No Prescriptions Issued Yet</Text>
@@ -264,7 +278,7 @@ export default function HealthHubScreen() {
                 </Text>
               </View>
             ) : (
-              prescriptions.map((rx) => (
+              patientPrescriptions.map((rx) => (
                 <TouchableOpacity
                   key={rx.id}
                   onPress={() => openPrescriptionModal(rx)}
@@ -284,7 +298,7 @@ export default function HealthHubScreen() {
                         {rx.doctorSpecialty || 'Specialist Consultant'} • {rx.doctorMciNumber || 'MCI Registered'}
                       </Text>
                       <Text className="text-[11px] text-slate-500 mt-0.5" numberOfLines={1}>
-                        {rx.clinicName || 'HeartCare Specialty Clinic, Mumbai'}
+                        {rx.clinicName || 'FiYDoc Healthcare Clinic'}
                       </Text>
                     </View>
                     <Badge label={rx.createdAt || 'Today'} variant="blue" size="sm" />
@@ -369,7 +383,7 @@ export default function HealthHubScreen() {
                   <View className="flex-row items-center" style={{ gap: 6 }}>
                     <Building2 size={16} color="#00B39B" />
                     <Text className="text-xs font-black text-white uppercase tracking-wider">
-                      {selectedPrescription.clinicName || 'HeartCare Specialty Clinic'}
+                      {selectedPrescription.clinicName || 'FiYDoc Healthcare Clinic'}
                     </Text>
                   </View>
                   <Badge label="MCI CERTIFIED" variant="teal" size="sm" />
@@ -377,10 +391,10 @@ export default function HealthHubScreen() {
 
                 <Text className="text-base font-black text-white">{selectedPrescription.doctorName}</Text>
                 <Text className="text-xs text-teal-300 font-semibold">
-                  {selectedPrescription.doctorSpecialty} • {selectedPrescription.doctorMciNumber || 'MCI-847291'}
+                  {selectedPrescription.doctorSpecialty} • {selectedPrescription.doctorMciNumber || 'MCI Registered'}
                 </Text>
                 <Text className="text-[11px] text-slate-400">
-                  {selectedPrescription.clinicAddress || 'Suite 402, Medical Enclave, Bandra West, Mumbai'}
+                  {selectedPrescription.clinicAddress || 'Healthcare Enclave, Clinical OPD Block'}
                 </Text>
               </View>
 

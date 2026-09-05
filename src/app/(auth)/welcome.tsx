@@ -8,38 +8,15 @@ import { GoogleLogo } from '@/components/ui/GoogleLogo';
 import { ShieldCheck, HeartPulse, Stethoscope, Sparkles } from 'lucide-react-native';
 import { authService } from '@/services/authService';
 import { useAuthStore } from '@/store/useAuthStore';
-import { GoogleAccountPickerModal } from '@/components/auth/GoogleAccountPickerModal';
-import { googleAuthService } from '@/services/googleAuth';
+import { PremadeAuthModal } from '@/components/auth/PremadeAuthModal';
+import { UserSession } from '@/services/authService';
 
 export default function WelcomeScreen() {
   const router = useRouter();
   const setSession = useAuthStore((s) => s.setSession);
-  const [googleModalVisible, setGoogleModalVisible] = useState(false);
-  const [googleLoading, setGoogleLoading] = useState(false);
+  const [quickAuthVisible, setQuickAuthVisible] = useState(false);
 
-  const handleGooglePress = async () => {
-    setGoogleLoading(true);
-    try {
-      const session = await googleAuthService.signInWithGoogle();
-      if (session) {
-        setSession(session);
-        if (session.role === 'doctor') {
-          router.replace('/(doctor)/(tabs)/home');
-        } else {
-          router.replace('/(patient)/(tabs)/home');
-        }
-        return;
-      }
-      setGoogleModalVisible(true);
-    } catch {
-      setGoogleModalVisible(true);
-    } finally {
-      setGoogleLoading(false);
-    }
-  };
-
-  const handleSelectGoogleAccount = async (account: { email: string; name: string }) => {
-    const session = await authService.loginWithGoogle(account.email, account.name);
+  const handleAuthenticated = (session: UserSession) => {
     setSession(session);
     if (session.role === 'doctor') {
       router.replace('/(doctor)/(tabs)/home');
@@ -114,19 +91,14 @@ export default function WelcomeScreen() {
           />
 
           <TouchableOpacity
-            onPress={handleGooglePress}
+            onPress={() => setQuickAuthVisible(true)}
             activeOpacity={0.85}
-            disabled={googleLoading}
             className="flex-row items-center justify-center bg-white py-3 px-4 rounded-2xl border border-slate-200 shadow-sm"
             style={{ gap: 10 }}
           >
-            {googleLoading ? (
-              <ActivityIndicator size="small" color="#1E58C8" />
-            ) : (
-              <GoogleLogo size={18} />
-            )}
+            <GoogleLogo size={18} />
             <Text className="text-sm font-bold text-slate-800">
-              {googleLoading ? 'Connecting to Google...' : 'Continue with Google'}
+              Continue with Google / 1-Tap Auth
             </Text>
           </TouchableOpacity>
 
@@ -139,11 +111,11 @@ export default function WelcomeScreen() {
         </View>
       </ScrollView>
 
-      {/* Interactive Google Account Picker Modal */}
-      <GoogleAccountPickerModal
-        visible={googleModalVisible}
-        onClose={() => setGoogleModalVisible(false)}
-        onSelectAccount={handleSelectGoogleAccount}
+      {/* Interactive Premade Auth & Supabase OTP Modal */}
+      <PremadeAuthModal
+        visible={quickAuthVisible}
+        onClose={() => setQuickAuthVisible(false)}
+        onAuthenticated={handleAuthenticated}
       />
     </SafeAreaView>
   );

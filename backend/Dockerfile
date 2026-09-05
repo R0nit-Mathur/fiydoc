@@ -46,9 +46,6 @@ RUN npx prisma generate
 # Copy built distribution files from builder stage
 COPY --from=builder /app/dist ./dist
 
-# Copy .env.production as fallback configuration if not injected via cloud env
-COPY .env.production ./.env.production
-
 EXPOSE 3000
 
 # Container Healthcheck (Monitored by Cloud Platforms)

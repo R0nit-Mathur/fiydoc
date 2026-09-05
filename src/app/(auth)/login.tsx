@@ -9,8 +9,8 @@ import { GoogleLogo } from '@/components/ui/GoogleLogo';
 import { Mail, Lock, ArrowLeft, Eye, EyeOff, ShieldCheck, UserCheck, Stethoscope } from 'lucide-react-native';
 import { authService } from '@/services/authService';
 import { useAuthStore } from '@/store/useAuthStore';
-import { GoogleAccountPickerModal } from '@/components/auth/GoogleAccountPickerModal';
-import { googleAuthService } from '@/services/googleAuth';
+import { PremadeAuthModal } from '@/components/auth/PremadeAuthModal';
+import { UserSession } from '@/services/authService';
 
 export default function LoginScreen() {
   const router = useRouter();
@@ -20,8 +20,7 @@ export default function LoginScreen() {
   const [password, setPassword] = useState('');
   const [showPassword, setShowPassword] = useState(false);
   const [loading, setLoading] = useState(false);
-  const [googleModalVisible, setGoogleModalVisible] = useState(false);
-  const [googleLoading, setGoogleLoading] = useState(false);
+  const [quickAuthVisible, setQuickAuthVisible] = useState(false);
   const [error, setError] = useState('');
 
   const handleSafeBack = () => {
@@ -56,33 +55,8 @@ export default function LoginScreen() {
     }
   };
 
-  const handleGooglePress = async () => {
-    setError('');
-    setGoogleLoading(true);
-    try {
-      const session = await googleAuthService.signInWithGoogle();
-      if (session) {
-        setSession(session);
-        if (session.role === 'doctor') {
-          router.replace('/(doctor)/(tabs)/home');
-        } else {
-          router.replace('/(patient)/(tabs)/home');
-        }
-        return;
-      }
-      setGoogleModalVisible(true);
-    } catch {
-      setGoogleModalVisible(true);
-    } finally {
-      setGoogleLoading(false);
-    }
-  };
-
-  const handleSelectGoogleAccount = async (account: { email: string; name: string }) => {
-    setError('');
-    const session = await authService.loginWithGoogle(account.email, account.name);
+  const handleAuthenticated = (session: UserSession) => {
     setSession(session);
-
     if (session.role === 'doctor') {
       router.replace('/(doctor)/(tabs)/home');
     } else {
@@ -121,11 +95,11 @@ export default function LoginScreen() {
             <Text className="text-[10px] font-black text-slate-400 uppercase tracking-wider mb-2">
               ⚡ Quick Test Credentials:
             </Text>
-            <View className="flex-row" style={{ gap: 6 }}>
+            <View className="flex-row flex-wrap" style={{ gap: 6 }}>
               <TouchableOpacity
                 onPress={() => setTestAccount('patient@fiydoc.app')}
                 activeOpacity={0.8}
-                className="flex-1 bg-teal-50 border border-teal-200/90 p-2 rounded-xl items-center flex-row justify-center"
+                className="flex-1 min-w-[70px] bg-teal-50 border border-teal-200/90 p-2 rounded-xl items-center flex-row justify-center"
                 style={{ gap: 4 }}
               >
                 <UserCheck size={13} color="#00B39B" />
@@ -133,19 +107,29 @@ export default function LoginScreen() {
               </TouchableOpacity>
 
               <TouchableOpacity
+                onPress={() => setTestAccount('rakshit.doctor@fiydoc.app')}
+                activeOpacity={0.8}
+                className="flex-1 min-w-[90px] bg-indigo-50 border border-indigo-200/90 p-2 rounded-xl items-center flex-row justify-center"
+                style={{ gap: 4 }}
+              >
+                <Stethoscope size={13} color="#4F46E5" />
+                <Text className="text-xs font-bold text-indigo-800">Dr. Rakshit</Text>
+              </TouchableOpacity>
+
+              <TouchableOpacity
                 onPress={() => setTestAccount('doctor@fiydoc.app')}
                 activeOpacity={0.8}
-                className="flex-1 bg-blue-50 border border-blue-200/90 p-2 rounded-xl items-center flex-row justify-center"
+                className="flex-1 min-w-[80px] bg-blue-50 border border-blue-200/90 p-2 rounded-xl items-center flex-row justify-center"
                 style={{ gap: 4 }}
               >
                 <Stethoscope size={13} color="#1E58C8" />
-                <Text className="text-xs font-bold text-blue-800">Doctor</Text>
+                <Text className="text-xs font-bold text-blue-800">Dr. Priya</Text>
               </TouchableOpacity>
 
               <TouchableOpacity
                 onPress={() => setTestAccount('admin@fiydoc.app')}
                 activeOpacity={0.8}
-                className="flex-1 bg-slate-100 border border-slate-300 p-2 rounded-xl items-center flex-row justify-center"
+                className="flex-1 min-w-[70px] bg-slate-100 border border-slate-300 p-2 rounded-xl items-center flex-row justify-center"
                 style={{ gap: 4 }}
               >
                 <ShieldCheck size={13} color="#0F172A" />
@@ -200,21 +184,16 @@ export default function LoginScreen() {
             size="lg"
           />
 
-          {/* Google Sign In Button */}
+          {/* Quick 1-Tap / Supabase Auth Button */}
           <TouchableOpacity
-            onPress={handleGooglePress}
+            onPress={() => setQuickAuthVisible(true)}
             activeOpacity={0.85}
-            disabled={googleLoading}
             className="flex-row items-center justify-center bg-white py-3 px-4 rounded-2xl border border-slate-200 shadow-sm"
             style={{ gap: 10 }}
           >
-            {googleLoading ? (
-              <ActivityIndicator size="small" color="#1E58C8" />
-            ) : (
-              <GoogleLogo size={18} />
-            )}
+            <GoogleLogo size={18} />
             <Text className="text-sm font-bold text-slate-800">
-              {googleLoading ? 'Connecting to Google...' : 'Continue with Google'}
+              Continue with Google / 1-Tap Auth
             </Text>
           </TouchableOpacity>
 
@@ -227,11 +206,11 @@ export default function LoginScreen() {
         </View>
       </ScrollView>
 
-      {/* Google Account Picker Modal */}
-      <GoogleAccountPickerModal
-        visible={googleModalVisible}
-        onClose={() => setGoogleModalVisible(false)}
-        onSelectAccount={handleSelectGoogleAccount}
+      {/* Interactive Premade Auth & Supabase OTP Modal */}
+      <PremadeAuthModal
+        visible={quickAuthVisible}
+        onClose={() => setQuickAuthVisible(false)}
+        onAuthenticated={handleAuthenticated}
       />
     </SafeAreaView>
   );

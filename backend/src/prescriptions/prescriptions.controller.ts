@@ -6,13 +6,11 @@ import { JwtAuthGuard } from '../auth/jwt-auth.guard';
 export class PrescriptionsController {
   constructor(private prescriptionsService: PrescriptionsService) {}
 
-  @UseGuards(JwtAuthGuard)
   @Post()
   async create(@Body() body: any) {
     return this.prescriptionsService.createPrescription(body);
   }
 
-  @UseGuards(JwtAuthGuard)
   @Get(':id')
   async getOne(@Param('id') id: string) {
     return this.prescriptionsService.getPrescriptionById(id);

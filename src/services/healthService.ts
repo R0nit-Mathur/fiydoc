@@ -21,4 +21,28 @@ export const healthService = {
       body: JSON.stringify({ patientId, title, type }),
     });
   },
+
+  async createPrescription(payload: {
+    consultationId?: string;
+    patientId?: string;
+    doctorId?: string;
+    doctorNotes?: string;
+    followUpInstructions?: string;
+    medicines?: Array<{
+      name: string;
+      dosage: string;
+      frequency: string;
+      durationDays: number;
+      instructions?: string;
+    }>;
+    tests?: Array<{
+      name: string;
+      category?: string;
+    }>;
+  }): Promise<any> {
+    return apiClient<any>('/prescriptions', {
+      method: 'POST',
+      body: JSON.stringify(payload),
+    });
+  },
 };

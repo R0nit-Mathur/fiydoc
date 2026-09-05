@@ -132,10 +132,10 @@ export default function BookingPaymentScreen() {
         patientName: user?.name || 'Aarav Mehta',
         patientAvatar: user?.avatar,
         doctorId: doctor?.id || 'doc_live',
-        doctorName: doctor?.name || 'Dr. Priya Sharma',
-        doctorSpecialty: doctor?.specialty || 'Senior Consultant Cardiologist',
+        doctorName: doctor?.name || 'Dr. Specialist',
+        doctorSpecialty: doctor?.specialty || 'Consultant Specialist',
         doctorAvatar: doctor?.avatar || 'https://images.unsplash.com/photo-1559839734-2b71ea197ec2?w=400&q=80',
-        hospital: doctor?.hospital || 'HeartCare Specialty Clinic',
+        hospital: doctor?.hospital || 'FiYDoc Healthcare Clinic',
         date: bookingDraft.date || new Date().toISOString().split('T')[0],
         time: bookingDraft.timeSlot || '10:30 AM',
         status: 'confirmed' as const,
@@ -148,8 +148,10 @@ export default function BookingPaymentScreen() {
 
       addAppointment(newAppointment);
 
-      // Trigger user-facing notification
+      // 1. Patient Notification
       addNotification({
+        recipientId: user?.id || 'pat_1',
+        recipientRole: 'patient',
         title: isPayAtClinic
           ? `Appointment Booked • ${invoice.clinicTokenNumber}`
           : `Payment Successful (₹${totalPayable}) • ${invoice.clinicTokenNumber}`,
@@ -158,6 +160,16 @@ export default function BookingPaymentScreen() {
           : `Txn #${invoice.transactionId}. Consultation with ${doctor?.name || 'Doctor'} confirmed for ${newAppointment.date} at ${newAppointment.time}.`,
         type: 'appointment',
         link: `/(patient)/appointments/${newAppointment.id}`,
+      });
+
+      // 2. Doctor Notification (Instant Alert for New Patient Booking)
+      addNotification({
+        recipientId: doctor?.id || 'doc_live',
+        recipientRole: 'doctor',
+        title: `New Appointment • ${invoice.clinicTokenNumber}`,
+        message: `Patient ${user?.name || 'Patient'} booked for ${newAppointment.date} at ${newAppointment.time}. Chief complaint: ${bookingDraft.symptoms.join(', ') || 'Consultation'}.`,
+        type: 'appointment',
+        link: `/(doctor)/(tabs)/appointments`,
       });
 
       resetBookingDraft();
@@ -217,13 +229,13 @@ export default function BookingPaymentScreen() {
           <View className="flex-row justify-between items-start">
             <View className="flex-1 mr-2">
               <Text className="text-base font-black text-slate-900" numberOfLines={1}>
-                {doctor?.name || 'Dr. Priya Sharma'}
+                {doctor?.name || 'Dr. Specialist'}
               </Text>
               <Text className="text-xs font-bold text-[#00B39B] mt-0.5" numberOfLines={1}>
-                {doctor?.specialty || 'Senior Consultant Cardiologist'}
+                {doctor?.specialty || 'Consultant Specialist'}
               </Text>
               <Text className="text-[11px] text-slate-500 mt-0.5" numberOfLines={1}>
-                {doctor?.hospital || 'HeartCare Specialty Clinic, Mumbai'}
+                {doctor?.hospital || 'FiYDoc Healthcare Clinic'}
               </Text>
             </View>
             <Badge label="IN-CLINIC OPD" variant="blue" size="sm" />

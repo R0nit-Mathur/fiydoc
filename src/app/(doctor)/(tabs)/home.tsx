@@ -18,13 +18,21 @@ import {
   User,
   Users,
   Settings,
+  Bell,
 } from 'lucide-react-native';
+import { Modal } from '@/components/ui/Modal';
+import { useNotificationStore } from '@/store/useNotificationStore';
 import { BackHandler } from 'react-native';
 
 export default function DoctorHomeScreen() {
   const router = useRouter();
   const { user } = useAuthStore();
   const { data: appointments } = useAppointmentsQuery(undefined, user?.id);
+  const [notificationsVisible, setNotificationsVisible] = React.useState(false);
+
+  const unreadCount = useNotificationStore((s) => s.getUnreadCount(user?.id, 'doctor'));
+  const doctorNotifications = useNotificationStore((s) => s.getNotificationsForUser(user?.id, 'doctor'));
+  const markAllAsRead = useNotificationStore((s) => s.markAllAsRead);
 
   // Consume hardware back on doctor home so React Navigation never throws GO_BACK unhandled
   React.useEffect(() => {
@@ -85,11 +93,23 @@ export default function DoctorHomeScreen() {
           </View>
         </View>
 
-        {/* Portal Tag & Settings Shortcut */}
+        {/* Portal Tag, Notifications & Settings */}
         <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, flexShrink: 0 }}>
-          <View className="bg-blue-50 px-2.5 py-1 rounded-xl border border-blue-200">
+          <View className="bg-blue-50 px-2 py-1 rounded-xl border border-blue-200">
             <Text className="text-[10px] font-black text-[#1E58C8] tracking-wider">PORTAL</Text>
           </View>
+          <TouchableOpacity
+            onPress={() => setNotificationsVisible(true)}
+            activeOpacity={0.8}
+            className="w-8 h-8 rounded-xl bg-slate-100 items-center justify-center border border-slate-200/80 relative"
+          >
+            <Bell size={16} color="#475569" />
+            {unreadCount > 0 && (
+              <View className="absolute -top-1 -right-1 bg-red-500 rounded-full min-w-[16px] h-4 px-1 items-center justify-center">
+                <Text className="text-[9px] font-black text-white">{unreadCount}</Text>
+              </View>
+            )}
+          </TouchableOpacity>
           <TouchableOpacity
             onPress={() => router.push('/(doctor)/settings')}
             activeOpacity={0.8}
@@ -394,6 +414,70 @@ export default function DoctorHomeScreen() {
           </TouchableOpacity>
         </View>
       </ScrollView>
+
+      {/* Doctor Notifications Modal */}
+      <Modal
+        visible={notificationsVisible}
+        onClose={() => setNotificationsVisible(false)}
+        title="Doctor Alerts & Activity"
+      >
+        <View style={{ gap: 12, paddingVertical: 4 }}>
+          <View className="flex-row justify-between items-center pb-2 border-b border-slate-100">
+            <Text className="text-xs font-bold text-slate-500">
+              {doctorNotifications.length} Alert(s)
+            </Text>
+            {doctorNotifications.length > 0 && (
+              <TouchableOpacity
+                onPress={() => markAllAsRead(user?.id, 'doctor')}
+                activeOpacity={0.8}
+              >
+                <Text className="text-xs font-bold text-[#1E58C8]">Mark all as read</Text>
+              </TouchableOpacity>
+            )}
+          </View>
+
+          {doctorNotifications.length === 0 ? (
+            <View className="py-8 items-center justify-center" style={{ gap: 6 }}>
+              <Bell size={28} color="#94A3B8" />
+              <Text className="text-sm font-black text-slate-800">All Caught Up!</Text>
+              <Text className="text-xs text-slate-400 text-center px-4">
+                You'll receive instant alerts here whenever a patient books or cancels an appointment.
+              </Text>
+            </View>
+          ) : (
+            <ScrollView style={{ maxHeight: 360 }} showsVerticalScrollIndicator={false}>
+              <View style={{ gap: 8 }}>
+                {doctorNotifications.map((notif) => (
+                  <TouchableOpacity
+                    key={notif.id}
+                    onPress={() => {
+                      if (notif.link) {
+                        setNotificationsVisible(false);
+                        router.push(notif.link as any);
+                      }
+                    }}
+                    activeOpacity={0.85}
+                    className={`p-3 rounded-2xl border ${
+                      notif.read ? 'bg-white border-slate-200' : 'bg-blue-50/70 border-blue-200'
+                    }`}
+                    style={{ gap: 4 }}
+                  >
+                    <View className="flex-row items-center justify-between">
+                      <Text className="text-xs font-black text-slate-900 flex-1 mr-2" numberOfLines={1}>
+                        {notif.title}
+                      </Text>
+                      <Text className="text-[10px] text-slate-400">{notif.time}</Text>
+                    </View>
+                    <Text className="text-[11px] text-slate-600 leading-4">
+                      {notif.message}
+                    </Text>
+                  </TouchableOpacity>
+                ))}
+              </View>
+            </ScrollView>
+          )}
+        </View>
+      </Modal>
     </SafeAreaView>
   );
 }

@@ -2,7 +2,14 @@ import Constants from 'expo-constants';
 import { useAuthStore } from '@/store/useAuthStore';
 
 function getBaseUrl(): string {
-  // 1. If expoConfig has hostUri (Expo Go / Dev Client), extract the LAN IP dynamically
+  const envUrl = process.env.EXPO_PUBLIC_API_URL?.trim();
+
+  // 1. If configured with a production/cloud HTTPS backend, prioritize it immediately
+  if (envUrl && envUrl.startsWith('https://')) {
+    return envUrl;
+  }
+
+  // 2. If in Expo Go / Dev client without cloud HTTPS, extract Metro LAN IP dynamically
   const hostUri = Constants.expoConfig?.hostUri || (Constants as any).manifest?.debuggerHost;
   if (hostUri) {
     const ip = hostUri.split(':')[0];
@@ -11,8 +18,8 @@ function getBaseUrl(): string {
     }
   }
 
-  // 2. Otherwise fall back to env or default
-  return process.env.EXPO_PUBLIC_API_URL || 'http://192.168.1.3:3000';
+  // 3. Fallback to env or localhost
+  return envUrl || 'http://localhost:3000';
 }
 
 export async function apiClient<T>(endpoint: string, options: RequestInit = {}): Promise<T> {

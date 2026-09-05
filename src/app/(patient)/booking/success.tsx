@@ -49,7 +49,7 @@ export default function BookingSuccessScreen() {
     try {
       await Share.share({
         title: `FiYDoc OPD Pass • ${tokenNumber}`,
-        message: `FiYDoc Confirmed Appointment Pass\nDoctor: ${apt?.doctorName || 'Dr. Specialist'}\nDate: ${apt?.date || 'Today'} at ${apt?.time || '10:30 AM'}\nToken: ${tokenNumber}\nClinic: ${apt?.hospital || 'HeartCare Specialty Clinic'}\nTxn: ${txnId}`,
+        message: `FiYDoc Confirmed Appointment Pass\nDoctor: ${apt?.doctorName || 'Dr. Specialist'}\nDate: ${apt?.date || 'Today'} at ${apt?.time || '10:30 AM'}\nToken: ${tokenNumber}\nClinic: ${apt?.hospital || 'FiYDoc Healthcare Clinic'}\nTxn: ${txnId}`,
       });
     } catch (e) {
       console.error(e);
@@ -116,15 +116,15 @@ export default function BookingSuccessScreen() {
           {/* Doctor Meta */}
           <View style={{ gap: 2 }}>
             <Text className="text-lg font-black text-slate-900">
-              {apt?.doctorName || 'Dr. Priya Sharma'}
+              {apt?.doctorName || 'Dr. Specialist'}
             </Text>
             <Text className="text-xs font-bold text-[#00B39B]">
-              {apt?.doctorSpecialty || 'Senior Consultant Cardiologist'}
+              {apt?.doctorSpecialty || 'Consultant Specialist'}
             </Text>
             <View className="flex-row items-center mt-0.5" style={{ gap: 4 }}>
               <Building2 size={13} color="#64748B" />
               <Text className="text-xs text-slate-500" numberOfLines={1}>
-                {apt?.hospital || 'HeartCare Specialty Clinic, Mumbai'}
+                {apt?.hospital || 'FiYDoc Healthcare Clinic'}
               </Text>
             </View>
           </View>

@@ -4,6 +4,7 @@ import { useLocalSearchParams, useRouter } from 'expo-router';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useAppointmentDetailQuery } from '@/hooks/queries/useAppointmentsQuery';
 import { useAppointmentStore } from '@/store/useAppointmentStore';
+import { useNotificationStore } from '@/store/useNotificationStore';
 import { Avatar } from '@/components/ui/Avatar';
 import { Button } from '@/components/ui/Button';
 import { Badge } from '@/components/ui/Badge';
@@ -34,6 +35,26 @@ export default function AppointmentDetailScreen() {
 
   const handleCancel = () => {
     cancelAppointment(apt.id);
+
+    // 1. Patient Notification
+    useNotificationStore.getState().addNotification({
+      recipientId: apt.patientId,
+      recipientRole: 'patient',
+      title: 'Appointment Cancelled',
+      message: `Your appointment with ${apt.doctorName} on ${apt.date} has been cancelled.`,
+      type: 'appointment',
+    });
+
+    // 2. Doctor Notification
+    useNotificationStore.getState().addNotification({
+      recipientId: apt.doctorId,
+      recipientRole: 'doctor',
+      title: `Appointment Cancelled • ${apt.patientName}`,
+      message: `${apt.patientName} has cancelled their ${apt.time} appointment for ${apt.date}. Time slot has been released.`,
+      type: 'appointment',
+      link: '/(doctor)/(tabs)/appointments',
+    });
+
     router.back();
   };
 

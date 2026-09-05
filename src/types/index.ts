@@ -152,6 +152,8 @@ export interface MedicalRecord {
 
 export interface NotificationItem {
   id: string;
+  recipientId?: string;
+  recipientRole?: 'patient' | 'doctor' | 'all';
   title: string;
   message: string;
   time: string;

@@ -22,6 +22,7 @@ import { useAuthStore } from '@/store/useAuthStore';
 import { useHealthStore } from '@/store/useHealthStore';
 import { useNotificationStore } from '@/store/useNotificationStore';
 import { useAppointmentStore } from '@/store/useAppointmentStore';
+import { healthService } from '@/services/healthService';
 import {
   MEDICINES_DIRECTORY,
   DIAGNOSTIC_TESTS_DIRECTORY,
@@ -563,7 +564,34 @@ export default function DoctorConsultationWorkspaceScreen() {
 
     useHealthStore.getState().addPrescription(newPrescription);
 
+    // Persist real prescription to NestJS backend
+    healthService
+      .createPrescription({
+        consultationId: (id as string) || 'apt_live',
+        patientId: apt?.patientId || 'pat_1',
+        doctorId: user?.id || apt?.doctorId || 'doc_live',
+        doctorNotes: objective || 'Clinical examination within physiological tolerance.',
+        followUpInstructions: adviceNotes || 'Review after 7 days in clinic or SOS if symptoms persist.',
+        medicines: prescribedMeds.map((m) => ({
+          name: m.name,
+          dosage: m.dosage,
+          frequency: m.frequency,
+          durationDays: parseInt(m.duration) || 5,
+          instructions: m.instructions,
+        })),
+        tests: prescribedTests.map((t) => ({
+          name: t.name,
+          category: t.category,
+        })),
+      })
+      .catch((err) => {
+        console.warn('[handleSignPrescription] Server sync notice:', err.message);
+      });
+
+    // Notify patient of digital Rx pass
     useNotificationStore.getState().addNotification({
+      recipientId: apt?.patientId || 'pat_1',
+      recipientRole: 'patient',
       title: 'Digital Prescription (Rx) Issued',
       message: `${doctorName} has issued your official digital prescription with ${prescribedMeds.length} medication(s). Tap to review dosage instructions.`,
       type: 'prescription',
@@ -715,7 +743,9 @@ export default function DoctorConsultationWorkspaceScreen() {
                 </Text>
                 <View className="bg-slate-50 p-3 rounded-xl border border-slate-200/80" style={{ gap: 4 }}>
                   <View className="flex-row justify-between items-center">
-                    <Text className="text-xs font-black text-slate-900">Dr. Priya Sharma • OPD Review</Text>
+                    <Text className="text-xs font-black text-slate-900">
+                      {apt?.doctorName || user?.name || 'Clinical Specialist'} • Prior OPD Review
+                    </Text>
                     <Text className="text-[10px] font-bold text-slate-500">12 Aug 2026</Text>
                   </View>
                   <Text className="text-[11px] text-slate-600">

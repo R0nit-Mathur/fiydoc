@@ -55,10 +55,10 @@ export default function DoctorProfileScreen() {
           <Avatar uri={user?.avatar} name={user?.name || 'Dr. Specialist'} size="lg" />
           <View style={{ flex: 1, minWidth: 0 }}>
             <Text style={{ fontSize: 16, fontWeight: '800', color: '#0F172A' }} numberOfLines={1}>
-              {user?.name || 'Dr. Priya Sharma'}
+              {user?.name || 'Dr. Specialist'}
             </Text>
             <Text style={{ fontSize: 11, fontWeight: '700', color: '#00B39B', marginTop: 1 }} numberOfLines={1}>
-              Senior Consultant Cardiologist
+              {(user as any)?.specialty || 'Senior Consultant Specialist'}
             </Text>
             <Text style={{ fontSize: 11, fontWeight: '500', color: '#64748B', marginTop: 1 }} numberOfLines={1}>
               {user?.email || 'doctor@fiydoc.app'}
@@ -81,7 +81,9 @@ export default function DoctorProfileScreen() {
             </View>
             <View className="flex-1">
               <Text className="text-xs font-bold text-[#1E58C8] uppercase">Medical Council Registration</Text>
-              <Text className="text-sm font-black text-slate-900 mt-0.5">MCI-847291 (Maharashtra)</Text>
+              <Text className="text-sm font-black text-slate-900 mt-0.5">
+                {(user as any)?.registrationNumber || (user as any)?.licenseNumber || 'NMC-MH-847291 (Active)'}
+              </Text>
               <Text className="text-[11px] text-slate-500 mt-0.5">Status: Active & Authorized for Digital Rx</Text>
             </View>
           </View>
@@ -96,8 +98,12 @@ export default function DoctorProfileScreen() {
           <View className="flex-row items-start pt-1" style={{ gap: 12 }}>
             <Building2 size={18} color="#00B39B" className="mt-0.5" />
             <View className="flex-1">
-              <Text className="text-sm font-black text-slate-900">HeartCare Specialty Clinic</Text>
-              <Text className="text-xs text-slate-600 mt-0.5 font-medium">Suite 402, Medical Enclave, Bandra West, Mumbai</Text>
+              <Text className="text-sm font-black text-slate-900">
+                {(user as any)?.clinicName || 'FiYDoc Healthcare Clinic'}
+              </Text>
+              <Text className="text-xs text-slate-600 mt-0.5 font-medium">
+                {(user as any)?.clinicAddress || 'Healthcare Enclave, Clinical OPD Block'}
+              </Text>
               <Text className="text-[11px] text-slate-400 mt-1">Consultation Hours: 09:00 AM - 05:00 PM</Text>
             </View>
           </View>

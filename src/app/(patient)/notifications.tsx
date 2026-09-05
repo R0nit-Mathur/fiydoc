@@ -17,10 +17,14 @@ import {
   Inbox,
 } from 'lucide-react-native';
 
+import { useAuthStore } from '@/store/useAuthStore';
+
 export default function PatientNotificationsScreen() {
   const router = useRouter();
-  const { notifications, markAsRead, markAllAsRead } = useNotificationStore();
+  const { user } = useAuthStore();
+  const { getNotificationsForUser, markAsRead, markAllAsRead } = useNotificationStore();
 
+  const notifications = getNotificationsForUser(user?.id, 'patient');
   const unreadCount = notifications.filter((n) => !n.read).length;
 
   const getIcon = (type: NotificationItem['type']) => {
@@ -79,7 +83,7 @@ export default function PatientNotificationsScreen() {
 
         {unreadCount > 0 && (
           <TouchableOpacity
-            onPress={markAllAsRead}
+            onPress={() => markAllAsRead(user?.id, 'patient')}
             activeOpacity={0.75}
             className="flex-row items-center bg-teal-50 px-3 py-1.5 rounded-xl border border-teal-200"
             style={{ gap: 4 }}
