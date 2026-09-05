@@ -307,7 +307,7 @@ export default function DoctorConsultationWorkspaceScreen() {
     if (router.canGoBack()) {
       router.back();
     } else {
-      router.replace('/(doctor)/home');
+      router.replace('/(doctor)/(tabs)/home');
     }
   };
 
@@ -504,6 +504,12 @@ export default function DoctorConsultationWorkspaceScreen() {
     setPrescribedTests(prescribedTests.filter((t) => t.id !== id));
   };
 
+  const doctorName = user?.name || apt?.doctorName || 'Dr. Specialist';
+  const doctorSpecialty = (user as any)?.specialty || apt?.doctorSpecialty || 'Senior Consultant Specialist';
+  const doctorMciNumber = (user as any)?.registrationNumber || (user as any)?.mciNumber || 'NMC-MH-847291';
+  const clinicName = (user as any)?.clinicName || apt?.hospital || 'FiYDoc Specialty Clinic';
+  const clinicAddress = (user as any)?.clinicAddress || 'Medical Enclave, Healthcare OPD Block';
+
   const handleSignPrescription = () => {
     const rxId = `rx_${Date.now()}`;
     const verificationCode = `FYD-RX-${Math.floor(100000 + Math.random() * 900000)}-MH`;
@@ -517,12 +523,12 @@ export default function DoctorConsultationWorkspaceScreen() {
       id: rxId,
       consultationId: (id as string) || 'apt_live',
       patientId: apt?.patientId || 'pat_1',
-      doctorId: user?.id || 'doc_live',
+      doctorId: user?.id || apt?.doctorId || 'doc_live',
       doctorName,
-      doctorSpecialty: 'Senior Consultant Cardiologist',
-      doctorMciNumber: 'MCI-847291',
-      clinicName: 'HeartCare Specialty Clinic',
-      clinicAddress: 'Suite 402, Medical Enclave, Bandra West, Mumbai',
+      doctorSpecialty,
+      doctorMciNumber,
+      clinicName,
+      clinicAddress,
       patientName: apt?.patientName || 'Aarav Mehta',
       patientAge: 32,
       patientGender: 'Male',
@@ -579,7 +585,7 @@ export default function DoctorConsultationWorkspaceScreen() {
     try {
       await Share.share({
         title: `Digital Prescription (Rx) • ${doctorName}`,
-        message: `FiYDoc Official Medical Prescription (Rx)\nDoctor: ${doctorName} (MCI-847291)\nClinic: HeartCare Specialty Clinic\nPatient: ${apt?.patientName || 'Aarav Mehta'}\nDiagnosis: ${assessment || 'Clinical Assessment'}\nMedications (${prescribedMeds.length}):\n${prescribedMeds.map((m, i) => `${i + 1}. ${m.name} - ${m.dosage} [${m.frequency}] x ${m.duration} (${m.instructions})`).join('\n')}\nAdvice: ${adviceNotes || 'Take rest and adequate hydration.'}\nRef: FYD-RX-847291`,
+        message: `FiYDoc Official Medical Prescription (Rx)\nDoctor: ${doctorName} (${doctorMciNumber})\nClinic: ${clinicName}\nPatient: ${apt?.patientName || 'Aarav Mehta'}\nDiagnosis: ${assessment || 'Clinical Assessment'}\nMedications (${prescribedMeds.length}):\n${prescribedMeds.map((m, i) => `${i + 1}. ${m.name} - ${m.dosage} [${m.frequency}] x ${m.duration} (${m.instructions})`).join('\n')}\nAdvice: ${adviceNotes || 'Take rest and adequate hydration.'}\nRef: ${doctorMciNumber}`,
       });
     } catch (e) {
       console.error(e);
@@ -590,8 +596,6 @@ export default function DoctorConsultationWorkspaceScreen() {
     setDownloadToast(true);
     setTimeout(() => setDownloadToast(false), 2500);
   };
-
-  const doctorName = user?.name || apt?.doctorName || 'Dr. Priya Sharma';
 
   return (
     <SafeAreaView className="flex-1 bg-slate-50 justify-between" edges={['top']}>
@@ -1484,7 +1488,7 @@ export default function DoctorConsultationWorkspaceScreen() {
                   <View className="flex-row items-center" style={{ gap: 6 }}>
                     <Building2 size={18} color="#00B39B" />
                     <Text className="text-xs font-black text-slate-900 uppercase tracking-wider">
-                      HeartCare Specialty Clinic
+                      {clinicName}
                     </Text>
                   </View>
                   <Badge label="NMC / MCI VERIFIED" variant="teal" size="sm" />
@@ -1492,10 +1496,10 @@ export default function DoctorConsultationWorkspaceScreen() {
 
                 <Text className="text-lg font-black text-slate-900 mt-1">{doctorName}</Text>
                 <Text className="text-xs font-bold text-[#1E58C8]">
-                  MBBS, MD (Medicine), DM (Cardiology) • Reg No: MCI-847291
+                  {doctorSpecialty} • Reg No: {doctorMciNumber}
                 </Text>
                 <Text className="text-[10px] text-slate-500">
-                  Suite 402, Medical Enclave, Bandra West, Mumbai 400050 • Ph: +91 98200 12345
+                  {clinicAddress} • Ph: +91 98200 12345
                 </Text>
                 <Text className="text-[10px] text-slate-400">
                   OPD Timings: 09:30 AM – 01:30 PM, 05:00 PM – 08:30 PM (Mon – Sat)
@@ -1630,7 +1634,7 @@ export default function DoctorConsultationWorkspaceScreen() {
                       Digitally Signed by {doctorName}
                     </Text>
                     <Text className="text-[10px] text-emerald-700">
-                      National Medical Commission Reg No: MCI-847291
+                      National Medical Commission Reg No: {doctorMciNumber}
                     </Text>
                   </View>
                 </View>
@@ -1664,7 +1668,7 @@ export default function DoctorConsultationWorkspaceScreen() {
                 title="Finish & Return to OPD Queue"
                 onPress={() => {
                   setShowPrescriptionPass(false);
-                  router.replace('/(doctor)/home');
+                  router.replace('/(doctor)/(tabs)/home');
                 }}
                 variant="primary"
                 size="lg"

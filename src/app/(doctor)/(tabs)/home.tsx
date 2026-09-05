@@ -71,7 +71,7 @@ export default function DoctorHomeScreen() {
                 numberOfLines={1}
                 ellipsizeMode="tail"
               >
-                {user?.name || 'Dr. Priya Sharma'}
+                {user?.name || 'Dr. Specialist'}
               </Text>
               <CheckCircle2 size={15} color="#00B39B" fill="#E0F7F4" style={{ flexShrink: 0 }} />
             </View>
@@ -80,7 +80,7 @@ export default function DoctorHomeScreen() {
               numberOfLines={1}
               ellipsizeMode="tail"
             >
-              Senior Consultant Cardiologist
+              {(user as any)?.specialty || 'Medical Specialist'}
             </Text>
           </View>
         </View>
@@ -121,10 +121,10 @@ export default function DoctorHomeScreen() {
             </View>
             <View style={{ flex: 1, minWidth: 0 }}>
               <Text className="text-xs font-black text-slate-900" numberOfLines={1}>
-                MCI Verified Practitioner
+                NMC / State Council Verified Practitioner
               </Text>
               <Text className="text-[11px] text-slate-600 font-medium mt-0.5" numberOfLines={1}>
-                Reg: MCI-847291 • Active for Consultations
+                Reg: {(user as any)?.registrationNumber || (user as any)?.mciNumber || 'NMC-2024-DOC'} • Active for Consultations
               </Text>
             </View>
           </View>
@@ -236,7 +236,7 @@ export default function DoctorHomeScreen() {
                 Today's OPD Queue Timeline
               </Text>
             </View>
-            <TouchableOpacity onPress={() => router.push('/(doctor)/appointments')}>
+            <TouchableOpacity onPress={() => router.push('/(doctor)/(tabs)/appointments')}>
               <Text className="text-xs font-bold text-[#1E58C8]">View All →</Text>
             </TouchableOpacity>
           </View>
@@ -358,7 +358,7 @@ export default function DoctorHomeScreen() {
           </TouchableOpacity>
 
           <TouchableOpacity
-            onPress={() => router.push('/(doctor)/appointments')}
+            onPress={() => router.push('/(doctor)/(tabs)/appointments')}
             activeOpacity={0.85}
             className="bg-white p-3.5 rounded-2xl border border-slate-200/80 flex-row items-center justify-between shadow-sm"
           >

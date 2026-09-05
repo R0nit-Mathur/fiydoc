@@ -85,9 +85,9 @@ export default function OtpScreen() {
 
       const { role } = useAuthStore.getState();
       if (role === 'doctor') {
-        router.replace('/(doctor)/home');
+        router.replace('/(doctor)/(tabs)/home');
       } else {
-        router.replace('/(patient)/home');
+        router.replace('/(patient)/(tabs)/home');
       }
     } catch (err: any) {
       setError(err.message || 'Invalid verification code. Use demo code 1234.');

@@ -10,6 +10,8 @@ interface HealthState {
   addRecord: (record: MedicalRecord) => void;
   addPrescription: (prescription: Prescription) => void;
   setActiveFilter: (filter: string) => void;
+  getPrescriptionsForDoctor: (doctorId: string, doctorName?: string) => Prescription[];
+  getPrescriptionsForPatient: (patientId: string, patientName?: string) => Prescription[];
 }
 
 const initialPrescriptions: Prescription[] = [
@@ -116,7 +118,7 @@ const initialRecords: MedicalRecord[] = [
 
 export const useHealthStore = create<HealthState>()(
   persist(
-    (set) => ({
+    (set, get) => ({
       records: initialRecords,
       prescriptions: initialPrescriptions,
       activeFilter: 'All',
@@ -152,9 +154,31 @@ export const useHealthStore = create<HealthState>()(
         }),
 
       setActiveFilter: (activeFilter) => set({ activeFilter }),
+
+      getPrescriptionsForDoctor: (doctorId: string, doctorName?: string) => {
+        const state = get();
+        return state.prescriptions.filter((p) => {
+          if (p.doctorId && doctorId && p.doctorId === doctorId) return true;
+          if (doctorName && p.doctorName && p.doctorName.trim().toLowerCase() === doctorName.trim().toLowerCase()) {
+            return true;
+          }
+          return false;
+        });
+      },
+
+      getPrescriptionsForPatient: (patientId: string, patientName?: string) => {
+        const state = get();
+        return state.prescriptions.filter((p) => {
+          if (p.patientId && patientId && p.patientId === patientId) return true;
+          if (patientName && p.patientName && p.patientName.trim().toLowerCase() === patientName.trim().toLowerCase()) {
+            return true;
+          }
+          return false;
+        });
+      },
     }),
     {
-      name: 'fiydoc-health-storage-v2',
+      name: 'fiydoc-health-storage-v3',
       storage: createJSONStorage(() => AsyncStorage),
     }
   )

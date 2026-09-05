@@ -20,7 +20,7 @@ export default function DoctorSettingsScreen() {
     if (router.canGoBack()) {
       router.back();
     } else {
-      router.replace('/(doctor)/home');
+      router.replace('/(doctor)/(tabs)/home');
     }
   };
 

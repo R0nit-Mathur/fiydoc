@@ -20,7 +20,7 @@ export default function DoctorSetupScreen() {
   const handleFinish = () => {
     setOnboardingCompleted(true);
     setVerificationStatus('verified');
-    router.replace('/(doctor)/home');
+    router.replace('/(doctor)/(tabs)/home');
   };
 
   return (

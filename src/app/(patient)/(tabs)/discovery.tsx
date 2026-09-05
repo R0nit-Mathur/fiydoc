@@ -48,7 +48,7 @@ export default function DoctorDiscoveryScreen() {
     if (router.canGoBack()) {
       router.back();
     } else {
-      router.replace('/(patient)/home');
+      router.replace('/(patient)/(tabs)/home');
     }
   };
 

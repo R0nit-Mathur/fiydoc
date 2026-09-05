@@ -16,9 +16,9 @@ export default function Index() {
       if (!isAuthenticated) {
         router.replace('/(auth)/welcome');
       } else if (role === 'doctor') {
-        router.replace('/(doctor)/home');
+        router.replace('/(doctor)/(tabs)/home');
       } else {
-        router.replace('/(patient)/home');
+        router.replace('/(patient)/(tabs)/home');
       }
     }, 400);
 

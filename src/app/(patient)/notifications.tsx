@@ -39,8 +39,8 @@ export default function PatientNotificationsScreen() {
 
   const handleNotificationPress = (item: NotificationItem) => {
     markAsRead(item.id);
-    if (item.type === 'prescription' || item.link === '/(patient)/health') {
-      router.push('/(patient)/health');
+    if (item.type === 'prescription' || item.link === '/(patient)/health' || item.link === '/(patient)/(tabs)/health') {
+      router.push('/(patient)/(tabs)/health');
     } else if (item.link) {
       router.push(item.link as any);
     }

@@ -24,9 +24,24 @@ export function useAppointmentsQuery(patientId?: string, doctorId?: string) {
         console.warn('[useAppointmentsQuery] Failed to fetch server appointments, using local state:', err);
       }
 
-      // Combine store appointments with fetched appointments
+      // Combine store appointments with fetched appointments, filtering by effective user
+      let relevantStoreAppointments = storeAppointments;
+      if (effectiveDoctorId) {
+        relevantStoreAppointments = storeAppointments.filter(
+          (a) =>
+            a.doctorId === effectiveDoctorId ||
+            (currentUser?.name && a.doctorName?.toLowerCase() === currentUser.name.toLowerCase())
+        );
+      } else if (effectivePatientId) {
+        relevantStoreAppointments = storeAppointments.filter(
+          (a) =>
+            a.patientId === effectivePatientId ||
+            (currentUser?.name && a.patientName?.toLowerCase() === currentUser.name.toLowerCase())
+        );
+      }
+
       const ids = new Set(fetched.map((a) => a.id));
-      const custom = storeAppointments.filter((a) => !ids.has(a.id));
+      const custom = relevantStoreAppointments.filter((a) => !ids.has(a.id));
       return [...custom, ...fetched];
     },
     enabled: Boolean(effectiveDoctorId || effectivePatientId),

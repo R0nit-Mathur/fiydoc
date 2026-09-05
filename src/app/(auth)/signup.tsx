@@ -150,9 +150,9 @@ export default function SignupScreen() {
       if (session) {
         setSession(session);
         if (session.role === 'doctor') {
-          router.replace('/(doctor)/home');
+          router.replace('/(doctor)/(tabs)/home');
         } else {
-          router.replace('/(patient)/home');
+          router.replace('/(patient)/(tabs)/home');
         }
         return;
       }
@@ -170,9 +170,9 @@ export default function SignupScreen() {
     setSession(session);
 
     if (session.role === 'doctor') {
-      router.replace('/(doctor)/home');
+      router.replace('/(doctor)/(tabs)/home');
     } else {
-      router.replace('/(patient)/home');
+      router.replace('/(patient)/(tabs)/home');
     }
   };
 

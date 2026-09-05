@@ -96,13 +96,23 @@ export default function BookingPaymentScreen() {
       }
     }
 
+    const targetDoctorId = doctor?.id || 'doc_live';
+    const targetDate = bookingDraft.date || new Date().toISOString().split('T')[0];
+    const targetTimeSlot = bookingDraft.timeSlot || '10:30 AM';
+
+    // Real-time concurrency check to prevent double booking
+    if (useAppointmentStore.getState().isSlotBooked(targetDoctorId, targetDate, targetTimeSlot)) {
+      setErrorMsg('This slot was just booked by another patient. Please go back and pick an available time.');
+      return;
+    }
+
     try {
       setProcessing(true);
 
       const invoice = await paymentService.processPayment({
-        doctorId: doctor?.id || 'doc_live',
-        doctorName: doctor?.name || 'Dr. Priya Sharma',
-        clinicName: doctor?.hospital || 'HeartCare Specialty Clinic',
+        doctorId: targetDoctorId,
+        doctorName: doctor?.name || 'Dr. Specialist',
+        clinicName: doctor?.hospital || 'FiYDoc Medical Clinic',
         consultationFee: fee,
         date: bookingDraft.date || new Date().toISOString().split('T')[0],
         timeSlot: bookingDraft.timeSlot || '10:30 AM',

@@ -208,7 +208,7 @@ export default function BookingSuccessScreen() {
       <View className="p-4 bg-white border-t border-slate-100 shadow-md">
         <Button
           title="Return to Patient Dashboard"
-          onPress={() => router.replace('/(patient)/home')}
+          onPress={() => router.replace('/(patient)/(tabs)/home')}
           variant="primary"
           size="lg"
         />

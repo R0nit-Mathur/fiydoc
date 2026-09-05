@@ -147,7 +147,7 @@ export default function AppointmentDetailScreen() {
               Active medicines & prescribed lab investigations are synced to your Medical Records.
             </Text>
             <TouchableOpacity
-              onPress={() => router.push('/(patient)/health/index')}
+              onPress={() => router.push('/(patient)/(tabs)/health')}
               className="bg-[#00B39B] py-2.5 px-4 rounded-xl items-center mt-1"
             >
               <Text className="text-xs font-black text-white">View Full Rx & Lab Orders</Text>

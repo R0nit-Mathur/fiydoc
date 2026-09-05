@@ -19,7 +19,7 @@ export default function PatientSetupScreen() {
 
   const handleFinish = () => {
     setOnboardingCompleted(true);
-    router.replace('/(patient)/home');
+    router.replace('/(patient)/(tabs)/home');
   };
 
   return (

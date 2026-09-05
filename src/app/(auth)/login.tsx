@@ -45,9 +45,9 @@ export default function LoginScreen() {
       setSession(session);
 
       if (session.role === 'doctor') {
-        router.replace('/(doctor)/home');
+        router.replace('/(doctor)/(tabs)/home');
       } else {
-        router.replace('/(patient)/home');
+        router.replace('/(patient)/(tabs)/home');
       }
     } catch (err: any) {
       setError(err.message || 'Login failed. Please verify credentials.');
@@ -64,9 +64,9 @@ export default function LoginScreen() {
       if (session) {
         setSession(session);
         if (session.role === 'doctor') {
-          router.replace('/(doctor)/home');
+          router.replace('/(doctor)/(tabs)/home');
         } else {
-          router.replace('/(patient)/home');
+          router.replace('/(patient)/(tabs)/home');
         }
         return;
       }
@@ -84,9 +84,9 @@ export default function LoginScreen() {
     setSession(session);
 
     if (session.role === 'doctor') {
-      router.replace('/(doctor)/home');
+      router.replace('/(doctor)/(tabs)/home');
     } else {
-      router.replace('/(patient)/home');
+      router.replace('/(patient)/(tabs)/home');
     }
   };
 

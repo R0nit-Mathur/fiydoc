@@ -24,9 +24,9 @@ export default function WelcomeScreen() {
       if (session) {
         setSession(session);
         if (session.role === 'doctor') {
-          router.replace('/(doctor)/home');
+          router.replace('/(doctor)/(tabs)/home');
         } else {
-          router.replace('/(patient)/home');
+          router.replace('/(patient)/(tabs)/home');
         }
         return;
       }
@@ -42,9 +42,9 @@ export default function WelcomeScreen() {
     const session = await authService.loginWithGoogle(account.email, account.name);
     setSession(session);
     if (session.role === 'doctor') {
-      router.replace('/(doctor)/home');
+      router.replace('/(doctor)/(tabs)/home');
     } else {
-      router.replace('/(patient)/home');
+      router.replace('/(patient)/(tabs)/home');
     }
   };
 

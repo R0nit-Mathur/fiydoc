@@ -18,13 +18,23 @@ const SLOTS = ['09:30 AM', '10:30 AM', '11:30 AM', '02:00 PM', '03:30 PM', '05:0
 
 export default function BookingSlotSelectScreen() {
   const router = useRouter();
-  const { bookingDraft, setBookingSlot } = useAppointmentStore();
+  const { bookingDraft, setBookingSlot, isSlotBooked } = useAppointmentStore();
   const doctor = bookingDraft.doctor;
 
   const [date, setDate] = useState(bookingDraft.date || DATES[0].full);
   const [slot, setSlot] = useState(bookingDraft.timeSlot || '10:30 AM');
+  const [slotError, setSlotError] = useState('');
 
   const handleNext = () => {
+    if (!slot) {
+      setSlotError('Please select a time slot.');
+      return;
+    }
+    if (doctor && isSlotBooked(doctor.id, date, slot)) {
+      setSlotError('This slot is already reserved. Please select another slot.');
+      return;
+    }
+    setSlotError('');
     setBookingSlot(date, slot, 'clinic');
     router.push('/(patient)/booking/confirm');
   };
@@ -107,28 +117,56 @@ export default function BookingSlotSelectScreen() {
 
           {/* Time Slot Picker */}
           <View>
-            <Text className="text-base font-black text-slate-900 mb-3">Available Clinic Slots</Text>
+            <View className="flex-row items-center justify-between mb-3">
+              <Text className="text-base font-black text-slate-900">Available Clinic Slots</Text>
+              <Text className="text-xs text-slate-500 font-semibold">15 mins consultation</Text>
+            </View>
+
+            {slotError ? (
+              <View className="bg-rose-50 border border-rose-200 p-3 rounded-2xl mb-3">
+                <Text className="text-xs font-bold text-rose-700">{slotError}</Text>
+              </View>
+            ) : null}
+
             <View className="flex-row flex-wrap gap-2.5">
               {SLOTS.map((s) => {
-                const isSelected = slot === s;
+                const isBooked = Boolean(doctor && isSlotBooked(doctor.id, date, s));
+                const isSelected = slot === s && !isBooked;
                 return (
                   <TouchableOpacity
                     key={s}
-                    onPress={() => setSlot(s)}
+                    onPress={() => {
+                      if (!isBooked) {
+                        setSlot(s);
+                        setSlotError('');
+                      }
+                    }}
                     activeOpacity={0.8}
-                    className={`px-4 py-2.5 rounded-2xl border ${
-                      isSelected
+                    disabled={isBooked}
+                    className={`px-4 py-2.5 rounded-2xl border flex-row items-center gap-1.5 ${
+                      isBooked
+                        ? 'bg-slate-100/90 border-slate-200 opacity-60'
+                        : isSelected
                         ? 'bg-[#00B39B] border-[#00B39B] shadow-sm'
                         : 'bg-slate-50 border-slate-200/90'
                     }`}
                   >
                     <Text
                       className={`text-xs font-bold ${
-                        isSelected ? 'text-white' : 'text-slate-800'
+                        isBooked
+                          ? 'text-slate-400 line-through'
+                          : isSelected
+                          ? 'text-white'
+                          : 'text-slate-800'
                       }`}
                     >
                       {s}
                     </Text>
+                    {isBooked && (
+                      <Text className="text-[9px] font-black text-rose-500 uppercase tracking-tight">
+                        Booked
+                      </Text>
+                    )}
                   </TouchableOpacity>
                 );
               })}

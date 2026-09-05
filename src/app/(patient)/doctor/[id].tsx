@@ -25,6 +25,7 @@ export default function DoctorProfileScreen() {
   const { data: doctor, isLoading } = useDoctorDetailQuery(id as string);
   const setBookingDoctor = useAppointmentStore((s) => s.setBookingDoctor);
   const setBookingSlot = useAppointmentStore((s) => s.setBookingSlot);
+  const isSlotBooked = useAppointmentStore((s) => s.isSlotBooked);
 
   const todayStr = new Date().toISOString().split('T')[0];
   const [selectedDate, setSelectedDate] = useState(todayStr);
@@ -39,6 +40,10 @@ export default function DoctorProfileScreen() {
   }
 
   const handleBookNow = () => {
+    if (isSlotBooked(doctor.id, selectedDate, selectedSlot)) {
+      alert('This slot is already booked. Please choose an available time slot.');
+      return;
+    }
     setBookingDoctor(doctor);
     setBookingSlot(selectedDate, selectedSlot, 'clinic');
     router.push('/(patient)/booking/slot-select');
@@ -197,25 +202,38 @@ export default function DoctorProfileScreen() {
           <Text className="text-base font-black text-slate-900 mb-2.5">Select In-Clinic Slot</Text>
           <View className="flex-row flex-wrap gap-2.5">
             {SLOTS.map((slot: string) => {
-              const isSelected = selectedSlot === slot;
+              const isBooked = isSlotBooked(doctor.id, selectedDate, slot);
+              const isSelected = selectedSlot === slot && !isBooked;
               return (
                 <TouchableOpacity
                   key={slot}
-                  onPress={() => setSelectedSlot(slot)}
+                  onPress={() => !isBooked && setSelectedSlot(slot)}
                   activeOpacity={0.8}
-                  className={`px-4 py-2.5 rounded-2xl border ${
-                    isSelected
+                  disabled={isBooked}
+                  className={`px-4 py-2.5 rounded-2xl border flex-row items-center gap-1.5 ${
+                    isBooked
+                      ? 'bg-slate-100/90 border-slate-200 opacity-60'
+                      : isSelected
                       ? 'bg-[#00B39B] border-[#00B39B] shadow-sm'
                       : 'bg-slate-50 border-slate-200/90'
                   }`}
                 >
                   <Text
                     className={`text-xs font-extrabold ${
-                      isSelected ? 'text-white' : 'text-slate-700'
+                      isBooked
+                        ? 'text-slate-400 line-through'
+                        : isSelected
+                        ? 'text-white'
+                        : 'text-slate-700'
                     }`}
                   >
                     {slot}
                   </Text>
+                  {isBooked && (
+                    <Text className="text-[9px] font-black text-rose-500 uppercase tracking-tight">
+                      Booked
+                    </Text>
+                  )}
                 </TouchableOpacity>
               );
             })}

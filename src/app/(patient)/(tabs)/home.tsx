@@ -47,7 +47,7 @@ export default function PatientHomeScreen() {
         }}
       >
         <TouchableOpacity
-          onPress={() => router.push('/(patient)/profile')}
+          onPress={() => router.push('/(patient)/(tabs)/profile')}
           activeOpacity={0.8}
           style={{ flexDirection: 'row', alignItems: 'center', flex: 1, minWidth: 0, marginRight: 12, gap: 10 }}
         >
@@ -84,7 +84,7 @@ export default function PatientHomeScreen() {
       >
         {/* Search Trigger Bar */}
         <TouchableOpacity
-          onPress={() => router.push('/(patient)/discovery')}
+          onPress={() => router.push('/(patient)/(tabs)/discovery')}
           activeOpacity={0.9}
           className="bg-white px-4 py-3 rounded-2xl border border-slate-200/90 shadow-sm flex-row items-center"
           style={{ gap: 10 }}
@@ -102,7 +102,7 @@ export default function PatientHomeScreen() {
           </Text>
           <View style={{ flexDirection: 'row', gap: 10 }}>
             <TouchableOpacity
-              onPress={() => router.push('/(patient)/discovery')}
+              onPress={() => router.push('/(patient)/(tabs)/discovery')}
               activeOpacity={0.85}
               style={{
                 flex: 1,
@@ -154,7 +154,7 @@ export default function PatientHomeScreen() {
             </TouchableOpacity>
 
             <TouchableOpacity
-              onPress={() => router.push('/(patient)/health/index')}
+              onPress={() => router.push('/(patient)/(tabs)/health')}
               activeOpacity={0.85}
               style={{
                 flex: 1,
@@ -246,7 +246,7 @@ export default function PatientHomeScreen() {
                 Schedule an in-clinic consultation with a verified medical specialist.
               </Text>
               <TouchableOpacity
-                onPress={() => router.push('/(patient)/discovery')}
+                onPress={() => router.push('/(patient)/(tabs)/discovery')}
                 activeOpacity={0.8}
                 className="bg-[#00B39B] px-5 py-2.5 rounded-xl shadow-sm"
               >
@@ -265,7 +265,7 @@ export default function PatientHomeScreen() {
               </Text>
               <ShieldCheck size={16} color="#00B39B" />
             </View>
-            <TouchableOpacity onPress={() => router.push('/(patient)/discovery')}>
+            <TouchableOpacity onPress={() => router.push('/(patient)/(tabs)/discovery')}>
               <Text className="text-xs font-extrabold text-[#00B39B]">See All</Text>
             </TouchableOpacity>
           </View>
