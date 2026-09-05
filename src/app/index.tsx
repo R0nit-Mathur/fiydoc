@@ -29,7 +29,7 @@ export default function Index() {
 
   return (
     <View className="flex-1 bg-white items-center justify-center space-y-4">
-      <FiYLogo size="xl" />
+      <FiYLogo size="2xl" />
       <ActivityIndicator size="large" color="#00B39B" className="mt-8" />
     </View>
   );

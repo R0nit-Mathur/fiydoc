@@ -101,7 +101,7 @@ export default function LoginScreen() {
         <View style={styles.topSection}>
           {/* Official Brand Logo */}
           <View style={styles.logoWrapper}>
-            <FiYLogo size="xl" />
+            <FiYLogo size="2xl" />
           </View>
 
           {/* Heading & Subtitle */}

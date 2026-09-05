@@ -270,7 +270,7 @@ export default function SignupScreen() {
         <View style={styles.topSection}>
           {/* Logo */}
           <View style={styles.logoWrapper}>
-            <FiYLogo size="xl" />
+            <FiYLogo size="2xl" />
           </View>
 
           <Text style={styles.title}>
