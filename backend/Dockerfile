@@ -19,14 +19,15 @@ COPY package.json pnpm-lock.yaml* package-lock.json* ./
 COPY prisma ./prisma/
 
 # Install dependencies (with build scripts allowed)
-RUN pnpm install --no-frozen-lockfile || npm install
+RUN pnpm install --no-frozen-lockfile
 
 # Copy application source code
 COPY . .
 
 # Generate Prisma Client & compile NestJS application
 RUN npx prisma generate
-RUN pnpm run build || npm run build
+RUN pnpm run build
+RUN node -e "const fs=require('fs'); if (!fs.existsSync('./dist/main.js') && fs.existsSync('./dist/src/main.js')) { fs.writeFileSync('./dist/main.js', 'require(\"./src/main.js\");\n'); }"
 
 # Stage 2: Production Execution Image
 FROM node:22-alpine AS runner
@@ -51,4 +52,4 @@ EXPOSE 3000
 HEALTHCHECK --interval=30s --timeout=5s --start-period=15s --retries=3 \
   CMD wget --no-verbose --tries=1 --spider http://localhost:3000/health || exit 1
 
-CMD ["node", "dist/main.js"]
+CMD ["sh", "-c", "if [ -f dist/main.js ]; then node dist/main.js; elif [ -f dist/src/main.js ]; then node dist/src/main.js; else node -e 'require(\"./dist/src/main.js\")'; fi"]
