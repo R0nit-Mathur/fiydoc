@@ -1270,8 +1270,8 @@ export default function DoctorConsultationWorkspaceScreen() {
             ))}
           </ScrollView>
 
-          <ScrollView style={{ maxHeight: 340 }} showsVerticalScrollIndicator={false}>
-            <View style={{ gap: 8 }}>
+          <ScrollView style={{ height: 320 }} showsVerticalScrollIndicator={true} nestedScrollEnabled={true}>
+            <View style={{ gap: 8, paddingBottom: 16 }}>
               {filteredMedicines.map((med) => (
                 <TouchableOpacity
                   key={med.id}
@@ -1491,8 +1491,8 @@ export default function DoctorConsultationWorkspaceScreen() {
             />
           </View>
 
-          <ScrollView style={{ maxHeight: 340 }} showsVerticalScrollIndicator={false}>
-            <View style={{ gap: 8 }}>
+          <ScrollView style={{ height: 320 }} showsVerticalScrollIndicator={true} nestedScrollEnabled={true}>
+            <View style={{ gap: 8, paddingBottom: 16 }}>
               {filteredTests.map((test) => (
                 <TouchableOpacity
                   key={test.id}

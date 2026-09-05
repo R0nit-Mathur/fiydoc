@@ -37,11 +37,13 @@ export const useHealthStore = create<HealthState>()(
             sourceId: prescription.id,
             createdAt: 'Just now',
             doctorName: prescription.doctorName,
-            facility: prescription.clinicName || 'FiYDoc Health Clinic',
             summary: prescription.diagnosis
-              ? `Diagnosis: ${prescription.diagnosis}. Prescribed ${prescription.medicines.length} medication(s).`
-              : `Official prescription with ${prescription.medicines.length} medication(s).`,
-            extractedTags: ['DIGITAL_RX', 'MCI_VERIFIED', 'TELE_HEALTH'],
+              ? prescription.medicines && prescription.medicines.length > 0
+                ? `Diagnosis: ${prescription.diagnosis}. Prescribed ${prescription.medicines.length} medication(s).`
+                : `Diagnosis: ${prescription.diagnosis}. Clinical Assessment & Advice (No medications required).`
+              : prescription.medicines && prescription.medicines.length > 0
+                ? `Official prescription with ${prescription.medicines.length} medication(s).`
+                : `Official clinical assessment & consultation advice.`,
             tags: ['DIGITAL_RX', 'MCI_VERIFIED'],
           };
 

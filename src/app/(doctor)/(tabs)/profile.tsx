@@ -1,7 +1,8 @@
-import React, { useState } from 'react';
-import { View, Text, ScrollView, TouchableOpacity, Alert, ActivityIndicator } from 'react-native';
+import React, { useState, useCallback } from 'react';
+import { View, Text, ScrollView, TouchableOpacity, Alert, ActivityIndicator, RefreshControl } from 'react-native';
 import { useRouter } from 'expo-router';
 import { SafeAreaView } from 'react-native-safe-area-context';
+import { useQueryClient } from '@tanstack/react-query';
 import { useAuthStore } from '@/store/useAuthStore';
 import { updateService } from '@/services/updateService';
 import * as Location from 'expo-location';
@@ -20,8 +21,23 @@ import {
 
 export default function DoctorProfileScreen() {
   const router = useRouter();
+  const queryClient = useQueryClient();
   const { user, logout, updateUser } = useAuthStore();
   const [isUpdatingLocation, setIsUpdatingLocation] = useState(false);
+  const [refreshing, setRefreshing] = useState(false);
+
+  const handleRefresh = useCallback(async () => {
+    setRefreshing(true);
+    try {
+      await Promise.all([
+        queryClient.invalidateQueries({ queryKey: ['appointments'] }),
+        queryClient.invalidateQueries({ queryKey: ['profile'] }),
+      ]);
+      await new Promise((r) => setTimeout(r, 400));
+    } finally {
+      setRefreshing(false);
+    }
+  }, [queryClient]);
 
   const handleUpdateClinicLocation = async () => {
     setIsUpdatingLocation(true);
@@ -86,6 +102,14 @@ export default function DoctorProfileScreen() {
       <ScrollView
         contentContainerStyle={{ padding: 16, paddingBottom: 110, gap: 16 }}
         showsVerticalScrollIndicator={false}
+        refreshControl={
+          <RefreshControl
+            refreshing={refreshing}
+            onRefresh={handleRefresh}
+            colors={['#1E58C8']}
+            tintColor="#1E58C8"
+          />
+        }
       >
         {/* Doctor Identity Card */}
         <View className="bg-white/95 p-4 rounded-2xl border border-slate-200/80 shadow-sm flex-row items-center" style={{ gap: 14 }}>

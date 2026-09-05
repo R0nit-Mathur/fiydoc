@@ -1,7 +1,8 @@
-import React, { useState } from 'react';
-import { View, Text, ScrollView, TouchableOpacity, TextInput } from 'react-native';
+import React, { useState, useCallback } from 'react';
+import { View, Text, ScrollView, TouchableOpacity, TextInput, RefreshControl } from 'react-native';
 import { useRouter } from 'expo-router';
 import { SafeAreaView } from 'react-native-safe-area-context';
+import { useQueryClient } from '@tanstack/react-query';
 import { useAppointmentsQuery } from '@/hooks/queries/useAppointmentsQuery';
 import { useAuthStore } from '@/store/useAuthStore';
 import { useAppointmentStore } from '@/store/useAppointmentStore';
@@ -9,6 +10,7 @@ import { useNotificationStore } from '@/store/useNotificationStore';
 import { Badge } from '@/components/ui/Badge';
 import { Avatar } from '@/components/ui/Avatar';
 import { Modal } from '@/components/ui/Modal';
+import { ConfirmationAnimation } from '@/components/ui/ConfirmationAnimation';
 import {
   Calendar,
   Clock,
@@ -19,6 +21,7 @@ import {
   AlertCircle,
   Clock3,
   CheckCircle2,
+  UserCheck,
 } from 'lucide-react-native';
 
 function addMinutesToTimeString(timeStr: string, minutesToAdd: number): string {
@@ -62,9 +65,11 @@ const REASON_PRESETS = [
 
 export default function DoctorAppointmentsQueueScreen() {
   const router = useRouter();
+  const queryClient = useQueryClient();
   const { user } = useAuthStore();
   const [activeTab, setActiveTab] = useState<'upcoming' | 'completed' | 'cancelled'>('upcoming');
-  const { data: appointments } = useAppointmentsQuery(undefined, user?.id);
+  const { data: appointments, isRefetching, refetch } = useAppointmentsQuery(undefined, user?.id);
+  const [refreshing, setRefreshing] = useState(false);
 
   // Postpone State
   const [selectedApt, setSelectedApt] = useState<any | null>(null);
@@ -73,6 +78,37 @@ export default function DoctorAppointmentsQueueScreen() {
   const [customReason, setCustomReason] = useState<string>('');
   const [postponeModalVisible, setPostponeModalVisible] = useState(false);
   const [successToast, setSuccessToast] = useState(false);
+
+  // Confirm Arrival State
+  const [confirmedApt, setConfirmedApt] = useState<any | null>(null);
+  const [confirmModalVisible, setConfirmModalVisible] = useState(false);
+
+  const handleRefresh = useCallback(async () => {
+    setRefreshing(true);
+    try {
+      await Promise.all([
+        queryClient.invalidateQueries({ queryKey: ['appointments'] }),
+        refetch(),
+      ]);
+    } finally {
+      setRefreshing(false);
+    }
+  }, [queryClient, refetch]);
+
+  const handleConfirmArrival = (apt: any) => {
+    setConfirmedApt(apt);
+    setConfirmModalVisible(true);
+
+    // Alert Patient via Notification
+    useNotificationStore.getState().addNotification({
+      recipientId: apt.patientId || 'pat_1',
+      recipientRole: 'patient',
+      title: 'Doctor Confirmed Arrival',
+      message: `${user?.name || apt.doctorName || 'Your doctor'} has confirmed your OPD arrival. Please proceed to Consultation Room.`,
+      type: 'appointment',
+      link: `/(patient)/appointments/${apt.id}`,
+    });
+  };
 
   const filtered = appointments?.filter((a) => a.status === activeTab);
 
@@ -160,7 +196,17 @@ export default function DoctorAppointmentsQueueScreen() {
         </View>
       )}
 
-      <ScrollView contentContainerStyle={{ padding: 16, paddingBottom: 110, gap: 12 }}>
+      <ScrollView
+        contentContainerStyle={{ padding: 16, paddingBottom: 110, gap: 12 }}
+        refreshControl={
+          <RefreshControl
+            refreshing={refreshing || isRefetching}
+            onRefresh={handleRefresh}
+            colors={['#1E58C8']}
+            tintColor="#1E58C8"
+          />
+        }
+      >
         {filtered?.length === 0 ? (
           <View className="bg-white p-8 rounded-3xl border border-slate-200 items-center justify-center mt-6" style={{ gap: 8 }}>
             <Calendar size={32} color="#94A3B8" />
@@ -205,22 +251,33 @@ export default function DoctorAppointmentsQueueScreen() {
               </View>
 
               {apt.status === 'upcoming' && (
-                <View className="flex-row items-center pt-1" style={{ gap: 8 }}>
-                  <TouchableOpacity
-                    onPress={() => router.push(`/(doctor)/consultation/${apt.id}`)}
-                    className="flex-1 bg-[#1E58C8] py-2.5 rounded-xl items-center shadow-xs"
-                  >
-                    <Text className="text-xs font-black text-white">Open Consultation Suite</Text>
-                  </TouchableOpacity>
+                <View style={{ gap: 6, paddingTop: 4 }}>
+                  <View className="flex-row items-center" style={{ gap: 8 }}>
+                    <TouchableOpacity
+                      onPress={() => router.push(`/(doctor)/consultation/${apt.id}`)}
+                      className="flex-1 bg-[#1E58C8] py-2.5 rounded-xl items-center shadow-xs"
+                    >
+                      <Text className="text-xs font-black text-white">Open Consultation</Text>
+                    </TouchableOpacity>
 
-                  <TouchableOpacity
-                    onPress={() => handleOpenPostpone(apt)}
-                    className="bg-amber-50 border border-amber-200/90 py-2.5 px-3.5 rounded-xl flex-row items-center justify-center"
-                    style={{ gap: 4 }}
-                  >
-                    <Clock3 size={14} color="#D97706" />
-                    <Text className="text-xs font-bold text-amber-800">Postpone</Text>
-                  </TouchableOpacity>
+                    <TouchableOpacity
+                      onPress={() => handleConfirmArrival(apt)}
+                      className="bg-emerald-50 border border-emerald-200 py-2.5 px-3 rounded-xl flex-row items-center justify-center"
+                      style={{ gap: 4 }}
+                    >
+                      <UserCheck size={14} color="#059669" />
+                      <Text className="text-xs font-bold text-emerald-800">Confirm Arrival</Text>
+                    </TouchableOpacity>
+
+                    <TouchableOpacity
+                      onPress={() => handleOpenPostpone(apt)}
+                      className="bg-amber-50 border border-amber-200/90 py-2.5 px-3 rounded-xl flex-row items-center justify-center"
+                      style={{ gap: 4 }}
+                    >
+                      <Clock3 size={14} color="#D97706" />
+                      <Text className="text-xs font-bold text-amber-800">Postpone</Text>
+                    </TouchableOpacity>
+                  </View>
                 </View>
               )}
             </View>
@@ -347,6 +404,54 @@ export default function DoctorAppointmentsQueueScreen() {
               <Clock3 size={16} color="#FFFFFF" />
               <Text className="text-sm font-black text-white">Confirm Delay & Alert Patient</Text>
             </TouchableOpacity>
+          </View>
+        </Modal>
+      )}
+
+      {/* Patient Confirmation Animation Modal */}
+      {confirmedApt && (
+        <Modal
+          visible={confirmModalVisible}
+          onClose={() => setConfirmModalVisible(false)}
+          title="Patient Arrival Confirmed"
+        >
+          <View style={{ gap: 16, paddingVertical: 8, alignItems: 'center' }}>
+            <ConfirmationAnimation
+              title="Patient Arrival Confirmed!"
+              subtitle={`Patient ${confirmedApt.patientName} has been checked into the OPD priority queue.`}
+              color="#10B981"
+              size={68}
+            />
+
+            <View className="w-full bg-slate-50 p-4 rounded-2xl border border-slate-200" style={{ gap: 8 }}>
+              <View className="flex-row justify-between items-center">
+                <Text className="text-xs text-slate-500 font-bold uppercase">Queue Status</Text>
+                <Badge label="IN-CLINIC READY" variant="teal" size="sm" />
+              </View>
+              <View className="flex-row justify-between items-center">
+                <Text className="text-xs text-slate-500 font-bold uppercase">Scheduled Slot</Text>
+                <Text className="text-xs font-black text-slate-900">{confirmedApt.date} at {confirmedApt.time}</Text>
+              </View>
+              <View className="flex-row justify-between items-center">
+                <Text className="text-xs text-slate-500 font-bold uppercase">Symptoms</Text>
+                <Text className="text-xs font-bold text-slate-700" numberOfLines={1}>
+                  {confirmedApt.symptoms?.join(', ') || 'General OPD Evaluation'}
+                </Text>
+              </View>
+            </View>
+
+            <View className="flex-row gap-2 w-full">
+              <TouchableOpacity
+                onPress={() => {
+                  setConfirmModalVisible(false);
+                  router.push(`/(doctor)/consultation/${confirmedApt.id}`);
+                }}
+                activeOpacity={0.85}
+                className="flex-1 bg-[#1E58C8] py-3.5 rounded-2xl items-center justify-center shadow-sm"
+              >
+                <Text className="text-sm font-black text-white">Open Consultation Room</Text>
+              </TouchableOpacity>
+            </View>
           </View>
         </Modal>
       )}

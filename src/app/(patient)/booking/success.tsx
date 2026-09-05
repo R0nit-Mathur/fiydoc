@@ -7,8 +7,8 @@ import { useAppointmentStore } from '@/store/useAppointmentStore';
 import { Button } from '@/components/ui/Button';
 import { Badge } from '@/components/ui/Badge';
 import { FiYLogo } from '@/components/ui/FiYLogo';
+import { ConfirmationAnimation } from '@/components/ui/ConfirmationAnimation';
 import {
-  CheckCircle2,
   Calendar,
   Clock,
   QrCode,
@@ -20,6 +20,7 @@ import {
   Banknote,
   Smartphone,
   ShieldCheck,
+  CheckCircle2,
 } from 'lucide-react-native';
 
 export default function BookingSuccessScreen() {
@@ -67,19 +68,13 @@ export default function BookingSuccessScreen() {
         contentContainerStyle={{ padding: 20, alignItems: 'center', gap: 18 }}
         showsVerticalScrollIndicator={false}
       >
-        {/* Animated Check Icon */}
-        <View className="w-16 h-16 rounded-full bg-emerald-100 items-center justify-center border-4 border-emerald-50 mt-2">
-          <CheckCircle2 size={36} color="#10B981" />
-        </View>
-
-        <View className="items-center" style={{ gap: 4 }}>
-          <Text className="text-2xl font-black text-slate-900 text-center">
-            {isPayAtClinic ? 'Clinic Token Reserved!' : 'Payment & Booking Confirmed!'}
-          </Text>
-          <Text className="text-xs text-slate-500 text-center">
-            Booking ID: <Text className="font-mono font-bold text-slate-800">{targetId}</Text>
-          </Text>
-        </View>
+        {/* Animated Check Confirmation with Ripple */}
+        <ConfirmationAnimation
+          title={isPayAtClinic ? 'Clinic Token Reserved!' : 'Payment & Booking Confirmed!'}
+          subtitle={`Booking ID: ${targetId}`}
+          color="#10B981"
+          size={74}
+        />
 
         {receiptSaved && (
           <View className="w-full bg-emerald-50 p-3 rounded-2xl border border-emerald-200 flex-row items-center justify-center" style={{ gap: 6 }}>

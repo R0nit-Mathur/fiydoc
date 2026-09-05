@@ -1,7 +1,8 @@
-import React, { useState, useMemo } from 'react';
-import { View, Text, ScrollView, TouchableOpacity } from 'react-native';
+import React, { useState, useMemo, useCallback } from 'react';
+import { View, Text, ScrollView, TouchableOpacity, RefreshControl } from 'react-native';
 import { useRouter } from 'expo-router';
 import { SafeAreaView } from 'react-native-safe-area-context';
+import { useQueryClient } from '@tanstack/react-query';
 import { Input } from '@/components/ui/Input';
 import { DoctorCard } from '@/components/ui/DoctorCard';
 import { DoctorCardSkeleton } from '@/components/ui/Skeleton';
@@ -40,17 +41,31 @@ const SORT_OPTIONS = ['Recommended', 'Nearest / Distance', 'Top Rated', 'Experie
 
 export default function DoctorDiscoveryScreen() {
   const router = useRouter();
+  const queryClient = useQueryClient();
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedSpecialty, setSelectedSpecialty] = useState('All');
   const [selectedSort, setSelectedSort] = useState('Recommended');
   const [locationModalVisible, setLocationModalVisible] = useState(false);
+  const [refreshing, setRefreshing] = useState(false);
 
   const { latitude: userLat, longitude: userLng, city: userCity } = useLocationStore();
 
-  const { data: doctors, isLoading } = useDoctorsQuery({
+  const { data: doctors, isLoading, isRefetching, refetch } = useDoctorsQuery({
     query: searchQuery,
     specialty: selectedSpecialty,
   });
+
+  const handleRefresh = useCallback(async () => {
+    setRefreshing(true);
+    try {
+      await Promise.all([
+        queryClient.invalidateQueries({ queryKey: ['doctors'] }),
+        refetch(),
+      ]);
+    } finally {
+      setRefreshing(false);
+    }
+  }, [queryClient, refetch]);
 
   const handleSafeBack = () => {
     if (router.canGoBack()) {
@@ -341,6 +356,14 @@ export default function DoctorDiscoveryScreen() {
       <ScrollView
         contentContainerStyle={{ paddingHorizontal: 16, paddingTop: 14, paddingBottom: 100, gap: 12 }}
         showsVerticalScrollIndicator={false}
+        refreshControl={
+          <RefreshControl
+            refreshing={refreshing || isRefetching}
+            onRefresh={handleRefresh}
+            colors={['#00B39B']}
+            tintColor="#00B39B"
+          />
+        }
       >
         {isLoading ? (
           <>

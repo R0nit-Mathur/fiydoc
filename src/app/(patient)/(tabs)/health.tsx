@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useCallback } from 'react';
 import {
   View,
   Text,
@@ -6,9 +6,11 @@ import {
   TouchableOpacity,
   ActivityIndicator,
   Share,
+  RefreshControl,
 } from 'react-native';
 import { useRouter } from 'expo-router';
 import { SafeAreaView } from 'react-native-safe-area-context';
+import { useQueryClient } from '@tanstack/react-query';
 import { Timeline } from '@/components/ui/Timeline';
 import { Button } from '@/components/ui/Button';
 import { Modal } from '@/components/ui/Modal';
@@ -61,6 +63,19 @@ export default function HealthHubScreen() {
   const [selectedPrescription, setSelectedPrescription] = useState<Prescription | null>(null);
   const [rxModalVisible, setRxModalVisible] = useState(false);
   const [downloadToast, setDownloadToast] = useState(false);
+
+  const queryClient = useQueryClient();
+  const [refreshing, setRefreshing] = useState(false);
+
+  const handleRefresh = useCallback(async () => {
+    setRefreshing(true);
+    try {
+      await queryClient.invalidateQueries({ queryKey: ['appointments'] });
+      await new Promise((r) => setTimeout(r, 400));
+    } finally {
+      setRefreshing(false);
+    }
+  }, [queryClient]);
 
   // OCR Modal States
   const [uploadModalVisible, setUploadModalVisible] = useState(false);
@@ -199,6 +214,14 @@ export default function HealthHubScreen() {
       <ScrollView
         contentContainerStyle={{ paddingHorizontal: 16, paddingTop: 16, paddingBottom: 110, gap: 16 }}
         showsVerticalScrollIndicator={false}
+        refreshControl={
+          <RefreshControl
+            refreshing={refreshing}
+            onRefresh={handleRefresh}
+            colors={['#00B39B']}
+            tintColor="#00B39B"
+          />
+        }
       >
         {/* Banner */}
         <View className="bg-[#00B39B] p-4 rounded-3xl flex-row items-center justify-between shadow-md">

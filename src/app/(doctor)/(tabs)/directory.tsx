@@ -1,7 +1,8 @@
 import React, { useState } from 'react';
-import { View, Text, ScrollView, TouchableOpacity, Image } from 'react-native';
+import { View, Text, ScrollView, TouchableOpacity, RefreshControl } from 'react-native';
 import { useRouter } from 'expo-router';
 import { SafeAreaView } from 'react-native-safe-area-context';
+import { useQueryClient } from '@tanstack/react-query';
 import { Patient } from '@/types/index';
 import { Input } from '@/components/ui/Input';
 import { Modal } from '@/components/ui/Modal';
@@ -9,14 +10,22 @@ import { Badge } from '@/components/ui/Badge';
 import { Avatar } from '@/components/ui/Avatar';
 import { useAuthStore } from '@/store/useAuthStore';
 import { useAppointmentsQuery } from '@/hooks/queries/useAppointmentsQuery';
-import { Search, UserCheck, AlertCircle, Phone, Mail, ChevronRight, Activity } from 'lucide-react-native';
+import { Search, UserCheck, AlertCircle, Phone, Mail, ChevronRight, Activity, Stethoscope } from 'lucide-react-native';
 
 export default function PatientDirectoryScreen() {
   const router = useRouter();
+  const queryClient = useQueryClient();
   const { user } = useAuthStore();
-  const { data: appointments } = useAppointmentsQuery(undefined, user?.id);
+  const { data: appointments, isRefetching } = useAppointmentsQuery(undefined, user?.id);
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedPatient, setSelectedPatient] = useState<Patient | null>(null);
+  const [refreshing, setRefreshing] = useState(false);
+
+  const onRefresh = async () => {
+    setRefreshing(true);
+    await queryClient.invalidateQueries({ queryKey: ['appointments'] });
+    setRefreshing(false);
+  };
 
   const patients: Patient[] = React.useMemo(() => {
     if (appointments && appointments.length > 0) {
@@ -58,7 +67,18 @@ export default function PatientDirectoryScreen() {
         />
       </View>
 
-      <ScrollView contentContainerStyle={{ padding: 16, paddingBottom: 110, gap: 12 }}>
+      <ScrollView
+        contentContainerStyle={{ padding: 16, paddingBottom: 110, gap: 12 }}
+        showsVerticalScrollIndicator={false}
+        refreshControl={
+          <RefreshControl
+            refreshing={refreshing || isRefetching}
+            onRefresh={onRefresh}
+            tintColor="#1E58C8"
+            colors={['#1E58C8']}
+          />
+        }
+      >
         {filtered.length === 0 ? (
           <View className="bg-white p-6 rounded-2xl border border-slate-200/80 items-center justify-center shadow-sm mt-4">
             <View className="w-10 h-10 rounded-xl bg-slate-100 items-center justify-center mb-2">
@@ -104,42 +124,62 @@ export default function PatientDirectoryScreen() {
         title="Patient Medical Profile"
       >
         {selectedPatient && (
-          <View style={{ gap: 16, paddingVertical: 8 }}>
-            <View className="flex-row items-center bg-slate-50 p-3.5 rounded-2xl border border-slate-100" style={{ gap: 12 }}>
-              <Image
-                source={{ uri: selectedPatient.avatar }}
-                className="w-14 h-14 rounded-2xl bg-slate-200"
-              />
-              <View className="flex-1">
-                <Text className="text-lg font-black text-slate-900">{selectedPatient.name}</Text>
-                <Text className="text-xs text-slate-500">{selectedPatient.email}</Text>
-                <Text className="text-xs font-bold text-[#1E58C8]">{selectedPatient.phone}</Text>
+          <View style={{ gap: 14, paddingVertical: 4 }}>
+            <View style={{ flexDirection: 'row', alignItems: 'center', backgroundColor: '#F8FAFC', padding: 14, borderRadius: 20, borderWidth: 1, borderColor: '#E2E8F0', gap: 12 }}>
+              <Avatar uri={selectedPatient.avatar} name={selectedPatient.name} size="lg" />
+              <View style={{ flex: 1, minWidth: 0 }}>
+                <Text style={{ fontSize: 16, fontWeight: '800', color: '#0F172A' }} numberOfLines={1}>
+                  {selectedPatient.name}
+                </Text>
+                <Text style={{ fontSize: 12, fontWeight: '500', color: '#64748B', marginTop: 2 }} numberOfLines={1}>
+                  {selectedPatient.email || 'patient@fiydoc.app'}
+                </Text>
+                {selectedPatient.phone ? (
+                  <Text style={{ fontSize: 12, fontWeight: '700', color: '#1E58C8', marginTop: 2 }}>
+                    {selectedPatient.phone}
+                  </Text>
+                ) : (
+                  <Text style={{ fontSize: 11, fontWeight: '600', color: '#94A3B8', marginTop: 2 }}>
+                    Verified Patient Account
+                  </Text>
+                )}
               </View>
             </View>
 
-            <View className="flex-row justify-around bg-teal-50 p-3 rounded-2xl border border-teal-100">
-              <View className="items-center">
-                <Text className="text-[10px] text-slate-400 font-medium">Age</Text>
-                <Text className="text-sm font-bold text-slate-900">{selectedPatient.age} Yrs</Text>
+            <View style={{ flexDirection: 'row', justifyContent: 'space-around', backgroundColor: '#F0FDFA', padding: 12, borderRadius: 18, borderWidth: 1, borderColor: '#CCFBF1' }}>
+              <View style={{ alignItems: 'center' }}>
+                <Text style={{ fontSize: 10, fontWeight: '700', color: '#64748B', textTransform: 'uppercase' }}>Age</Text>
+                <Text style={{ fontSize: 14, fontWeight: '800', color: '#0F172A', marginTop: 2 }}>
+                  {selectedPatient.age || 32} Yrs
+                </Text>
               </View>
-              <View className="w-px h-6 bg-teal-200 self-center" />
-              <View className="items-center">
-                <Text className="text-[10px] text-slate-400 font-medium">Blood Group</Text>
-                <Text className="text-sm font-black text-[#00B39B]">{selectedPatient.bloodGroup}</Text>
+              <View style={{ width: 1, height: 24, backgroundColor: '#99F6E4', alignSelf: 'center' }} />
+              <View style={{ alignItems: 'center' }}>
+                <Text style={{ fontSize: 10, fontWeight: '700', color: '#64748B', textTransform: 'uppercase' }}>Blood Group</Text>
+                <Text style={{ fontSize: 14, fontWeight: '900', color: '#00B39B', marginTop: 2 }}>
+                  {selectedPatient.bloodGroup || 'B+'}
+                </Text>
               </View>
-              <View className="w-px h-6 bg-teal-200 self-center" />
-              <View className="items-center">
-                <Text className="text-[10px] text-slate-400 font-medium">Gender</Text>
-                <Text className="text-sm font-bold text-slate-900">{selectedPatient.gender}</Text>
+              <View style={{ width: 1, height: 24, backgroundColor: '#99F6E4', alignSelf: 'center' }} />
+              <View style={{ alignItems: 'center' }}>
+                <Text style={{ fontSize: 10, fontWeight: '700', color: '#64748B', textTransform: 'uppercase' }}>Gender</Text>
+                <Text style={{ fontSize: 14, fontWeight: '800', color: '#0F172A', marginTop: 2 }}>
+                  {selectedPatient.gender || 'Patient'}
+                </Text>
               </View>
             </View>
 
-            <View className="bg-red-50 p-3.5 rounded-2xl border border-red-100">
-              <Text className="text-xs font-bold text-red-800 uppercase tracking-wider mb-1">
-                Allergy Warnings
-              </Text>
-              <Text className="text-xs text-red-700 font-semibold">
-                {(selectedPatient.allergies || []).join(' • ')}
+            <View style={{ backgroundColor: '#FEF2F2', padding: 12, borderRadius: 18, borderWidth: 1, borderColor: '#FECACA' }}>
+              <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, marginBottom: 4 }}>
+                <AlertCircle size={14} color="#DC2626" />
+                <Text style={{ fontSize: 11, fontWeight: '800', color: '#991B1B', textTransform: 'uppercase', letterSpacing: 0.5 }}>
+                  Allergy & Clinical Alerts
+                </Text>
+              </View>
+              <Text style={{ fontSize: 12, fontWeight: '600', color: '#B91C1C' }}>
+                {selectedPatient.allergies && selectedPatient.allergies.length > 0
+                  ? selectedPatient.allergies.join(' • ')
+                  : 'No known drug allergies reported'}
               </Text>
             </View>
 
@@ -149,9 +189,26 @@ export default function PatientDirectoryScreen() {
                 setSelectedPatient(null);
                 router.push(`/(doctor)/consultation/${pId || 'apt_live'}`);
               }}
-              className="bg-[#1E58C8] py-3.5 px-4 rounded-2xl items-center"
+              activeOpacity={0.85}
+              style={{
+                backgroundColor: '#1E58C8',
+                paddingVertical: 14,
+                borderRadius: 16,
+                flexDirection: 'row',
+                alignItems: 'center',
+                justifyContent: 'center',
+                gap: 8,
+                shadowColor: '#1E58C8',
+                shadowOffset: { width: 0, height: 4 },
+                shadowOpacity: 0.25,
+                shadowRadius: 8,
+                elevation: 3,
+              }}
             >
-              <Text className="text-sm font-bold text-white">Start New Clinical Session</Text>
+              <Stethoscope size={16} color="#FFFFFF" />
+              <Text style={{ fontSize: 13, fontWeight: '800', color: '#FFFFFF' }}>
+                Start In-Clinic Consultation
+              </Text>
             </TouchableOpacity>
           </View>
         )}

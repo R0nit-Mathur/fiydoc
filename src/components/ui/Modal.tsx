@@ -1,5 +1,13 @@
 import React from 'react';
-import { Modal as RNModal, View, Text, TouchableOpacity, TouchableWithoutFeedback } from 'react-native';
+import {
+  Modal as RNModal,
+  View,
+  Text,
+  TouchableOpacity,
+  TouchableWithoutFeedback,
+  KeyboardAvoidingView,
+  Platform,
+} from 'react-native';
 import { X } from 'lucide-react-native';
 
 interface ModalProps {
@@ -11,7 +19,14 @@ interface ModalProps {
   contentStyle?: any;
 }
 
-export function Modal({ visible, onClose, title, children, fullscreen = false, contentStyle }: ModalProps) {
+export function Modal({
+  visible,
+  onClose,
+  title,
+  children,
+  fullscreen = false,
+  contentStyle,
+}: ModalProps) {
   return (
     <RNModal
       visible={visible}
@@ -19,30 +34,94 @@ export function Modal({ visible, onClose, title, children, fullscreen = false, c
       animationType="fade"
       onRequestClose={onClose}
     >
-      <TouchableWithoutFeedback onPress={onClose}>
-        <View className={`flex-1 bg-black/60 justify-center items-center ${fullscreen ? 'p-2' : 'p-4'}`}>
-          <TouchableWithoutFeedback>
-            <View
-              className={`w-full ${fullscreen ? 'max-w-2xl h-[94%]' : 'max-w-md max-h-[88%]'} bg-white dark:bg-slate-800 rounded-3xl p-4 sm:p-5 shadow-2xl border border-slate-100 dark:border-slate-700`}
-              style={[{ display: 'flex', flexDirection: 'column' }, contentStyle]}
-            >
-              {title && (
-                <View className="flex-row items-center justify-between pb-3 border-b border-slate-100 dark:border-slate-700 mb-3 flex-shrink-0">
-                  <Text className="text-base sm:text-lg font-black text-slate-900 dark:text-white flex-1 mr-2" numberOfLines={1}>
-                    {title}
-                  </Text>
-                  <TouchableOpacity onPress={onClose} className="p-1.5 rounded-full bg-slate-100 dark:bg-slate-700">
-                    <X size={18} color="#64748B" />
-                  </TouchableOpacity>
-                </View>
-              )}
-              <View style={{ flex: 1, minHeight: 0 }}>
-                {children}
+      <KeyboardAvoidingView
+        behavior={Platform.OS === 'ios' ? 'padding' : undefined}
+        style={{ flex: 1 }}
+      >
+        <TouchableWithoutFeedback onPress={onClose}>
+          <View
+            style={{
+              flex: 1,
+              backgroundColor: 'rgba(15, 23, 42, 0.65)',
+              justifyContent: 'center',
+              alignItems: 'center',
+              padding: fullscreen ? 8 : 16,
+            }}
+          >
+            <TouchableWithoutFeedback>
+              <View
+                style={[
+                  {
+                    width: '100%',
+                    maxWidth: fullscreen ? 640 : 440,
+                    backgroundColor: '#FFFFFF',
+                    borderRadius: 24,
+                    padding: 18,
+                    shadowColor: '#000',
+                    shadowOffset: { width: 0, height: 10 },
+                    shadowOpacity: 0.18,
+                    shadowRadius: 20,
+                    elevation: 10,
+                    borderWidth: 1,
+                    borderColor: '#E2E8F0',
+                  },
+                  fullscreen
+                    ? { height: '94%', display: 'flex', flexDirection: 'column' }
+                    : { maxHeight: '90%' },
+                  contentStyle,
+                ]}
+              >
+                {title && (
+                  <View
+                    style={{
+                      flexDirection: 'row',
+                      alignItems: 'center',
+                      justifyContent: 'space-between',
+                      paddingBottom: 12,
+                      borderBottomWidth: 1,
+                      borderBottomColor: '#F1F5F9',
+                      marginBottom: 12,
+                      flexShrink: 0,
+                    }}
+                  >
+                    <Text
+                      style={{
+                        fontSize: 16,
+                        fontWeight: '800',
+                        color: '#0F172A',
+                        flex: 1,
+                        marginRight: 8,
+                      }}
+                      numberOfLines={1}
+                    >
+                      {title}
+                    </Text>
+                    <TouchableOpacity
+                      onPress={onClose}
+                      activeOpacity={0.7}
+                      style={{
+                        width: 32,
+                        height: 32,
+                        borderRadius: 16,
+                        backgroundColor: '#F1F5F9',
+                        alignItems: 'center',
+                        justifyContent: 'center',
+                      }}
+                    >
+                      <X size={16} color="#64748B" />
+                    </TouchableOpacity>
+                  </View>
+                )}
+                {fullscreen ? (
+                  <View style={{ flex: 1, minHeight: 0 }}>{children}</View>
+                ) : (
+                  <View style={{ flexShrink: 1 }}>{children}</View>
+                )}
               </View>
-            </View>
-          </TouchableWithoutFeedback>
-        </View>
-      </TouchableWithoutFeedback>
+            </TouchableWithoutFeedback>
+          </View>
+        </TouchableWithoutFeedback>
+      </KeyboardAvoidingView>
     </RNModal>
   );
 }
@@ -55,26 +134,81 @@ export function BottomSheet({ visible, onClose, title, children }: ModalProps) {
       animationType="slide"
       onRequestClose={onClose}
     >
-      <TouchableWithoutFeedback onPress={onClose}>
-        <View className="flex-1 bg-black/50 justify-end">
-          <TouchableWithoutFeedback>
-            <View className="bg-white dark:bg-slate-800 rounded-t-3xl p-5 shadow-2xl border-t border-slate-100 dark:border-slate-700 max-h-[85%]">
-              <View className="w-12 h-1.5 bg-slate-300 dark:bg-slate-600 rounded-full self-center mb-4" />
-              {title && (
-                <View className="flex-row items-center justify-between pb-3 border-b border-slate-100 dark:border-slate-700 mb-4">
-                  <Text className="text-lg font-bold text-slate-900 dark:text-white">
-                    {title}
-                  </Text>
-                  <TouchableOpacity onPress={onClose} className="p-1 rounded-full bg-slate-100 dark:bg-slate-700">
-                    <X size={18} color="#64748B" />
-                  </TouchableOpacity>
-                </View>
-              )}
-              {children}
-            </View>
-          </TouchableWithoutFeedback>
-        </View>
-      </TouchableWithoutFeedback>
+      <KeyboardAvoidingView
+        behavior={Platform.OS === 'ios' ? 'padding' : undefined}
+        style={{ flex: 1 }}
+      >
+        <TouchableWithoutFeedback onPress={onClose}>
+          <View
+            style={{
+              flex: 1,
+              backgroundColor: 'rgba(15, 23, 42, 0.6)',
+              justifyContent: 'flex-end',
+            }}
+          >
+            <TouchableWithoutFeedback>
+              <View
+                style={{
+                  backgroundColor: '#FFFFFF',
+                  borderTopLeftRadius: 28,
+                  borderTopRightRadius: 28,
+                  padding: 20,
+                  maxHeight: '85%',
+                  shadowColor: '#000',
+                  shadowOffset: { width: 0, height: -4 },
+                  shadowOpacity: 0.15,
+                  shadowRadius: 15,
+                  elevation: 10,
+                  borderTopWidth: 1,
+                  borderTopColor: '#E2E8F0',
+                }}
+              >
+                <View
+                  style={{
+                    width: 44,
+                    height: 5,
+                    backgroundColor: '#CBD5E1',
+                    borderRadius: 99,
+                    alignSelf: 'center',
+                    marginBottom: 16,
+                  }}
+                />
+                {title && (
+                  <View
+                    style={{
+                      flexDirection: 'row',
+                      alignItems: 'center',
+                      justifyContent: 'space-between',
+                      paddingBottom: 12,
+                      borderBottomWidth: 1,
+                      borderBottomColor: '#F1F5F9',
+                      marginBottom: 14,
+                    }}
+                  >
+                    <Text style={{ fontSize: 17, fontWeight: '800', color: '#0F172A' }}>
+                      {title}
+                    </Text>
+                    <TouchableOpacity
+                      onPress={onClose}
+                      style={{
+                        width: 32,
+                        height: 32,
+                        borderRadius: 16,
+                        backgroundColor: '#F1F5F9',
+                        alignItems: 'center',
+                        justifyContent: 'center',
+                      }}
+                    >
+                      <X size={16} color="#64748B" />
+                    </TouchableOpacity>
+                  </View>
+                )}
+                <View style={{ flexShrink: 1 }}>{children}</View>
+              </View>
+            </TouchableWithoutFeedback>
+          </View>
+        </TouchableWithoutFeedback>
+      </KeyboardAvoidingView>
     </RNModal>
   );
 }

@@ -1,6 +1,6 @@
 import React from 'react';
-import { View, Text } from 'react-native';
-import { FileText, Activity, Pill, Stethoscope, CheckCircle2 } from 'lucide-react-native';
+import { View, Text, TouchableOpacity } from 'react-native';
+import { FileText, Activity, Pill, Stethoscope, CheckCircle2, ChevronRight } from 'lucide-react-native';
 import { MedicalRecord } from '@/types/index';
 
 interface TimelineProps {
@@ -8,7 +8,7 @@ interface TimelineProps {
   onRecordPress?: (record: MedicalRecord) => void;
 }
 
-export function Timeline({ records }: TimelineProps) {
+export function Timeline({ records, onRecordPress }: TimelineProps) {
   const getIcon = (type: MedicalRecord['type']) => {
     switch (type) {
       case 'Lab Result':
@@ -26,21 +26,30 @@ export function Timeline({ records }: TimelineProps) {
     <View className="py-2">
       {records.map((item, index) => {
         const isLast = index === records.length - 1;
+        const cleanSummary = (item.summary || '').replace(
+          /Prescribed 0 medication\(s\)\.?/gi,
+          'Clinical Assessment & Advice (No medications required).'
+        );
 
         return (
           <View key={item.id} className="flex-row space-x-3.5 mb-5">
             {/* Timeline Bar & Node */}
             <View className="items-center">
-              <View className="w-8 h-8 rounded-full bg-slate-100 dark:bg-slate-800 items-center justify-center border border-slate-200 dark:border-slate-700 z-10">
+              <View className="w-8 h-8 rounded-full bg-slate-100 items-center justify-center border border-slate-200 z-10">
                 {getIcon(item.type)}
               </View>
               {!isLast && (
-                <View className="w-0.5 flex-1 bg-slate-200 dark:bg-slate-700 my-1" />
+                <View className="w-0.5 flex-1 bg-slate-200 my-1" />
               )}
             </View>
 
             {/* Record Card */}
-            <View className="flex-1 bg-white dark:bg-slate-800 p-4 rounded-2xl border border-slate-100 dark:border-slate-700/80 shadow-sm">
+            <TouchableOpacity
+              activeOpacity={onRecordPress ? 0.82 : 1}
+              onPress={() => onRecordPress?.(item)}
+              disabled={!onRecordPress}
+              className="flex-1 bg-white p-4 rounded-2xl border border-slate-200/80 shadow-sm"
+            >
               <View className="flex-row justify-between items-start">
                 <Text className="text-xs font-bold text-[#00B39B] uppercase tracking-wider">
                   {item.type} • {item.createdAt}
@@ -55,28 +64,35 @@ export function Timeline({ records }: TimelineProps) {
                 )}
               </View>
 
-              <Text className="text-sm font-bold text-slate-900 dark:text-white mt-1">
-                {item.title}
-              </Text>
+              <View className="flex-row justify-between items-center mt-1">
+                <Text className="text-sm font-bold text-slate-900 flex-1 mr-2">
+                  {item.title}
+                </Text>
+                {onRecordPress && item.sourceId && (
+                  <ChevronRight size={16} color="#94A3B8" />
+                )}
+              </View>
               <Text className="text-xs text-slate-500 mt-0.5">
                 {item.facility || 'FiYDoc AI OCR'} {item.doctorName ? `• ${item.doctorName}` : ''}
               </Text>
 
-              <Text className="text-xs text-slate-600 dark:text-slate-300 mt-2 bg-slate-50 dark:bg-slate-900/60 p-2.5 rounded-xl border border-slate-100 dark:border-slate-800">
-                {item.summary}
-              </Text>
+              {cleanSummary ? (
+                <Text className="text-xs text-slate-600 mt-2 bg-slate-50 p-2.5 rounded-xl border border-slate-100">
+                  {cleanSummary}
+                </Text>
+              ) : null}
 
               {/* Tag Chips */}
               <View className="flex-row flex-wrap gap-1.5 mt-2.5">
                 {item.extractedTags?.map((tag, i) => (
-                  <View key={i} className="bg-teal-50 dark:bg-teal-950/60 px-2 py-0.5 rounded-md border border-teal-100 dark:border-teal-900">
-                    <Text className="text-[11px] font-semibold text-teal-700 dark:text-teal-300">
+                  <View key={i} className="bg-teal-50 px-2 py-0.5 rounded-md border border-teal-100">
+                    <Text className="text-[11px] font-semibold text-teal-700">
                       {tag}
                     </Text>
                   </View>
                 ))}
               </View>
-            </View>
+            </TouchableOpacity>
           </View>
         );
       })}

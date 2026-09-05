@@ -1,7 +1,8 @@
-import React from 'react';
-import { View, Text, ScrollView, TouchableOpacity } from 'react-native';
+import React, { useState, useCallback, useEffect } from 'react';
+import { View, Text, ScrollView, TouchableOpacity, RefreshControl } from 'react-native';
 import { useRouter } from 'expo-router';
 import { SafeAreaView } from 'react-native-safe-area-context';
+import { useQueryClient } from '@tanstack/react-query';
 import { DoctorCard } from '@/components/ui/DoctorCard';
 import { AppointmentCard } from '@/components/ui/AppointmentCard';
 import { DoctorCardSkeleton } from '@/components/ui/Skeleton';
@@ -24,18 +25,34 @@ import {
 
 export default function PatientHomeScreen() {
   const router = useRouter();
+  const queryClient = useQueryClient();
   const { user } = useAuthStore();
-  const [locationModalVisible, setLocationModalVisible] = React.useState(false);
+  const [locationModalVisible, setLocationModalVisible] = useState(false);
+  const [refreshing, setRefreshing] = useState(false);
   const { city, formattedAddress, detectDeviceLocation } = useLocationStore();
 
-  React.useEffect(() => {
+  useEffect(() => {
     if (!city) {
       detectDeviceLocation();
     }
   }, []);
 
-  const { data: doctors, isLoading: doctorsLoading } = useDoctorsQuery();
-  const { data: appointments } = useAppointmentsQuery(user?.id);
+  const { data: doctors, isLoading: doctorsLoading, isRefetching: isDoctorsRefetching, refetch: refetchDoctors } = useDoctorsQuery();
+  const { data: appointments, isRefetching: isAptsRefetching, refetch: refetchApts } = useAppointmentsQuery(user?.id);
+
+  const handleRefresh = useCallback(async () => {
+    setRefreshing(true);
+    try {
+      await Promise.all([
+        queryClient.invalidateQueries({ queryKey: ['doctors'] }),
+        queryClient.invalidateQueries({ queryKey: ['appointments'] }),
+        refetchDoctors(),
+        refetchApts(),
+      ]);
+    } finally {
+      setRefreshing(false);
+    }
+  }, [queryClient, refetchDoctors, refetchApts]);
 
   const upcomingApt = appointments?.find(
     (a) => a.status === 'upcoming' || a.status === 'confirmed' || a.status === 'in_progress'
@@ -91,6 +108,14 @@ export default function PatientHomeScreen() {
       <ScrollView
         contentContainerStyle={{ paddingHorizontal: 16, paddingTop: 14, paddingBottom: 100, gap: 16 }}
         showsVerticalScrollIndicator={false}
+        refreshControl={
+          <RefreshControl
+            refreshing={refreshing || isDoctorsRefetching || isAptsRefetching}
+            onRefresh={handleRefresh}
+            colors={['#00B39B']}
+            tintColor="#00B39B"
+          />
+        }
       >
         {/* Healthcare Location Pill Bar */}
         <TouchableOpacity

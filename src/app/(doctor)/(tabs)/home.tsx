@@ -1,7 +1,8 @@
-import React from 'react';
-import { View, Text, ScrollView, TouchableOpacity } from 'react-native';
+import React, { useState, useMemo, useCallback, useEffect } from 'react';
+import { View, Text, ScrollView, TouchableOpacity, RefreshControl, BackHandler } from 'react-native';
 import { useRouter } from 'expo-router';
 import { SafeAreaView } from 'react-native-safe-area-context';
+import { useQueryClient } from '@tanstack/react-query';
 import { useAuthStore } from '@/store/useAuthStore';
 import { useAppointmentsQuery } from '@/hooks/queries/useAppointmentsQuery';
 import { Avatar } from '@/components/ui/Avatar';
@@ -22,13 +23,26 @@ import {
 } from 'lucide-react-native';
 import { Modal } from '@/components/ui/Modal';
 import { useNotificationStore } from '@/store/useNotificationStore';
-import { BackHandler } from 'react-native';
 
 export default function DoctorHomeScreen() {
   const router = useRouter();
+  const queryClient = useQueryClient();
   const { user } = useAuthStore();
-  const { data: appointments } = useAppointmentsQuery(undefined, user?.id);
-  const [notificationsVisible, setNotificationsVisible] = React.useState(false);
+  const { data: appointments, isRefetching, refetch } = useAppointmentsQuery(undefined, user?.id);
+  const [notificationsVisible, setNotificationsVisible] = useState(false);
+  const [refreshing, setRefreshing] = useState(false);
+
+  const handleRefresh = useCallback(async () => {
+    setRefreshing(true);
+    try {
+      await Promise.all([
+        queryClient.invalidateQueries({ queryKey: ['appointments'] }),
+        refetch(),
+      ]);
+    } finally {
+      setRefreshing(false);
+    }
+  }, [queryClient, refetch]);
 
   const notifications = useNotificationStore((s) => s.notifications);
   const markAllAsRead = useNotificationStore((s) => s.markAllAsRead);
@@ -134,6 +148,14 @@ export default function DoctorHomeScreen() {
       <ScrollView
         contentContainerStyle={{ padding: 16, paddingBottom: 110, gap: 16 }}
         showsVerticalScrollIndicator={false}
+        refreshControl={
+          <RefreshControl
+            refreshing={refreshing || isRefetching}
+            onRefresh={handleRefresh}
+            colors={['#1E58C8']}
+            tintColor="#1E58C8"
+          />
+        }
       >
         {/* Verification Status Banner */}
         <View className="bg-blue-50/80 p-3.5 rounded-2xl border border-blue-200/90 flex-row items-center justify-between shadow-sm">
