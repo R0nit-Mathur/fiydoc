@@ -56,6 +56,11 @@ import {
   Edit3,
   Bookmark,
   Check,
+  ZoomIn,
+  ZoomOut,
+  Maximize2,
+  Minimize2,
+  RotateCcw,
 } from 'lucide-react-native';
 
 interface PrescribedMedicine {
@@ -342,8 +347,22 @@ export default function DoctorConsultationWorkspaceScreen() {
   const [showMedicineModal, setShowMedicineModal] = useState(false);
   const [showTestModal, setShowTestModal] = useState(false);
   const [showPrescriptionPass, setShowPrescriptionPass] = useState(false);
+  const [rxZoomScale, setRxZoomScale] = useState(1);
+  const [rxFullscreen, setRxFullscreen] = useState(false);
   const [showDosageModal, setShowDosageModal] = useState(false);
   const [activeEditingMed, setActiveEditingMed] = useState<PrescribedMedicine | null>(null);
+
+  const handleZoomIn = () => {
+    setRxZoomScale((prev) => Math.min(1.4, +(prev + 0.1).toFixed(2)));
+  };
+
+  const handleZoomOut = () => {
+    setRxZoomScale((prev) => Math.max(0.85, +(prev - 0.1).toFixed(2)));
+  };
+
+  const handleResetZoom = () => {
+    setRxZoomScale(1);
+  };
 
   // Dosage Form State
   const [selectedTiming, setSelectedTiming] = useState(TIMING_OPTIONS[0]);
@@ -668,16 +687,18 @@ export default function DoctorConsultationWorkspaceScreen() {
         <View className="bg-white p-4 rounded-3xl border border-slate-200/90 shadow-sm flex-row items-center" style={{ gap: 12 }}>
           <Avatar uri={apt?.patientAvatar} name={apt?.patientName || 'Aarav Mehta'} size="lg" />
           <View className="flex-1" style={{ minWidth: 0 }}>
-            <View className="flex-row items-center justify-between">
-              <Text className="text-base font-black text-slate-900" numberOfLines={1}>
+            <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: 8 }}>
+              <Text className="text-base font-black text-slate-900" numberOfLines={1} style={{ flex: 1, minWidth: 0 }}>
                 {apt?.patientName || 'Aarav Mehta'}
               </Text>
-              <Badge label="TOKEN #02" variant="teal" size="sm" />
+              <View style={{ flexShrink: 0 }}>
+                <Badge label="TOKEN #02" variant="teal" size="sm" />
+              </View>
             </View>
-            <Text className="text-xs text-slate-500 font-medium mt-0.5">
+            <Text className="text-xs text-slate-500 font-medium mt-0.5" numberOfLines={1}>
               Age: 32 Yrs • Gender: Male • Blood: O+
             </Text>
-            <View className="flex-row items-center mt-1.5" style={{ gap: 6 }}>
+            <View style={{ flexDirection: 'row', alignItems: 'center', marginTop: 6, gap: 6, flexWrap: 'wrap' }}>
               <View className="bg-red-50 px-2 py-0.5 rounded-md border border-red-200">
                 <Text className="text-[10px] font-bold text-red-600">Allergies: Penicillin</Text>
               </View>
@@ -693,29 +714,40 @@ export default function DoctorConsultationWorkspaceScreen() {
           <TouchableOpacity
             onPress={() => setShowPatientHistory(!showPatientHistory)}
             activeOpacity={0.8}
-            className="p-3.5 flex-row items-center justify-between bg-slate-50/80 border-b border-slate-100"
+            style={{
+              padding: 14,
+              flexDirection: 'row',
+              alignItems: 'center',
+              justifyContent: 'space-between',
+              backgroundColor: '#F8FAFC',
+              borderBottomWidth: 1,
+              borderBottomColor: '#F1F5F9',
+              gap: 8,
+            }}
           >
-            <View className="flex-row items-center" style={{ gap: 8 }}>
-              <View className="w-8 h-8 rounded-xl bg-blue-50 items-center justify-center border border-blue-200">
+            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8, flex: 1, minWidth: 0 }}>
+              <View className="w-8 h-8 rounded-xl bg-blue-50 items-center justify-center border border-blue-200" style={{ flexShrink: 0 }}>
                 <History size={16} color="#1E58C8" />
               </View>
-              <View>
-                <View className="flex-row items-center" style={{ gap: 6 }}>
-                  <Text className="text-xs font-black text-slate-900 uppercase tracking-wide">
-                    Patient Longitudinal History (EHR)
+              <View style={{ flex: 1, minWidth: 0 }}>
+                <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, flexWrap: 'wrap' }}>
+                  <Text className="text-xs font-black text-slate-900 uppercase tracking-wide" numberOfLines={1}>
+                    Patient EHR History
                   </Text>
                   <Badge label="ABDM CONNECTED" variant="teal" size="sm" />
                 </View>
-                <Text className="text-[11px] text-slate-500 font-medium">
-                  Past visits, chronic conditions, prescriptions & lab records
+                <Text className="text-[11px] text-slate-500 font-medium" numberOfLines={1}>
+                  Past visits, conditions & prescriptions
                 </Text>
               </View>
             </View>
-            {showPatientHistory ? (
-              <ChevronUp size={18} color="#64748B" />
-            ) : (
-              <ChevronDown size={18} color="#64748B" />
-            )}
+            <View style={{ flexShrink: 0 }}>
+              {showPatientHistory ? (
+                <ChevronUp size={18} color="#64748B" />
+              ) : (
+                <ChevronDown size={18} color="#64748B" />
+              )}
+            </View>
           </TouchableOpacity>
 
           {showPatientHistory && (
@@ -806,16 +838,18 @@ export default function DoctorConsultationWorkspaceScreen() {
             shadowRadius: 6,
           }}
         >
-          <View className="flex-row items-center justify-between">
-            <View className="flex-row items-center" style={{ gap: 8 }}>
-              <View className="w-8 h-8 rounded-xl bg-blue-50 items-center justify-center">
+          <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: 8 }}>
+            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8, flex: 1, minWidth: 0 }}>
+              <View className="w-8 h-8 rounded-xl bg-blue-50 items-center justify-center" style={{ flexShrink: 0 }}>
                 <Stethoscope size={17} color="#1E58C8" />
               </View>
-              <Text style={{ fontSize: 13, fontWeight: '800', color: '#0F172A', textTransform: 'uppercase', letterSpacing: 0.5 }}>
-                Patient's Chief Complaints (What Patient is Saying)
+              <Text style={{ fontSize: 13, fontWeight: '800', color: '#0F172A', textTransform: 'uppercase', letterSpacing: 0.3, flex: 1, minWidth: 0 }} numberOfLines={1}>
+                Chief Complaints (Patient Voice)
               </Text>
             </View>
-            <Badge label="SUBJECTIVE" variant="blue" size="sm" />
+            <View style={{ flexShrink: 0 }}>
+              <Badge label="SUBJECTIVE" variant="blue" size="sm" />
+            </View>
           </View>
 
           {/* Quick Tap Complaint Chips */}
@@ -828,11 +862,20 @@ export default function DoctorConsultationWorkspaceScreen() {
                 key={idx}
                 onPress={() => appendPatientVoiceChip(chip)}
                 activeOpacity={0.75}
-                className="bg-slate-100 hover:bg-blue-50 border border-slate-200 px-3 py-1.5 rounded-xl flex-row items-center"
-                style={{ gap: 4 }}
+                style={{
+                  backgroundColor: '#F1F5F9',
+                  borderWidth: 1,
+                  borderColor: '#E2E8F0',
+                  paddingHorizontal: 10,
+                  paddingVertical: 6,
+                  borderRadius: 12,
+                  flexDirection: 'row',
+                  alignItems: 'center',
+                  gap: 4,
+                }}
               >
                 <Plus size={12} color="#475569" />
-                <Text className="text-xs font-bold text-slate-700">{chip}</Text>
+                <Text style={{ fontSize: 11, fontWeight: '700', color: '#334155' }}>{chip}</Text>
               </TouchableOpacity>
             ))}
           </View>
@@ -861,17 +904,18 @@ export default function DoctorConsultationWorkspaceScreen() {
             shadowRadius: 6,
           }}
         >
-          <View className="flex-row items-center justify-between">
-            <View className="flex-row items-center" style={{ gap: 8 }}>
-              <View className="w-8 h-8 rounded-xl bg-teal-50 items-center justify-center">
+          <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: 8 }}>
+            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8, flex: 1, minWidth: 0 }}>
+              <View className="w-8 h-8 rounded-xl bg-teal-50 items-center justify-center" style={{ flexShrink: 0 }}>
                 <HeartPulse size={17} color="#00B39B" />
               </View>
-              <Text style={{ fontSize: 13, fontWeight: '800', color: '#0F172A', textTransform: 'uppercase', letterSpacing: 0.5 }}>
-                Vitals & Physical Examination
+              <Text style={{ fontSize: 13, fontWeight: '800', color: '#0F172A', textTransform: 'uppercase', letterSpacing: 0.3, flex: 1, minWidth: 0 }} numberOfLines={1}>
+                Vitals & Physical Exam
               </Text>
             </View>
             <TouchableOpacity
               onPress={fillNormalVitals}
+              style={{ flexShrink: 0 }}
               className="bg-teal-50 px-2.5 py-1 rounded-lg border border-teal-200"
             >
               <Text className="text-[10px] font-bold text-[#00B39B]">+ Normal Vitals</Text>
@@ -902,16 +946,18 @@ export default function DoctorConsultationWorkspaceScreen() {
             shadowRadius: 6,
           }}
         >
-          <View className="flex-row items-center justify-between">
-            <View className="flex-row items-center" style={{ gap: 8 }}>
-              <View className="w-8 h-8 rounded-xl bg-purple-50 items-center justify-center">
+          <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: 8 }}>
+            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8, flex: 1, minWidth: 0 }}>
+              <View className="w-8 h-8 rounded-xl bg-purple-50 items-center justify-center" style={{ flexShrink: 0 }}>
                 <ClipboardList size={17} color="#8B5CF6" />
               </View>
-              <Text style={{ fontSize: 13, fontWeight: '800', color: '#0F172A', textTransform: 'uppercase', letterSpacing: 0.5 }}>
-                Clinical Assessment & Diagnosis
+              <Text style={{ fontSize: 13, fontWeight: '800', color: '#0F172A', textTransform: 'uppercase', letterSpacing: 0.3, flex: 1, minWidth: 0 }} numberOfLines={1}>
+                Clinical Assessment
               </Text>
             </View>
-            <Badge label="ASSESSMENT" variant="purple" size="sm" />
+            <View style={{ flexShrink: 0 }}>
+              <Badge label="ASSESSMENT" variant="purple" size="sm" />
+            </View>
           </View>
 
           <Input
@@ -936,16 +982,18 @@ export default function DoctorConsultationWorkspaceScreen() {
             shadowRadius: 6,
           }}
         >
-          <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }}>
-            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
-              <View style={{ width: 32, height: 32, borderRadius: 10, backgroundColor: '#F0FDF4', alignItems: 'center', justifyContent: 'center' }}>
+          <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: 8 }}>
+            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8, flex: 1, minWidth: 0 }}>
+              <View style={{ width: 32, height: 32, borderRadius: 10, backgroundColor: '#F0FDF4', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
                 <Pill size={17} color="#00B39B" />
               </View>
-              <Text style={{ fontSize: 14, fontWeight: '800', color: '#0F172A', textTransform: 'uppercase', letterSpacing: 0.5 }}>
+              <Text style={{ fontSize: 13, fontWeight: '800', color: '#0F172A', textTransform: 'uppercase', letterSpacing: 0.3, flex: 1, minWidth: 0 }} numberOfLines={1}>
                 Prescribed Medicines (Rx)
               </Text>
             </View>
-            <Badge label={`${prescribedMeds.length} Added`} variant="teal" size="sm" />
+            <View style={{ flexShrink: 0 }}>
+              <Badge label={`${prescribedMeds.length} Added`} variant="teal" size="sm" />
+            </View>
           </View>
 
           {/* Medicines List */}
@@ -1053,16 +1101,18 @@ export default function DoctorConsultationWorkspaceScreen() {
             shadowRadius: 6,
           }}
         >
-          <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }}>
-            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
-              <View style={{ width: 32, height: 32, borderRadius: 10, backgroundColor: '#EFF6FF', alignItems: 'center', justifyContent: 'center' }}>
+          <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: 8 }}>
+            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8, flex: 1, minWidth: 0 }}>
+              <View style={{ width: 32, height: 32, borderRadius: 10, backgroundColor: '#EFF6FF', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
                 <Activity size={17} color="#1E58C8" />
               </View>
-              <Text style={{ fontSize: 14, fontWeight: '800', color: '#0F172A', textTransform: 'uppercase', letterSpacing: 0.5 }}>
-                Diagnostic Investigations Ordered
+              <Text style={{ fontSize: 13, fontWeight: '800', color: '#0F172A', textTransform: 'uppercase', letterSpacing: 0.3, flex: 1, minWidth: 0 }} numberOfLines={1}>
+                Diagnostic Investigations
               </Text>
             </View>
-            <Badge label={`${prescribedTests.length} Tests`} variant="blue" size="sm" />
+            <View style={{ flexShrink: 0 }}>
+              <Badge label={`${prescribedTests.length} Tests`} variant="blue" size="sm" />
+            </View>
           </View>
 
           {prescribedTests.length === 0 ? (
@@ -1486,9 +1536,126 @@ export default function DoctorConsultationWorkspaceScreen() {
         visible={showPrescriptionPass}
         onClose={() => setShowPrescriptionPass(false)}
         title="Official Medical Prescription Pass (Rx)"
+        fullscreen={rxFullscreen}
       >
-        <ScrollView style={{ maxHeight: 520 }} showsVerticalScrollIndicator={false}>
-          <View style={{ gap: 14, paddingVertical: 4 }}>
+        {/* Prescription Zoom & View Toolbar */}
+        <View
+          style={{
+            flexDirection: 'row',
+            alignItems: 'center',
+            justifyContent: 'space-between',
+            backgroundColor: '#F1F5F9',
+            paddingHorizontal: 12,
+            paddingVertical: 8,
+            borderRadius: 14,
+            marginBottom: 10,
+            borderWidth: 1,
+            borderColor: '#E2E8F0',
+          }}
+        >
+          <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+            <TouchableOpacity
+              onPress={handleZoomOut}
+              activeOpacity={0.7}
+              disabled={rxZoomScale <= 0.85}
+              style={{
+                width: 32,
+                height: 32,
+                borderRadius: 10,
+                backgroundColor: rxZoomScale <= 0.85 ? '#E2E8F0' : '#FFFFFF',
+                alignItems: 'center',
+                justifyContent: 'center',
+                borderWidth: 1,
+                borderColor: '#CBD5E1',
+              }}
+            >
+              <ZoomOut size={16} color={rxZoomScale <= 0.85 ? '#94A3B8' : '#0F172A'} />
+            </TouchableOpacity>
+
+            <TouchableOpacity
+              onPress={handleResetZoom}
+              activeOpacity={0.7}
+              style={{
+                paddingHorizontal: 10,
+                height: 32,
+                borderRadius: 10,
+                backgroundColor: '#FFFFFF',
+                alignItems: 'center',
+                justifyContent: 'center',
+                borderWidth: 1,
+                borderColor: '#CBD5E1',
+                flexDirection: 'row',
+                gap: 4,
+              }}
+            >
+              <RotateCcw size={12} color="#64748B" />
+              <Text style={{ fontSize: 11, fontWeight: '800', color: '#0F172A' }}>
+                {Math.round(rxZoomScale * 100)}%
+              </Text>
+            </TouchableOpacity>
+
+            <TouchableOpacity
+              onPress={handleZoomIn}
+              activeOpacity={0.7}
+              disabled={rxZoomScale >= 1.4}
+              style={{
+                width: 32,
+                height: 32,
+                borderRadius: 10,
+                backgroundColor: rxZoomScale >= 1.4 ? '#E2E8F0' : '#FFFFFF',
+                alignItems: 'center',
+                justifyContent: 'center',
+                borderWidth: 1,
+                borderColor: '#CBD5E1',
+              }}
+            >
+              <ZoomIn size={16} color={rxZoomScale >= 1.4 ? '#94A3B8' : '#0F172A'} />
+            </TouchableOpacity>
+          </View>
+
+          <TouchableOpacity
+            onPress={() => setRxFullscreen(!rxFullscreen)}
+            activeOpacity={0.7}
+            style={{
+              flexDirection: 'row',
+              alignItems: 'center',
+              gap: 5,
+              backgroundColor: rxFullscreen ? '#0F172A' : '#FFFFFF',
+              paddingHorizontal: 10,
+              height: 32,
+              borderRadius: 10,
+              borderWidth: 1,
+              borderColor: rxFullscreen ? '#0F172A' : '#CBD5E1',
+            }}
+          >
+            {rxFullscreen ? (
+              <>
+                <Minimize2 size={14} color="#FFFFFF" />
+                <Text style={{ fontSize: 11, fontWeight: '800', color: '#FFFFFF' }}>Compact</Text>
+              </>
+            ) : (
+              <>
+                <Maximize2 size={14} color="#0F172A" />
+                <Text style={{ fontSize: 11, fontWeight: '800', color: '#0F172A' }}>Fullscreen</Text>
+              </>
+            )}
+          </TouchableOpacity>
+        </View>
+
+        {/* Smooth ScrollView with zoom scale container */}
+        <ScrollView
+          style={{ flex: 1 }}
+          contentContainerStyle={{ paddingBottom: 60 }}
+          nestedScrollEnabled={true}
+          showsVerticalScrollIndicator={true}
+        >
+          <View
+            style={{
+              transform: [{ scale: rxZoomScale }],
+              gap: 14,
+              paddingVertical: 4,
+            }}
+          >
             {downloadToast && (
               <View className="bg-emerald-50 p-3 rounded-xl border border-emerald-200 flex-row items-center justify-center" style={{ gap: 6 }}>
                 <CheckCircle2 size={16} color="#10B981" />

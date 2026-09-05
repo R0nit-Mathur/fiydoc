@@ -39,6 +39,14 @@ export default function DoctorProfileScreen() {
     );
   }
 
+  const handleSafeBack = () => {
+    if (router.canGoBack()) {
+      router.back();
+    } else {
+      router.replace('/(patient)/(tabs)/discovery');
+    }
+  };
+
   const handleBookNow = () => {
     if (isSlotBooked(doctor.id, selectedDate, selectedSlot)) {
       alert('This slot is already booked. Please choose an available time slot.');
@@ -64,7 +72,7 @@ export default function DoctorProfileScreen() {
           borderBottomColor: '#F1F5F9',
         }}
       >
-        <TouchableOpacity onPress={() => router.back()} className="p-1 -ml-1">
+        <TouchableOpacity onPress={handleSafeBack} className="p-1 -ml-1">
           <ArrowLeft size={22} color="#0F172A" />
         </TouchableOpacity>
         <Text style={{ fontSize: 16, fontWeight: '800', color: '#0F172A' }}>Doctor Profile</Text>
@@ -210,27 +218,31 @@ export default function DoctorProfileScreen() {
                   onPress={() => !isBooked && setSelectedSlot(slot)}
                   activeOpacity={0.8}
                   disabled={isBooked}
-                  className={`px-4 py-2.5 rounded-2xl border flex-row items-center gap-1.5 ${
-                    isBooked
-                      ? 'bg-slate-100/90 border-slate-200 opacity-60'
-                      : isSelected
-                      ? 'bg-[#00B39B] border-[#00B39B] shadow-sm'
-                      : 'bg-slate-50 border-slate-200/90'
-                  }`}
+                  style={{
+                    paddingHorizontal: 16,
+                    paddingVertical: 10,
+                    borderRadius: 16,
+                    borderWidth: 1,
+                    flexDirection: 'row',
+                    alignItems: 'center',
+                    gap: 6,
+                    backgroundColor: isBooked ? '#F1F5F9' : isSelected ? '#00B39B' : '#F8FAFC',
+                    borderColor: isBooked ? '#E2E8F0' : isSelected ? '#00B39B' : '#E2E8F0',
+                    opacity: isBooked ? 0.6 : 1,
+                  }}
                 >
                   <Text
-                    className={`text-xs font-extrabold ${
-                      isBooked
-                        ? 'text-slate-400 line-through'
-                        : isSelected
-                        ? 'text-white'
-                        : 'text-slate-700'
-                    }`}
+                    style={{
+                      fontSize: 12,
+                      fontWeight: '800',
+                      color: isBooked ? '#94A3B8' : isSelected ? '#FFFFFF' : '#334155',
+                      textDecorationLine: isBooked ? 'line-through' : 'none',
+                    }}
                   >
                     {slot}
                   </Text>
                   {isBooked && (
-                    <Text className="text-[9px] font-black text-rose-500 uppercase tracking-tight">
+                    <Text style={{ fontSize: 9, fontWeight: '900', color: '#F43F5E', textTransform: 'uppercase' }}>
                       Booked
                     </Text>
                   )}

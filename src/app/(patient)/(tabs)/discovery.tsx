@@ -20,6 +20,7 @@ import {
   Stethoscope,
   SlidersHorizontal,
   Star,
+  CheckCircle2,
 } from 'lucide-react-native';
 
 const SPECIALTIES = [
@@ -206,12 +207,12 @@ export default function DoctorDiscoveryScreen() {
         </ScrollView>
       </View>
 
-      {/* 4. Secondary Sort Bar with Proper Margins */}
+      {/* 4. Doctors Count & Active Filters Meta Bar */}
       <View
         style={{
           marginHorizontal: 16,
-          marginTop: 12,
-          marginBottom: 4,
+          marginTop: 14,
+          marginBottom: 8,
           flexDirection: 'row',
           alignItems: 'center',
           justifyContent: 'space-between',
@@ -224,21 +225,29 @@ export default function DoctorDiscoveryScreen() {
             backgroundColor: '#F0FDFA',
             paddingHorizontal: 10,
             paddingVertical: 5,
-            borderRadius: 10,
+            borderRadius: 12,
             borderWidth: 1,
             borderColor: '#CCFBF1',
+            gap: 6,
           }}
         >
+          <CheckCircle2 size={13} color="#00B39B" />
           <Text style={{ fontSize: 11, fontWeight: '800', color: '#00B39B' }}>
-            {sortedDoctors.length} Specialists
+            {sortedDoctors.length} Verified Specialist{sortedDoctors.length === 1 ? '' : 's'}
           </Text>
         </View>
 
+        <Text style={{ fontSize: 11, fontWeight: '700', color: '#64748B' }}>
+          Sorted by: <Text style={{ color: '#0F172A', fontWeight: '800' }}>{selectedSort}</Text>
+        </Text>
+      </View>
+
+      {/* 5. Dedicated Full-Width Sort Options Bar with Generous Gaps */}
+      <View style={{ marginBottom: 12 }}>
         <ScrollView
           horizontal
           showsHorizontalScrollIndicator={false}
-          style={{ flexGrow: 0 }}
-          contentContainerStyle={{ gap: 6 }}
+          contentContainerStyle={{ paddingHorizontal: 16, gap: 10 }}
         >
           {SORT_OPTIONS.map((opt) => {
             const isSel = selectedSort === opt;
@@ -248,17 +257,22 @@ export default function DoctorDiscoveryScreen() {
                 onPress={() => setSelectedSort(opt)}
                 activeOpacity={0.8}
                 style={{
-                  paddingHorizontal: 11,
-                  paddingVertical: 6,
-                  borderRadius: 10,
-                  borderWidth: 1,
-                  backgroundColor: isSel ? '#0F172A' : '#FFFFFF',
+                  paddingHorizontal: 14,
+                  paddingVertical: 8,
+                  borderRadius: 14,
+                  borderWidth: 1.5,
+                  backgroundColor: isSel ? '#0F172A' : '#F8FAFC',
                   borderColor: isSel ? '#0F172A' : '#E2E8F0',
+                  shadowColor: isSel ? '#0F172A' : 'transparent',
+                  shadowOffset: { width: 0, height: 2 },
+                  shadowOpacity: isSel ? 0.2 : 0,
+                  shadowRadius: 4,
+                  elevation: isSel ? 2 : 0,
                 }}
               >
                 <Text
                   style={{
-                    fontSize: 11,
+                    fontSize: 12,
                     fontWeight: isSel ? '800' : '600',
                     color: isSel ? '#FFFFFF' : '#475569',
                   }}

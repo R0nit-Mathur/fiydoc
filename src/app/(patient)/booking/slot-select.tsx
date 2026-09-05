@@ -25,6 +25,14 @@ export default function BookingSlotSelectScreen() {
   const [slot, setSlot] = useState(bookingDraft.timeSlot || '10:30 AM');
   const [slotError, setSlotError] = useState('');
 
+  const handleSafeBack = () => {
+    if (router.canGoBack()) {
+      router.back();
+    } else {
+      router.replace('/(patient)/(tabs)/discovery');
+    }
+  };
+
   const handleNext = () => {
     if (!slot) {
       setSlotError('Please select a time slot.');
@@ -43,7 +51,7 @@ export default function BookingSlotSelectScreen() {
     <SafeAreaView className="flex-1 bg-white justify-between" edges={['top']}>
       <View>
         <View className="px-5 py-3.5 flex-row items-center justify-between border-b border-slate-100">
-          <TouchableOpacity onPress={() => router.back()} className="p-1 -ml-1">
+          <TouchableOpacity onPress={handleSafeBack} className="p-1 -ml-1">
             <ArrowLeft size={24} color="#0F172A" />
           </TouchableOpacity>
           <Text className="text-base font-black text-slate-900">Select Date & Time</Text>
@@ -89,23 +97,32 @@ export default function BookingSlotSelectScreen() {
                     key={item.full}
                     onPress={() => setDate(item.full)}
                     activeOpacity={0.8}
-                    className={`flex-1 py-3 items-center rounded-2xl border-2 ${
-                      isSelected
-                        ? 'border-[#00B39B] bg-teal-50'
-                        : 'border-slate-200/90 bg-white'
-                    }`}
+                    style={{
+                      flex: 1,
+                      paddingVertical: 12,
+                      alignItems: 'center',
+                      borderRadius: 16,
+                      borderWidth: 2,
+                      borderColor: isSelected ? '#00B39B' : '#E2E8F0',
+                      backgroundColor: isSelected ? '#F0FDFA' : '#FFFFFF',
+                    }}
                   >
                     <Text
-                      className={`text-xs font-semibold ${
-                        isSelected ? 'text-[#00B39B]' : 'text-slate-500'
-                      }`}
+                      style={{
+                        fontSize: 12,
+                        fontWeight: '600',
+                        color: isSelected ? '#00B39B' : '#64748B',
+                      }}
                     >
                       {item.day}
                     </Text>
                     <Text
-                      className={`text-sm font-black mt-0.5 ${
-                        isSelected ? 'text-[#00B39B]' : 'text-slate-900'
-                      }`}
+                      style={{
+                        fontSize: 14,
+                        fontWeight: '900',
+                        marginTop: 2,
+                        color: isSelected ? '#00B39B' : '#0F172A',
+                      }}
                     >
                       {item.date}
                     </Text>
@@ -143,27 +160,31 @@ export default function BookingSlotSelectScreen() {
                     }}
                     activeOpacity={0.8}
                     disabled={isBooked}
-                    className={`px-4 py-2.5 rounded-2xl border flex-row items-center gap-1.5 ${
-                      isBooked
-                        ? 'bg-slate-100/90 border-slate-200 opacity-60'
-                        : isSelected
-                        ? 'bg-[#00B39B] border-[#00B39B] shadow-sm'
-                        : 'bg-slate-50 border-slate-200/90'
-                    }`}
+                    style={{
+                      paddingHorizontal: 16,
+                      paddingVertical: 10,
+                      borderRadius: 16,
+                      borderWidth: 1,
+                      flexDirection: 'row',
+                      alignItems: 'center',
+                      gap: 6,
+                      backgroundColor: isBooked ? '#F1F5F9' : isSelected ? '#00B39B' : '#F8FAFC',
+                      borderColor: isBooked ? '#E2E8F0' : isSelected ? '#00B39B' : '#E2E8F0',
+                      opacity: isBooked ? 0.6 : 1,
+                    }}
                   >
                     <Text
-                      className={`text-xs font-bold ${
-                        isBooked
-                          ? 'text-slate-400 line-through'
-                          : isSelected
-                          ? 'text-white'
-                          : 'text-slate-800'
-                      }`}
+                      style={{
+                        fontSize: 12,
+                        fontWeight: '700',
+                        color: isBooked ? '#94A3B8' : isSelected ? '#FFFFFF' : '#1E293B',
+                        textDecorationLine: isBooked ? 'line-through' : 'none',
+                      }}
                     >
                       {s}
                     </Text>
                     {isBooked && (
-                      <Text className="text-[9px] font-black text-rose-500 uppercase tracking-tight">
+                      <Text style={{ fontSize: 9, fontWeight: '900', color: '#F43F5E', textTransform: 'uppercase' }}>
                         Booked
                       </Text>
                     )}

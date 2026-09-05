@@ -46,22 +46,23 @@ export function BodyRegion3D({ onSelectRegion }: BodyRegion3DProps) {
   return (
     <View className="bg-slate-900 p-4 rounded-3xl border border-slate-800" style={{ gap: 14 }}>
       {/* Header */}
-      <View className="flex-row items-center justify-between">
-        <View className="flex-row items-center" style={{ gap: 8 }}>
-          <View className="w-2.5 h-2.5 rounded-full bg-teal-400" />
-          <Text className="text-xs font-black text-white uppercase tracking-wider">
+      <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: 8 }}>
+        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8, flex: 1, minWidth: 0 }}>
+          <View style={{ width: 10, height: 10, borderRadius: 5, backgroundColor: '#2DD4BF', flexShrink: 0 }} />
+          <Text style={{ fontSize: 12, fontWeight: '900', color: '#FFFFFF', textTransform: 'uppercase', letterSpacing: 0.5, flex: 1, minWidth: 0 }} numberOfLines={1}>
             Anatomical Exam Focus
           </Text>
         </View>
-        <Badge label={selectedRegion.name} variant="teal" size="sm" />
+        <View style={{ flexShrink: 0 }}>
+          <Badge label={selectedRegion.name} variant="teal" size="sm" />
+        </View>
       </View>
 
       {/* Main Interactive Area */}
-      <View className="flex-row items-center" style={{ gap: 14 }}>
+      <View style={{ flexDirection: 'row', alignItems: 'center', gap: 12 }}>
         {/* Silhouette Vector */}
         <View
-          className="bg-slate-950 rounded-2xl items-center justify-center border border-slate-800"
-          style={{ width: 100, height: 170 }}
+          style={{ width: 90, height: 165, backgroundColor: '#020617', borderRadius: 16, alignItems: 'center', justifyContent: 'center', borderWidth: 1, borderColor: '#1E293B', flexShrink: 0 }}
         >
           <Svg width="80" height="150" viewBox="0 0 100 200" fill="none">
             {/* Head */}
