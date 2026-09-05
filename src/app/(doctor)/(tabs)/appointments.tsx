@@ -22,6 +22,7 @@ import {
   Clock3,
   CheckCircle2,
   UserCheck,
+  Stethoscope,
 } from 'lucide-react-native';
 
 function addMinutesToTimeString(timeStr: string, minutesToAdd: number): string {
@@ -83,6 +84,10 @@ export default function DoctorAppointmentsQueueScreen() {
   const [confirmedApt, setConfirmedApt] = useState<any | null>(null);
   const [confirmModalVisible, setConfirmModalVisible] = useState(false);
 
+  // Slot Approval State
+  const [approvingApt, setApprovingApt] = useState<any | null>(null);
+  const [approveModalVisible, setApproveModalVisible] = useState(false);
+
   const handleRefresh = useCallback(async () => {
     setRefreshing(true);
     try {
@@ -110,7 +115,37 @@ export default function DoctorAppointmentsQueueScreen() {
     });
   };
 
-  const filtered = appointments?.filter((a) => a.status === activeTab);
+  const handleOpenApproveSlot = (apt: any) => {
+    setApprovingApt(apt);
+    setApproveModalVisible(true);
+  };
+
+  const handleSaveApproveSlot = () => {
+    if (!approvingApt) return;
+    const aptStore = useAppointmentStore.getState();
+    aptStore.updateAppointmentStatus(approvingApt.id, 'confirmed');
+
+    // Notify Patient
+    useNotificationStore.getState().addNotification({
+      recipientId: approvingApt.patientId || 'pat_1',
+      recipientRole: 'patient',
+      title: 'Time Slot Approved!',
+      message: `Dr. ${user?.name || approvingApt.doctorName || 'Specialist'} has approved your appointment slot for ${approvingApt.time} on ${approvingApt.date}.`,
+      type: 'appointment',
+      link: `/(patient)/appointments/${approvingApt.id}`,
+    });
+
+    setApproveModalVisible(false);
+    setSuccessToast(true);
+    setTimeout(() => setSuccessToast(false), 3000);
+  };
+
+  const filtered = appointments?.filter((a) => {
+    if (activeTab === 'upcoming') {
+      return a.status === 'upcoming' || a.status === 'confirmed' || a.status === 'pending';
+    }
+    return a.status === activeTab;
+  });
 
   const handleOpenPostpone = (apt: any) => {
     setSelectedApt(apt);
@@ -230,8 +265,8 @@ export default function DoctorAppointmentsQueueScreen() {
                   </Text>
                 </View>
                 <Badge
-                  label={apt.status === 'upcoming' ? 'In-Clinic' : apt.status.toUpperCase()}
-                  variant={apt.status === 'completed' ? 'teal' : apt.status === 'cancelled' ? 'danger' : 'blue'}
+                  label={apt.status === 'confirmed' ? 'SLOT APPROVED' : apt.status === 'upcoming' ? 'IN-CLINIC' : apt.status.toUpperCase()}
+                  variant={apt.status === 'confirmed' ? 'teal' : apt.status === 'completed' ? 'teal' : apt.status === 'cancelled' ? 'danger' : 'blue'}
                   size="sm"
                 />
               </View>
@@ -250,32 +285,99 @@ export default function DoctorAppointmentsQueueScreen() {
                 </View>
               </View>
 
-              {apt.status === 'upcoming' && (
-                <View style={{ gap: 6, paddingTop: 4 }}>
-                  <View className="flex-row items-center" style={{ gap: 8 }}>
+              {(apt.status === 'upcoming' || apt.status === 'confirmed' || apt.status === 'pending') && (
+                <View style={{ gap: 8, paddingTop: 4 }}>
+                  {/* Primary Action Button */}
+                  <View style={{ flexDirection: 'row', gap: 8 }}>
                     <TouchableOpacity
                       onPress={() => router.push(`/(doctor)/consultation/${apt.id}`)}
-                      className="flex-1 bg-[#1E58C8] py-2.5 rounded-xl items-center shadow-xs"
+                      activeOpacity={0.85}
+                      style={{
+                        flex: 1,
+                        backgroundColor: '#1E58C8',
+                        paddingVertical: 10,
+                        borderRadius: 12,
+                        flexDirection: 'row',
+                        alignItems: 'center',
+                        justifyContent: 'center',
+                        gap: 6,
+                      }}
                     >
-                      <Text className="text-xs font-black text-white">Open Consultation</Text>
+                      <Stethoscope size={15} color="#FFFFFF" />
+                      <Text style={{ fontSize: 13, fontWeight: '800', color: '#FFFFFF' }}>
+                        Start Consultation
+                      </Text>
                     </TouchableOpacity>
 
+                    {apt.status !== 'confirmed' && (
+                      <TouchableOpacity
+                        onPress={() => handleOpenApproveSlot(apt)}
+                        activeOpacity={0.85}
+                        style={{
+                          backgroundColor: '#F0FDFA',
+                          borderWidth: 1,
+                          borderColor: '#99F6E4',
+                          paddingHorizontal: 12,
+                          paddingVertical: 10,
+                          borderRadius: 12,
+                          flexDirection: 'row',
+                          alignItems: 'center',
+                          justifyContent: 'center',
+                          gap: 5,
+                        }}
+                      >
+                        <CheckCircle2 size={15} color="#0D9488" />
+                        <Text style={{ fontSize: 12, fontWeight: '800', color: '#0D9488' }}>
+                          Approve Slot
+                        </Text>
+                      </TouchableOpacity>
+                    )}
+                  </View>
+
+                  {/* Secondary Actions: Check-in and Reschedule */}
+                  <View style={{ flexDirection: 'row', gap: 8 }}>
                     <TouchableOpacity
                       onPress={() => handleConfirmArrival(apt)}
-                      className="bg-emerald-50 border border-emerald-200 py-2.5 px-3 rounded-xl flex-row items-center justify-center"
-                      style={{ gap: 4 }}
+                      activeOpacity={0.8}
+                      style={{
+                        flex: 1,
+                        backgroundColor: '#F8FAFC',
+                        borderWidth: 1,
+                        borderColor: '#E2E8F0',
+                        paddingVertical: 8,
+                        borderRadius: 10,
+                        flexDirection: 'row',
+                        alignItems: 'center',
+                        justifyContent: 'center',
+                        gap: 5,
+                      }}
                     >
                       <UserCheck size={14} color="#059669" />
-                      <Text className="text-xs font-bold text-emerald-800">Confirm Arrival</Text>
+                      <Text style={{ fontSize: 12, fontWeight: '700', color: '#334155' }}>
+                        Mark Patient Arrived
+                      </Text>
                     </TouchableOpacity>
 
                     <TouchableOpacity
                       onPress={() => handleOpenPostpone(apt)}
-                      className="bg-amber-50 border border-amber-200/90 py-2.5 px-3 rounded-xl flex-row items-center justify-center"
-                      style={{ gap: 4 }}
+                      activeOpacity={0.8}
+                      style={{
+                        flex: 1,
+                        backgroundColor: '#F8FAFC',
+                        borderWidth: 1,
+                        borderColor: '#E2E8F0',
+                        paddingVertical: 8,
+                        borderRadius: 10,
+                        flexDirection: 'row',
+                        alignItems: 'center',
+                        justifyContent: 'center',
+                        gap: 5,
+                      }}
                     >
                       <Clock3 size={14} color="#D97706" />
-                      <Text className="text-xs font-bold text-amber-800">Postpone</Text>
+                      <Text style={{ fontSize: 12, fontWeight: '700', color: '#334155' }}>
+                        Postpone / Delay
+                      </Text>
                     </TouchableOpacity>
                   </View>
                 </View>
@@ -452,6 +554,51 @@ export default function DoctorAppointmentsQueueScreen() {
                 <Text className="text-sm font-black text-white">Open Consultation Room</Text>
               </TouchableOpacity>
             </View>
+          </View>
+        </Modal>
+      )}
+
+      {/* Doctor Slot Approval Modal with Save Button */}
+      {approvingApt && (
+        <Modal
+          visible={approveModalVisible}
+          onClose={() => setApproveModalVisible(false)}
+          title="Approve Patient Time Slot"
+        >
+          <View style={{ gap: 14, paddingVertical: 6 }}>
+            <View className="bg-slate-50 p-3.5 rounded-2xl border border-slate-200" style={{ gap: 8 }}>
+              <View className="flex-row items-center" style={{ gap: 10 }}>
+                <Avatar uri={approvingApt.patientAvatar} name={approvingApt.patientName} size="md" />
+                <View className="flex-1">
+                  <Text className="text-base font-black text-slate-900">{approvingApt.patientName}</Text>
+                  <Text className="text-xs text-slate-500 font-medium">
+                    Requested Slot: {approvingApt.date} at {approvingApt.time}
+                  </Text>
+                </View>
+              </View>
+
+              <View className="pt-2 border-t border-slate-200/80 flex-row justify-between items-center">
+                <Text className="text-xs text-slate-500 font-bold uppercase">Slot Allocation</Text>
+                <Badge label="1 / 5 Patients Booked" variant="teal" size="sm" />
+              </View>
+
+              <View className="flex-row justify-between items-center">
+                <Text className="text-xs text-slate-500 font-bold uppercase">Symptoms</Text>
+                <Text className="text-xs font-bold text-slate-800" numberOfLines={1}>
+                  {approvingApt.symptoms?.join(', ') || 'General OPD Evaluation'}
+                </Text>
+              </View>
+            </View>
+
+            <TouchableOpacity
+              onPress={handleSaveApproveSlot}
+              activeOpacity={0.88}
+              className="bg-[#00B39B] py-3.5 rounded-2xl flex-row items-center justify-center shadow-sm"
+              style={{ gap: 8 }}
+            >
+              <CheckCircle2 size={18} color="#FFFFFF" />
+              <Text className="text-sm font-black text-white">Save & Approve Time Slot</Text>
+            </TouchableOpacity>
           </View>
         </Modal>
       )}

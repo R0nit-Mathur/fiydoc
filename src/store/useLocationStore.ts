@@ -74,6 +74,7 @@ export const INDIAN_LOCATION_HUBS: LocationHub[] = [
 interface LocationState {
   latitude: number | null;
   longitude: number | null;
+  area: string;
   city: string;
   formattedAddress: string;
   permissionStatus: 'undetermined' | 'granted' | 'denied';
@@ -83,7 +84,7 @@ interface LocationState {
   detectCurrentLocation: () => Promise<boolean>;
   detectDeviceLocation: () => Promise<boolean>;
   setHub: (hub: LocationHub) => void;
-  setManualLocation: (lat: number, lng: number, city: string, address: string) => void;
+  setManualLocation: (lat: number, lng: number, city: string, address: string, area?: string) => void;
 }
 
 export const useLocationStore = create<LocationState>()(
@@ -91,6 +92,7 @@ export const useLocationStore = create<LocationState>()(
     (set, get) => ({
       latitude: INDIAN_LOCATION_HUBS[0].latitude,
       longitude: INDIAN_LOCATION_HUBS[0].longitude,
+      area: INDIAN_LOCATION_HUBS[0].name.split(',')[0].trim(),
       city: INDIAN_LOCATION_HUBS[0].city,
       formattedAddress: INDIAN_LOCATION_HUBS[0].name,
       permissionStatus: 'undetermined',
@@ -120,27 +122,54 @@ export const useLocationStore = create<LocationState>()(
 
           const { latitude, longitude } = loc.coords;
 
-          // Attempt reverse geocoding
-          let city = 'Current Area';
-          let address = `${latitude.toFixed(3)}, ${longitude.toFixed(3)}`;
+          // Reverse geocode to exact locality name like Zomato / Blinkit / Rapido
+          let cityName = 'Bengaluru';
+          let areaName = 'Indiranagar';
+          let localityName = 'Indiranagar, Bengaluru';
 
           try {
             const geocoded = await Location.reverseGeocodeAsync({ latitude, longitude });
             if (geocoded && geocoded.length > 0) {
               const place = geocoded[0];
-              city = place.city || place.subregion || place.region || 'Nearby';
-              const district = place.district || place.name || place.street || '';
-              address = district ? `${district}, ${city}` : city;
+              cityName = place.city || place.subregion || place.district || 'City Center';
+
+              // Extract clean locality / neighborhood name (ignore numbers/pincodes)
+              const candidateArea = [
+                place.subregion,
+                place.district,
+                place.street,
+                place.name,
+              ].find((val) => {
+                if (!val) return false;
+                const trimmed = val.trim();
+                return trimmed.length > 2 && !/^\d+$/.test(trimmed) && trimmed.toLowerCase() !== cityName.toLowerCase();
+              });
+
+              areaName = candidateArea || place.name || cityName;
+              localityName = `${areaName}, ${cityName}`;
             }
-          } catch {
-            // Geocode fallback to coords
+          } catch (e) {
+            // If reverse geocode fails, find closest Indian hub name mathematically
+            let closestHub = INDIAN_LOCATION_HUBS[0];
+            let minDiff = Infinity;
+            for (const hub of INDIAN_LOCATION_HUBS) {
+              const diff = Math.hypot(hub.latitude - latitude, hub.longitude - longitude);
+              if (diff < minDiff) {
+                minDiff = diff;
+                closestHub = hub;
+              }
+            }
+            cityName = closestHub.city;
+            areaName = closestHub.name.split(',')[0].trim();
+            localityName = closestHub.name;
           }
 
           set({
             latitude,
             longitude,
-            city,
-            formattedAddress: address,
+            area: areaName,
+            city: cityName,
+            formattedAddress: localityName,
             permissionStatus: 'granted',
             isLoading: false,
             error: null,
@@ -161,16 +190,18 @@ export const useLocationStore = create<LocationState>()(
         set({
           latitude: hub.latitude,
           longitude: hub.longitude,
+          area: hub.name.split(',')[0].trim(),
           city: hub.city,
           formattedAddress: hub.name,
           error: null,
         });
       },
 
-      setManualLocation: (latitude: number, longitude: number, city: string, formattedAddress: string) => {
+      setManualLocation: (latitude: number, longitude: number, city: string, formattedAddress: string, area?: string) => {
         set({
           latitude,
           longitude,
+          area: area || formattedAddress.split(',')[0].trim() || city,
           city,
           formattedAddress,
           error: null,

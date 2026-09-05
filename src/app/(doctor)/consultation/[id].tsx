@@ -1682,10 +1682,14 @@ export default function DoctorConsultationWorkspaceScreen() {
             >
               {/* Header: Clinic & Doctor Info */}
               <View className="pb-3 border-b-2 border-slate-900" style={{ gap: 4 }}>
-                <View className="flex-row items-center justify-between">
-                  <View className="flex-row items-center" style={{ gap: 6 }}>
-                    <Building2 size={18} color="#00B39B" />
-                    <Text className="text-xs font-black text-slate-900 uppercase tracking-wider">
+                <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: 10 }}>
+                  <View style={{ flexDirection: 'row', alignItems: 'center', flex: 1, minWidth: 0, gap: 6 }}>
+                    <Building2 size={18} color="#00B39B" style={{ flexShrink: 0 }} />
+                    <Text
+                      numberOfLines={1}
+                      ellipsizeMode="tail"
+                      style={{ fontSize: 12, fontWeight: '900', color: '#0F172A', textTransform: 'uppercase', letterSpacing: 0.5, flex: 1 }}
+                    >
                       {clinicName}
                     </Text>
                   </View>

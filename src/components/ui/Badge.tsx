@@ -49,6 +49,7 @@ export function Badge({ label, variant = 'teal', size = 'md', icon }: BadgeProps
           fontWeight: '800',
           color: current.text,
           letterSpacing: 0.3,
+          flexShrink: 0,
         }}
       >
         {label}

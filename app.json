@@ -4,7 +4,7 @@
     "slug": "fiydoc",
     "version": "1.0.0",
     "orientation": "portrait",
-    "icon": "./assets/images/icon.png",
+    "icon": "./assets/images/app logo.png",
     "scheme": "fiydoc",
     "userInterfaceStyle": "automatic",
     "ios": {

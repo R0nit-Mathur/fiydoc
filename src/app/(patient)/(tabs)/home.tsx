@@ -12,6 +12,7 @@ import { useAppointmentsQuery } from '@/hooks/queries/useAppointmentsQuery';
 import { useAuthStore } from '@/store/useAuthStore';
 import { useLocationStore } from '@/store/useLocationStore';
 import { LocationPickerModal } from '@/components/location/LocationPickerModal';
+import { SidebarDrawer } from '@/components/ui/SidebarDrawer';
 import {
   Stethoscope,
   FileText,
@@ -20,7 +21,9 @@ import {
   Bell,
   ShieldCheck,
   ChevronRight,
+  ChevronDown,
   MapPin,
+  Menu,
 } from 'lucide-react-native';
 
 export default function PatientHomeScreen() {
@@ -28,8 +31,9 @@ export default function PatientHomeScreen() {
   const queryClient = useQueryClient();
   const { user } = useAuthStore();
   const [locationModalVisible, setLocationModalVisible] = useState(false);
+  const [drawerVisible, setDrawerVisible] = useState(false);
   const [refreshing, setRefreshing] = useState(false);
-  const { city, formattedAddress, detectDeviceLocation } = useLocationStore();
+  const { city, formattedAddress, area, detectDeviceLocation } = useLocationStore();
 
   useEffect(() => {
     if (!city) {
@@ -58,9 +62,19 @@ export default function PatientHomeScreen() {
     (a) => a.status === 'upcoming' || a.status === 'confirmed' || a.status === 'in_progress'
   );
 
+  const POPULAR_SPECIALTIES = [
+    { name: 'All Doctors', icon: '🩺' },
+    { name: 'General Physician', icon: '👨‍⚕️' },
+    { name: 'Cardiologist', icon: '❤️' },
+    { name: 'Dermatologist', icon: '✨' },
+    { name: 'Pediatrician', icon: '👶' },
+    { name: 'Orthopedic', icon: '🦴' },
+    { name: 'ENT Specialist', icon: '👂' },
+  ];
+
   return (
     <SafeAreaView className="flex-1 bg-slate-50" edges={['top']}>
-      {/* Top Bar Header */}
+      {/* Top Bar Header - Zomato / Blinkit / Rapido Locality Style */}
       <View
         style={{
           paddingHorizontal: 16,
@@ -73,36 +87,88 @@ export default function PatientHomeScreen() {
           borderBottomColor: '#F1F5F9',
         }}
       >
+        {/* Exact Locality Name Trigger */}
         <TouchableOpacity
-          onPress={() => router.push('/(patient)/(tabs)/profile')}
+          onPress={() => setLocationModalVisible(true)}
           activeOpacity={0.8}
-          style={{ flexDirection: 'row', alignItems: 'center', flex: 1, minWidth: 0, marginRight: 12, gap: 10 }}
+          style={{ flexDirection: 'row', alignItems: 'center', gap: 8, flex: 1, minWidth: 0, marginRight: 12 }}
         >
-          <Avatar uri={user?.avatar} name={user?.name || 'Patient'} size="md" />
+          <View
+            style={{
+              width: 38,
+              height: 38,
+              borderRadius: 12,
+              backgroundColor: '#EFF6FF',
+              alignItems: 'center',
+              justifyContent: 'center',
+              flexShrink: 0,
+            }}
+          >
+            <MapPin size={20} color="#0B3064" />
+          </View>
           <View style={{ flex: 1, minWidth: 0 }}>
-            <Text className="text-[10px] text-slate-500 font-bold tracking-wider uppercase">
-              Welcome back
-            </Text>
-            <Text
-              style={{ fontSize: 15, fontWeight: '800', color: '#0F172A' }}
-              numberOfLines={1}
-              ellipsizeMode="tail"
-            >
-              {user?.name || 'Patient User'}
+            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4 }}>
+              <Text style={{ fontSize: 16, fontWeight: '900', color: '#0F172A' }} numberOfLines={1}>
+                {area || city || 'Select Locality'}
+              </Text>
+              <ChevronDown size={14} color="#64748B" />
+            </View>
+            <Text style={{ fontSize: 11, color: '#64748B', fontWeight: '500' }} numberOfLines={1}>
+              {formattedAddress || `${city}, India`}
             </Text>
           </View>
         </TouchableOpacity>
 
-        {/* Notification Bell */}
-        <TouchableOpacity
-          onPress={() => router.push('/(patient)/notifications')}
-          activeOpacity={0.8}
-          className="w-9 h-9 rounded-xl bg-slate-50 border border-slate-200/80 items-center justify-center relative"
-          style={{ flexShrink: 0 }}
-        >
-          <Bell size={18} color="#0F172A" />
-          <View className="w-2.5 h-2.5 rounded-full bg-[#00B39B] absolute top-1.5 right-1.5 border-2 border-white" />
-        </TouchableOpacity>
+        {/* Action Controls: Notifications & Sidebar Profile */}
+        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8, flexShrink: 0 }}>
+          <TouchableOpacity
+            onPress={() => router.push('/(patient)/notifications')}
+            activeOpacity={0.8}
+            style={{
+              width: 38,
+              height: 38,
+              borderRadius: 12,
+              backgroundColor: '#F8FAFC',
+              borderWidth: 1,
+              borderColor: '#E2E8F0',
+              alignItems: 'center',
+              justifyContent: 'center',
+              position: 'relative',
+            }}
+          >
+            <Bell size={18} color="#0F172A" />
+            <View
+              style={{
+                width: 8,
+                height: 8,
+                borderRadius: 4,
+                backgroundColor: '#00B39B',
+                position: 'absolute',
+                top: 8,
+                right: 8,
+                borderWidth: 1.5,
+                borderColor: '#FFFFFF',
+              }}
+            />
+          </TouchableOpacity>
+
+          <TouchableOpacity
+            onPress={() => setDrawerVisible(true)}
+            activeOpacity={0.8}
+            style={{
+              width: 38,
+              height: 38,
+              borderRadius: 12,
+              backgroundColor: '#F8FAFC',
+              borderWidth: 1,
+              borderColor: '#E2E8F0',
+              alignItems: 'center',
+              justifyContent: 'center',
+            }}
+          >
+            <Menu size={20} color="#0B3064" />
+          </TouchableOpacity>
+        </View>
       </View>
 
       <ScrollView
@@ -117,154 +183,183 @@ export default function PatientHomeScreen() {
           />
         }
       >
-        {/* Healthcare Location Pill Bar */}
-        <TouchableOpacity
-          onPress={() => setLocationModalVisible(true)}
-          activeOpacity={0.85}
-          className="bg-white px-3.5 py-2.5 rounded-2xl border border-slate-200/90 shadow-sm flex-row items-center justify-between"
-          style={{ gap: 8 }}
-        >
-          <View style={{ flexDirection: 'row', alignItems: 'center', flex: 1, minWidth: 0, gap: 10 }}>
-            <View className="w-8 h-8 rounded-xl bg-emerald-50 items-center justify-center border border-emerald-100/80">
-              <MapPin size={16} color="#00B39B" />
-            </View>
-            <View style={{ flex: 1, minWidth: 0 }}>
-              <Text className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">
-                Current Location
-              </Text>
-              <Text className="text-xs font-black text-slate-900" numberOfLines={1}>
-                {city ? `${city} • ` : ''}{formattedAddress || 'Tap to set location'}
-              </Text>
-            </View>
-          </View>
-          <View className="bg-emerald-50/80 px-2.5 py-1 rounded-lg border border-emerald-200/60">
-            <Text className="text-[10px] font-extrabold text-[#00B39B]">Change</Text>
-          </View>
-        </TouchableOpacity>
-
-        {/* Search Trigger Bar */}
+        {/* Search Trigger Bar - Zomato / Practo Style */}
         <TouchableOpacity
           onPress={() => router.push('/(patient)/(tabs)/discovery')}
           activeOpacity={0.9}
-          className="bg-white px-4 py-3 rounded-2xl border border-slate-200/90 shadow-sm flex-row items-center"
-          style={{ gap: 10 }}
+          style={{
+            backgroundColor: '#FFFFFF',
+            paddingHorizontal: 16,
+            paddingVertical: 13,
+            borderRadius: 16,
+            borderWidth: 1,
+            borderColor: '#E2E8F0',
+            flexDirection: 'row',
+            alignItems: 'center',
+            gap: 10,
+            shadowColor: '#000',
+            shadowOpacity: 0.03,
+            shadowRadius: 6,
+            elevation: 1,
+          }}
         >
           <Search size={18} color="#00B39B" />
-          <Text className="text-xs font-semibold text-slate-400 flex-1" numberOfLines={1}>
-            Search specialists, clinics, or conditions...
+          <Text style={{ fontSize: 13, fontWeight: '500', color: '#94A3B8', flex: 1 }} numberOfLines={1}>
+            Search doctors, clinics, symptoms (e.g. fever, cardiologist)...
           </Text>
         </TouchableOpacity>
 
-        {/* Core Services Action Grid */}
-        <View>
-          <Text style={{ fontSize: 15, fontWeight: '800', color: '#0F172A', marginBottom: 10 }}>
-            Healthcare Services
-          </Text>
-          <View style={{ flexDirection: 'row', gap: 10 }}>
-            <TouchableOpacity
-              onPress={() => router.push('/(patient)/(tabs)/discovery')}
-              activeOpacity={0.85}
+        {/* Core Services Action Grid - Clean 4-Item Grid */}
+        <View style={{ flexDirection: 'row', gap: 10 }}>
+          <TouchableOpacity
+            onPress={() => router.push('/(patient)/(tabs)/discovery')}
+            activeOpacity={0.85}
+            style={{
+              flex: 1,
+              backgroundColor: '#FFFFFF',
+              borderRadius: 16,
+              padding: 12,
+              borderWidth: 1,
+              borderColor: '#E2E8F0',
+              justifyContent: 'space-between',
+              minHeight: 100,
+            }}
+          >
+            <View
               style={{
-                flex: 1,
-                minWidth: 0,
-                backgroundColor: '#FFFFFF',
-                borderRadius: 18,
-                paddingHorizontal: 12,
-                paddingVertical: 12,
+                backgroundColor: '#F0FAF8',
+                width: 36,
+                height: 36,
+                borderRadius: 10,
+                alignItems: 'center',
+                justifyContent: 'center',
                 borderWidth: 1,
-                borderColor: '#E2E8F0',
-                justifyContent: 'space-between',
-                minHeight: 106,
-                shadowColor: '#000',
-                shadowOpacity: 0.03,
-                shadowRadius: 5,
-                elevation: 1,
+                borderColor: '#B8EFE7',
               }}
             >
-              <View
-                style={{
-                  backgroundColor: '#F0FAF8',
-                  width: 36,
-                  height: 36,
-                  borderRadius: 10,
-                  alignItems: 'center',
-                  justifyContent: 'center',
-                  borderWidth: 1,
-                  borderColor: '#B8EFE7',
-                }}
-              >
-                <Stethoscope size={18} color="#00B39B" />
-              </View>
-              <View style={{ marginTop: 8 }}>
-                <Text
-                  style={{ fontSize: 13, fontWeight: '800', color: '#0F172A' }}
-                  numberOfLines={1}
-                  ellipsizeMode="tail"
-                >
-                  Find Specialists
-                </Text>
-                <Text
-                  style={{ fontSize: 10, fontWeight: '600', color: '#64748B', marginTop: 2 }}
-                  numberOfLines={1}
-                  ellipsizeMode="tail"
-                >
-                  In-Clinic Bookings
-                </Text>
-              </View>
-            </TouchableOpacity>
+              <Stethoscope size={18} color="#00B39B" />
+            </View>
+            <View style={{ marginTop: 6 }}>
+              <Text style={{ fontSize: 13, fontWeight: '800', color: '#0F172A' }} numberOfLines={1}>
+                Book Clinic
+              </Text>
+              <Text style={{ fontSize: 10, fontWeight: '600', color: '#64748B', marginTop: 1 }} numberOfLines={1}>
+                In-person OPD
+              </Text>
+            </View>
+          </TouchableOpacity>
 
-            <TouchableOpacity
-              onPress={() => router.push('/(patient)/(tabs)/health')}
-              activeOpacity={0.85}
+          <TouchableOpacity
+            onPress={() => router.push('/(patient)/(tabs)/health')}
+            activeOpacity={0.85}
+            style={{
+              flex: 1,
+              backgroundColor: '#FFFFFF',
+              borderRadius: 16,
+              padding: 12,
+              borderWidth: 1,
+              borderColor: '#E2E8F0',
+              justifyContent: 'space-between',
+              minHeight: 100,
+            }}
+          >
+            <View
               style={{
-                flex: 1,
-                minWidth: 0,
-                backgroundColor: '#FFFFFF',
-                borderRadius: 18,
-                paddingHorizontal: 12,
-                paddingVertical: 12,
+                backgroundColor: '#FAF5FF',
+                width: 36,
+                height: 36,
+                borderRadius: 10,
+                alignItems: 'center',
+                justifyContent: 'center',
                 borderWidth: 1,
-                borderColor: '#E2E8F0',
-                justifyContent: 'space-between',
-                minHeight: 106,
-                shadowColor: '#000',
-                shadowOpacity: 0.03,
-                shadowRadius: 5,
-                elevation: 1,
+                borderColor: '#E9D5FF',
               }}
             >
-              <View
+              <FileText size={18} color="#8B5CF6" />
+            </View>
+            <View style={{ marginTop: 6 }}>
+              <Text style={{ fontSize: 13, fontWeight: '800', color: '#0F172A' }} numberOfLines={1}>
+                Digital Rx
+              </Text>
+              <Text style={{ fontSize: 10, fontWeight: '600', color: '#64748B', marginTop: 1 }} numberOfLines={1}>
+                MCI Prescriptions
+              </Text>
+            </View>
+          </TouchableOpacity>
+
+          <TouchableOpacity
+            onPress={() => router.push(upcomingApt ? (`/(patient)/appointments/${upcomingApt.id}` as any) : '/(patient)/(tabs)/discovery')}
+            activeOpacity={0.85}
+            style={{
+              flex: 1,
+              backgroundColor: '#FFFFFF',
+              borderRadius: 16,
+              padding: 12,
+              borderWidth: 1,
+              borderColor: '#E2E8F0',
+              justifyContent: 'space-between',
+              minHeight: 100,
+            }}
+          >
+            <View
+              style={{
+                backgroundColor: '#EFF6FF',
+                width: 36,
+                height: 36,
+                borderRadius: 10,
+                alignItems: 'center',
+                justifyContent: 'center',
+                borderWidth: 1,
+                borderColor: '#BFDBFE',
+              }}
+            >
+              <Calendar size={18} color="#1E58C8" />
+            </View>
+            <View style={{ marginTop: 6 }}>
+              <Text style={{ fontSize: 13, fontWeight: '800', color: '#0F172A' }} numberOfLines={1}>
+                OPD Passes
+              </Text>
+              <Text style={{ fontSize: 10, fontWeight: '600', color: '#64748B', marginTop: 1 }} numberOfLines={1}>
+                Tokens & Status
+              </Text>
+            </View>
+          </TouchableOpacity>
+        </View>
+
+        {/* Popular Specialties Horizontal Scroll - Practo Style */}
+        <View style={{ gap: 8 }}>
+          <Text style={{ fontSize: 14, fontWeight: '800', color: '#0F172A' }}>
+            Find by Specialty
+          </Text>
+          <ScrollView
+            horizontal
+            showsHorizontalScrollIndicator={false}
+            contentContainerStyle={{ gap: 8 }}
+          >
+            {POPULAR_SPECIALTIES.map((spec, i) => (
+              <TouchableOpacity
+                key={i}
+                onPress={() => router.push('/(patient)/(tabs)/discovery')}
+                activeOpacity={0.8}
                 style={{
-                  backgroundColor: '#FAF5FF',
-                  width: 36,
-                  height: 36,
-                  borderRadius: 10,
+                  flexDirection: 'row',
                   alignItems: 'center',
-                  justifyContent: 'center',
+                  gap: 6,
+                  backgroundColor: '#FFFFFF',
+                  paddingHorizontal: 12,
+                  paddingVertical: 8,
+                  borderRadius: 20,
                   borderWidth: 1,
-                  borderColor: '#E9D5FF',
+                  borderColor: '#E2E8F0',
                 }}
               >
-                <FileText size={18} color="#8B5CF6" />
-              </View>
-              <View style={{ marginTop: 8 }}>
-                <Text
-                  style={{ fontSize: 13, fontWeight: '800', color: '#0F172A' }}
-                  numberOfLines={1}
-                  ellipsizeMode="tail"
-                >
-                  Medical Records
+                <Text style={{ fontSize: 14 }}>{spec.icon}</Text>
+                <Text style={{ fontSize: 12, fontWeight: '700', color: '#334155' }}>
+                  {spec.name}
                 </Text>
-                <Text
-                  style={{ fontSize: 10, fontWeight: '600', color: '#64748B', marginTop: 2 }}
-                  numberOfLines={1}
-                  ellipsizeMode="tail"
-                >
-                  Prescriptions & OCR
-                </Text>
-              </View>
-            </TouchableOpacity>
-          </View>
+              </TouchableOpacity>
+            ))}
+          </ScrollView>
         </View>
 
         {/* Upcoming In-Clinic Appointment Section */}
@@ -353,6 +448,12 @@ export default function PatientHomeScreen() {
       <LocationPickerModal
         visible={locationModalVisible}
         onClose={() => setLocationModalVisible(false)}
+      />
+
+      <SidebarDrawer
+        visible={drawerVisible}
+        onClose={() => setDrawerVisible(false)}
+        onOpenLocationPicker={() => setLocationModalVisible(true)}
       />
     </SafeAreaView>
   );

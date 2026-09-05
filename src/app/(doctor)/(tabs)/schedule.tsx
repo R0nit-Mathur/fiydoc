@@ -1,7 +1,8 @@
-import React, { useState } from 'react';
-import { View, Text, ScrollView, TouchableOpacity, Switch } from 'react-native';
+import React, { useState, useCallback } from 'react';
+import { View, Text, ScrollView, TouchableOpacity, Switch, RefreshControl } from 'react-native';
 import { useRouter } from 'expo-router';
 import { SafeAreaView } from 'react-native-safe-area-context';
+import { useQueryClient } from '@tanstack/react-query';
 import { Button } from '@/components/ui/Button';
 import { Input } from '@/components/ui/Input';
 import { Badge } from '@/components/ui/Badge';
@@ -23,8 +24,10 @@ const DAYS = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
 
 export default function DoctorScheduleScreen() {
   const router = useRouter();
+  const queryClient = useQueryClient();
   const [selectedDays, setSelectedDays] = useState(['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat']);
   const [fee, setFee] = useState('750');
+  const [slotCapacity, setSlotCapacity] = useState('5');
   const [morningStart, setMorningStart] = useState('09:30 AM');
   const [morningEnd, setMorningEnd] = useState('01:30 PM');
   const [eveningStart, setEveningStart] = useState('05:00 PM');
@@ -34,6 +37,17 @@ export default function DoctorScheduleScreen() {
   const [onlineEnabled, setOnlineEnabled] = useState(true);
   const [inPersonEnabled, setInPersonEnabled] = useState(true);
   const [savedToast, setSavedToast] = useState(false);
+  const [refreshing, setRefreshing] = useState(false);
+
+  const handleRefresh = useCallback(async () => {
+    setRefreshing(true);
+    try {
+      await queryClient.invalidateQueries({ queryKey: ['appointments'] });
+      await new Promise((r) => setTimeout(r, 400));
+    } finally {
+      setRefreshing(false);
+    }
+  }, [queryClient]);
 
   const toggleDay = (day: string) => {
     if (selectedDays.includes(day)) {
@@ -73,6 +87,14 @@ export default function DoctorScheduleScreen() {
       <ScrollView
         contentContainerStyle={{ padding: 16, paddingBottom: 110, gap: 16 }}
         showsVerticalScrollIndicator={false}
+        refreshControl={
+          <RefreshControl
+            refreshing={refreshing}
+            onRefresh={handleRefresh}
+            colors={['#1E58C8']}
+            tintColor="#1E58C8"
+          />
+        }
       >
         {savedToast && (
           <View className="bg-emerald-50 p-3.5 rounded-2xl border border-emerald-200 flex-row items-center" style={{ gap: 8 }}>
@@ -242,6 +264,23 @@ export default function DoctorScheduleScreen() {
             </View>
             <Switch value={walkinEnabled} onValueChange={setWalkinEnabled} trackColor={{ true: '#1E58C8' }} />
           </View>
+        </View>
+
+        {/* Slot Patient Allocation Cap (Max 5 per slot) */}
+        <View className="bg-white p-4 rounded-3xl border border-slate-200/90 shadow-sm" style={{ gap: 8 }}>
+          <View className="flex-row justify-between items-center">
+            <Text className="text-sm font-black text-slate-900">Slot Patient Allocation Cap</Text>
+            <Badge label="5 PATIENTS / SLOT" variant="teal" size="sm" />
+          </View>
+          <Input
+            value={slotCapacity}
+            onChangeText={setSlotCapacity}
+            keyboardType="number-pad"
+            placeholder="5"
+          />
+          <Text className="text-[11px] text-slate-400">
+            Maximum number of patients that can be booked into any single time slot interval simultaneously.
+          </Text>
         </View>
 
         {/* Consultation OPD Fee */}

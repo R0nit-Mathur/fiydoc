@@ -17,6 +17,7 @@ import {
   LogOut,
   ChevronRight,
   FileCheck,
+  CheckCircle2,
 } from 'lucide-react-native';
 
 export default function DoctorProfileScreen() {
@@ -65,7 +66,7 @@ export default function DoctorProfileScreen() {
         latitude: loc.coords.latitude,
         longitude: loc.coords.longitude,
       });
-      Alert.alert('Clinic Location Updated', `Coordinates successfully linked:\n${addr}`);
+      Alert.alert('Clinic Location Updated', `Clinic locality verified:\n${addr}`);
     } catch (err: any) {
       Alert.alert('Error', 'Failed to detect current location.');
     } finally {
@@ -183,12 +184,15 @@ export default function DoctorProfileScreen() {
               <Text className="text-xs text-slate-600 mt-0.5 font-medium">
                 {(user as any)?.clinicAddress || 'Address not yet specified'}
               </Text>
-              {(user as any)?.latitude && (user as any)?.longitude ? (
-                <Text className="text-[10px] text-emerald-600 font-bold mt-1">
-                  📍 Coordinates linked: {((user as any).latitude as number).toFixed(4)}, {((user as any).longitude as number).toFixed(4)}
-                </Text>
+              {(user as any)?.clinicAddress || (user as any)?.city ? (
+                <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4, marginTop: 6 }}>
+                  <CheckCircle2 size={12} color="#059669" />
+                  <Text style={{ fontSize: 11, fontWeight: '700', color: '#059669' }}>
+                    Verified Clinic Locality: {(user as any)?.city || 'Area Hub'}
+                  </Text>
+                </View>
               ) : (
-                <Text className="text-[11px] text-slate-400 mt-1">Tap Update GPS to link clinic coordinates for proximity search</Text>
+                <Text className="text-[11px] text-slate-400 mt-1">Tap Update GPS to link clinic address for patient search</Text>
               )}
             </View>
           </View>

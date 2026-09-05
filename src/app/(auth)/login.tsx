@@ -1,21 +1,29 @@
 import React, { useState } from 'react';
-import { View, Text, TouchableOpacity, ScrollView, ActivityIndicator } from 'react-native';
+import {
+  View,
+  Text,
+  TouchableOpacity,
+  ScrollView,
+  ActivityIndicator,
+  TextInput,
+  StyleSheet,
+} from 'react-native';
 import { useRouter } from 'expo-router';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { FiYLogo } from '@/components/ui/FiYLogo';
-import { Input } from '@/components/ui/Input';
-import { Button } from '@/components/ui/Button';
 import { GoogleLogo } from '@/components/ui/GoogleLogo';
-import { Mail, Lock, ArrowLeft, Eye, EyeOff, ShieldCheck, UserCheck, Stethoscope, Zap } from 'lucide-react-native';
-import { authService } from '@/services/authService';
+import { Mail, Lock, Eye, EyeOff, Zap, UserCheck, Stethoscope } from 'lucide-react-native';
+import { authService, UserSession } from '@/services/authService';
 import { useAuthStore } from '@/store/useAuthStore';
 import { PremadeAuthModal } from '@/components/auth/PremadeAuthModal';
-import { UserSession } from '@/services/authService';
 import { googleAuthService } from '@/services/googleAuth';
 
 export default function LoginScreen() {
   const router = useRouter();
   const setSession = useAuthStore((s) => s.setSession);
+
+  // Role Slider: 'patient' or 'doctor' (as in Screenshot 2)
+  const [selectedRole, setSelectedRole] = useState<'patient' | 'doctor'>('patient');
 
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
@@ -25,17 +33,9 @@ export default function LoginScreen() {
   const [quickAuthVisible, setQuickAuthVisible] = useState(false);
   const [error, setError] = useState('');
 
-  const handleSafeBack = () => {
-    if (router.canGoBack()) {
-      router.back();
-    } else {
-      router.replace('/(auth)/welcome');
-    }
-  };
-
   const handleLogin = async () => {
     setError('');
-    if (!email || !password) {
+    if (!email.trim() || !password) {
       setError('Please fill in both email and password.');
       return;
     }
@@ -51,7 +51,7 @@ export default function LoginScreen() {
         router.replace('/(patient)/(tabs)/home');
       }
     } catch (err: any) {
-      setError(err.message || 'Login failed. Please verify credentials.');
+      setError(err.message || 'Login failed. Please verify your credentials.');
     } finally {
       setLoading(false);
     }
@@ -84,167 +84,216 @@ export default function LoginScreen() {
     }
   };
 
-  const setTestAccount = (accountEmail: string) => {
+  const setTestAccount = (accountEmail: string, role: 'patient' | 'doctor') => {
+    setSelectedRole(role);
     setEmail(accountEmail);
     setPassword('password123');
     setError('');
   };
 
   return (
-    <SafeAreaView className="flex-1 bg-white" edges={['top']}>
+    <SafeAreaView style={styles.safeArea} edges={['top', 'bottom']}>
       <ScrollView
-        contentContainerStyle={{ padding: 20, flexGrow: 1, justifyContent: 'space-between' }}
+        contentContainerStyle={styles.scrollContainer}
         showsVerticalScrollIndicator={false}
+        keyboardShouldPersistTaps="handled"
       >
-        <View>
-          <TouchableOpacity
-            onPress={handleSafeBack}
-            className="w-10 h-10 rounded-2xl bg-slate-100 items-center justify-center -ml-1 mb-3"
-          >
-            <ArrowLeft size={20} color="#0F172A" />
-          </TouchableOpacity>
-
-          <FiYLogo size="lg" />
-          <Text className="text-2xl font-black text-slate-900 mt-3">Welcome to FiYDoc</Text>
-          <Text className="text-xs text-slate-500 font-medium mt-1 mb-5 leading-5">
-            Sign in to access your clinic appointments, verified specialist network, and health records.
-          </Text>
-
-          {/* Quick Test Accounts Bar */}
-          <View className="bg-slate-50/90 p-3.5 rounded-2xl border border-slate-200/90 mb-4">
-            <Text className="text-[10px] font-black text-slate-400 uppercase tracking-wider mb-2">
-              ⚡ Quick Test Credentials:
-            </Text>
-            <View className="flex-row flex-wrap" style={{ gap: 6 }}>
-              <TouchableOpacity
-                onPress={() => setTestAccount('patient@fiydoc.app')}
-                activeOpacity={0.8}
-                className="flex-1 min-w-[70px] bg-teal-50 border border-teal-200/90 p-2 rounded-xl items-center flex-row justify-center"
-                style={{ gap: 4 }}
-              >
-                <UserCheck size={13} color="#00B39B" />
-                <Text className="text-xs font-bold text-teal-800">Patient</Text>
-              </TouchableOpacity>
-
-              <TouchableOpacity
-                onPress={() => setTestAccount('rakshit.doctor@fiydoc.app')}
-                activeOpacity={0.8}
-                className="flex-1 min-w-[90px] bg-indigo-50 border border-indigo-200/90 p-2 rounded-xl items-center flex-row justify-center"
-                style={{ gap: 4 }}
-              >
-                <Stethoscope size={13} color="#4F46E5" />
-                <Text className="text-xs font-bold text-indigo-800">Dr. Rakshit</Text>
-              </TouchableOpacity>
-
-              <TouchableOpacity
-                onPress={() => setTestAccount('doctor@fiydoc.app')}
-                activeOpacity={0.8}
-                className="flex-1 min-w-[80px] bg-blue-50 border border-blue-200/90 p-2 rounded-xl items-center flex-row justify-center"
-                style={{ gap: 4 }}
-              >
-                <Stethoscope size={13} color="#1E58C8" />
-                <Text className="text-xs font-bold text-blue-800">Dr. Priya</Text>
-              </TouchableOpacity>
-
-              <TouchableOpacity
-                onPress={() => setTestAccount('admin@fiydoc.app')}
-                activeOpacity={0.8}
-                className="flex-1 min-w-[70px] bg-slate-100 border border-slate-300 p-2 rounded-xl items-center flex-row justify-center"
-                style={{ gap: 4 }}
-              >
-                <ShieldCheck size={13} color="#0F172A" />
-                <Text className="text-xs font-bold text-slate-800">Admin</Text>
-              </TouchableOpacity>
-            </View>
+        <View style={styles.topSection}>
+          {/* Official Brand Logo */}
+          <View style={styles.logoWrapper}>
+            <FiYLogo size="xl" />
           </View>
 
+          {/* Heading & Subtitle */}
+          <Text style={styles.title}>Welcome to FIYDOC</Text>
+          <Text style={styles.subtitle}>
+            Sign in to access your consultations & appointments
+          </Text>
+
+          {/* Role Slider Toggle (Screenshot 2) */}
+          <View style={styles.sliderContainer}>
+            <TouchableOpacity
+              activeOpacity={0.9}
+              onPress={() => {
+                setSelectedRole('patient');
+                if (email.includes('doctor')) setEmail('patient@fiydoc.app');
+              }}
+              style={[
+                styles.sliderTab,
+                selectedRole === 'patient' && styles.sliderTabActive,
+              ]}
+            >
+              <Text
+                style={[
+                  styles.sliderText,
+                  selectedRole === 'patient' && styles.sliderTextActive,
+                ]}
+              >
+                Patient Login
+              </Text>
+            </TouchableOpacity>
+
+            <TouchableOpacity
+              activeOpacity={0.9}
+              onPress={() => {
+                setSelectedRole('doctor');
+                if (email === 'patient@fiydoc.app' || !email) setEmail('rakshit.doctor@fiydoc.app');
+              }}
+              style={[
+                styles.sliderTab,
+                selectedRole === 'doctor' && styles.sliderTabActive,
+              ]}
+            >
+              <Text
+                style={[
+                  styles.sliderText,
+                  selectedRole === 'doctor' && styles.sliderTextActive,
+                ]}
+              >
+                Doctor Login
+              </Text>
+            </TouchableOpacity>
+          </View>
+
+          {/* Error Message */}
           {error ? (
-            <View className="bg-red-50 p-3 rounded-xl border border-red-200 mb-4">
-              <Text className="text-xs font-bold text-red-600">{error}</Text>
+            <View style={styles.errorCard}>
+              <Text style={styles.errorText}>{error}</Text>
             </View>
           ) : null}
 
-          <View style={{ gap: 14 }}>
-            <Input
-              label="Email Address"
-              placeholder="name@example.com"
-              keyboardType="email-address"
-              autoCapitalize="none"
-              value={email}
-              onChangeText={setEmail}
-              leftIcon={<Mail size={16} color="#94A3B8" />}
-            />
+          {/* Clean Input Fields with Icons */}
+          <View style={styles.formContainer}>
+            {/* Email Field */}
+            <View style={styles.inputWrapper}>
+              <Mail size={18} color="#0B3064" style={styles.inputLeftIcon} />
+              <TextInput
+                style={styles.textInput}
+                placeholder="Email Address"
+                placeholderTextColor="#94A3B8"
+                keyboardType="email-address"
+                autoCapitalize="none"
+                autoCorrect={false}
+                value={email}
+                onChangeText={setEmail}
+              />
+            </View>
 
-            <Input
-              label="Password"
-              placeholder="••••••••••••"
-              secureTextEntry={!showPassword}
-              value={password}
-              onChangeText={setPassword}
-              leftIcon={<Lock size={16} color="#94A3B8" />}
-              rightIcon={
-                <TouchableOpacity onPress={() => setShowPassword(!showPassword)}>
-                  {showPassword ? <EyeOff size={16} color="#94A3B8" /> : <Eye size={16} color="#94A3B8" />}
-                </TouchableOpacity>
-              }
-            />
+            {/* Password Field */}
+            <View style={styles.inputWrapper}>
+              <Lock size={18} color="#0B3064" style={styles.inputLeftIcon} />
+              <TextInput
+                style={styles.textInput}
+                placeholder="Password"
+                placeholderTextColor="#94A3B8"
+                secureTextEntry={!showPassword}
+                value={password}
+                onChangeText={setPassword}
+              />
+              <TouchableOpacity
+                onPress={() => setShowPassword(!showPassword)}
+                hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+                style={styles.inputRightIcon}
+              >
+                {showPassword ? (
+                  <EyeOff size={18} color="#64748B" />
+                ) : (
+                  <Eye size={18} color="#64748B" />
+                )}
+              </TouchableOpacity>
+            </View>
 
-            <TouchableOpacity onPress={() => router.push('/(auth)/forgot-password')} className="self-end pt-0.5">
-              <Text className="text-xs font-bold text-[#1E58C8]">Forgot Password?</Text>
+            <TouchableOpacity
+              onPress={() => router.push('/(auth)/forgot-password')}
+              style={styles.forgotPassBtn}
+            >
+              <Text style={styles.forgotPassText}>Forgot Password?</Text>
             </TouchableOpacity>
           </View>
-        </View>
 
-        <View style={{ gap: 12, paddingTop: 20, paddingBottom: 6 }}>
-          <Button
-            title="Sign In to FiYDoc"
+          {/* Main Sign In Button */}
+          <TouchableOpacity
             onPress={handleLogin}
-            loading={loading}
-            variant="primary"
-            size="lg"
-          />
+            activeOpacity={0.88}
+            disabled={loading}
+            style={styles.signInBtn}
+          >
+            {loading ? (
+              <ActivityIndicator size="small" color="#FFFFFF" />
+            ) : (
+              <Text style={styles.signInBtnText}>
+                {selectedRole === 'doctor' ? 'Sign In as Doctor' : 'Sign In'}
+              </Text>
+            )}
+          </TouchableOpacity>
 
-          {/* Real Google OAuth 2.0 Button */}
+          {/* OR Divider */}
+          <View style={styles.dividerRow}>
+            <View style={styles.dividerLine} />
+            <Text style={styles.dividerText}>OR</Text>
+            <View style={styles.dividerLine} />
+          </View>
+
+          {/* Continue with Google */}
           <TouchableOpacity
             onPress={handleGooglePress}
             activeOpacity={0.85}
             disabled={googleLoading}
-            className="flex-row items-center justify-center bg-white py-3.5 px-4 rounded-2xl border border-slate-200 shadow-sm"
-            style={{ gap: 10 }}
+            style={styles.googleBtn}
           >
             {googleLoading ? (
-              <ActivityIndicator size="small" color="#1E58C8" />
+              <ActivityIndicator size="small" color="#0B3064" />
             ) : (
-              <GoogleLogo size={18} />
+              <View style={styles.googleBtnContent}>
+                <GoogleLogo size={18} />
+                <Text style={styles.googleBtnText}>Continue with Google</Text>
+              </View>
             )}
-            <Text className="text-sm font-bold text-slate-800">
-              {googleLoading ? 'Connecting to Google OAuth...' : 'Continue with Google'}
-            </Text>
           </TouchableOpacity>
+        </View>
 
-          {/* Quick 1-Tap & Supabase OTP Option */}
-          <TouchableOpacity
-            onPress={() => setQuickAuthVisible(true)}
-            activeOpacity={0.85}
-            className="flex-row items-center justify-center bg-slate-50 py-2.5 px-4 rounded-2xl border border-slate-200/90"
-            style={{ gap: 8 }}
-          >
-            <Zap size={14} color="#1E58C8" />
-            <Text className="text-xs font-bold text-slate-700">
-              1-Tap Personas & Passwordless OTP
-            </Text>
-          </TouchableOpacity>
+        {/* Bottom Section */}
+        <View style={styles.bottomSection}>
+          {/* Quick Demo Credentials Bar */}
+          <View style={styles.demoBar}>
+            <Text style={styles.demoTitle}>Quick Test Credentials:</Text>
+            <View style={styles.demoBtnsRow}>
+              <TouchableOpacity
+                onPress={() => setTestAccount('patient@fiydoc.app', 'patient')}
+                style={styles.demoBtn}
+              >
+                <UserCheck size={12} color="#00B39B" />
+                <Text style={styles.demoBtnText}>Patient</Text>
+              </TouchableOpacity>
 
-          <View className="flex-row justify-center items-center pt-1">
-            <Text className="text-xs text-slate-500">Don't have an account yet? </Text>
+              <TouchableOpacity
+                onPress={() => setTestAccount('rakshit.doctor@fiydoc.app', 'doctor')}
+                style={styles.demoBtn}
+              >
+                <Stethoscope size={12} color="#0B3064" />
+                <Text style={styles.demoBtnText}>Dr. Rakshit</Text>
+              </TouchableOpacity>
+
+              <TouchableOpacity
+                onPress={() => setQuickAuthVisible(true)}
+                style={[styles.demoBtn, { backgroundColor: '#EFF6FF' }]}
+              >
+                <Zap size={12} color="#1E58C8" />
+                <Text style={[styles.demoBtnText, { color: '#1E58C8' }]}>Personas</Text>
+              </TouchableOpacity>
+            </View>
+          </View>
+
+          <View style={styles.registerRow}>
+            <Text style={styles.registerText}>New to FIYDOC? </Text>
             <TouchableOpacity onPress={() => router.push('/(auth)/signup')}>
-              <Text className="text-xs font-bold text-[#00B39B]">Create an Account</Text>
+              <Text style={styles.registerLink}>Register Account</Text>
             </TouchableOpacity>
           </View>
         </View>
       </ScrollView>
 
-      {/* Interactive Premade Auth & Supabase OTP Modal */}
+      {/* Premade Personas & Supabase OTP Modal */}
       <PremadeAuthModal
         visible={quickAuthVisible}
         onClose={() => setQuickAuthVisible(false)}
@@ -253,3 +302,237 @@ export default function LoginScreen() {
     </SafeAreaView>
   );
 }
+
+const styles = StyleSheet.create({
+  safeArea: {
+    flex: 1,
+    backgroundColor: '#FFFFFF',
+  },
+  scrollContainer: {
+    paddingHorizontal: 24,
+    paddingTop: 16,
+    paddingBottom: 24,
+    flexGrow: 1,
+    justifyContent: 'space-between',
+  },
+  topSection: {
+    alignItems: 'center',
+    width: '100%',
+  },
+  logoWrapper: {
+    marginTop: 12,
+    marginBottom: 20,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  title: {
+    fontSize: 24,
+    fontWeight: '900',
+    color: '#0A2540',
+    textAlign: 'center',
+    letterSpacing: -0.3,
+  },
+  subtitle: {
+    fontSize: 13,
+    color: '#64748B',
+    textAlign: 'center',
+    marginTop: 6,
+    marginBottom: 24,
+  },
+  sliderContainer: {
+    flexDirection: 'row',
+    backgroundColor: '#F1F5F9',
+    borderRadius: 999,
+    padding: 4,
+    width: '100%',
+    marginBottom: 22,
+  },
+  sliderTab: {
+    flex: 1,
+    paddingVertical: 12,
+    borderRadius: 999,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  sliderTabActive: {
+    backgroundColor: '#0B3064',
+    shadowColor: '#0B3064',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.15,
+    shadowRadius: 4,
+    elevation: 3,
+  },
+  sliderText: {
+    fontSize: 13,
+    fontWeight: '700',
+    color: '#64748B',
+  },
+  sliderTextActive: {
+    color: '#FFFFFF',
+    fontWeight: '800',
+  },
+  errorCard: {
+    width: '100%',
+    backgroundColor: '#FEF2F2',
+    borderWidth: 1,
+    borderColor: '#FECACA',
+    borderRadius: 14,
+    padding: 12,
+    marginBottom: 16,
+  },
+  errorText: {
+    fontSize: 12,
+    fontWeight: '600',
+    color: '#DC2626',
+    textAlign: 'center',
+  },
+  formContainer: {
+    width: '100%',
+    gap: 14,
+  },
+  inputWrapper: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    borderWidth: 1.5,
+    borderColor: '#0B3064',
+    borderRadius: 16,
+    paddingHorizontal: 14,
+    height: 54,
+    backgroundColor: '#FFFFFF',
+  },
+  inputLeftIcon: {
+    marginRight: 10,
+  },
+  inputRightIcon: {
+    padding: 4,
+  },
+  textInput: {
+    flex: 1,
+    fontSize: 14,
+    fontWeight: '600',
+    color: '#0F172A',
+  },
+  forgotPassBtn: {
+    alignSelf: 'flex-end',
+    marginTop: -4,
+  },
+  forgotPassText: {
+    fontSize: 12,
+    fontWeight: '700',
+    color: '#0B3064',
+  },
+  signInBtn: {
+    width: '100%',
+    backgroundColor: '#0B3064',
+    height: 52,
+    borderRadius: 16,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginTop: 20,
+    shadowColor: '#0B3064',
+    shadowOffset: { width: 0, height: 3 },
+    shadowOpacity: 0.2,
+    shadowRadius: 6,
+    elevation: 4,
+  },
+  signInBtnText: {
+    fontSize: 15,
+    fontWeight: '800',
+    color: '#FFFFFF',
+  },
+  dividerRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    width: '100%',
+    marginVertical: 18,
+    gap: 10,
+  },
+  dividerLine: {
+    flex: 1,
+    height: 1,
+    backgroundColor: '#E2E8F0',
+  },
+  dividerText: {
+    fontSize: 11,
+    fontWeight: '700',
+    color: '#94A3B8',
+    textTransform: 'uppercase',
+  },
+  googleBtn: {
+    width: '100%',
+    borderWidth: 1.5,
+    borderColor: '#0B3064',
+    height: 50,
+    borderRadius: 16,
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: '#FFFFFF',
+  },
+  googleBtnContent: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 10,
+  },
+  googleBtnText: {
+    fontSize: 14,
+    fontWeight: '700',
+    color: '#0F172A',
+  },
+  bottomSection: {
+    width: '100%',
+    marginTop: 20,
+    gap: 12,
+  },
+  demoBar: {
+    backgroundColor: '#F8FAFC',
+    borderRadius: 14,
+    borderWidth: 1,
+    borderColor: '#E2E8F0',
+    padding: 10,
+  },
+  demoTitle: {
+    fontSize: 10,
+    fontWeight: '800',
+    color: '#64748B',
+    textTransform: 'uppercase',
+    letterSpacing: 0.5,
+    marginBottom: 6,
+  },
+  demoBtnsRow: {
+    flexDirection: 'row',
+    gap: 6,
+  },
+  demoBtn: {
+    flex: 1,
+    backgroundColor: '#FFFFFF',
+    borderWidth: 1,
+    borderColor: '#CBD5E1',
+    borderRadius: 10,
+    paddingVertical: 6,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 4,
+  },
+  demoBtnText: {
+    fontSize: 11,
+    fontWeight: '700',
+    color: '#0F172A',
+  },
+  registerRow: {
+    flexDirection: 'row',
+    justifyContent: 'center',
+    alignItems: 'center',
+    paddingVertical: 4,
+  },
+  registerText: {
+    fontSize: 13,
+    color: '#64748B',
+    fontWeight: '500',
+  },
+  registerLink: {
+    fontSize: 13,
+    fontWeight: '800',
+    color: '#0B3064',
+  },
+});

@@ -136,22 +136,23 @@ export default function PatientNotificationsScreen() {
                 }`}
                 style={{ gap: 10 }}
               >
-                <View className="flex-row items-start justify-between">
-                  <View className="flex-row items-center" style={{ gap: 8 }}>
+                <View className="flex-row items-center justify-between" style={{ gap: 8 }}>
+                  <View style={{ flexDirection: 'row', alignItems: 'center', flex: 1, minWidth: 0, gap: 8 }}>
                     <View
                       className={`w-9 h-9 rounded-2xl items-center justify-center border ${
                         isPrescription
                           ? 'bg-teal-100/70 border-teal-200'
                           : 'bg-slate-100 border-slate-200'
                       }`}
+                      style={{ flexShrink: 0 }}
                     >
                       {getIcon(item.type)}
                     </View>
-                    <View>
+                    <View style={{ flex: 1, minWidth: 0 }}>
                       <Text
                         className="text-xs font-black text-slate-900"
                         numberOfLines={1}
-                        style={{ maxWidth: 210 }}
+                        ellipsizeMode="tail"
                       >
                         {item.title}
                       </Text>
@@ -161,7 +162,7 @@ export default function PatientNotificationsScreen() {
                     </View>
                   </View>
 
-                  <View className="flex-row items-center" style={{ gap: 6 }}>
+                  <View style={{ flexDirection: 'row', alignItems: 'center', flexShrink: 0, gap: 6 }}>
                     {isPrescription && (
                       <Badge label="DIGITAL RX" variant="teal" size="sm" />
                     )}

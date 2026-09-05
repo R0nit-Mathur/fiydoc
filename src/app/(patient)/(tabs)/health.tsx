@@ -285,8 +285,8 @@ export default function HealthHubScreen() {
         {/* 1. PRESCRIPTIONS TAB LIST */}
         {activeTab === 'PRESCRIPTIONS' && (
           <View style={{ gap: 12 }}>
-            <View className="flex-row justify-between items-center">
-              <Text style={{ fontSize: 15, fontWeight: '800', color: '#0F172A' }}>
+            <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', gap: 8 }}>
+              <Text style={{ fontSize: 15, fontWeight: '800', color: '#0F172A', flex: 1, minWidth: 0 }} numberOfLines={1}>
                 Issued Digital Prescriptions (Rx)
               </Text>
               <Badge label="MCI VERIFIED" variant="teal" size="sm" />
@@ -402,10 +402,14 @@ export default function HealthHubScreen() {
 
               {/* Clinic Letterhead */}
               <View className="bg-slate-900 p-4 rounded-3xl" style={{ gap: 6 }}>
-                <View className="flex-row items-center justify-between">
-                  <View className="flex-row items-center" style={{ gap: 6 }}>
-                    <Building2 size={16} color="#00B39B" />
-                    <Text className="text-xs font-black text-white uppercase tracking-wider">
+                <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: 10 }}>
+                  <View style={{ flexDirection: 'row', alignItems: 'center', flex: 1, minWidth: 0, gap: 6 }}>
+                    <Building2 size={16} color="#00B39B" style={{ flexShrink: 0 }} />
+                    <Text
+                      numberOfLines={1}
+                      ellipsizeMode="tail"
+                      style={{ fontSize: 12, fontWeight: '800', color: '#FFFFFF', textTransform: 'uppercase', letterSpacing: 0.5, flex: 1 }}
+                    >
                       {selectedPrescription.clinicName || 'FiYDoc Healthcare Clinic'}
                     </Text>
                   </View>
