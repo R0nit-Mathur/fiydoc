@@ -8,8 +8,9 @@ import {
   StyleSheet,
   Alert,
 } from 'react-native';
-import { useRouter } from 'expo-router';
+import { useRouter, useLocalSearchParams } from 'expo-router';
 import { SafeAreaView } from 'react-native-safe-area-context';
+import { useDoctorsQuery } from '@/hooks/queries/useDoctorsQuery';
 import { useAppointmentStore, MAX_PATIENTS_PER_SLOT } from '@/store/useAppointmentStore';
 import { useAuthStore } from '@/store/useAuthStore';
 import { useNotificationStore } from '@/store/useNotificationStore';
@@ -45,6 +46,8 @@ const EVENING_SLOTS = ['02:00 PM', '04:00 PM', '05:30 PM'];
 
 export default function UnifiedBookingScreen() {
   const router = useRouter();
+  const { doctorId } = useLocalSearchParams<{ doctorId?: string }>();
+  const { data: doctors, isLoading: isDoctorsLoading } = useDoctorsQuery();
   const { user } = useAuthStore();
   const {
     bookingDraft,
@@ -53,7 +56,14 @@ export default function UnifiedBookingScreen() {
     isSlotFull,
   } = useAppointmentStore();
 
-  const doctor = bookingDraft.doctor;
+  const matchedDoctor = doctors?.find((d) => d.id === doctorId);
+  const doctor = bookingDraft.doctor || matchedDoctor;
+
+  useEffect(() => {
+    if (matchedDoctor && (!bookingDraft.doctor || bookingDraft.doctor.id !== matchedDoctor.id)) {
+      useAppointmentStore.getState().setBookingDoctor(matchedDoctor);
+    }
+  }, [matchedDoctor]);
 
   // Generate next 6 dates
   const dates = React.useMemo(() => {

@@ -1,13 +1,10 @@
 import React, { useState, useCallback, useEffect } from 'react';
-import { View, Text, ScrollView, TouchableOpacity, RefreshControl } from 'react-native';
+import { View, Text, ScrollView, TouchableOpacity, RefreshControl, Platform } from 'react-native';
 import { useRouter } from 'expo-router';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useQueryClient } from '@tanstack/react-query';
-import { DoctorCard } from '@/components/ui/DoctorCard';
 import { AppointmentCard } from '@/components/ui/AppointmentCard';
-import { DoctorCardSkeleton } from '@/components/ui/Skeleton';
 import { Avatar } from '@/components/ui/Avatar';
-import { useDoctorsQuery } from '@/hooks/queries/useDoctorsQuery';
 import { useAppointmentsQuery } from '@/hooks/queries/useAppointmentsQuery';
 import { useAuthStore } from '@/store/useAuthStore';
 import { useLocationStore } from '@/store/useLocationStore';
@@ -19,12 +16,89 @@ import {
   Search,
   Calendar,
   Bell,
-  ShieldCheck,
   ChevronRight,
   ChevronDown,
   MapPin,
   Menu,
+  Video,
+  Sparkles,
 } from 'lucide-react-native';
+
+interface SpecialtyOption {
+  title: string;
+  subtitle: string;
+  icon: string;
+  searchKey: string;
+  bg: string;
+  border: string;
+}
+
+const DOCTOR_SPECIALTIES: SpecialtyOption[] = [
+  {
+    title: 'General Physician',
+    subtitle: 'Fever, cold, headache, cough',
+    icon: '🩺',
+    searchKey: 'General Medicine',
+    bg: '#F0FDFA',
+    border: '#CCFBF1',
+  },
+  {
+    title: 'Cardiologist',
+    subtitle: 'Heart care, chest pain, BP',
+    icon: '❤️',
+    searchKey: 'Cardiology',
+    bg: '#FEF2F2',
+    border: '#FECACA',
+  },
+  {
+    title: 'Dermatologist',
+    subtitle: 'Skin rash, acne, hair fall',
+    icon: '✨',
+    searchKey: 'Dermatology',
+    bg: '#FDF4FF',
+    border: '#F5D0FE',
+  },
+  {
+    title: 'Pediatrician',
+    subtitle: 'Infant & child healthcare',
+    icon: '👶',
+    searchKey: 'Pediatrics',
+    bg: '#EFF6FF',
+    border: '#BFDBFE',
+  },
+  {
+    title: 'Orthopedic',
+    subtitle: 'Joint, bone & back pain',
+    icon: '🦴',
+    searchKey: 'Orthopedics',
+    bg: '#FFFBEB',
+    border: '#FDE68A',
+  },
+  {
+    title: 'ENT Specialist',
+    subtitle: 'Ear, nose, throat & sinus',
+    icon: '👂',
+    searchKey: 'ENT',
+    bg: '#F5F3FF',
+    border: '#DDD6FE',
+  },
+  {
+    title: 'Gynecologist',
+    subtitle: "Women's health & maternity",
+    icon: '🤰',
+    searchKey: 'Gynecology',
+    bg: '#FFF1F2',
+    border: '#FECDD3',
+  },
+  {
+    title: 'Dentist',
+    subtitle: 'Toothache, gums & braces',
+    icon: '🦷',
+    searchKey: 'Dentistry',
+    bg: '#F0FDF4',
+    border: '#BBF7D0',
+  },
+];
 
 export default function PatientHomeScreen() {
   const router = useRouter();
@@ -41,7 +115,6 @@ export default function PatientHomeScreen() {
     }
   }, []);
 
-  const { data: doctors, isLoading: doctorsLoading, isRefetching: isDoctorsRefetching, refetch: refetchDoctors } = useDoctorsQuery();
   const { data: appointments, isRefetching: isAptsRefetching, refetch: refetchApts } = useAppointmentsQuery(user?.id);
 
   const handleRefresh = useCallback(async () => {
@@ -50,31 +123,29 @@ export default function PatientHomeScreen() {
       await Promise.all([
         queryClient.invalidateQueries({ queryKey: ['doctors'] }),
         queryClient.invalidateQueries({ queryKey: ['appointments'] }),
-        refetchDoctors(),
         refetchApts(),
       ]);
     } finally {
       setRefreshing(false);
     }
-  }, [queryClient, refetchDoctors, refetchApts]);
+  }, [queryClient, refetchApts]);
 
   const upcomingApt = appointments?.find(
     (a) => a.status === 'upcoming' || a.status === 'confirmed' || a.status === 'in_progress'
   );
 
-  const POPULAR_SPECIALTIES = [
-    { name: 'All Doctors', icon: '🩺' },
-    { name: 'General Physician', icon: '👨‍⚕️' },
-    { name: 'Cardiologist', icon: '❤️' },
-    { name: 'Dermatologist', icon: '✨' },
-    { name: 'Pediatrician', icon: '👶' },
-    { name: 'Orthopedic', icon: '🦴' },
-    { name: 'ENT Specialist', icon: '👂' },
-  ];
+  const userName = user?.name ? user.name.split(' ')[0] : 'there';
+
+  const handleSelectSpecialty = (searchKey: string) => {
+    router.push({
+      pathname: '/(patient)/(tabs)/discovery',
+      params: { specialty: searchKey },
+    });
+  };
 
   return (
-    <SafeAreaView className="flex-1 bg-slate-50" edges={['top']}>
-      {/* Top Bar Header - Zomato / Blinkit / Rapido Locality Style */}
+    <SafeAreaView style={{ flex: 1, backgroundColor: '#F8FAFC' }} edges={['top']}>
+      {/* Top Bar Header - Zomato / Blinkit Style */}
       <View
         style={{
           paddingHorizontal: 16,
@@ -87,7 +158,7 @@ export default function PatientHomeScreen() {
           borderBottomColor: '#F1F5F9',
         }}
       >
-        {/* Exact Locality Name Trigger */}
+        {/* Exact Locality Selector */}
         <TouchableOpacity
           onPress={() => setLocationModalVisible(true)}
           activeOpacity={0.8}
@@ -172,44 +243,59 @@ export default function PatientHomeScreen() {
       </View>
 
       <ScrollView
-        contentContainerStyle={{ paddingHorizontal: 16, paddingTop: 14, paddingBottom: 100, gap: 16 }}
+        contentContainerStyle={{ paddingHorizontal: 16, paddingTop: 16, paddingBottom: 110, gap: 18 }}
         showsVerticalScrollIndicator={false}
         refreshControl={
           <RefreshControl
-            refreshing={refreshing || isDoctorsRefetching || isAptsRefetching}
+            refreshing={refreshing || isAptsRefetching}
             onRefresh={handleRefresh}
             colors={['#00B39B']}
             tintColor="#00B39B"
           />
         }
       >
-        {/* Search Trigger Bar - Zomato / Practo Style */}
+        {/* Warm Welcome Greeting & Direct Question */}
+        <View style={{ gap: 4 }}>
+          <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+            <Text style={{ fontSize: 13, fontWeight: '800', color: '#00B39B', textTransform: 'uppercase', letterSpacing: 0.5 }}>
+              👋 Hello, {userName}
+            </Text>
+          </View>
+          <Text style={{ fontSize: 24, fontWeight: '900', color: '#0A2540', lineHeight: 30, letterSpacing: -0.4 }}>
+            What kind of doctor are you looking for?
+          </Text>
+          <Text style={{ fontSize: 13, color: '#64748B', fontWeight: '500', marginTop: 2 }}>
+            Tap a specialty below or search symptoms for 1-tap clinic booking.
+          </Text>
+        </View>
+
+        {/* Clean Prominent Search Input Bar */}
         <TouchableOpacity
           onPress={() => router.push('/(patient)/(tabs)/discovery')}
           activeOpacity={0.9}
           style={{
             backgroundColor: '#FFFFFF',
             paddingHorizontal: 16,
-            paddingVertical: 13,
-            borderRadius: 16,
-            borderWidth: 1,
+            paddingVertical: 14,
+            borderRadius: 18,
+            borderWidth: 1.5,
             borderColor: '#E2E8F0',
             flexDirection: 'row',
             alignItems: 'center',
-            gap: 10,
+            gap: 12,
             shadowColor: '#000',
-            shadowOpacity: 0.03,
-            shadowRadius: 6,
-            elevation: 1,
+            shadowOpacity: 0.04,
+            shadowRadius: 8,
+            elevation: 2,
           }}
         >
-          <Search size={18} color="#00B39B" />
-          <Text style={{ fontSize: 13, fontWeight: '500', color: '#94A3B8', flex: 1 }} numberOfLines={1}>
-            Search doctors, clinics, symptoms (e.g. fever, cardiologist)...
+          <Search size={20} color="#00B39B" />
+          <Text style={{ fontSize: 13, fontWeight: '600', color: '#94A3B8', flex: 1 }} numberOfLines={1}>
+            Search 'fever', 'headache', 'skin', or clinic...
           </Text>
         </TouchableOpacity>
 
-        {/* Core Services Action Grid - Clean 4-Item Grid */}
+        {/* Core Services Strip - Clean & Direct */}
         <View style={{ flexDirection: 'row', gap: 10 }}>
           <TouchableOpacity
             onPress={() => router.push('/(patient)/(tabs)/discovery')}
@@ -222,14 +308,14 @@ export default function PatientHomeScreen() {
               borderWidth: 1,
               borderColor: '#E2E8F0',
               justifyContent: 'space-between',
-              minHeight: 100,
+              minHeight: 92,
             }}
           >
             <View
               style={{
                 backgroundColor: '#F0FAF8',
-                width: 36,
-                height: 36,
+                width: 34,
+                height: 34,
                 borderRadius: 10,
                 alignItems: 'center',
                 justifyContent: 'center',
@@ -237,13 +323,13 @@ export default function PatientHomeScreen() {
                 borderColor: '#B8EFE7',
               }}
             >
-              <Stethoscope size={18} color="#00B39B" />
+              <Stethoscope size={17} color="#00B39B" />
             </View>
             <View style={{ marginTop: 6 }}>
-              <Text style={{ fontSize: 13, fontWeight: '800', color: '#0F172A' }} numberOfLines={1}>
+              <Text style={{ fontSize: 12, fontWeight: '800', color: '#0F172A' }} numberOfLines={1}>
                 Book Clinic
               </Text>
-              <Text style={{ fontSize: 10, fontWeight: '600', color: '#64748B', marginTop: 1 }} numberOfLines={1}>
+              <Text style={{ fontSize: 10, fontWeight: '600', color: '#64748B' }} numberOfLines={1}>
                 In-person OPD
               </Text>
             </View>
@@ -260,14 +346,14 @@ export default function PatientHomeScreen() {
               borderWidth: 1,
               borderColor: '#E2E8F0',
               justifyContent: 'space-between',
-              minHeight: 100,
+              minHeight: 92,
             }}
           >
             <View
               style={{
                 backgroundColor: '#FAF5FF',
-                width: 36,
-                height: 36,
+                width: 34,
+                height: 34,
                 borderRadius: 10,
                 alignItems: 'center',
                 justifyContent: 'center',
@@ -275,14 +361,14 @@ export default function PatientHomeScreen() {
                 borderColor: '#E9D5FF',
               }}
             >
-              <FileText size={18} color="#8B5CF6" />
+              <FileText size={17} color="#8B5CF6" />
             </View>
             <View style={{ marginTop: 6 }}>
-              <Text style={{ fontSize: 13, fontWeight: '800', color: '#0F172A' }} numberOfLines={1}>
+              <Text style={{ fontSize: 12, fontWeight: '800', color: '#0F172A' }} numberOfLines={1}>
                 Digital Rx
               </Text>
-              <Text style={{ fontSize: 10, fontWeight: '600', color: '#64748B', marginTop: 1 }} numberOfLines={1}>
-                MCI Prescriptions
+              <Text style={{ fontSize: 10, fontWeight: '600', color: '#64748B' }} numberOfLines={1}>
+                Prescriptions
               </Text>
             </View>
           </TouchableOpacity>
@@ -298,14 +384,14 @@ export default function PatientHomeScreen() {
               borderWidth: 1,
               borderColor: '#E2E8F0',
               justifyContent: 'space-between',
-              minHeight: 100,
+              minHeight: 92,
             }}
           >
             <View
               style={{
                 backgroundColor: '#EFF6FF',
-                width: 36,
-                height: 36,
+                width: 34,
+                height: 34,
                 borderRadius: 10,
                 alignItems: 'center',
                 justifyContent: 'center',
@@ -313,134 +399,97 @@ export default function PatientHomeScreen() {
                 borderColor: '#BFDBFE',
               }}
             >
-              <Calendar size={18} color="#1E58C8" />
+              <Calendar size={17} color="#1E58C8" />
             </View>
             <View style={{ marginTop: 6 }}>
-              <Text style={{ fontSize: 13, fontWeight: '800', color: '#0F172A' }} numberOfLines={1}>
+              <Text style={{ fontSize: 12, fontWeight: '800', color: '#0F172A' }} numberOfLines={1}>
                 OPD Passes
               </Text>
-              <Text style={{ fontSize: 10, fontWeight: '600', color: '#64748B', marginTop: 1 }} numberOfLines={1}>
-                Tokens & Status
+              <Text style={{ fontSize: 10, fontWeight: '600', color: '#64748B' }} numberOfLines={1}>
+                Queue Tokens
               </Text>
             </View>
           </TouchableOpacity>
         </View>
 
-        {/* Popular Specialties Horizontal Scroll - Practo Style */}
-        <View style={{ gap: 8 }}>
-          <Text style={{ fontSize: 14, fontWeight: '800', color: '#0F172A' }}>
-            Find by Specialty
-          </Text>
-          <ScrollView
-            horizontal
-            showsHorizontalScrollIndicator={false}
-            contentContainerStyle={{ gap: 8 }}
-          >
-            {POPULAR_SPECIALTIES.map((spec, i) => (
-              <TouchableOpacity
-                key={i}
-                onPress={() => router.push('/(patient)/(tabs)/discovery')}
-                activeOpacity={0.8}
-                style={{
-                  flexDirection: 'row',
-                  alignItems: 'center',
-                  gap: 6,
-                  backgroundColor: '#FFFFFF',
-                  paddingHorizontal: 12,
-                  paddingVertical: 8,
-                  borderRadius: 20,
-                  borderWidth: 1,
-                  borderColor: '#E2E8F0',
-                }}
-              >
-                <Text style={{ fontSize: 14 }}>{spec.icon}</Text>
-                <Text style={{ fontSize: 12, fontWeight: '700', color: '#334155' }}>
-                  {spec.name}
-                </Text>
-              </TouchableOpacity>
-            ))}
-          </ScrollView>
-        </View>
-
-        {/* Upcoming In-Clinic Appointment Section */}
-        <View>
-          <View className="flex-row justify-between items-center mb-3">
-            <Text className="text-base font-black text-slate-900">Upcoming Clinic Visit</Text>
-            {upcomingApt && (
+        {/* Active Upcoming Clinic Visit (Only shown when active appointment exists) */}
+        {upcomingApt && (
+          <View style={{ gap: 8 }}>
+            <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
+              <Text style={{ fontSize: 14, fontWeight: '800', color: '#0F172A' }}>
+                Next Clinic Appointment
+              </Text>
               <TouchableOpacity onPress={() => router.push(`/(patient)/appointments/${upcomingApt.id}`)}>
-                <Text className="text-xs font-extrabold text-[#00B39B]">View Full Details</Text>
+                <Text style={{ fontSize: 12, fontWeight: '800', color: '#00B39B' }}>View Pass →</Text>
               </TouchableOpacity>
-            )}
+            </View>
+            <AppointmentCard
+              appointment={upcomingApt}
+              onPress={() => router.push(`/(patient)/appointments/${upcomingApt.id}`)}
+            />
           </View>
+        )}
 
-          {upcomingApt ? (
-            <View style={{ gap: 8 }}>
-              <AppointmentCard
-                appointment={upcomingApt}
-                onPress={() => router.push(`/(patient)/appointments/${upcomingApt.id}`)}
-              />
-              <TouchableOpacity
-                onPress={() => router.push(`/(patient)/appointments/${upcomingApt.id}`)}
-                activeOpacity={0.85}
-                className="bg-[#1E58C8] py-3.5 px-4 rounded-2xl flex-row justify-center items-center shadow-sm"
-                style={{ gap: 8 }}
-              >
-                <MapPin size={16} color="#FFFFFF" />
-                <Text className="text-xs font-extrabold text-white uppercase tracking-wider">
-                  View Clinic Location & Directions
-                </Text>
-              </TouchableOpacity>
-            </View>
-          ) : (
-            <View className="bg-white p-6 rounded-3xl border border-slate-200/80 items-center justify-center shadow-sm">
-              <View className="w-12 h-12 rounded-2xl bg-slate-100 items-center justify-center mb-2">
-                <Calendar size={24} color="#94A3B8" />
-              </View>
-              <Text className="text-sm font-extrabold text-slate-800 mt-1">No Upcoming Appointments</Text>
-              <Text className="text-xs text-slate-400 text-center mt-1 mb-4">
-                Schedule an in-clinic consultation with a verified medical specialist.
-              </Text>
-              <TouchableOpacity
-                onPress={() => router.push('/(patient)/(tabs)/discovery')}
-                activeOpacity={0.8}
-                className="bg-[#00B39B] px-5 py-2.5 rounded-xl shadow-sm"
-              >
-                <Text className="text-xs font-extrabold text-white">Book Clinic Visit</Text>
-              </TouchableOpacity>
-            </View>
-          )}
-        </View>
-
-        {/* Verified Specialists Section */}
-        <View>
-          <View className="flex-row justify-between items-center mb-3.5">
-            <View className="flex-row items-center flex-1 mr-2" style={{ gap: 6 }}>
-              <Text className="text-base font-black text-slate-900 flex-1" numberOfLines={1}>
-                Verified Specialists
-              </Text>
-              <ShieldCheck size={16} color="#00B39B" />
-            </View>
+        {/* Doctor Specialties Grid - The Core Focus */}
+        <View style={{ gap: 12 }}>
+          <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
+            <Text style={{ fontSize: 16, fontWeight: '900', color: '#0A2540' }}>
+              Medical Specialties
+            </Text>
             <TouchableOpacity onPress={() => router.push('/(patient)/(tabs)/discovery')}>
-              <Text className="text-xs font-extrabold text-[#00B39B]">See All</Text>
+              <Text style={{ fontSize: 12, fontWeight: '800', color: '#00B39B' }}>
+                View All →
+              </Text>
             </TouchableOpacity>
           </View>
 
-          <View style={{ gap: 14 }}>
-            {doctorsLoading ? (
-              <>
-                <DoctorCardSkeleton />
-                <DoctorCardSkeleton />
-              </>
-            ) : (
-              doctors?.slice(0, 4).map((doc) => (
-                <DoctorCard
-                  key={doc.id}
-                  doctor={doc}
-                  onPress={() => router.push(`/(patient)/doctor/${doc.id}`)}
-                  onBookPress={() => router.push(`/(patient)/doctor/${doc.id}`)}
-                />
-              ))
-            )}
+          {/* 2-Column Responsive Card Grid */}
+          <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 10 }}>
+            {DOCTOR_SPECIALTIES.map((spec, i) => (
+              <TouchableOpacity
+                key={i}
+                onPress={() => handleSelectSpecialty(spec.searchKey)}
+                activeOpacity={0.82}
+                style={{
+                  width: '48.5%',
+                  backgroundColor: '#FFFFFF',
+                  borderRadius: 18,
+                  padding: 14,
+                  borderWidth: 1,
+                  borderColor: '#E2E8F0',
+                  justifyContent: 'space-between',
+                  minHeight: 112,
+                  shadowColor: '#000',
+                  shadowOpacity: 0.02,
+                  shadowRadius: 4,
+                  elevation: 1,
+                }}
+              >
+                <View
+                  style={{
+                    width: 40,
+                    height: 40,
+                    borderRadius: 12,
+                    backgroundColor: spec.bg,
+                    borderWidth: 1,
+                    borderColor: spec.border,
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                  }}
+                >
+                  <Text style={{ fontSize: 20 }}>{spec.icon}</Text>
+                </View>
+
+                <View style={{ marginTop: 8 }}>
+                  <Text style={{ fontSize: 13, fontWeight: '800', color: '#0F172A' }} numberOfLines={1}>
+                    {spec.title}
+                  </Text>
+                  <Text style={{ fontSize: 10, fontWeight: '500', color: '#64748B', marginTop: 2 }} numberOfLines={2}>
+                    {spec.subtitle}
+                  </Text>
+                </View>
+              </TouchableOpacity>
+            ))}
           </View>
         </View>
       </ScrollView>

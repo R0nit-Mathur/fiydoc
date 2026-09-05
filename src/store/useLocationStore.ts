@@ -1,6 +1,7 @@
 import { create } from 'zustand';
 import { createJSONStorage, persist } from 'zustand/middleware';
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import { Platform } from 'react-native';
 import * as Location from 'expo-location';
 
 export interface LocationHub {
@@ -128,25 +129,43 @@ export const useLocationStore = create<LocationState>()(
           let localityName = 'Indiranagar, Bengaluru';
 
           try {
-            const geocoded = await Location.reverseGeocodeAsync({ latitude, longitude });
-            if (geocoded && geocoded.length > 0) {
-              const place = geocoded[0];
-              cityName = place.city || place.subregion || place.district || 'City Center';
+            if (Platform.OS === 'web') {
+              // Web: Use lightweight reverse geocode without triggering Expo SDK 49 web geocode removal warning
+              try {
+                const res = await fetch(`https://nominatim.openstreetmap.org/reverse?format=json&lat=${latitude}&lon=${longitude}&zoom=14&addressdetails=1`, {
+                  headers: { 'Accept': 'application/json' },
+                });
+                if (res.ok) {
+                  const data = await res.json();
+                  const addr = data.address || {};
+                  cityName = addr.city || addr.town || addr.state_district || 'Bengaluru';
+                  areaName = addr.suburb || addr.neighbourhood || addr.residential || addr.road || cityName;
+                  localityName = `${areaName}, ${cityName}`;
+                }
+              } catch {
+                // fall through to closest hub
+              }
+            } else {
+              const geocoded = await Location.reverseGeocodeAsync({ latitude, longitude });
+              if (geocoded && geocoded.length > 0) {
+                const place = geocoded[0];
+                cityName = place.city || place.subregion || place.district || 'City Center';
 
-              // Extract clean locality / neighborhood name (ignore numbers/pincodes)
-              const candidateArea = [
-                place.subregion,
-                place.district,
-                place.street,
-                place.name,
-              ].find((val) => {
-                if (!val) return false;
-                const trimmed = val.trim();
-                return trimmed.length > 2 && !/^\d+$/.test(trimmed) && trimmed.toLowerCase() !== cityName.toLowerCase();
-              });
+                // Extract clean locality / neighborhood name (ignore numbers/pincodes)
+                const candidateArea = [
+                  place.subregion,
+                  place.district,
+                  place.street,
+                  place.name,
+                ].find((val) => {
+                  if (!val) return false;
+                  const trimmed = val.trim();
+                  return trimmed.length > 2 && !/^\d+$/.test(trimmed) && trimmed.toLowerCase() !== cityName.toLowerCase();
+                });
 
-              areaName = candidateArea || place.name || cityName;
-              localityName = `${areaName}, ${cityName}`;
+                areaName = candidateArea || place.name || cityName;
+                localityName = `${areaName}, ${cityName}`;
+              }
             }
           } catch (e) {
             // If reverse geocode fails, find closest Indian hub name mathematically

@@ -1,8 +1,9 @@
-import React, { useState, useMemo, useCallback } from 'react';
+import React, { useState, useMemo, useCallback, useEffect } from 'react';
 import { View, Text, ScrollView, TouchableOpacity, RefreshControl } from 'react-native';
-import { useRouter } from 'expo-router';
+import { useRouter, useLocalSearchParams } from 'expo-router';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useQueryClient } from '@tanstack/react-query';
+import { useAppointmentStore } from '@/store/useAppointmentStore';
 import { Input } from '@/components/ui/Input';
 import { DoctorCard } from '@/components/ui/DoctorCard';
 import { DoctorCardSkeleton } from '@/components/ui/Skeleton';
@@ -41,12 +42,18 @@ const SORT_OPTIONS = ['Recommended', 'Nearest / Distance', 'Top Rated', 'Experie
 
 export default function DoctorDiscoveryScreen() {
   const router = useRouter();
+  const params = useLocalSearchParams<{ specialty?: string; query?: string }>();
   const queryClient = useQueryClient();
-  const [searchQuery, setSearchQuery] = useState('');
-  const [selectedSpecialty, setSelectedSpecialty] = useState('All');
+  const [searchQuery, setSearchQuery] = useState(params.query || '');
+  const [selectedSpecialty, setSelectedSpecialty] = useState(params.specialty || 'All');
   const [selectedSort, setSelectedSort] = useState('Recommended');
   const [locationModalVisible, setLocationModalVisible] = useState(false);
   const [refreshing, setRefreshing] = useState(false);
+
+  useEffect(() => {
+    if (params.specialty) setSelectedSpecialty(params.specialty);
+    if (params.query) setSearchQuery(params.query);
+  }, [params.specialty, params.query]);
 
   const { latitude: userLat, longitude: userLng, city: userCity } = useLocationStore();
 
@@ -387,8 +394,14 @@ export default function DoctorDiscoveryScreen() {
             <DoctorCard
               key={doc.id}
               doctor={doc}
-              onPress={() => router.push(`/(patient)/doctor/${doc.id}`)}
-              onBookPress={() => router.push(`/(patient)/doctor/${doc.id}`)}
+              onPress={() => {
+                useAppointmentStore.getState().setBookingDoctor(doc);
+                router.push({ pathname: '/(patient)/booking/slot-select', params: { doctorId: doc.id } });
+              }}
+              onBookPress={() => {
+                useAppointmentStore.getState().setBookingDoctor(doc);
+                router.push({ pathname: '/(patient)/booking/slot-select', params: { doctorId: doc.id } });
+              }}
             />
           ))
         )}
