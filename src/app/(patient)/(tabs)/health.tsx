@@ -59,7 +59,7 @@ export default function HealthHubScreen() {
     });
   }, [prescriptions, user]);
 
-  const [activeTab, setActiveTab] = useState<'ALL' | 'PRESCRIPTIONS' | 'LABS'>('ALL');
+  const [activeTab, setActiveTab] = useState<'PRESCRIPTIONS' | 'HISTORY'>('PRESCRIPTIONS');
   const [selectedPrescription, setSelectedPrescription] = useState<Prescription | null>(null);
   const [rxModalVisible, setRxModalVisible] = useState(false);
   const [downloadToast, setDownloadToast] = useState(false);
@@ -176,11 +176,7 @@ export default function HealthHubScreen() {
     setTimeout(() => setDownloadToast(false), 2500);
   };
 
-  const filteredRecords = records.filter((r) => {
-    if (activeTab === 'PRESCRIPTIONS') return r.type.toLowerCase().includes('prescription');
-    if (activeTab === 'LABS') return r.type.toLowerCase().includes('lab') || r.type.toLowerCase().includes('scan');
-    return true;
-  });
+  const filteredRecords = records;
 
   return (
     <SafeAreaView className="flex-1 bg-slate-50" edges={['top']}>
@@ -223,63 +219,47 @@ export default function HealthHubScreen() {
           />
         }
       >
-        {/* Banner */}
-        <View className="bg-[#00B39B] p-4 rounded-3xl flex-row items-center justify-between shadow-md">
-          <View className="flex-1 mr-3">
-            <View className="flex-row items-center bg-white/20 self-start px-2 py-0.5 rounded-md mb-1.5">
-              <ScanText size={12} color="#FFFFFF" />
-              <Text className="text-[10px] font-extrabold text-white ml-1 uppercase">
-                ABDM & OCR Healthcare Engine
-              </Text>
-            </View>
-            <Text className="text-white font-extrabold text-base">Longitudinal Patient History</Text>
-            <Text className="text-teal-100 text-xs mt-0.5">
-              Access all digital prescriptions issued by doctors, OCR verified lab reports, and vitals history.
-            </Text>
-          </View>
+        {/* Clean Segmented Tab Switcher */}
+        <View className="flex-row bg-slate-100 p-1 rounded-full" style={{ gap: 4 }}>
           <TouchableOpacity
-            onPress={() => setUploadModalVisible(true)}
-            activeOpacity={0.85}
-            className="bg-white p-3 rounded-2xl shadow-sm"
+            onPress={() => setActiveTab('PRESCRIPTIONS')}
+            activeOpacity={0.8}
+            className={`flex-1 py-2.5 rounded-full flex-row items-center justify-center ${
+              activeTab === 'PRESCRIPTIONS' ? 'bg-[#0F172A] shadow-xs' : 'bg-transparent'
+            }`}
+            style={{ gap: 6 }}
           >
-            <ScanText size={22} color="#00B39B" />
+            <Pill size={15} color={activeTab === 'PRESCRIPTIONS' ? '#FFFFFF' : '#64748B'} />
+            <Text
+              style={{
+                fontSize: 13,
+                fontWeight: activeTab === 'PRESCRIPTIONS' ? '700' : '600',
+                color: activeTab === 'PRESCRIPTIONS' ? '#FFFFFF' : '#64748B',
+              }}
+            >
+              Prescriptions ({patientPrescriptions.length})
+            </Text>
           </TouchableOpacity>
-        </View>
 
-        {/* Interactive Tab Switcher */}
-        <View className="flex-row bg-white p-1.5 rounded-2xl border border-slate-200/90 shadow-sm" style={{ gap: 6 }}>
-          {[
-            { id: 'ALL', label: 'All Timeline', icon: <FileText size={14} /> },
-            { id: 'PRESCRIPTIONS', label: `Prescriptions (${patientPrescriptions.length})`, icon: <Pill size={14} /> },
-            { id: 'LABS', label: 'Lab Reports', icon: <Activity size={14} /> },
-          ].map((tab) => {
-            const active = activeTab === tab.id;
-            return (
-              <TouchableOpacity
-                key={tab.id}
-                onPress={() => setActiveTab(tab.id as any)}
-                activeOpacity={0.8}
-                className={`flex-1 py-2 rounded-xl flex-row items-center justify-center ${
-                  active ? 'bg-[#1E58C8] shadow-sm' : 'bg-transparent'
-                }`}
-                style={{ gap: 5 }}
-              >
-                {React.cloneElement(tab.icon, {
-                  color: active ? '#FFFFFF' : '#64748B',
-                })}
-                <Text
-                  style={{
-                    fontSize: 11,
-                    fontWeight: active ? '800' : '700',
-                    color: active ? '#FFFFFF' : '#475569',
-                  }}
-                  numberOfLines={1}
-                >
-                  {tab.label}
-                </Text>
-              </TouchableOpacity>
-            );
-          })}
+          <TouchableOpacity
+            onPress={() => setActiveTab('HISTORY')}
+            activeOpacity={0.8}
+            className={`flex-1 py-2.5 rounded-full flex-row items-center justify-center ${
+              activeTab === 'HISTORY' ? 'bg-[#0F172A] shadow-xs' : 'bg-transparent'
+            }`}
+            style={{ gap: 6 }}
+          >
+            <FileText size={15} color={activeTab === 'HISTORY' ? '#FFFFFF' : '#64748B'} />
+            <Text
+              style={{
+                fontSize: 13,
+                fontWeight: activeTab === 'HISTORY' ? '700' : '600',
+                color: activeTab === 'HISTORY' ? '#FFFFFF' : '#64748B',
+              }}
+            >
+              Medical History
+            </Text>
+          </TouchableOpacity>
         </View>
 
         {/* 1. PRESCRIPTIONS TAB LIST */}
@@ -360,7 +340,7 @@ export default function HealthHubScreen() {
           <View style={{ gap: 12 }}>
             <View className="flex-row justify-between items-center pt-1">
               <Text style={{ fontSize: 16, fontWeight: '800', color: '#0F172A' }}>
-                {activeTab === 'LABS' ? 'Diagnostic Lab Reports' : 'Unified Health Timeline'}
+                Unified Medical History & Timeline
               </Text>
               <View className="bg-slate-200/80 px-2.5 py-0.5 rounded-full">
                 <Text className="text-[10px] font-bold text-slate-700">
