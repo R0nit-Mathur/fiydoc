@@ -30,9 +30,20 @@ export default function DoctorHomeScreen() {
   const { data: appointments } = useAppointmentsQuery(undefined, user?.id);
   const [notificationsVisible, setNotificationsVisible] = React.useState(false);
 
-  const unreadCount = useNotificationStore((s) => s.getUnreadCount(user?.id, 'doctor'));
-  const doctorNotifications = useNotificationStore((s) => s.getNotificationsForUser(user?.id, 'doctor'));
+  const notifications = useNotificationStore((s) => s.notifications);
   const markAllAsRead = useNotificationStore((s) => s.markAllAsRead);
+
+  const doctorNotifications = React.useMemo(() => {
+    return notifications.filter((n) => {
+      if (n.recipientId && user?.id && n.recipientId !== user.id) return false;
+      if (n.recipientRole && n.recipientRole !== 'all' && n.recipientRole !== 'doctor') return false;
+      return true;
+    });
+  }, [notifications, user?.id]);
+
+  const unreadCount = React.useMemo(() => {
+    return doctorNotifications.filter((n) => !n.read).length;
+  }, [doctorNotifications]);
 
   // Consume hardware back on doctor home so React Navigation never throws GO_BACK unhandled
   React.useEffect(() => {

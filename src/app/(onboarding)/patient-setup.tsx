@@ -9,7 +9,7 @@ import { useAuthStore } from '@/store/useAuthStore';
 
 export default function PatientSetupScreen() {
   const router = useRouter();
-  const { setOnboardingCompleted } = useAuthStore();
+  const { user, setSession, setOnboardingCompleted } = useAuthStore();
 
   const [age, setAge] = useState('32');
   const [gender, setGender] = useState<'Male' | 'Female' | 'Other'>('Male');
@@ -18,7 +18,20 @@ export default function PatientSetupScreen() {
   const [emergencyContact, setEmergencyContact] = useState('+91 98765 12345');
 
   const handleFinish = () => {
-    setOnboardingCompleted(true);
+    if (user) {
+      setSession({
+        ...user,
+        role: 'patient',
+        onboardingCompleted: true,
+        age,
+        gender,
+        bloodGroup,
+        allergies,
+        phone: emergencyContact || user.phone,
+      } as any);
+    } else {
+      setOnboardingCompleted(true);
+    }
     router.replace('/(patient)/(tabs)/home');
   };
 

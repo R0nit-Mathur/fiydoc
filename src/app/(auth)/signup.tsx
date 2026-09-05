@@ -145,7 +145,9 @@ export default function SignupScreen() {
 
   const handleAuthenticated = (session: UserSession) => {
     setSession(session);
-    if (session.role === 'doctor') {
+    if (!session.onboardingCompleted) {
+      router.replace('/(onboarding)/role-select');
+    } else if (session.role === 'doctor') {
       router.replace('/(doctor)/(tabs)/home');
     } else {
       router.replace('/(patient)/(tabs)/home');

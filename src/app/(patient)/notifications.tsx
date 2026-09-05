@@ -22,10 +22,21 @@ import { useAuthStore } from '@/store/useAuthStore';
 export default function PatientNotificationsScreen() {
   const router = useRouter();
   const { user } = useAuthStore();
-  const { getNotificationsForUser, markAsRead, markAllAsRead } = useNotificationStore();
+  const notifications = useNotificationStore((s) => s.notifications);
+  const markAsRead = useNotificationStore((s) => s.markAsRead);
+  const markAllAsRead = useNotificationStore((s) => s.markAllAsRead);
 
-  const notifications = getNotificationsForUser(user?.id, 'patient');
-  const unreadCount = notifications.filter((n) => !n.read).length;
+  const patientNotifications = React.useMemo(() => {
+    return notifications.filter((n) => {
+      if (n.recipientId && user?.id && n.recipientId !== user.id) return false;
+      if (n.recipientRole && n.recipientRole !== 'all' && n.recipientRole !== 'patient') return false;
+      return true;
+    });
+  }, [notifications, user?.id]);
+
+  const unreadCount = React.useMemo(() => {
+    return patientNotifications.filter((n) => !n.read).length;
+  }, [patientNotifications]);
 
   const getIcon = (type: NotificationItem['type']) => {
     switch (type) {
@@ -98,7 +109,7 @@ export default function PatientNotificationsScreen() {
         contentContainerStyle={{ padding: 16, paddingBottom: 100, gap: 12 }}
         showsVerticalScrollIndicator={false}
       >
-        {notifications.length === 0 ? (
+        {patientNotifications.length === 0 ? (
           <View className="py-20 items-center justify-center" style={{ gap: 12 }}>
             <View className="w-16 h-16 rounded-full bg-slate-100 items-center justify-center border border-slate-200">
               <Inbox size={32} color="#94A3B8" />
@@ -109,7 +120,7 @@ export default function PatientNotificationsScreen() {
             </Text>
           </View>
         ) : (
-          notifications.map((item) => {
+          patientNotifications.map((item) => {
             const isPrescription = item.type === 'prescription';
             return (
               <TouchableOpacity

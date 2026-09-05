@@ -9,7 +9,7 @@ import { useAuthStore } from '@/store/useAuthStore';
 
 export default function DoctorSetupScreen() {
   const router = useRouter();
-  const { setOnboardingCompleted, setVerificationStatus } = useAuthStore();
+  const { user, setSession, setOnboardingCompleted, setVerificationStatus } = useAuthStore();
 
   const [specialty, setSpecialty] = useState('Cardiology');
   const [qualification, setQualification] = useState('MD, DM (Cardiology)');
@@ -18,8 +18,23 @@ export default function DoctorSetupScreen() {
   const [fee, setFee] = useState('750');
 
   const handleFinish = () => {
-    setOnboardingCompleted(true);
-    setVerificationStatus('verified');
+    if (user) {
+      setSession({
+        ...user,
+        name: user.name?.startsWith('Dr.') ? user.name : `Dr. ${user.name}`,
+        role: 'doctor',
+        onboardingCompleted: true,
+        verificationStatus: 'verified',
+        specialty,
+        qualification,
+        licenseNumber,
+        hospital,
+        consultationFee: fee,
+      } as any);
+    } else {
+      setOnboardingCompleted(true);
+      setVerificationStatus('verified');
+    }
     router.replace('/(doctor)/(tabs)/home');
   };
 

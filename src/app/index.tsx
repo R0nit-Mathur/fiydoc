@@ -6,7 +6,7 @@ import { FiYLogo } from '@/components/ui/FiYLogo';
 
 export default function Index() {
   const router = useRouter();
-  const { isAuthenticated, role } = useAuthStore();
+  const { isAuthenticated, role, onboardingCompleted } = useAuthStore();
   const rootNavigationState = useRootNavigationState();
 
   useEffect(() => {
@@ -15,6 +15,8 @@ export default function Index() {
     const timer = setTimeout(() => {
       if (!isAuthenticated) {
         router.replace('/(auth)/welcome');
+      } else if (!onboardingCompleted) {
+        router.replace('/(onboarding)/role-select');
       } else if (role === 'doctor') {
         router.replace('/(doctor)/(tabs)/home');
       } else {
@@ -23,7 +25,7 @@ export default function Index() {
     }, 400);
 
     return () => clearTimeout(timer);
-  }, [isAuthenticated, role, rootNavigationState?.key]);
+  }, [isAuthenticated, role, onboardingCompleted, rootNavigationState?.key]);
 
   return (
     <View className="flex-1 bg-white items-center justify-center space-y-4">
