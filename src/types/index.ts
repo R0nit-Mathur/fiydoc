@@ -7,6 +7,10 @@ export interface User {
   role: Role;
   name: string;
   avatar?: string;
+  latitude?: number;
+  longitude?: number;
+  city?: string;
+  address?: string;
 }
 
 export interface PatientProfile {
@@ -21,6 +25,10 @@ export interface PatientProfile {
   medications: string[];
   emergencyContact?: { name: string; phone: string; relation: string };
   onboardingComplete: boolean;
+  latitude?: number;
+  longitude?: number;
+  city?: string;
+  address?: string;
 }
 
 export interface Doctor {
@@ -49,6 +57,18 @@ export interface Doctor {
   nextAvailableSlot?: string;
   modes?: ('video' | 'clinic' | 'in_person')[];
   timings?: string;
+  latitude?: number;
+  longitude?: number;
+  city?: string;
+  distanceKm?: number;
+  clinic?: {
+    id?: string;
+    name?: string;
+    address?: string;
+    latitude?: number | null;
+    longitude?: number | null;
+    timings?: string;
+  };
 }
 
 export interface Appointment {

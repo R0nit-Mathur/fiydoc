@@ -3,6 +3,8 @@ import { View, Text, TouchableOpacity } from 'react-native';
 import { Doctor } from '@/types/index';
 import { Star, MapPin, Building2, CheckCircle2 } from 'lucide-react-native';
 import { Avatar } from './Avatar';
+import { formatDistance, calculateDistanceKm } from '@/utils/distance';
+import { useLocationStore } from '@/store/useLocationStore';
 
 interface DoctorCardProps {
   doctor: Doctor;
@@ -11,8 +13,16 @@ interface DoctorCardProps {
 }
 
 export function DoctorCard({ doctor, onPress, onBookPress }: DoctorCardProps) {
+  const userLat = useLocationStore((s) => s.latitude);
+  const userLng = useLocationStore((s) => s.longitude);
+
   const qualification =
     doctor.qualification || doctor.qualifications || 'MBBS, MD Specialist';
+
+  const effectiveDistance =
+    doctor.distanceKm !== undefined && doctor.distanceKm !== null
+      ? doctor.distanceKm
+      : calculateDistanceKm(userLat, userLng, doctor.latitude, doctor.longitude);
 
   return (
     <TouchableOpacity
@@ -82,7 +92,7 @@ export function DoctorCard({ doctor, onPress, onBookPress }: DoctorCardProps) {
             </Text>
           </View>
 
-          <View style={{ flexDirection: 'row', alignItems: 'center', marginTop: 8, gap: 6 }}>
+          <View style={{ flexDirection: 'row', alignItems: 'center', marginTop: 8, gap: 6, flexWrap: 'wrap' }}>
             <View
               style={{
                 flexDirection: 'row',
@@ -97,6 +107,27 @@ export function DoctorCard({ doctor, onPress, onBookPress }: DoctorCardProps) {
               <Building2 size={11} color="#1E58C8" />
               <Text style={{ fontSize: 10, fontWeight: '700', color: '#1E58C8' }}>In-Clinic Visit</Text>
             </View>
+
+            {effectiveDistance !== null && effectiveDistance !== undefined && (
+              <View
+                style={{
+                  flexDirection: 'row',
+                  alignItems: 'center',
+                  backgroundColor: '#ECFDF5',
+                  paddingHorizontal: 8,
+                  paddingVertical: 3,
+                  borderRadius: 8,
+                  gap: 3,
+                  borderWidth: 0.5,
+                  borderColor: '#A7F3D0',
+                }}
+              >
+                <MapPin size={10} color="#059669" />
+                <Text style={{ fontSize: 10, fontWeight: '700', color: '#059669' }}>
+                  {formatDistance(effectiveDistance)}
+                </Text>
+              </View>
+            )}
           </View>
         </View>
       </View>

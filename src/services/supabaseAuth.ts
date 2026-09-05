@@ -129,7 +129,7 @@ export const supabaseAuthService = {
         avatar: isDoctor
           ? 'https://images.unsplash.com/photo-1622253692010-333f2da6031d?w=400&q=80'
           : 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=400&q=80',
-        phone: '+91 98765 43210',
+        phone: '',
       };
     }
 

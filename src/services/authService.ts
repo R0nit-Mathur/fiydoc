@@ -11,6 +11,14 @@ export interface UserSession {
   onboardingCompleted: boolean;
   verificationStatus?: 'registered' | 'verified' | 'pending' | 'rejected' | 'info_required';
   accessToken?: string;
+  latitude?: number;
+  longitude?: number;
+  city?: string;
+  clinicName?: string;
+  clinicAddress?: string;
+  registrationNumber?: string;
+  licenseNumber?: string;
+  specialty?: string;
 }
 
 export const authService = {
@@ -48,6 +56,8 @@ export const authService = {
       experienceYears?: number;
       clinicName?: string;
       clinicAddress?: string;
+      clinicLatitude?: number;
+      clinicLongitude?: number;
       consultationFee?: number;
     }
   ): Promise<UserSession> {
@@ -107,8 +117,8 @@ export const authService = {
         name: response.user.patient?.fullName || response.user.doctor?.fullName || name,
         email: response.user.email,
         role: hasDoctorProfile ? 'doctor' : (response.user.role || 'PATIENT').toLowerCase() as 'patient' | 'doctor',
-        avatar: response.user.patient?.profilePhoto || response.user.doctor?.profilePhoto || avatarUrl || 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=400&q=80',
-        phone: response.user.phone || '+91 98765 43210',
+        avatar: response.user.patient?.profilePhoto || response.user.doctor?.profilePhoto || avatarUrl || '',
+        phone: response.user.phone || '',
         isLoggedIn: true,
         onboardingCompleted: isProfileConfigured,
         verificationStatus: hasDoctorProfile ? 'verified' : 'registered',
@@ -123,8 +133,8 @@ export const authService = {
         name,
         email,
         role: isDoctorEmail ? 'doctor' : 'patient',
-        avatar: avatarUrl || 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=400&q=80',
-        phone: '+91 98765 43210',
+        avatar: avatarUrl || '',
+        phone: '',
         isLoggedIn: true,
         onboardingCompleted: false, // Always prompts for profile creation (Patient or Doctor)
         verificationStatus: 'registered',

@@ -195,68 +195,80 @@ export default function DoctorHomeScreen() {
         </View>
 
         {/* Next Patient Card */}
-        <View className="bg-white p-4 rounded-2xl border border-slate-200/80 shadow-sm" style={{ gap: 12 }}>
-          <View className="flex-row justify-between items-center pb-2.5 border-b border-slate-100">
-            <View
-              style={{
-                flexDirection: 'row',
-                alignItems: 'center',
-                flex: 1,
-                minWidth: 0,
-                marginRight: 8,
-                gap: 6,
-              }}
-            >
-              <Clock size={15} color="#1E58C8" style={{ flexShrink: 0 }} />
-              <Text
-                className="text-xs font-black text-slate-900 uppercase tracking-wide flex-1"
-                numberOfLines={1}
+        {nextPatient ? (
+          <View className="bg-white p-4 rounded-2xl border border-slate-200/80 shadow-sm" style={{ gap: 12 }}>
+            <View className="flex-row justify-between items-center pb-2.5 border-b border-slate-100">
+              <View
+                style={{
+                  flexDirection: 'row',
+                  alignItems: 'center',
+                  flex: 1,
+                  minWidth: 0,
+                  marginRight: 8,
+                  gap: 6,
+                }}
               >
-                Next Patient in Queue
+                <Clock size={15} color="#1E58C8" style={{ flexShrink: 0 }} />
+                <Text
+                  className="text-xs font-black text-slate-900 uppercase tracking-wide flex-1"
+                  numberOfLines={1}
+                >
+                  Next Patient in Queue
+                </Text>
+              </View>
+              <View style={{ flexShrink: 0 }}>
+                <Badge label={nextPatient.time || '10:30 AM'} variant="teal" size="sm" />
+              </View>
+            </View>
+
+            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 12 }}>
+              <Avatar
+                uri={nextPatient.patientAvatar}
+                name={nextPatient.patientName || 'Patient'}
+                size="md"
+              />
+              <View style={{ flex: 1, minWidth: 0 }}>
+                <Text className="text-base font-black text-slate-900" numberOfLines={1}>
+                  {nextPatient.patientName || 'Patient'}
+                </Text>
+                <Text className="text-xs text-slate-500 font-medium mt-0.5" numberOfLines={1}>
+                  In-Clinic Consultation • OPD Slot
+                </Text>
+              </View>
+            </View>
+
+            <View className="bg-slate-50 p-3 rounded-xl border border-slate-100">
+              <Text className="text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-1">
+                Chief Reported Symptoms
+              </Text>
+              <Text className="text-xs font-bold text-slate-800" numberOfLines={2}>
+                {nextPatient.symptoms?.join(' • ') || 'General Consultation'}
               </Text>
             </View>
-            <View style={{ flexShrink: 0 }}>
-              <Badge label={nextPatient?.time || '10:30 AM'} variant="teal" size="sm" />
-            </View>
-          </View>
 
-          <View style={{ flexDirection: 'row', alignItems: 'center', gap: 12 }}>
-            <Avatar
-              uri={nextPatient?.patientAvatar}
-              name={nextPatient?.patientName || 'Aarav Mehta'}
-              size="md"
-            />
-            <View style={{ flex: 1, minWidth: 0 }}>
-              <Text className="text-base font-black text-slate-900" numberOfLines={1}>
-                {nextPatient?.patientName || 'Aarav Mehta'}
+            <TouchableOpacity
+              onPress={() => router.push(`/(doctor)/consultation/${nextPatient.id}`)}
+              activeOpacity={0.85}
+              className="bg-[#1E58C8] py-3 px-4 rounded-xl flex-row justify-center items-center shadow-sm"
+              style={{ gap: 8 }}
+            >
+              <Sparkles size={16} color="#FFFFFF" style={{ flexShrink: 0 }} />
+              <Text className="text-xs font-black text-white" numberOfLines={1}>
+                Launch In-Clinic Consultation Workspace
               </Text>
-              <Text className="text-xs text-slate-500 font-medium mt-0.5" numberOfLines={1}>
-                Male • 32 Yrs • Blood Group: O+
-              </Text>
+            </TouchableOpacity>
+          </View>
+        ) : (
+          <View className="bg-white p-5 rounded-2xl border border-slate-200/80 items-center justify-center shadow-sm">
+            <View className="w-10 h-10 rounded-xl bg-slate-100 items-center justify-center mb-2">
+              <Clock size={20} color="#94A3B8" />
             </View>
-          </View>
-
-          <View className="bg-slate-50 p-3 rounded-xl border border-slate-100">
-            <Text className="text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-1">
-              Chief Reported Symptoms
-            </Text>
-            <Text className="text-xs font-bold text-slate-800" numberOfLines={2}>
-              {nextPatient?.symptoms?.join(' • ') || 'Chest Discomfort'}
+            <Text className="text-sm font-extrabold text-slate-800">No Patients in Waiting Queue</Text>
+            <Text className="text-xs text-slate-400 text-center mt-1">
+              New patient bookings will automatically appear here in your live queue.
             </Text>
           </View>
-
-          <TouchableOpacity
-            onPress={() => router.push(`/(doctor)/consultation/${nextPatient?.id || 'apt_live'}`)}
-            activeOpacity={0.85}
-            className="bg-[#1E58C8] py-3 px-4 rounded-xl flex-row justify-center items-center shadow-sm"
-            style={{ gap: 8 }}
-          >
-            <Sparkles size={16} color="#FFFFFF" style={{ flexShrink: 0 }} />
-            <Text className="text-xs font-black text-white" numberOfLines={1}>
-              Launch In-Clinic Consultation Workspace
-            </Text>
-          </TouchableOpacity>
-        </View>
+        )}
 
         {/* Live OPD Queue Timeline (Indian Clinic Queue) */}
         <View style={{ gap: 10 }}>
@@ -274,77 +286,51 @@ export default function DoctorHomeScreen() {
 
           {/* Timeline Nodes */}
           <View className="bg-white p-4 rounded-3xl border border-slate-200/90 shadow-sm" style={{ gap: 10 }}>
-            {[
-              {
-                token: 'Token #01',
-                time: '09:30 AM',
-                name: 'Rohit Joshi',
-                age: '45 M',
-                symptoms: 'Mild Angina Checkup',
-                status: 'COMPLETED',
-                badgeVariant: 'teal',
-              },
-              {
-                token: 'Token #02',
-                time: '10:00 AM',
-                name: nextPatient?.patientName || 'Aarav Mehta',
-                age: '32 M',
-                symptoms: nextPatient?.symptoms?.join(', ') || 'Chest Discomfort',
-                status: 'IN PROGRESS',
-                badgeVariant: 'blue',
-                isCurrent: true,
-              },
-              {
-                token: 'Token #03',
-                time: '10:30 AM',
-                name: 'Kavita Rao',
-                age: '58 F',
-                symptoms: 'Hypertension & Dizziness',
-                status: 'WAITING',
-                badgeVariant: 'warning',
-              },
-              {
-                token: 'Token #04',
-                time: '11:00 AM',
-                name: 'Rajesh Verma',
-                age: '50 M',
-                symptoms: 'Lipid Profile Review',
-                status: 'SCHEDULED',
-                badgeVariant: 'slate',
-              },
-            ].map((q, idx) => (
-              <View
-                key={idx}
-                className={`p-3 rounded-2xl border flex-row items-center justify-between ${
-                  q.isCurrent
-                    ? 'bg-blue-50/80 border-[#1E58C8]'
-                    : 'bg-slate-50 border-slate-200/80'
-                }`}
-              >
-                <View style={{ gap: 2 }}>
-                  <View className="flex-row items-center" style={{ gap: 6 }}>
-                    <Text className="text-xs font-black text-[#1E58C8]">{q.token}</Text>
-                    <Text className="text-[11px] text-slate-400 font-bold">• {q.time}</Text>
+            {appointments && appointments.length > 0 ? (
+              appointments.map((apt, idx) => (
+                <View
+                  key={apt.id || idx}
+                  className={`p-3 rounded-2xl border flex-row items-center justify-between ${
+                    idx === 0
+                      ? 'bg-blue-50/80 border-[#1E58C8]'
+                      : 'bg-slate-50 border-slate-200/80'
+                  }`}
+                >
+                  <View style={{ gap: 2, flex: 1, marginRight: 8 }}>
+                    <View className="flex-row items-center" style={{ gap: 6 }}>
+                      <Text className="text-xs font-black text-[#1E58C8]">Token #{String(idx + 1).padStart(2, '0')}</Text>
+                      <Text className="text-[11px] text-slate-400 font-bold">• {apt.time}</Text>
+                    </View>
+                    <Text className="text-sm font-black text-slate-900" numberOfLines={1}>
+                      {apt.patientName || 'Patient'}
+                    </Text>
+                    <Text className="text-[11px] text-slate-500" numberOfLines={1}>
+                      {apt.symptoms?.join(', ') || 'General OPD Examination'}
+                    </Text>
                   </View>
-                  <Text className="text-sm font-black text-slate-900">{q.name} ({q.age})</Text>
-                  <Text className="text-[11px] text-slate-500">{q.symptoms}</Text>
-                </View>
 
-                <View className="items-end" style={{ gap: 6 }}>
-                  <Badge label={q.status} variant={q.badgeVariant as any} size="sm" />
-                  {q.isCurrent ? (
-                    <TouchableOpacity
-                      onPress={() => router.push(`/(doctor)/consultation/${nextPatient?.id || 'apt_live'}`)}
-                      className="bg-[#1E58C8] px-3 py-1 rounded-lg"
-                    >
-                      <Text className="text-[11px] font-bold text-white">Consult</Text>
-                    </TouchableOpacity>
-                  ) : (
-                    <Text className="text-[10px] text-slate-400 font-medium">OPD Room 4</Text>
-                  )}
+                  <View className="items-end" style={{ gap: 6 }}>
+                    <Badge label={apt.status.toUpperCase()} variant={idx === 0 ? 'blue' : 'slate'} size="sm" />
+                    {idx === 0 ? (
+                      <TouchableOpacity
+                        onPress={() => router.push(`/(doctor)/consultation/${apt.id}`)}
+                        className="bg-[#1E58C8] px-3 py-1 rounded-lg"
+                      >
+                        <Text className="text-[11px] font-bold text-white">Consult</Text>
+                      </TouchableOpacity>
+                    ) : (
+                      <Text className="text-[10px] text-slate-400 font-medium">OPD Room</Text>
+                    )}
+                  </View>
                 </View>
+              ))
+            ) : (
+              <View className="py-4 items-center justify-center">
+                <Text className="text-xs font-bold text-slate-400">
+                  No appointments currently queued for today
+                </Text>
               </View>
-            ))}
+            )}
           </View>
         </View>
 

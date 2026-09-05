@@ -7,68 +7,41 @@ import { Input } from '@/components/ui/Input';
 import { Modal } from '@/components/ui/Modal';
 import { Badge } from '@/components/ui/Badge';
 import { Avatar } from '@/components/ui/Avatar';
+import { useAuthStore } from '@/store/useAuthStore';
+import { useAppointmentsQuery } from '@/hooks/queries/useAppointmentsQuery';
 import { Search, UserCheck, AlertCircle, Phone, Mail, ChevronRight, Activity } from 'lucide-react-native';
-
-const DEFAULT_PATIENTS: Patient[] = [
-  {
-    id: 'pat_1',
-    name: 'Aarav Mehta',
-    email: 'aarav.mehta@gmail.com',
-    phone: '+91 98765 43210',
-    gender: 'Male',
-    age: 32,
-    bloodGroup: 'O+',
-    allergies: ['Penicillin', 'Sulfa drugs'],
-    conditions: ['Mild Hypertension', 'Asthma'],
-    avatar: 'https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?w=400&q=80',
-    emergencyContact: {
-      name: 'Pooja Mehta (Spouse)',
-      phone: '+91 98765 43211',
-      relation: 'Spouse',
-    },
-  },
-  {
-    id: 'pat_2',
-    name: 'Ananya Roy',
-    email: 'ananya.roy@gmail.com',
-    phone: '+91 98234 56789',
-    gender: 'Female',
-    age: 28,
-    bloodGroup: 'B+',
-    allergies: ['Peanuts'],
-    conditions: ['Dermatitis'],
-    avatar: 'https://images.unsplash.com/photo-1494790108377-be9c29b29330?w=400&q=80',
-    emergencyContact: {
-      name: 'Rahul Roy (Brother)',
-      phone: '+91 98234 56780',
-      relation: 'Brother',
-    },
-  },
-  {
-    id: 'pat_3',
-    name: 'Vikram Malhotra',
-    email: 'vikram.m@gmail.com',
-    phone: '+91 98111 22334',
-    gender: 'Male',
-    age: 45,
-    bloodGroup: 'A+',
-    allergies: ['None reported'],
-    conditions: ['Type 2 Diabetes', 'Hyperlipidemia'],
-    avatar: 'https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?w=400&q=80',
-    emergencyContact: {
-      name: 'Sunita Malhotra',
-      phone: '+91 98111 22335',
-      relation: 'Spouse',
-    },
-  },
-];
 
 export default function PatientDirectoryScreen() {
   const router = useRouter();
+  const { user } = useAuthStore();
+  const { data: appointments } = useAppointmentsQuery(undefined, user?.id);
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedPatient, setSelectedPatient] = useState<Patient | null>(null);
 
-  const [patients, setPatients] = useState<Patient[]>(DEFAULT_PATIENTS);
+  const patients: Patient[] = React.useMemo(() => {
+    if (appointments && appointments.length > 0) {
+      const map = new Map<string, Patient>();
+      appointments.forEach((apt) => {
+        if (!map.has(apt.patientId)) {
+          map.set(apt.patientId, {
+            id: apt.patientId,
+            name: apt.patientName || 'Patient',
+            email: 'patient@fiydoc.app',
+            phone: '',
+            gender: 'Clinical Patient',
+            age: 32,
+            bloodGroup: 'B+',
+            allergies: [],
+            conditions: apt.symptoms || [],
+            avatar: apt.patientAvatar,
+          });
+        }
+      });
+      return Array.from(map.values());
+    }
+    return [];
+  }, [appointments]);
+
   const filtered = patients.filter(
     (p) => p.name.toLowerCase().includes(searchQuery.toLowerCase()) || (p.email && p.email.toLowerCase().includes(searchQuery.toLowerCase()))
   );
@@ -86,30 +59,42 @@ export default function PatientDirectoryScreen() {
       </View>
 
       <ScrollView contentContainerStyle={{ padding: 16, paddingBottom: 110, gap: 12 }}>
-        {filtered.map((pat) => (
-          <TouchableOpacity
-            key={pat.id}
-            onPress={() => setSelectedPatient(pat)}
-            activeOpacity={0.88}
-            className="bg-white/95 p-3.5 rounded-2xl border border-slate-200/80 shadow-sm flex-row items-center justify-between"
-          >
-            <View style={{ flexDirection: 'row', alignItems: 'center', flex: 1, minWidth: 0, marginRight: 8, gap: 10 }}>
-              <Avatar uri={pat.avatar} name={pat.name} size="md" />
-              <View style={{ flex: 1, minWidth: 0 }}>
-                <Text style={{ fontSize: 14, fontWeight: '800', color: '#0F172A' }} numberOfLines={1}>
-                  {pat.name}
-                </Text>
-                <Text style={{ fontSize: 11, fontWeight: '500', color: '#64748B', marginTop: 1 }} numberOfLines={1}>
-                  {pat.gender} • {pat.age} Yrs • Blood: {pat.bloodGroup}
-                </Text>
-                <Text style={{ fontSize: 10, fontWeight: '700', color: '#00B39B', marginTop: 1 }} numberOfLines={1}>
-                  Allergies: {(pat.allergies || []).join(', ')}
-                </Text>
-              </View>
+        {filtered.length === 0 ? (
+          <View className="bg-white p-6 rounded-2xl border border-slate-200/80 items-center justify-center shadow-sm mt-4">
+            <View className="w-10 h-10 rounded-xl bg-slate-100 items-center justify-center mb-2">
+              <UserCheck size={20} color="#94A3B8" />
             </View>
-            <ChevronRight size={16} color="#94A3B8" style={{ flexShrink: 0 }} />
-          </TouchableOpacity>
-        ))}
+            <Text className="text-sm font-extrabold text-slate-800">No Patient Records</Text>
+            <Text className="text-xs text-slate-400 text-center mt-1">
+              Patients who book or complete consultations with you will automatically appear in this directory.
+            </Text>
+          </View>
+        ) : (
+          filtered.map((pat) => (
+            <TouchableOpacity
+              key={pat.id}
+              onPress={() => setSelectedPatient(pat)}
+              activeOpacity={0.88}
+              className="bg-white/95 p-3.5 rounded-2xl border border-slate-200/80 shadow-sm flex-row items-center justify-between"
+            >
+              <View style={{ flexDirection: 'row', alignItems: 'center', flex: 1, minWidth: 0, marginRight: 8, gap: 10 }}>
+                <Avatar uri={pat.avatar} name={pat.name} size="md" />
+                <View style={{ flex: 1, minWidth: 0 }}>
+                  <Text style={{ fontSize: 14, fontWeight: '800', color: '#0F172A' }} numberOfLines={1}>
+                    {pat.name}
+                  </Text>
+                  <Text style={{ fontSize: 11, fontWeight: '500', color: '#64748B', marginTop: 1 }} numberOfLines={1}>
+                    {pat.gender} • {pat.age} Yrs • Blood: {pat.bloodGroup}
+                  </Text>
+                  <Text style={{ fontSize: 10, fontWeight: '700', color: '#00B39B', marginTop: 1 }} numberOfLines={1}>
+                    Allergies: {(pat.allergies || []).join(', ') || 'None reported'}
+                  </Text>
+                </View>
+              </View>
+              <ChevronRight size={16} color="#94A3B8" style={{ flexShrink: 0 }} />
+            </TouchableOpacity>
+          ))
+        )}
       </ScrollView>
 
       {/* Patient Profile Detail Modal */}
@@ -162,7 +147,7 @@ export default function PatientDirectoryScreen() {
               onPress={() => {
                 const pId = selectedPatient.id;
                 setSelectedPatient(null);
-                router.push(`/(doctor)/consultation/apt_101`);
+                router.push(`/(doctor)/consultation/${pId || 'apt_live'}`);
               }}
               className="bg-[#1E58C8] py-3.5 px-4 rounded-2xl items-center"
             >

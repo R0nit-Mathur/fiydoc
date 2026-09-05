@@ -6,7 +6,8 @@ import { FiYLogo } from '@/components/ui/FiYLogo';
 import { Input } from '@/components/ui/Input';
 import { Button } from '@/components/ui/Button';
 import { GoogleLogo } from '@/components/ui/GoogleLogo';
-import { User, Mail, Lock, Phone, ArrowLeft, UserCheck, Stethoscope, ShieldCheck, Building2, Award, FileCheck, AlertCircle, ArrowRight, Zap } from 'lucide-react-native';
+import { User, Mail, Lock, Phone, ArrowLeft, UserCheck, Stethoscope, ShieldCheck, Building2, Award, FileCheck, AlertCircle, ArrowRight, Zap, MapPin } from 'lucide-react-native';
+import * as Location from 'expo-location';
 import { authService } from '@/services/authService';
 import { useAuthStore } from '@/store/useAuthStore';
 import { PremadeAuthModal } from '@/components/auth/PremadeAuthModal';
@@ -59,6 +60,9 @@ export default function SignupScreen() {
   const [experienceYears, setExperienceYears] = useState('10');
   const [clinicName, setClinicName] = useState('');
   const [clinicAddress, setClinicAddress] = useState('');
+  const [clinicLatitude, setClinicLatitude] = useState<number | null>(null);
+  const [clinicLongitude, setClinicLongitude] = useState<number | null>(null);
+  const [isLocatingClinic, setIsLocatingClinic] = useState(false);
   const [consultationFee, setConsultationFee] = useState('800');
 
   const handleSafeBack = () => {
@@ -66,6 +70,35 @@ export default function SignupScreen() {
       router.back();
     } else {
       router.replace('/(auth)/welcome');
+    }
+  };
+
+  const handleDetectClinicLocation = async () => {
+    setIsLocatingClinic(true);
+    setError('');
+    try {
+      const { status } = await Location.requestForegroundPermissionsAsync();
+      if (status !== 'granted') {
+        setError('Location permission was denied. Please enter clinic address manually.');
+        return;
+      }
+      const loc = await Location.getCurrentPositionAsync({ accuracy: Location.Accuracy.Balanced });
+      setClinicLatitude(loc.coords.latitude);
+      setClinicLongitude(loc.coords.longitude);
+
+      const rev = await Location.reverseGeocodeAsync({
+        latitude: loc.coords.latitude,
+        longitude: loc.coords.longitude,
+      });
+      if (rev && rev.length > 0) {
+        const p = rev[0];
+        const addr = [p.name, p.street, p.subregion || p.city, p.region].filter(Boolean).join(', ');
+        setClinicAddress(addr);
+      }
+    } catch (err: any) {
+      setError('Could not auto-detect location. Please enter clinic address manually.');
+    } finally {
+      setIsLocatingClinic(false);
     }
   };
 
@@ -114,10 +147,12 @@ export default function SignupScreen() {
         registrationAuthority,
         specialization,
         qualifications: qualifications.trim(),
-        experienceYears: Number(experienceYears) || 10,
+        experienceYears: Number(experienceYears) || 0,
         clinicName: clinicName.trim(),
-        clinicAddress: clinicAddress.trim() || 'Medical Enclave, Mumbai',
-        consultationFee: Number(consultationFee) || 800,
+        clinicAddress: clinicAddress.trim() || undefined,
+        clinicLatitude: clinicLatitude ?? undefined,
+        clinicLongitude: clinicLongitude ?? undefined,
+        consultationFee: Number(consultationFee) || 500,
       } : undefined;
 
       const session = await authService.registerWithEmail(
@@ -127,7 +162,9 @@ export default function SignupScreen() {
         formattedName,
         doctorFields
       );
-      session.phone = phone.trim() || '+91 98765 43210';
+      if (phone.trim()) {
+        session.phone = phone.trim();
+      }
       setSession(session);
       router.push('/(auth)/otp');
     } catch (err: any) {
@@ -407,8 +444,26 @@ export default function SignupScreen() {
 
                 <View className="flex-row" style={{ gap: 10 }}>
                   <View className="flex-1">
+                    <View className="flex-row items-center justify-between mb-1 px-1">
+                      <Text className="text-xs font-bold text-slate-700">Clinic Location</Text>
+                      <TouchableOpacity
+                        onPress={handleDetectClinicLocation}
+                        disabled={isLocatingClinic}
+                        activeOpacity={0.7}
+                        className="flex-row items-center"
+                        style={{ gap: 4 }}
+                      >
+                        {isLocatingClinic ? (
+                          <ActivityIndicator size="small" color="#00B39B" />
+                        ) : (
+                          <>
+                            <MapPin size={12} color="#00B39B" />
+                            <Text className="text-[11px] font-black text-[#00B39B]">Auto GPS</Text>
+                          </>
+                        )}
+                      </TouchableOpacity>
+                    </View>
                     <Input
-                      label="Clinic City & Location"
                       placeholder="e.g. Bandra West, Mumbai"
                       value={clinicAddress}
                       onChangeText={setClinicAddress}

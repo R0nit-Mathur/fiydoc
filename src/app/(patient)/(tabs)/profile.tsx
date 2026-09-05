@@ -3,6 +3,7 @@ import { View, Text, ScrollView, TouchableOpacity, Alert } from 'react-native';
 import { useRouter } from 'expo-router';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useAuthStore } from '@/store/useAuthStore';
+import { updateService } from '@/services/updateService';
 import { Avatar } from '@/components/ui/Avatar';
 import { Badge } from '@/components/ui/Badge';
 import {
@@ -56,10 +57,10 @@ export default function PatientProfileScreen() {
           <Avatar uri={user?.avatar} name={user?.name || 'Patient'} size="lg" />
           <View style={{ flex: 1, minWidth: 0 }}>
             <Text style={{ fontSize: 16, fontWeight: '800', color: '#0F172A' }} numberOfLines={1}>
-              {user?.name || 'Aarav Mehta'}
+              {user?.name || 'Patient User'}
             </Text>
             <Text style={{ fontSize: 11, fontWeight: '500', color: '#64748B', marginTop: 1 }} numberOfLines={1}>
-              {user?.email || 'patient@fiydoc.app'}
+              {user?.email || (user?.phone ? `Phone: ${user.phone}` : 'Verified Account')}
             </Text>
             <View className="flex-row items-center mt-2">
               <Badge label="VERIFIED PATIENT" variant="teal" size="sm" />
@@ -103,6 +104,30 @@ export default function PatientProfileScreen() {
               <Text className="text-xs text-slate-500 font-medium">Emergency Contact</Text>
               <Text className="text-xs font-bold text-[#1E58C8]">+91 98765 12345</Text>
             </View>
+          </View>
+        </View>
+
+        {/* App Version & OTA Updates Section */}
+        <View className="bg-white p-5 rounded-3xl border border-slate-200/80 shadow-sm" style={{ gap: 12 }}>
+          <Text className="text-[11px] font-bold text-slate-400 uppercase tracking-wider">
+            App Version & OTA Updates
+          </Text>
+
+          <View className="flex-row items-center justify-between">
+            <View>
+              <Text className="text-xs font-bold text-slate-900">FiYDoc Healthcare Client</Text>
+              <Text className="text-[11px] text-slate-500">v1.0.0 • Runtime: appVersion</Text>
+            </View>
+            <TouchableOpacity
+              onPress={async () => {
+                const res = await updateService.checkForUpdate();
+                Alert.alert('OTA Updates', res.message);
+              }}
+              activeOpacity={0.8}
+              className="bg-teal-50 px-3 py-1.5 rounded-xl border border-teal-200"
+            >
+              <Text className="text-xs font-bold text-[#00B39B]">Check Updates</Text>
+            </TouchableOpacity>
           </View>
         </View>
 

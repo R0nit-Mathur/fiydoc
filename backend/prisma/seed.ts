@@ -57,6 +57,8 @@ async function main() {
       regAuthority: 'Maharashtra Medical Council',
       clinicName: 'HeartCare Specialty Clinic',
       clinicAddress: 'Suite 402, Medical Enclave, Bandra West, Mumbai',
+      latitude: 19.0596,
+      longitude: 72.8295,
       timings: '09:00 AM - 05:00 PM',
       degrees: [
         { degree: 'MD (Cardiology)', institution: 'AIIMS New Delhi', year: 2012 },
@@ -74,6 +76,8 @@ async function main() {
       regAuthority: 'Karnataka Medical Council',
       clinicName: 'SkinCraft Advanced Aesthetics & Clinical Dermatology',
       clinicAddress: '100ft Road, Near Metro Pillar 140, Indiranagar, Bengaluru',
+      latitude: 12.9719,
+      longitude: 77.6412,
       timings: '10:00 AM - 06:00 PM',
       degrees: [
         { degree: 'MD (Dermatology, Venereology & Leprosy)', institution: 'St. John’s Medical College', year: 2015 },
@@ -91,6 +95,8 @@ async function main() {
       regAuthority: 'Delhi Medical Council',
       clinicName: 'NeuroCare Brain & Spine Super Specialty Clinic',
       clinicAddress: 'Outer Ring Road, Barakhamba, Connaught Place, New Delhi',
+      latitude: 28.6304,
+      longitude: 77.2177,
       timings: '09:30 AM - 04:30 PM',
       degrees: [
         { degree: 'DM (Neurology)', institution: 'NIMHANS Bengaluru', year: 2010 },
@@ -108,6 +114,8 @@ async function main() {
       regAuthority: 'Tamil Nadu Medical Council',
       clinicName: 'ChildFirst Pediatric & Adolescent Health Center',
       clinicAddress: '4th Block, 80 Feet Road, Koramangala, Bengaluru',
+      latitude: 12.9352,
+      longitude: 77.6245,
       timings: '09:00 AM - 01:00 PM, 04:00 PM - 07:00 PM',
       degrees: [
         { degree: 'DNB (Pediatrics)', institution: 'National Board of Examinations', year: 2016 },
@@ -125,6 +133,8 @@ async function main() {
       regAuthority: 'Delhi Medical Council',
       clinicName: 'JointCare Bone, Spine & Sports Injury Clinic',
       clinicAddress: 'A-Block, Max Hospital Complex, Saket, New Delhi',
+      latitude: 28.5245,
+      longitude: 77.2066,
       timings: '10:00 AM - 05:00 PM',
       degrees: [
         { degree: 'MS (Orthopedics)', institution: 'Maulana Azad Medical College', year: 2013 },
@@ -158,6 +168,8 @@ async function main() {
               create: {
                 name: doc.clinicName,
                 address: doc.clinicAddress,
+                latitude: doc.latitude,
+                longitude: doc.longitude,
                 timings: doc.timings,
               },
             },

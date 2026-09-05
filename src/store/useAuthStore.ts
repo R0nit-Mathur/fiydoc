@@ -15,6 +15,7 @@ interface AuthState {
   setRole: (role: 'patient' | 'doctor' | 'admin') => void;
   setOnboardingCompleted: (completed: boolean) => void;
   setVerificationStatus: (status: 'registered' | 'pending' | 'verified' | 'rejected' | 'info_required') => void;
+  updateUser: (fields: Partial<UserSession>) => void;
   logout: () => void;
 }
 
@@ -35,6 +36,11 @@ export const useAuthStore = create<AuthState>()(
           onboardingCompleted: session.onboardingCompleted,
           verificationStatus: session.verificationStatus || 'registered',
         }),
+
+      updateUser: (fields) =>
+        set((state) => ({
+          user: state.user ? { ...state.user, ...fields } : null,
+        })),
 
       setRole: (role) =>
         set((state) => ({

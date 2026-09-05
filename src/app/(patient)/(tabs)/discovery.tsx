@@ -7,6 +7,9 @@ import { DoctorCard } from '@/components/ui/DoctorCard';
 import { DoctorCardSkeleton } from '@/components/ui/Skeleton';
 import { EmptyState } from '@/components/ui/EmptyState';
 import { useDoctorsQuery } from '@/hooks/queries/useDoctorsQuery';
+import { useLocationStore } from '@/store/useLocationStore';
+import { calculateDistanceKm } from '@/utils/distance';
+import { LocationPickerModal } from '@/components/location/LocationPickerModal';
 import {
   Search,
   ArrowLeft,
@@ -21,6 +24,7 @@ import {
   SlidersHorizontal,
   Star,
   CheckCircle2,
+  MapPin,
 } from 'lucide-react-native';
 
 const SPECIALTIES = [
@@ -32,13 +36,16 @@ const SPECIALTIES = [
   { name: 'Orthopedics', icon: Stethoscope },
 ];
 
-const SORT_OPTIONS = ['Recommended', 'Top Rated', 'Experience', 'Consultation Fee'];
+const SORT_OPTIONS = ['Recommended', 'Nearest / Distance', 'Top Rated', 'Experience', 'Consultation Fee'];
 
 export default function DoctorDiscoveryScreen() {
   const router = useRouter();
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedSpecialty, setSelectedSpecialty] = useState('All');
   const [selectedSort, setSelectedSort] = useState('Recommended');
+  const [locationModalVisible, setLocationModalVisible] = useState(false);
+
+  const { latitude: userLat, longitude: userLng, city: userCity } = useLocationStore();
 
   const { data: doctors, isLoading } = useDoctorsQuery({
     query: searchQuery,
@@ -55,7 +62,23 @@ export default function DoctorDiscoveryScreen() {
 
   const sortedDoctors = useMemo(() => {
     if (!doctors) return [];
-    const list = [...doctors];
+    const list = doctors.map((doc) => {
+      const dist =
+        doc.distanceKm ??
+        calculateDistanceKm(userLat, userLng, doc.latitude, doc.longitude);
+      return { ...doc, distanceKm: dist ?? undefined };
+    });
+
+    if (selectedSort === 'Nearest / Distance') {
+      return list.sort((a, b) => {
+        if (a.distanceKm !== undefined && b.distanceKm !== undefined) {
+          return a.distanceKm - b.distanceKm;
+        }
+        if (a.distanceKm !== undefined) return -1;
+        if (b.distanceKm !== undefined) return 1;
+        return 0;
+      });
+    }
     if (selectedSort === 'Top Rated') {
       return list.sort((a, b) => b.rating - a.rating);
     }
@@ -66,7 +89,7 @@ export default function DoctorDiscoveryScreen() {
       return list.sort((a, b) => a.consultationFee - b.consultationFee);
     }
     return list;
-  }, [doctors, selectedSort]);
+  }, [doctors, selectedSort, userLat, userLng]);
 
   return (
     <SafeAreaView className="flex-1 bg-slate-50" edges={['top']}>
@@ -129,8 +152,8 @@ export default function DoctorDiscoveryScreen() {
         </View>
       </View>
 
-      {/* 2. Spaced Out Search Bar */}
-      <View style={{ paddingHorizontal: 16, paddingTop: 12, paddingBottom: 8, backgroundColor: '#FFFFFF' }}>
+      {/* 2. Spaced Out Search Bar & Location Pill */}
+      <View style={{ paddingHorizontal: 16, paddingTop: 12, paddingBottom: 6, backgroundColor: '#FFFFFF' }}>
         <Input
           placeholder="Search by doctor name, specialty, or clinic..."
           value={searchQuery}
@@ -144,6 +167,35 @@ export default function DoctorDiscoveryScreen() {
             ) : undefined
           }
         />
+        <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginTop: 8 }}>
+          <TouchableOpacity
+            onPress={() => setLocationModalVisible(true)}
+            activeOpacity={0.8}
+            style={{
+              flexDirection: 'row',
+              alignItems: 'center',
+              backgroundColor: '#F8FAFC',
+              paddingHorizontal: 10,
+              paddingVertical: 5,
+              borderRadius: 10,
+              borderWidth: 1,
+              borderColor: '#E2E8F0',
+              gap: 5,
+            }}
+          >
+            <MapPin size={12} color="#00B39B" />
+            <Text style={{ fontSize: 11, fontWeight: '700', color: '#475569' }}>
+              Near: {userCity || 'Current Location'}
+            </Text>
+            <Text style={{ fontSize: 11, fontWeight: '800', color: '#00B39B' }}>Change</Text>
+          </TouchableOpacity>
+
+          {selectedSort === 'Nearest / Distance' && (
+            <Text style={{ fontSize: 11, fontWeight: '700', color: '#059669' }}>
+              📍 Closest clinics first
+            </Text>
+          )}
+        </View>
       </View>
 
       {/* 3. Specialty Focus Filter Section */}
@@ -318,6 +370,11 @@ export default function DoctorDiscoveryScreen() {
           ))
         )}
       </ScrollView>
+
+      <LocationPickerModal
+        visible={locationModalVisible}
+        onClose={() => setLocationModalVisible(false)}
+      />
     </SafeAreaView>
   );
 }

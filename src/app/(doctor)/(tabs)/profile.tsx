@@ -1,8 +1,10 @@
-import React from 'react';
-import { View, Text, ScrollView, TouchableOpacity } from 'react-native';
+import React, { useState } from 'react';
+import { View, Text, ScrollView, TouchableOpacity, Alert, ActivityIndicator } from 'react-native';
 import { useRouter } from 'expo-router';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useAuthStore } from '@/store/useAuthStore';
+import { updateService } from '@/services/updateService';
+import * as Location from 'expo-location';
 import { Avatar } from '@/components/ui/Avatar';
 import { Badge } from '@/components/ui/Badge';
 import {
@@ -18,7 +20,42 @@ import {
 
 export default function DoctorProfileScreen() {
   const router = useRouter();
-  const { user, logout } = useAuthStore();
+  const { user, logout, updateUser } = useAuthStore();
+  const [isUpdatingLocation, setIsUpdatingLocation] = useState(false);
+
+  const handleUpdateClinicLocation = async () => {
+    setIsUpdatingLocation(true);
+    try {
+      const { status } = await Location.requestForegroundPermissionsAsync();
+      if (status !== 'granted') {
+        Alert.alert('Permission Denied', 'Please grant location permission to set clinic coordinates.');
+        return;
+      }
+      const loc = await Location.getCurrentPositionAsync({ accuracy: Location.Accuracy.Balanced });
+      const rev = await Location.reverseGeocodeAsync({
+        latitude: loc.coords.latitude,
+        longitude: loc.coords.longitude,
+      });
+      let addr = 'Current Location';
+      let city = 'City';
+      if (rev && rev.length > 0) {
+        const p = rev[0];
+        addr = [p.name, p.street, p.subregion || p.city, p.region].filter(Boolean).join(', ');
+        city = p.city || p.subregion || 'City';
+      }
+      updateUser({
+        clinicAddress: addr,
+        city,
+        latitude: loc.coords.latitude,
+        longitude: loc.coords.longitude,
+      });
+      Alert.alert('Clinic Location Updated', `Coordinates successfully linked:\n${addr}`);
+    } catch (err: any) {
+      Alert.alert('Error', 'Failed to detect current location.');
+    } finally {
+      setIsUpdatingLocation(false);
+    }
+  };
 
   const handleLogout = () => {
     logout();
@@ -82,7 +119,7 @@ export default function DoctorProfileScreen() {
             <View className="flex-1">
               <Text className="text-xs font-bold text-[#1E58C8] uppercase">Medical Council Registration</Text>
               <Text className="text-sm font-black text-slate-900 mt-0.5">
-                {(user as any)?.registrationNumber || (user as any)?.licenseNumber || 'NMC-MH-847291 (Active)'}
+                {(user as any)?.registrationNumber || (user as any)?.licenseNumber || 'NMC-Verified Practitioner'}
               </Text>
               <Text className="text-[11px] text-slate-500 mt-0.5">Status: Active & Authorized for Digital Rx</Text>
             </View>
@@ -91,21 +128,69 @@ export default function DoctorProfileScreen() {
 
         {/* Practice Clinic Information */}
         <View className="bg-white p-5 rounded-3xl border border-slate-200/80 shadow-sm" style={{ gap: 14 }}>
-          <Text className="text-[11px] font-bold text-slate-400 uppercase tracking-wider">
-            Clinic Practice Location
-          </Text>
+          <View className="flex-row items-center justify-between">
+            <Text className="text-[11px] font-bold text-slate-400 uppercase tracking-wider">
+              Clinic Practice Location
+            </Text>
+            <TouchableOpacity
+              onPress={handleUpdateClinicLocation}
+              disabled={isUpdatingLocation}
+              activeOpacity={0.7}
+              className="flex-row items-center bg-teal-50 px-2.5 py-1 rounded-xl border border-teal-200"
+              style={{ gap: 4 }}
+            >
+              {isUpdatingLocation ? (
+                <ActivityIndicator size="small" color="#00B39B" />
+              ) : (
+                <>
+                  <MapPin size={12} color="#00B39B" />
+                  <Text className="text-[11px] font-extrabold text-[#00B39B]">Update GPS</Text>
+                </>
+              )}
+            </TouchableOpacity>
+          </View>
 
           <View className="flex-row items-start pt-1" style={{ gap: 12 }}>
             <Building2 size={18} color="#00B39B" className="mt-0.5" />
             <View className="flex-1">
               <Text className="text-sm font-black text-slate-900">
-                {(user as any)?.clinicName || 'FiYDoc Healthcare Clinic'}
+                {(user as any)?.clinicName || 'In-Clinic Practice'}
               </Text>
               <Text className="text-xs text-slate-600 mt-0.5 font-medium">
-                {(user as any)?.clinicAddress || 'Healthcare Enclave, Clinical OPD Block'}
+                {(user as any)?.clinicAddress || 'Address not yet specified'}
               </Text>
-              <Text className="text-[11px] text-slate-400 mt-1">Consultation Hours: 09:00 AM - 05:00 PM</Text>
+              {(user as any)?.latitude && (user as any)?.longitude ? (
+                <Text className="text-[10px] text-emerald-600 font-bold mt-1">
+                  📍 Coordinates linked: {((user as any).latitude as number).toFixed(4)}, {((user as any).longitude as number).toFixed(4)}
+                </Text>
+              ) : (
+                <Text className="text-[11px] text-slate-400 mt-1">Tap Update GPS to link clinic coordinates for proximity search</Text>
+              )}
             </View>
+          </View>
+        </View>
+
+        {/* App Version & OTA Updates Section */}
+        <View className="bg-white p-5 rounded-3xl border border-slate-200/80 shadow-sm" style={{ gap: 12 }}>
+          <Text className="text-[11px] font-bold text-slate-400 uppercase tracking-wider">
+            App Version & OTA Updates
+          </Text>
+
+          <View className="flex-row items-center justify-between">
+            <View>
+              <Text className="text-xs font-bold text-slate-900">FiYDoc Provider Suite</Text>
+              <Text className="text-[11px] text-slate-500">v1.0.0 • Runtime: appVersion</Text>
+            </View>
+            <TouchableOpacity
+              onPress={async () => {
+                const res = await updateService.checkForUpdate();
+                Alert.alert('OTA Updates', res.message);
+              }}
+              activeOpacity={0.8}
+              className="bg-teal-50 px-3 py-1.5 rounded-xl border border-teal-200"
+            >
+              <Text className="text-xs font-bold text-[#00B39B]">Check Updates</Text>
+            </TouchableOpacity>
           </View>
         </View>
 

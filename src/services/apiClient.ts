@@ -18,8 +18,8 @@ function getBaseUrl(): string {
     }
   }
 
-  // 3. Fallback to env or localhost
-  return envUrl || 'http://localhost:3000';
+  // 3. Fallback to production cloud service
+  return envUrl || 'https://fiydoc.onrender.com';
 }
 
 export async function apiClient<T>(endpoint: string, options: RequestInit = {}): Promise<T> {

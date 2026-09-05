@@ -404,7 +404,7 @@ export default function HealthHubScreen() {
                   <View>
                     <Text className="text-[10px] font-bold text-slate-400 uppercase">Patient</Text>
                     <Text className="text-sm font-black text-slate-900">
-                      {selectedPrescription.patientName || 'Aarav Mehta'}
+                      {selectedPrescription.patientName || user?.name || 'Patient'}
                     </Text>
                     <Text className="text-[11px] text-slate-500">
                       Age: {selectedPrescription.patientAge || 32} • {selectedPrescription.patientGender || 'Male'} • Blood: O+
@@ -539,7 +539,7 @@ export default function HealthHubScreen() {
                     Digitally Authenticated by {selectedPrescription.doctorName}
                   </Text>
                   <Text className="text-[10px] text-emerald-600">
-                    MCI Registration: {selectedPrescription.doctorMciNumber || 'MCI-847291'}
+                    MCI Registration: {selectedPrescription.doctorMciNumber || 'NMC-Verified'}
                   </Text>
                 </View>
               </View>

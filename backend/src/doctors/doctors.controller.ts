@@ -6,8 +6,15 @@ export class DoctorsController {
   constructor(private doctorsService: DoctorsService) {}
 
   @Get()
-  async search(@Query('q') q?: string, @Query('specialty') specialty?: string) {
-    return this.doctorsService.searchDoctors(q, specialty);
+  async search(
+    @Query('q') q?: string,
+    @Query('specialty') specialty?: string,
+    @Query('lat') lat?: string,
+    @Query('lng') lng?: string,
+  ) {
+    const parsedLat = lat ? parseFloat(lat) : undefined;
+    const parsedLng = lng ? parseFloat(lng) : undefined;
+    return this.doctorsService.searchDoctors(q, specialty, parsedLat, parsedLng);
   }
 
   @Get(':id')

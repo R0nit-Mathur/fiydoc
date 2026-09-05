@@ -526,13 +526,14 @@ export default function DoctorConsultationWorkspaceScreen() {
 
   const doctorName = user?.name || apt?.doctorName || 'Dr. Specialist';
   const doctorSpecialty = (user as any)?.specialty || apt?.doctorSpecialty || 'Senior Consultant Specialist';
-  const doctorMciNumber = (user as any)?.registrationNumber || (user as any)?.mciNumber || 'NMC-MH-847291';
+  const doctorMciNumber = (user as any)?.registrationNumber || (user as any)?.mciNumber || 'NMC-Verified';
   const clinicName = (user as any)?.clinicName || apt?.hospital || 'FiYDoc Specialty Clinic';
-  const clinicAddress = (user as any)?.clinicAddress || 'Medical Enclave, Healthcare OPD Block';
+  const clinicAddress = (user as any)?.clinicAddress || 'Healthcare OPD Suites';
+  const doctorPhone = user?.phone || '+91 Clinic Reception';
 
   const handleSignPrescription = () => {
     const rxId = `rx_${Date.now()}`;
-    const verificationCode = `FYD-RX-${Math.floor(100000 + Math.random() * 900000)}-MH`;
+    const verificationCode = `FYD-RX-${Math.floor(100000 + Math.random() * 900000)}`;
     const formattedDate = new Date().toLocaleDateString('en-IN', {
       day: '2-digit',
       month: 'short',
@@ -542,14 +543,14 @@ export default function DoctorConsultationWorkspaceScreen() {
     const newPrescription = {
       id: rxId,
       consultationId: (id as string) || 'apt_live',
-      patientId: apt?.patientId || 'pat_1',
+      patientId: apt?.patientId || 'pat_live',
       doctorId: user?.id || apt?.doctorId || 'doc_live',
       doctorName,
       doctorSpecialty,
       doctorMciNumber,
       clinicName,
       clinicAddress,
-      patientName: apt?.patientName || 'Aarav Mehta',
+      patientName: apt?.patientName || 'Patient',
       patientAge: 32,
       patientGender: 'Male',
       diagnosis: assessment || 'Acute Clinical Evaluation',
@@ -632,7 +633,7 @@ export default function DoctorConsultationWorkspaceScreen() {
     try {
       await Share.share({
         title: `Digital Prescription (Rx) • ${doctorName}`,
-        message: `FiYDoc Official Medical Prescription (Rx)\nDoctor: ${doctorName} (${doctorMciNumber})\nClinic: ${clinicName}\nPatient: ${apt?.patientName || 'Aarav Mehta'}\nDiagnosis: ${assessment || 'Clinical Assessment'}\nMedications (${prescribedMeds.length}):\n${prescribedMeds.map((m, i) => `${i + 1}. ${m.name} - ${m.dosage} [${m.frequency}] x ${m.duration} (${m.instructions})`).join('\n')}\nAdvice: ${adviceNotes || 'Take rest and adequate hydration.'}\nRef: ${doctorMciNumber}`,
+        message: `FiYDoc Official Medical Prescription (Rx)\nDoctor: ${doctorName} (${doctorMciNumber})\nClinic: ${clinicName}\nPatient: ${apt?.patientName || 'Patient'}\nDiagnosis: ${assessment || 'Clinical Assessment'}\nMedications (${prescribedMeds.length}):\n${prescribedMeds.map((m, i) => `${i + 1}. ${m.name} - ${m.dosage} [${m.frequency}] x ${m.duration} (${m.instructions})`).join('\n')}\nAdvice: ${adviceNotes || 'Take rest and adequate hydration.'}\nRef: ${doctorMciNumber}`,
       });
     } catch (e) {
       console.error(e);
@@ -685,11 +686,11 @@ export default function DoctorConsultationWorkspaceScreen() {
       >
         {/* Patient Identity Header Card */}
         <View className="bg-white p-4 rounded-3xl border border-slate-200/90 shadow-sm flex-row items-center" style={{ gap: 12 }}>
-          <Avatar uri={apt?.patientAvatar} name={apt?.patientName || 'Aarav Mehta'} size="lg" />
+          <Avatar uri={apt?.patientAvatar} name={apt?.patientName || 'Patient'} size="lg" />
           <View className="flex-1" style={{ minWidth: 0 }}>
             <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: 8 }}>
               <Text className="text-base font-black text-slate-900" numberOfLines={1} style={{ flex: 1, minWidth: 0 }}>
-                {apt?.patientName || 'Aarav Mehta'}
+                {apt?.patientName || 'Patient'}
               </Text>
               <View style={{ flexShrink: 0 }}>
                 <Badge label="TOKEN #02" variant="teal" size="sm" />
@@ -1696,7 +1697,7 @@ export default function DoctorConsultationWorkspaceScreen() {
                   {doctorSpecialty} • Reg No: {doctorMciNumber}
                 </Text>
                 <Text className="text-[10px] text-slate-500">
-                  {clinicAddress} • Ph: +91 98200 12345
+                  {clinicAddress} • Ph: {doctorPhone}
                 </Text>
                 <Text className="text-[10px] text-slate-400">
                   OPD Timings: 09:30 AM – 01:30 PM, 05:00 PM – 08:30 PM (Mon – Sat)
@@ -1708,7 +1709,7 @@ export default function DoctorConsultationWorkspaceScreen() {
                 <View>
                   <Text className="text-[10px] font-bold text-slate-400 uppercase">Patient Details</Text>
                   <Text className="text-sm font-black text-slate-900">
-                    {apt?.patientName || 'Aarav Mehta'}
+                    {apt?.patientName || 'Patient'}
                   </Text>
                   <Text className="text-[11px] text-slate-500 font-semibold">
                     Age: 32 Yrs • Male • Blood: O+ • Token #02
@@ -1724,7 +1725,7 @@ export default function DoctorConsultationWorkspaceScreen() {
                     })}
                   </Text>
                   <Text className="text-[10px] font-mono font-bold text-teal-700 mt-0.5">
-                    FYD-RX-847291
+                    FYD-RX-OFFICIAL
                   </Text>
                 </View>
               </View>

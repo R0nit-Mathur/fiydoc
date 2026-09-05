@@ -24,6 +24,8 @@ export class AuthService {
     experienceYears?: number;
     clinicName?: string;
     clinicAddress?: string;
+    clinicLatitude?: number;
+    clinicLongitude?: number;
     consultationFee?: number;
   }) {
     if (!dto.email && !dto.phone) {
@@ -73,8 +75,10 @@ export class AuthService {
       const registrationAuthority = dto.registrationAuthority?.trim() || 'National Medical Commission / MCI';
       const specialization = dto.specialization?.trim() || 'General Medicine';
       const fee = Number(dto.consultationFee) || 800;
-      const clinicName = dto.clinicName?.trim() || 'FiYDoc Healthcare Clinic';
-      const clinicAddress = dto.clinicAddress?.trim() || 'Suite 402, Medical Enclave, Mumbai';
+      const clinicName = dto.clinicName?.trim() || 'Clinical OPD Practice';
+      const clinicAddress = dto.clinicAddress?.trim() || 'Metro Health Center';
+      const clinicLatitude = dto.clinicLatitude !== undefined && dto.clinicLatitude !== null ? Number(dto.clinicLatitude) : null;
+      const clinicLongitude = dto.clinicLongitude !== undefined && dto.clinicLongitude !== null ? Number(dto.clinicLongitude) : null;
 
       await this.prisma.doctor.create({
         data: {
@@ -86,6 +90,8 @@ export class AuthService {
             create: {
               name: clinicName,
               address: clinicAddress,
+              latitude: clinicLatitude,
+              longitude: clinicLongitude,
               timings: '09:00 AM - 05:00 PM',
             },
           },

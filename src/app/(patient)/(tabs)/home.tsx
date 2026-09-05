@@ -9,6 +9,8 @@ import { Avatar } from '@/components/ui/Avatar';
 import { useDoctorsQuery } from '@/hooks/queries/useDoctorsQuery';
 import { useAppointmentsQuery } from '@/hooks/queries/useAppointmentsQuery';
 import { useAuthStore } from '@/store/useAuthStore';
+import { useLocationStore } from '@/store/useLocationStore';
+import { LocationPickerModal } from '@/components/location/LocationPickerModal';
 import {
   Stethoscope,
   FileText,
@@ -23,6 +25,14 @@ import {
 export default function PatientHomeScreen() {
   const router = useRouter();
   const { user } = useAuthStore();
+  const [locationModalVisible, setLocationModalVisible] = React.useState(false);
+  const { city, formattedAddress, detectDeviceLocation } = useLocationStore();
+
+  React.useEffect(() => {
+    if (!city) {
+      detectDeviceLocation();
+    }
+  }, []);
 
   const { data: doctors, isLoading: doctorsLoading } = useDoctorsQuery();
   const { data: appointments } = useAppointmentsQuery(user?.id);
@@ -79,9 +89,34 @@ export default function PatientHomeScreen() {
       </View>
 
       <ScrollView
-        contentContainerStyle={{ paddingHorizontal: 16, paddingTop: 16, paddingBottom: 100, gap: 20 }}
+        contentContainerStyle={{ paddingHorizontal: 16, paddingTop: 14, paddingBottom: 100, gap: 16 }}
         showsVerticalScrollIndicator={false}
       >
+        {/* Healthcare Location Pill Bar */}
+        <TouchableOpacity
+          onPress={() => setLocationModalVisible(true)}
+          activeOpacity={0.85}
+          className="bg-white px-3.5 py-2.5 rounded-2xl border border-slate-200/90 shadow-sm flex-row items-center justify-between"
+          style={{ gap: 8 }}
+        >
+          <View style={{ flexDirection: 'row', alignItems: 'center', flex: 1, minWidth: 0, gap: 10 }}>
+            <View className="w-8 h-8 rounded-xl bg-emerald-50 items-center justify-center border border-emerald-100/80">
+              <MapPin size={16} color="#00B39B" />
+            </View>
+            <View style={{ flex: 1, minWidth: 0 }}>
+              <Text className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">
+                Current Location
+              </Text>
+              <Text className="text-xs font-black text-slate-900" numberOfLines={1}>
+                {city ? `${city} • ` : ''}{formattedAddress || 'Tap to set location'}
+              </Text>
+            </View>
+          </View>
+          <View className="bg-emerald-50/80 px-2.5 py-1 rounded-lg border border-emerald-200/60">
+            <Text className="text-[10px] font-extrabold text-[#00B39B]">Change</Text>
+          </View>
+        </TouchableOpacity>
+
         {/* Search Trigger Bar */}
         <TouchableOpacity
           onPress={() => router.push('/(patient)/(tabs)/discovery')}
@@ -289,6 +324,11 @@ export default function PatientHomeScreen() {
           </View>
         </View>
       </ScrollView>
+
+      <LocationPickerModal
+        visible={locationModalVisible}
+        onClose={() => setLocationModalVisible(false)}
+      />
     </SafeAreaView>
   );
 }
