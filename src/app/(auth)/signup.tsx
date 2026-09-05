@@ -7,7 +7,6 @@ import {
   ActivityIndicator,
   TextInput,
   StyleSheet,
-  Alert,
 } from 'react-native';
 import { useRouter } from 'expo-router';
 import { SafeAreaView } from 'react-native-safe-area-context';
@@ -28,9 +27,10 @@ import {
   MapPin,
   CheckCircle2,
   Navigation,
+  Sparkles,
 } from 'lucide-react-native';
 import * as Location from 'expo-location';
-import { authService, UserSession } from '@/services/authService';
+import { authService } from '@/services/authService';
 import { useAuthStore } from '@/store/useAuthStore';
 import { googleAuthService } from '@/services/googleAuth';
 
@@ -69,7 +69,7 @@ export default function SignupScreen() {
   // Doctor Step: 1, 2, or 3
   const [doctorStep, setDoctorStep] = useState<1 | 2 | 3>(1);
 
-  // Step 1: Basic Info (Patient & Doctor)
+  // Step 1: Basic Info
   const [name, setName] = useState('');
   const [email, setEmail] = useState('');
   const [phone, setPhone] = useState('');
@@ -84,7 +84,7 @@ export default function SignupScreen() {
   const [specialty, setSpecialty] = useState(SPECIALTIES[0]);
   const [experienceYears, setExperienceYears] = useState('8');
 
-  // Step 3: Doctor Clinic & Hospital Info
+  // Step 3: Doctor Clinic Info
   const [clinicName, setClinicName] = useState('');
   const [clinicAddress, setClinicAddress] = useState('');
   const [clinicLatitude, setClinicLatitude] = useState<number | null>(null);
@@ -149,11 +149,7 @@ export default function SignupScreen() {
 
   const validateStep2 = () => {
     if (!licenseNumber.trim()) {
-      setError('Please enter your Medical Registration Number (MCI / NMC ID).');
-      return false;
-    }
-    if (!experienceYears.trim()) {
-      setError('Please enter your years of clinical experience.');
+      setError('Please enter your MCI / State Council Registration Number.');
       return false;
     }
     return true;
@@ -161,21 +157,17 @@ export default function SignupScreen() {
 
   const validateStep3 = () => {
     if (!clinicName.trim()) {
-      setError('Please enter your Hospital or Clinic name.');
+      setError('Please enter your Clinic or Practice Hospital name.');
       return false;
     }
     if (!clinicAddress.trim()) {
-      setError('Please enter your Clinic address or tap GPS detect.');
-      return false;
-    }
-    if (!consultationFee.trim()) {
-      setError('Please enter your OPD consultation fee.');
+      setError('Please provide your clinic location or address.');
       return false;
     }
     return true;
   };
 
-  const handleNextDoctorStep = () => {
+  const handleNextStep = () => {
     setError('');
     if (doctorStep === 1) {
       if (validateStep1()) setDoctorStep(2);
@@ -184,13 +176,7 @@ export default function SignupScreen() {
     }
   };
 
-  const handlePrevDoctorStep = () => {
-    setError('');
-    if (doctorStep === 3) setDoctorStep(2);
-    else if (doctorStep === 2) setDoctorStep(1);
-  };
-
-  const handleRegister = async () => {
+  const handleSignup = async () => {
     setError('');
 
     if (selectedRole === 'patient') {
@@ -254,7 +240,7 @@ export default function SignupScreen() {
         }
       }
     } catch (err: any) {
-      setError(err.message || 'Google Sign-In failed.');
+      setError(err.message || 'Google Sign-Up failed.');
     } finally {
       setGoogleLoading(false);
     }
@@ -267,19 +253,24 @@ export default function SignupScreen() {
         showsVerticalScrollIndicator={false}
         keyboardShouldPersistTaps="handled"
       >
+        {/* Optically Centered Header */}
         <View style={styles.topSection}>
-          {/* Logo */}
-          <View style={styles.logoWrapper}>
-            <FiYLogo size="2xl" />
+          <FiYLogo size="lg" />
+
+          <View style={styles.badgePill}>
+            <Sparkles size={11} color="#00B39B" />
+            <Text style={styles.badgeText}>
+              {selectedRole === 'doctor' ? 'VERIFIED SPECIALIST NETWORK' : 'DIRECT OPD ACCESS'}
+            </Text>
           </View>
 
           <Text style={styles.title}>
-            {selectedRole === 'doctor' ? 'Register as Doctor' : 'Create Patient Account'}
+            {selectedRole === 'doctor' ? 'Doctor Registration' : 'Create Patient Account'}
           </Text>
           <Text style={styles.subtitle}>
             {selectedRole === 'doctor'
-              ? 'Join our accredited network of medical specialists'
-              : 'Sign up to consult top doctors and manage your OPD visits'}
+              ? 'Connect directly with your patients and manage OPD queue effortlessly'
+              : 'Direct connection with verified doctors & digital prescriptions on your app'}
           </Text>
 
           {/* Role Slider Toggle */}
@@ -301,7 +292,7 @@ export default function SignupScreen() {
                   selectedRole === 'patient' && styles.sliderTextActive,
                 ]}
               >
-                Patient Signup
+                Patient
               </Text>
             </TouchableOpacity>
 
@@ -322,27 +313,24 @@ export default function SignupScreen() {
                   selectedRole === 'doctor' && styles.sliderTextActive,
                 ]}
               >
-                Doctor Signup
+                Doctor / Specialist
               </Text>
             </TouchableOpacity>
           </View>
 
-          {/* Doctor Multi-Step Progress Bar (Practo style) */}
+          {/* Doctor 3-Step Wizard Indicator */}
           {selectedRole === 'doctor' && (
-            <View style={styles.stepIndicatorContainer}>
+            <View style={styles.stepIndicatorCard}>
               <View style={styles.stepHeaderRow}>
-                <Text style={styles.stepHeaderTitle}>
-                  {doctorStep === 1 && 'Step 1 of 3: Basic Account Info'}
-                  {doctorStep === 2 && 'Step 2 of 3: Medical Studies & Council'}
-                  {doctorStep === 3 && 'Step 3 of 3: Clinic & Slot Capacity'}
+                <Text style={styles.stepTitle}>
+                  {doctorStep === 1 && 'Step 1: Account & Contact'}
+                  {doctorStep === 2 && 'Step 2: Qualifications & NMC'}
+                  {doctorStep === 3 && 'Step 3: Practice Clinic'}
                 </Text>
-                <Text style={styles.stepHeaderPercent}>
-                  {doctorStep === 1 && '33%'}
-                  {doctorStep === 2 && '66%'}
-                  {doctorStep === 3 && '100%'}
-                </Text>
+                <Text style={styles.stepNumber}>{doctorStep} of 3</Text>
               </View>
-              <View style={styles.progressBarTrack}>
+
+              <View style={styles.progressBarBg}>
                 <View
                   style={[
                     styles.progressBarFill,
@@ -355,66 +343,77 @@ export default function SignupScreen() {
               </View>
             </View>
           )}
+        </View>
 
-          {/* Error Banner */}
-          {error ? (
-            <View style={styles.errorCard}>
-              <Text style={styles.errorText}>{error}</Text>
-            </View>
-          ) : null}
+        {/* Error Banner */}
+        {error ? (
+          <View style={styles.errorCard}>
+            <Text style={styles.errorText}>{error}</Text>
+          </View>
+        ) : null}
 
-          {/* Form Content */}
-          <View style={styles.formContainer}>
-            {/* PATIENT SIGNUP OR DOCTOR STEP 1: Basic Info */}
-            {(selectedRole === 'patient' || doctorStep === 1) && (
-              <>
+        {/* Form Fields */}
+        <View style={styles.formContainer}>
+          {/* STEP 1: Basic Information (Patient or Doctor Step 1) */}
+          {(selectedRole === 'patient' || (selectedRole === 'doctor' && doctorStep === 1)) && (
+            <>
+              <View style={styles.inputGroup}>
+                <Text style={styles.inputLabel}>Full Legal Name</Text>
                 <View style={styles.inputWrapper}>
-                  <User size={18} color="#0B3064" style={styles.inputLeftIcon} />
+                  <User size={18} color="#94A3B8" style={styles.inputLeftIcon} />
                   <TextInput
                     style={styles.textInput}
-                    placeholder={
-                      selectedRole === 'doctor' ? 'Full Name (e.g. Dr. Priya Sharma)' : 'Full Name'
-                    }
+                    placeholder={selectedRole === 'doctor' ? 'Dr. Sarah Smith' : 'Rohan Sharma'}
                     placeholderTextColor="#94A3B8"
                     value={name}
                     onChangeText={setName}
                   />
                 </View>
+              </View>
 
+              <View style={styles.inputGroup}>
+                <Text style={styles.inputLabel}>Email Address</Text>
                 <View style={styles.inputWrapper}>
-                  <Mail size={18} color="#0B3064" style={styles.inputLeftIcon} />
+                  <Mail size={18} color="#94A3B8" style={styles.inputLeftIcon} />
                   <TextInput
                     style={styles.textInput}
-                    placeholder="Email Address"
+                    placeholder="name@domain.com"
                     placeholderTextColor="#94A3B8"
-                    keyboardType="email-address"
-                    autoCapitalize="none"
                     value={email}
                     onChangeText={setEmail}
+                    keyboardType="email-address"
+                    autoCapitalize="none"
                   />
                 </View>
+              </View>
 
+              <View style={styles.inputGroup}>
+                <Text style={styles.inputLabel}>Mobile Phone Number</Text>
                 <View style={styles.inputWrapper}>
-                  <Phone size={18} color="#0B3064" style={styles.inputLeftIcon} />
+                  <Phone size={18} color="#94A3B8" style={styles.inputLeftIcon} />
                   <TextInput
                     style={styles.textInput}
-                    placeholder="10-digit Mobile Number"
+                    placeholder="9876543210"
                     placeholderTextColor="#94A3B8"
-                    keyboardType="phone-pad"
                     value={phone}
                     onChangeText={setPhone}
+                    keyboardType="phone-pad"
                   />
                 </View>
+              </View>
 
+              <View style={styles.inputGroup}>
+                <Text style={styles.inputLabel}>Create Password (min 6 characters)</Text>
                 <View style={styles.inputWrapper}>
-                  <Lock size={18} color="#0B3064" style={styles.inputLeftIcon} />
+                  <Lock size={18} color="#94A3B8" style={styles.inputLeftIcon} />
                   <TextInput
                     style={styles.textInput}
-                    placeholder="Create Password (min 6 characters)"
+                    placeholder="Create a strong password"
                     placeholderTextColor="#94A3B8"
-                    secureTextEntry={!showPassword}
                     value={password}
                     onChangeText={setPassword}
+                    secureTextEntry={!showPassword}
+                    autoCapitalize="none"
                   />
                   <TouchableOpacity
                     onPress={() => setShowPassword(!showPassword)}
@@ -427,211 +426,245 @@ export default function SignupScreen() {
                     )}
                   </TouchableOpacity>
                 </View>
+              </View>
 
-                {/* Gender Selector */}
-                <View style={{ gap: 6 }}>
-                  <Text style={styles.label}>Gender</Text>
-                  <View style={styles.chipRow}>
-                    {(['Male', 'Female', 'Other'] as const).map((g) => (
-                      <TouchableOpacity
-                        key={g}
-                        onPress={() => setGender(g)}
-                        style={[styles.chip, gender === g && styles.chipActive]}
+              {/* Gender Pills */}
+              <View style={styles.inputGroup}>
+                <Text style={styles.inputLabel}>Gender</Text>
+                <View style={styles.genderRow}>
+                  {(['Male', 'Female', 'Other'] as const).map((g) => (
+                    <TouchableOpacity
+                      key={g}
+                      onPress={() => setGender(g)}
+                      style={[
+                        styles.genderPill,
+                        gender === g && styles.genderPillActive,
+                      ]}
+                    >
+                      <Text
+                        style={[
+                          styles.genderText,
+                          gender === g && styles.genderTextActive,
+                        ]}
                       >
-                        <Text style={[styles.chipText, gender === g && styles.chipTextActive]}>
-                          {g}
-                        </Text>
-                      </TouchableOpacity>
-                    ))}
-                  </View>
+                        {g}
+                      </Text>
+                    </TouchableOpacity>
+                  ))}
                 </View>
-              </>
-            )}
+              </View>
+            </>
+          )}
 
-            {/* DOCTOR STEP 2: Studies & Medical Council */}
-            {selectedRole === 'doctor' && doctorStep === 2 && (
-              <>
-                <View style={{ gap: 6 }}>
-                  <Text style={styles.label}>Primary Medical Degree</Text>
-                  <View style={styles.chipRow}>
-                    {DEGREES.map((d) => (
-                      <TouchableOpacity
-                        key={d}
-                        onPress={() => setDegree(d)}
-                        style={[styles.chip, degree === d && styles.chipActive]}
+          {/* DOCTOR STEP 2: Credentials & Degree */}
+          {selectedRole === 'doctor' && doctorStep === 2 && (
+            <>
+              <View style={styles.inputGroup}>
+                <Text style={styles.inputLabel}>Primary Medical Degree</Text>
+                <View style={styles.pillsScrollRow}>
+                  {DEGREES.map((deg) => (
+                    <TouchableOpacity
+                      key={deg}
+                      onPress={() => setDegree(deg)}
+                      style={[
+                        styles.selectPill,
+                        degree === deg && styles.selectPillActive,
+                      ]}
+                    >
+                      <Text
+                        style={[
+                          styles.selectPillText,
+                          degree === deg && styles.selectPillTextActive,
+                        ]}
                       >
-                        <Text style={[styles.chipText, degree === d && styles.chipTextActive]}>
-                          {d}
-                        </Text>
-                      </TouchableOpacity>
-                    ))}
-                  </View>
+                        {deg}
+                      </Text>
+                    </TouchableOpacity>
+                  ))}
                 </View>
+              </View>
 
+              <View style={styles.inputGroup}>
+                <Text style={styles.inputLabel}>Medical Specialty</Text>
+                <View style={styles.pillsWrapRow}>
+                  {SPECIALTIES.map((spec) => (
+                    <TouchableOpacity
+                      key={spec}
+                      onPress={() => setSpecialty(spec)}
+                      style={[
+                        styles.selectPill,
+                        specialty === spec && styles.selectPillActive,
+                      ]}
+                    >
+                      <Text
+                        style={[
+                          styles.selectPillText,
+                          specialty === spec && styles.selectPillTextActive,
+                        ]}
+                      >
+                        {spec}
+                      </Text>
+                    </TouchableOpacity>
+                  ))}
+                </View>
+              </View>
+
+              <View style={styles.inputGroup}>
+                <Text style={styles.inputLabel}>NMC / MCI Registration Number</Text>
                 <View style={styles.inputWrapper}>
-                  <Award size={18} color="#0B3064" style={styles.inputLeftIcon} />
+                  <Award size={18} color="#94A3B8" style={styles.inputLeftIcon} />
                   <TextInput
                     style={styles.textInput}
-                    placeholder="MCI / NMC Registration Number"
+                    placeholder="MCI-2015-849201"
                     placeholderTextColor="#94A3B8"
-                    autoCapitalize="characters"
                     value={licenseNumber}
                     onChangeText={setLicenseNumber}
+                    autoCapitalize="characters"
                   />
                 </View>
+              </View>
 
-                <View style={{ gap: 6 }}>
-                  <Text style={styles.label}>Primary Medical Specialty</Text>
-                  <ScrollView horizontal showsHorizontalScrollIndicator={false} style={{ marginHorizontal: -4 }}>
-                    <View style={{ flexDirection: 'row', gap: 6, paddingHorizontal: 4 }}>
-                      {SPECIALTIES.map((spec) => (
-                        <TouchableOpacity
-                          key={spec}
-                          onPress={() => setSpecialty(spec)}
-                          style={[styles.chip, specialty === spec && styles.chipActive]}
-                        >
-                          <Text
-                            style={[
-                              styles.chipText,
-                              specialty === spec && styles.chipTextActive,
-                            ]}
-                          >
-                            {spec}
-                          </Text>
-                        </TouchableOpacity>
-                      ))}
-                    </View>
-                  </ScrollView>
-                </View>
-
+              <View style={styles.inputGroup}>
+                <Text style={styles.inputLabel}>Clinical Experience (Years)</Text>
                 <View style={styles.inputWrapper}>
-                  <Stethoscope size={18} color="#0B3064" style={styles.inputLeftIcon} />
+                  <Stethoscope size={18} color="#94A3B8" style={styles.inputLeftIcon} />
                   <TextInput
                     style={styles.textInput}
-                    placeholder="Years of Clinical Experience (e.g. 10)"
+                    placeholder="8"
                     placeholderTextColor="#94A3B8"
-                    keyboardType="number-pad"
                     value={experienceYears}
                     onChangeText={setExperienceYears}
+                    keyboardType="number-pad"
                   />
                 </View>
-              </>
-            )}
+              </View>
+            </>
+          )}
 
-            {/* DOCTOR STEP 3: Clinic & Hospital Setup */}
-            {selectedRole === 'doctor' && doctorStep === 3 && (
-              <>
+          {/* DOCTOR STEP 3: Clinic & Slot Capacity */}
+          {selectedRole === 'doctor' && doctorStep === 3 && (
+            <>
+              <View style={styles.capacityBadge}>
+                <CheckCircle2 size={16} color="#00B39B" />
+                <Text style={styles.capacityBadgeText}>
+                  Default Slot Policy: Max 5 Patients per 30-min OPD slot
+                </Text>
+              </View>
+
+              <View style={styles.inputGroup}>
+                <Text style={styles.inputLabel}>Clinic / Practice Hospital Name</Text>
                 <View style={styles.inputWrapper}>
-                  <Building2 size={18} color="#0B3064" style={styles.inputLeftIcon} />
+                  <Building2 size={18} color="#94A3B8" style={styles.inputLeftIcon} />
                   <TextInput
                     style={styles.textInput}
-                    placeholder="Hospital or Clinic Name"
+                    placeholder="Apollo Medical Centre, Indiranagar"
                     placeholderTextColor="#94A3B8"
                     value={clinicName}
                     onChangeText={setClinicName}
                   />
                 </View>
+              </View>
 
+              <View style={styles.inputGroup}>
+                <View style={styles.labelRow}>
+                  <Text style={styles.inputLabel}>Clinic Address & Locality</Text>
+                  <TouchableOpacity
+                    onPress={handleDetectClinicLocation}
+                    activeOpacity={0.8}
+                    style={styles.detectLocationBtn}
+                  >
+                    {isLocatingClinic ? (
+                      <ActivityIndicator size="small" color="#0B3064" />
+                    ) : (
+                      <>
+                        <Navigation size={12} color="#0B3064" />
+                        <Text style={styles.detectLocationText}>GPS Auto-Detect</Text>
+                      </>
+                    )}
+                  </TouchableOpacity>
+                </View>
                 <View style={styles.inputWrapper}>
-                  <MapPin size={18} color="#0B3064" style={styles.inputLeftIcon} />
+                  <MapPin size={18} color="#94A3B8" style={styles.inputLeftIcon} />
                   <TextInput
                     style={styles.textInput}
-                    placeholder="Clinic Address (Area, City)"
+                    placeholder="100 Feet Rd, Indiranagar, Bengaluru"
                     placeholderTextColor="#94A3B8"
                     value={clinicAddress}
                     onChangeText={setClinicAddress}
                   />
                 </View>
+              </View>
 
-                {/* 1-Tap GPS Detect Button */}
-                <TouchableOpacity
-                  onPress={handleDetectClinicLocation}
-                  disabled={isLocatingClinic}
-                  activeOpacity={0.8}
-                  style={styles.gpsBtn}
-                >
-                  {isLocatingClinic ? (
-                    <ActivityIndicator size="small" color="#0B3064" />
-                  ) : (
-                    <Navigation size={15} color="#0B3064" />
-                  )}
-                  <Text style={styles.gpsBtnText}>
-                    {isLocatingClinic ? 'Detecting Clinic GPS...' : 'Auto-Fill Location from GPS'}
-                  </Text>
-                </TouchableOpacity>
-
+              <View style={styles.inputGroup}>
+                <Text style={styles.inputLabel}>Standard Consultation Fee (₹)</Text>
                 <View style={styles.inputWrapper}>
-                  <Text style={{ fontSize: 16, fontWeight: '800', color: '#0B3064', marginRight: 6 }}>
+                  <Text style={{ fontSize: 16, fontWeight: '700', color: '#0F172A', marginRight: 6 }}>
                     ₹
                   </Text>
                   <TextInput
                     style={styles.textInput}
-                    placeholder="Consultation Fee (e.g. 750)"
+                    placeholder="750"
                     placeholderTextColor="#94A3B8"
-                    keyboardType="number-pad"
                     value={consultationFee}
                     onChangeText={setConsultationFee}
+                    keyboardType="number-pad"
                   />
                 </View>
-
-                <View style={styles.capacityNotice}>
-                  <CheckCircle2 size={16} color="#00B39B" />
-                  <Text style={styles.capacityText}>
-                    Slot Allocation: Configured to max 5 patients per time slot.
-                  </Text>
-                </View>
-              </>
-            )}
-          </View>
+              </View>
+            </>
+          )}
 
           {/* Action Buttons */}
-          <View style={styles.actionRow}>
-            {selectedRole === 'doctor' && doctorStep > 1 && (
+          {selectedRole === 'doctor' && doctorStep < 3 ? (
+            <View style={styles.stepBtnRow}>
+              {doctorStep > 1 && (
+                <TouchableOpacity
+                  onPress={() => setDoctorStep((s) => (s - 1) as 1 | 2)}
+                  style={styles.backStepBtn}
+                >
+                  <ArrowLeft size={16} color="#0B3064" />
+                  <Text style={styles.backStepText}>Back</Text>
+                </TouchableOpacity>
+              )}
               <TouchableOpacity
-                onPress={handlePrevDoctorStep}
-                style={styles.backStepBtn}
+                onPress={handleNextStep}
+                style={[styles.nextStepBtn, doctorStep === 1 && { flex: 1 }]}
               >
-                <ArrowLeft size={18} color="#0B3064" />
-                <Text style={styles.backStepText}>Back</Text>
+                <Text style={styles.nextStepText}>Continue</Text>
+                <ArrowRight size={16} color="#FFFFFF" />
               </TouchableOpacity>
-            )}
+            </View>
+          ) : (
+            <TouchableOpacity
+              onPress={handleSignup}
+              activeOpacity={0.88}
+              disabled={loading}
+              style={styles.primaryPillBtn}
+            >
+              {loading ? (
+                <ActivityIndicator color="#FFFFFF" size="small" />
+              ) : (
+                <Text style={styles.primaryPillBtnText}>
+                  {selectedRole === 'doctor'
+                    ? 'Complete Doctor Registration'
+                    : 'Create Patient Account'}
+                </Text>
+              )}
+            </TouchableOpacity>
+          )}
 
-            {selectedRole === 'doctor' && doctorStep < 3 ? (
-              <TouchableOpacity
-                onPress={handleNextDoctorStep}
-                style={styles.nextStepBtn}
-              >
-                <Text style={styles.primaryBtnText}>Continue to Step {doctorStep + 1}</Text>
-                <ArrowRight size={18} color="#FFFFFF" />
-              </TouchableOpacity>
-            ) : (
-              <TouchableOpacity
-                onPress={handleRegister}
-                disabled={loading}
-                style={[styles.primaryBtn, selectedRole === 'doctor' && doctorStep > 1 && { flex: 2 }]}
-              >
-                {loading ? (
-                  <ActivityIndicator size="small" color="#FFFFFF" />
-                ) : (
-                  <Text style={styles.primaryBtnText}>
-                    {selectedRole === 'doctor' ? 'Complete Doctor Registration' : 'Create Patient Account'}
-                  </Text>
-                )}
-              </TouchableOpacity>
-            )}
-          </View>
-
-          {/* Google Sign-up (Only on Step 1 / Patient) */}
-          {(selectedRole === 'patient' || doctorStep === 1) && (
+          {/* Patient Google OAuth */}
+          {selectedRole === 'patient' && (
             <>
               <View style={styles.dividerRow}>
                 <View style={styles.dividerLine} />
-                <Text style={styles.dividerText}>OR</Text>
+                <Text style={styles.dividerText}>or register with</Text>
                 <View style={styles.dividerLine} />
               </View>
 
               <TouchableOpacity
                 onPress={handleGooglePress}
+                activeOpacity={0.85}
                 disabled={googleLoading}
                 style={styles.googleBtn}
               >
@@ -640,7 +673,7 @@ export default function SignupScreen() {
                 ) : (
                   <View style={styles.googleBtnContent}>
                     <GoogleLogo size={18} />
-                    <Text style={styles.googleBtnText}>Sign up with Google</Text>
+                    <Text style={styles.googleBtnText}>Continue with Google</Text>
                   </View>
                 )}
               </TouchableOpacity>
@@ -648,7 +681,7 @@ export default function SignupScreen() {
           )}
         </View>
 
-        {/* Footer */}
+        {/* Footer Link */}
         <View style={styles.footerRow}>
           <Text style={styles.footerText}>Already have an account? </Text>
           <TouchableOpacity onPress={() => router.push('/(auth)/login')}>
@@ -663,50 +696,66 @@ export default function SignupScreen() {
 const styles = StyleSheet.create({
   safeArea: {
     flex: 1,
-    backgroundColor: '#FFFFFF',
+    backgroundColor: '#F8FAFC',
   },
   scrollContainer: {
-    paddingHorizontal: 24,
-    paddingTop: 16,
-    paddingBottom: 24,
     flexGrow: 1,
+    paddingHorizontal: 20,
+    paddingTop: 12,
+    paddingBottom: 24,
     justifyContent: 'space-between',
   },
   topSection: {
     alignItems: 'center',
     width: '100%',
+    paddingBottom: 6,
   },
-  logoWrapper: {
-    marginTop: 8,
-    marginBottom: 16,
+  badgePill: {
+    flexDirection: 'row',
     alignItems: 'center',
-    justifyContent: 'center',
+    backgroundColor: '#F0FDF4',
+    borderWidth: 1,
+    borderColor: '#BBF7D0',
+    paddingHorizontal: 10,
+    paddingVertical: 3,
+    borderRadius: 999,
+    marginTop: 8,
+    marginBottom: 8,
+    gap: 4,
+  },
+  badgeText: {
+    fontSize: 10,
+    fontWeight: '800',
+    color: '#00B39B',
+    letterSpacing: 0.8,
   },
   title: {
-    fontSize: 22,
+    fontSize: 24,
     fontWeight: '900',
-    color: '#0A2540',
+    color: '#0F172A',
     textAlign: 'center',
+    marginBottom: 6,
+    letterSpacing: -0.4,
   },
   subtitle: {
     fontSize: 13,
+    lineHeight: 18,
+    fontWeight: '500',
     color: '#64748B',
     textAlign: 'center',
-    marginTop: 4,
-    marginBottom: 20,
-    paddingHorizontal: 12,
+    paddingHorizontal: 14,
+    marginBottom: 16,
   },
   sliderContainer: {
     flexDirection: 'row',
-    backgroundColor: '#F1F5F9',
-    borderRadius: 999,
-    padding: 4,
     width: '100%',
-    marginBottom: 18,
+    backgroundColor: '#E2E8F0',
+    borderRadius: 999,
+    padding: 3,
   },
   sliderTab: {
     flex: 1,
-    paddingVertical: 12,
+    paddingVertical: 10,
     borderRadius: 999,
     alignItems: 'center',
     justifyContent: 'center',
@@ -715,9 +764,9 @@ const styles = StyleSheet.create({
     backgroundColor: '#0B3064',
     shadowColor: '#0B3064',
     shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.15,
+    shadowOpacity: 0.18,
     shadowRadius: 4,
-    elevation: 3,
+    elevation: 2,
   },
   sliderText: {
     fontSize: 13,
@@ -728,42 +777,41 @@ const styles = StyleSheet.create({
     color: '#FFFFFF',
     fontWeight: '800',
   },
-  stepIndicatorContainer: {
+  stepIndicatorCard: {
     width: '100%',
-    backgroundColor: '#F8FAFC',
+    backgroundColor: '#FFFFFF',
     borderRadius: 14,
-    padding: 12,
     borderWidth: 1,
     borderColor: '#E2E8F0',
-    marginBottom: 16,
-    gap: 6,
+    padding: 12,
+    marginTop: 12,
   },
   stepHeaderRow: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
+    marginBottom: 8,
   },
-  stepHeaderTitle: {
+  stepTitle: {
+    fontSize: 12,
+    fontWeight: '800',
+    color: '#0F172A',
+  },
+  stepNumber: {
     fontSize: 11,
     fontWeight: '800',
-    color: '#0B3064',
-    textTransform: 'uppercase',
-  },
-  stepHeaderPercent: {
-    fontSize: 11,
-    fontWeight: '900',
     color: '#00B39B',
   },
-  progressBarTrack: {
+  progressBarBg: {
     height: 6,
     backgroundColor: '#E2E8F0',
-    borderRadius: 999,
+    borderRadius: 3,
     overflow: 'hidden',
   },
   progressBarFill: {
     height: '100%',
     backgroundColor: '#00B39B',
-    borderRadius: 999,
+    borderRadius: 3,
   },
   errorCard: {
     width: '100%',
@@ -771,8 +819,8 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: '#FECACA',
     borderRadius: 14,
-    padding: 12,
-    marginBottom: 14,
+    padding: 10,
+    marginVertical: 8,
   },
   errorText: {
     fontSize: 12,
@@ -783,21 +831,35 @@ const styles = StyleSheet.create({
   formContainer: {
     width: '100%',
     gap: 12,
+    marginTop: 4,
   },
-  label: {
-    fontSize: 12,
+  inputGroup: {
+    gap: 6,
+  },
+  labelRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+  },
+  inputLabel: {
+    fontSize: 13,
     fontWeight: '700',
     color: '#334155',
   },
   inputWrapper: {
     flexDirection: 'row',
     alignItems: 'center',
-    borderWidth: 1.5,
-    borderColor: '#0B3064',
+    borderWidth: 1,
+    borderColor: '#CBD5E1',
     borderRadius: 16,
     paddingHorizontal: 14,
-    height: 52,
+    height: 50,
     backgroundColor: '#FFFFFF',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.03,
+    shadowRadius: 2,
+    elevation: 1,
   },
   inputLeftIcon: {
     marginRight: 10,
@@ -811,117 +873,151 @@ const styles = StyleSheet.create({
     fontWeight: '600',
     color: '#0F172A',
   },
-  chipRow: {
+  genderRow: {
     flexDirection: 'row',
     gap: 8,
   },
-  chip: {
+  genderPill: {
     flex: 1,
     paddingVertical: 10,
-    paddingHorizontal: 12,
-    borderRadius: 12,
-    borderWidth: 1.5,
-    borderColor: '#E2E8F0',
-    backgroundColor: '#F8FAFC',
+    borderRadius: 14,
+    borderWidth: 1,
+    borderColor: '#CBD5E1',
+    backgroundColor: '#FFFFFF',
     alignItems: 'center',
   },
-  chipActive: {
+  genderPillActive: {
     borderColor: '#0B3064',
-    backgroundColor: '#0B3064',
+    backgroundColor: '#EFF6FF',
   },
-  chipText: {
+  genderText: {
+    fontSize: 13,
+    fontWeight: '700',
+    color: '#64748B',
+  },
+  genderTextActive: {
+    color: '#0B3064',
+    fontWeight: '800',
+  },
+  pillsScrollRow: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 6,
+  },
+  pillsWrapRow: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 6,
+  },
+  selectPill: {
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: '#CBD5E1',
+    backgroundColor: '#FFFFFF',
+  },
+  selectPillActive: {
+    borderColor: '#0B3064',
+    backgroundColor: '#EFF6FF',
+  },
+  selectPillText: {
     fontSize: 12,
     fontWeight: '700',
     color: '#475569',
   },
-  chipTextActive: {
-    color: '#FFFFFF',
+  selectPillTextActive: {
+    color: '#0B3064',
+    fontWeight: '800',
   },
-  gpsBtn: {
+  capacityBadge: {
     flexDirection: 'row',
     alignItems: 'center',
-    justifyContent: 'center',
-    gap: 6,
-    paddingVertical: 10,
-    backgroundColor: '#F0FDFA',
-    borderWidth: 1,
-    borderColor: '#CCFBF1',
+    backgroundColor: '#F0FDF4',
     borderRadius: 12,
+    borderWidth: 1,
+    borderColor: '#BBF7D0',
+    padding: 10,
+    gap: 8,
   },
-  gpsBtnText: {
+  capacityBadgeText: {
     fontSize: 12,
-    fontWeight: '800',
+    fontWeight: '700',
+    color: '#166534',
+    flex: 1,
+  },
+  detectLocationBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    backgroundColor: '#EFF6FF',
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    borderRadius: 8,
+  },
+  detectLocationText: {
+    fontSize: 11,
+    fontWeight: '700',
     color: '#0B3064',
   },
-  capacityNotice: {
+  stepBtnRow: {
     flexDirection: 'row',
-    alignItems: 'center',
-    gap: 8,
-    backgroundColor: '#F0FDFA',
-    padding: 10,
-    borderRadius: 12,
-    borderWidth: 1,
-    borderColor: '#CCFBF1',
-  },
-  capacityText: {
-    fontSize: 11,
-    fontWeight: '600',
-    color: '#008C7A',
-    flex: 1,
-  },
-  actionRow: {
-    flexDirection: 'row',
-    width: '100%',
     gap: 10,
-    marginTop: 18,
+    marginTop: 10,
   },
   backStepBtn: {
-    flex: 1,
+    paddingHorizontal: 16,
+    height: 52,
+    borderRadius: 26,
+    borderWidth: 1,
+    borderColor: '#CBD5E1',
+    backgroundColor: '#FFFFFF',
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
     gap: 6,
-    height: 52,
-    borderRadius: 16,
-    borderWidth: 1.5,
-    borderColor: '#0B3064',
-    backgroundColor: '#FFFFFF',
   },
   backStepText: {
     fontSize: 14,
-    fontWeight: '800',
+    fontWeight: '700',
     color: '#0B3064',
   },
   nextStepBtn: {
-    flex: 2,
+    flex: 1,
+    height: 52,
+    borderRadius: 26,
+    backgroundColor: '#0A2540',
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
     gap: 6,
-    height: 52,
-    borderRadius: 16,
-    backgroundColor: '#0B3064',
-    shadowColor: '#0B3064',
+    shadowColor: '#0A2540',
     shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.15,
-    shadowRadius: 4,
+    shadowOpacity: 0.2,
+    shadowRadius: 5,
     elevation: 3,
   },
-  primaryBtn: {
+  nextStepText: {
+    fontSize: 15,
+    fontWeight: '800',
+    color: '#FFFFFF',
+  },
+  primaryPillBtn: {
     width: '100%',
+    backgroundColor: '#0A2540',
     height: 52,
-    borderRadius: 16,
-    backgroundColor: '#0B3064',
+    borderRadius: 26,
     alignItems: 'center',
     justifyContent: 'center',
-    shadowColor: '#0B3064',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.15,
-    shadowRadius: 4,
+    marginTop: 8,
+    shadowColor: '#0A2540',
+    shadowOffset: { width: 0, height: 3 },
+    shadowOpacity: 0.2,
+    shadowRadius: 6,
     elevation: 3,
   },
-  primaryBtnText: {
-    fontSize: 14,
+  primaryPillBtnText: {
+    fontSize: 15,
     fontWeight: '800',
     color: '#FFFFFF',
   },
@@ -929,7 +1025,7 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     width: '100%',
-    marginVertical: 16,
+    marginVertical: 8,
     gap: 10,
   },
   dividerLine: {
@@ -945,13 +1041,18 @@ const styles = StyleSheet.create({
   },
   googleBtn: {
     width: '100%',
-    borderWidth: 1.5,
-    borderColor: '#0B3064',
-    height: 50,
-    borderRadius: 16,
+    borderWidth: 1,
+    borderColor: '#E2E8F0',
+    height: 48,
+    borderRadius: 24,
     alignItems: 'center',
     justifyContent: 'center',
     backgroundColor: '#FFFFFF',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.03,
+    shadowRadius: 2,
+    elevation: 1,
   },
   googleBtnContent: {
     flexDirection: 'row',
@@ -967,7 +1068,7 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     justifyContent: 'center',
     alignItems: 'center',
-    paddingVertical: 8,
+    paddingTop: 12,
   },
   footerText: {
     fontSize: 13,

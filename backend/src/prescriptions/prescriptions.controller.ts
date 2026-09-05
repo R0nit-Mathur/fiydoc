@@ -11,6 +11,11 @@ export class PrescriptionsController {
     return this.prescriptionsService.createPrescription(body);
   }
 
+  @Get('patient/:patientId')
+  async getForPatient(@Param('patientId') patientId: string) {
+    return this.prescriptionsService.getPrescriptionsForPatient(patientId);
+  }
+
   @Get(':id')
   async getOne(@Param('id') id: string) {
     return this.prescriptionsService.getPrescriptionById(id);

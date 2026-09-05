@@ -52,4 +52,15 @@ export const appointmentService = {
   cancelAppointment: async (id: string): Promise<void> => {
     await apiClient(`/appointments/${id}/cancel`, { method: 'POST' });
   },
+
+  approveAppointment: async (id: string): Promise<Appointment> => {
+    return apiClient<Appointment>(`/appointments/${id}/approve`, { method: 'POST' });
+  },
+
+  updateAppointmentStatus: async (id: string, status: string): Promise<Appointment> => {
+    return apiClient<Appointment>(`/appointments/${id}/status`, {
+      method: 'POST',
+      body: JSON.stringify({ status }),
+    });
+  },
 };

@@ -53,11 +53,11 @@ export function FiYLogo({ size = 'md', variant = 'horizontal', style }: FiYLogoP
 
   // Full Brand Wordmark (tightly-cropped transparent PNG, true aspect ratio 2.616)
   const logoDimensions = {
-    sm: { width: 115, height: 44 },
-    md: { width: 155, height: 59 },
-    lg: { width: 210, height: 80 },
-    xl: { width: 260, height: 99 },
-    '2xl': { width: 320, height: 122 },
+    sm: { width: 96, height: 37 },
+    md: { width: 130, height: 50 },
+    lg: { width: 165, height: 63 },
+    xl: { width: 195, height: 75 },
+    '2xl': { width: 220, height: 84 },
   };
   const dim = logoDimensions[size] || logoDimensions.md;
 
@@ -76,5 +76,6 @@ const styles = StyleSheet.create({
   container: {
     alignItems: 'center',
     justifyContent: 'center',
+    alignSelf: 'center',
   },
 });

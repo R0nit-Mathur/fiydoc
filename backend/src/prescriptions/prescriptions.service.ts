@@ -189,4 +189,20 @@ export class PrescriptionsService {
       verificationCode: rx.verificationCode,
     };
   }
+
+  async getPrescriptionsForPatient(patientId: string) {
+    return this.prisma.prescription.findMany({
+      where: { patientId },
+      include: {
+        medicines: true,
+        doctor: {
+          include: {
+            clinic: true,
+            verification: true,
+          },
+        },
+      },
+      orderBy: { createdAt: 'desc' },
+    });
+  }
 }

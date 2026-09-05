@@ -5,6 +5,7 @@ import {
   ScrollView,
   TouchableOpacity,
   ActivityIndicator,
+  TextInput,
   StyleSheet,
   Alert,
 } from 'react-native';
@@ -31,14 +32,17 @@ import {
   ShieldCheck,
   AlertCircle,
   Users,
+  Star,
 } from 'lucide-react-native';
 
-const REASONS = [
-  'General Health Checkup',
-  'Follow-up Consultation',
-  'Fever, Cold or Flu',
-  'Specialist Diagnosis',
-  'Routine Review',
+const SYMPTOM_CHIPS = [
+  'I have a fever',
+  'I have a headache',
+  'I have a sore throat',
+  'I feel dizzy',
+  'Abdominal pain',
+  'General checkup',
+  'Body ache & chills',
 ];
 
 const MORNING_SLOTS = ['09:30 AM', '10:30 AM', '11:30 AM'];
@@ -78,7 +82,8 @@ export default function UnifiedBookingScreen() {
 
   const [selectedDate, setSelectedDate] = useState(dates[0].iso);
   const [selectedSlot, setSelectedSlot] = useState(MORNING_SLOTS[0]);
-  const [selectedReason, setSelectedReason] = useState(REASONS[0]);
+  const [selectedReason, setSelectedReason] = useState(SYMPTOM_CHIPS[0]);
+  const [customSymptom, setCustomSymptom] = useState('');
   const [paymentMethod, setPaymentMethod] = useState<'AT_CLINIC' | 'ONLINE'>('AT_CLINIC');
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
@@ -209,7 +214,13 @@ export default function UnifiedBookingScreen() {
                 </Text>
                 <CheckCircle2 size={16} color="#00B39B" fill="#E0F7F4" style={{ flexShrink: 0 }} />
               </View>
-              <Text style={styles.doctorSpec}>{doctor.specialty}</Text>
+              <View style={styles.specRatingRow}>
+                <Text style={styles.doctorSpec}>{doctor.specialty}</Text>
+                <View style={styles.ratingBadge}>
+                  <Star size={11} color="#F59E0B" fill="#F59E0B" />
+                  <Text style={styles.ratingText}>4.9</Text>
+                </View>
+              </View>
               <Text style={styles.doctorHospital} numberOfLines={1}>
                 {doctor.hospital || 'FiYDoc Specialty Clinic'}
               </Text>
@@ -387,16 +398,32 @@ export default function UnifiedBookingScreen() {
           </View>
         </View>
 
-        {/* 3. Reason for Visit (1-Tap Chips) */}
+        {/* 3. Describe your symptoms (Inspired by Reference Images 2 & 3) */}
         <View style={styles.sectionBlock}>
-          <Text style={styles.sectionTitle}>3. Reason for OPD Visit</Text>
+          <Text style={styles.sectionTitle}>3. Describe your symptoms</Text>
+          <View style={styles.symptomInputWrapper}>
+            <TextInput
+              style={styles.symptomInput}
+              placeholder="Type your symptoms or select a chip below..."
+              placeholderTextColor="#94A3B8"
+              value={customSymptom}
+              onChangeText={(text) => {
+                setCustomSymptom(text);
+                if (text.trim()) setSelectedReason(text.trim());
+              }}
+            />
+          </View>
           <View style={styles.reasonsGrid}>
-            {REASONS.map((r) => {
+            {SYMPTOM_CHIPS.map((r) => {
               const isSel = selectedReason === r;
               return (
                 <TouchableOpacity
                   key={r}
-                  onPress={() => setSelectedReason(r)}
+                  onPress={() => {
+                    setSelectedReason(r);
+                    setCustomSymptom('');
+                  }}
+                  activeOpacity={0.8}
                   style={[styles.reasonChip, isSel && styles.reasonChipActive]}
                 >
                   <Text style={[styles.reasonText, isSel && styles.reasonTextActive]}>{r}</Text>
@@ -528,11 +555,30 @@ const styles = StyleSheet.create({
     color: '#0F172A',
     flex: 1,
   },
+  specRatingRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    marginTop: 2,
+  },
   doctorSpec: {
     fontSize: 12,
     fontWeight: '700',
     color: '#00B39B',
-    marginTop: 1,
+  },
+  ratingBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 3,
+    backgroundColor: '#FEF3C7',
+    paddingHorizontal: 6,
+    paddingVertical: 1.5,
+    borderRadius: 6,
+  },
+  ratingText: {
+    fontSize: 10,
+    fontWeight: '800',
+    color: '#D97706',
   },
   doctorHospital: {
     fontSize: 11,
@@ -705,6 +751,21 @@ const styles = StyleSheet.create({
   },
   capacityTextFull: {
     color: '#B91C1C',
+  },
+  symptomInputWrapper: {
+    backgroundColor: '#F8FAFC',
+    borderRadius: 14,
+    borderWidth: 1,
+    borderColor: '#E2E8F0',
+    paddingHorizontal: 12,
+    height: 44,
+    justifyContent: 'center',
+    marginBottom: 8,
+  },
+  symptomInput: {
+    fontSize: 13,
+    fontWeight: '600',
+    color: '#0F172A',
   },
   reasonsGrid: {
     flexDirection: 'row',

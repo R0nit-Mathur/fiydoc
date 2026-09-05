@@ -165,4 +165,31 @@ export class AppointmentsService {
 
     return this.formatAppointment(updated);
   }
+
+  async updateAppointmentStatus(id: string, status: AppointmentStatus, currentUser?: any) {
+    const apt = await this.prisma.appointment.findUnique({
+      where: { id },
+      include: { doctor: { include: { clinic: true } }, patient: true },
+    });
+    if (!apt) throw new NotFoundException('Appointment not found.');
+
+    const updated = await this.prisma.appointment.update({
+      where: { id },
+      data: { status },
+      include: { doctor: { include: { clinic: true } }, patient: true, consultation: true },
+    });
+
+    if (status === AppointmentStatus.CONFIRMED && apt.patient?.userId) {
+      await this.prisma.notification.create({
+        data: {
+          userId: apt.patient.userId,
+          type: 'APPOINTMENT_APPROVED',
+          title: 'Appointment Approved by Doctor',
+          message: `Dr. ${apt.doctor.fullName} approved your appointment for ${apt.date} at ${apt.startTime}.`,
+        },
+      });
+    }
+
+    return this.formatAppointment(updated);
+  }
 }

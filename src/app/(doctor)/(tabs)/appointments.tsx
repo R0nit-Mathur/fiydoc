@@ -11,6 +11,7 @@ import { Badge } from '@/components/ui/Badge';
 import { Avatar } from '@/components/ui/Avatar';
 import { Modal } from '@/components/ui/Modal';
 import { ConfirmationAnimation } from '@/components/ui/ConfirmationAnimation';
+import { appointmentService } from '@/services/appointmentService';
 import {
   Calendar,
   Clock,
@@ -120,10 +121,17 @@ export default function DoctorAppointmentsQueueScreen() {
     setApproveModalVisible(true);
   };
 
-  const handleSaveApproveSlot = () => {
+  const handleSaveApproveSlot = async () => {
     if (!approvingApt) return;
     const aptStore = useAppointmentStore.getState();
     aptStore.updateAppointmentStatus(approvingApt.id, 'confirmed');
+
+    // Sync to backend
+    try {
+      await appointmentService.approveAppointment(approvingApt.id);
+    } catch {
+      // Offline / fallback to local state
+    }
 
     // Notify Patient
     useNotificationStore.getState().addNotification({

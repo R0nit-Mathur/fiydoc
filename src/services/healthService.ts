@@ -45,4 +45,8 @@ export const healthService = {
       body: JSON.stringify(payload),
     });
   },
+
+  async getPrescriptions(patientId: string): Promise<any[]> {
+    return apiClient<any[]>(`/prescriptions/patient/${patientId}`);
+  },
 };
