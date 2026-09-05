@@ -33,5 +33,23 @@ async function bootstrap() {
   await app.listen(port, '0.0.0.0');
   console.log(`🚀 FiYDoc NestJS Backend running on http://localhost:${port}`);
   console.log(`📚 Swagger API Docs available at http://localhost:${port}/api/docs`);
+
+  // Auto Keep-Alive Heartbeat for Render Free Tier (pings every 10 minutes to prevent spin-down)
+  const externalUrl = process.env.RENDER_EXTERNAL_URL || process.env.APP_URL;
+  if (externalUrl) {
+    const PING_INTERVAL = 10 * 60 * 1000; // 10 minutes
+    setInterval(async () => {
+      try {
+        const pingUrl = `${externalUrl.replace(/\/$/, '')}/health`;
+        const res = await fetch(pingUrl);
+        if (res.ok) {
+          console.log(`[KeepAlive] Pinged ${pingUrl} successfully (200 OK)`);
+        }
+      } catch (err: any) {
+        console.warn(`[KeepAlive] Ping notice:`, err.message);
+      }
+    }, PING_INTERVAL);
+    console.log(`⚡ Auto Keep-Alive active for ${externalUrl} (pinging every 10 mins to prevent sleep)`);
+  }
 }
 bootstrap();

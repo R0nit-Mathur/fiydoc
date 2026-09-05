@@ -10,11 +10,15 @@ import { authService } from '@/services/authService';
 import { useAuthStore } from '@/store/useAuthStore';
 import { PremadeAuthModal } from '@/components/auth/PremadeAuthModal';
 import { UserSession } from '@/services/authService';
+import { googleAuthService } from '@/services/googleAuth';
+import { Zap } from 'lucide-react-native';
 
 export default function WelcomeScreen() {
   const router = useRouter();
   const setSession = useAuthStore((s) => s.setSession);
   const [quickAuthVisible, setQuickAuthVisible] = useState(false);
+  const [googleLoading, setGoogleLoading] = useState(false);
+  const [authError, setAuthError] = useState('');
 
   const handleAuthenticated = (session: UserSession) => {
     setSession(session);
@@ -22,6 +26,22 @@ export default function WelcomeScreen() {
       router.replace('/(doctor)/(tabs)/home');
     } else {
       router.replace('/(patient)/(tabs)/home');
+    }
+  };
+
+  const handleGooglePress = async () => {
+    setAuthError('');
+    setGoogleLoading(true);
+    try {
+      const session = await googleAuthService.signInWithGoogle();
+      if (session) {
+        handleAuthenticated(session);
+        return;
+      }
+    } catch (err: any) {
+      setAuthError(err.message || 'Google Sign-In failed.');
+    } finally {
+      setGoogleLoading(false);
     }
   };
 
@@ -90,15 +110,40 @@ export default function WelcomeScreen() {
             size="lg"
           />
 
+          {authError ? (
+            <View className="bg-red-50 p-3 rounded-xl border border-red-200">
+              <Text className="text-xs font-bold text-red-600">{authError}</Text>
+            </View>
+          ) : null}
+
+          {/* Real Google OAuth 2.0 Sign In */}
+          <TouchableOpacity
+            onPress={handleGooglePress}
+            activeOpacity={0.85}
+            disabled={googleLoading}
+            className="flex-row items-center justify-center bg-white py-3.5 px-4 rounded-2xl border border-slate-200 shadow-sm"
+            style={{ gap: 10 }}
+          >
+            {googleLoading ? (
+              <ActivityIndicator size="small" color="#1E58C8" />
+            ) : (
+              <GoogleLogo size={18} />
+            )}
+            <Text className="text-sm font-bold text-slate-800">
+              {googleLoading ? 'Connecting to Google OAuth...' : 'Continue with Google'}
+            </Text>
+          </TouchableOpacity>
+
+          {/* Quick 1-Tap & Supabase OTP Option */}
           <TouchableOpacity
             onPress={() => setQuickAuthVisible(true)}
             activeOpacity={0.85}
-            className="flex-row items-center justify-center bg-white py-3 px-4 rounded-2xl border border-slate-200 shadow-sm"
-            style={{ gap: 10 }}
+            className="flex-row items-center justify-center bg-slate-50 py-2.5 px-4 rounded-2xl border border-slate-200/90"
+            style={{ gap: 8 }}
           >
-            <GoogleLogo size={18} />
-            <Text className="text-sm font-bold text-slate-800">
-              Continue with Google / 1-Tap Auth
+            <Zap size={14} color="#1E58C8" />
+            <Text className="text-xs font-bold text-slate-700">
+              1-Tap Personas & Passwordless OTP
             </Text>
           </TouchableOpacity>
 

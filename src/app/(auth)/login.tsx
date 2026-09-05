@@ -6,11 +6,12 @@ import { FiYLogo } from '@/components/ui/FiYLogo';
 import { Input } from '@/components/ui/Input';
 import { Button } from '@/components/ui/Button';
 import { GoogleLogo } from '@/components/ui/GoogleLogo';
-import { Mail, Lock, ArrowLeft, Eye, EyeOff, ShieldCheck, UserCheck, Stethoscope } from 'lucide-react-native';
+import { Mail, Lock, ArrowLeft, Eye, EyeOff, ShieldCheck, UserCheck, Stethoscope, Zap } from 'lucide-react-native';
 import { authService } from '@/services/authService';
 import { useAuthStore } from '@/store/useAuthStore';
 import { PremadeAuthModal } from '@/components/auth/PremadeAuthModal';
 import { UserSession } from '@/services/authService';
+import { googleAuthService } from '@/services/googleAuth';
 
 export default function LoginScreen() {
   const router = useRouter();
@@ -20,6 +21,7 @@ export default function LoginScreen() {
   const [password, setPassword] = useState('');
   const [showPassword, setShowPassword] = useState(false);
   const [loading, setLoading] = useState(false);
+  const [googleLoading, setGoogleLoading] = useState(false);
   const [quickAuthVisible, setQuickAuthVisible] = useState(false);
   const [error, setError] = useState('');
 
@@ -61,6 +63,22 @@ export default function LoginScreen() {
       router.replace('/(doctor)/(tabs)/home');
     } else {
       router.replace('/(patient)/(tabs)/home');
+    }
+  };
+
+  const handleGooglePress = async () => {
+    setError('');
+    setGoogleLoading(true);
+    try {
+      const session = await googleAuthService.signInWithGoogle();
+      if (session) {
+        handleAuthenticated(session);
+        return;
+      }
+    } catch (err: any) {
+      setError(err.message || 'Google Sign-In failed.');
+    } finally {
+      setGoogleLoading(false);
     }
   };
 
@@ -184,16 +202,34 @@ export default function LoginScreen() {
             size="lg"
           />
 
-          {/* Quick 1-Tap / Supabase Auth Button */}
+          {/* Real Google OAuth 2.0 Button */}
+          <TouchableOpacity
+            onPress={handleGooglePress}
+            activeOpacity={0.85}
+            disabled={googleLoading}
+            className="flex-row items-center justify-center bg-white py-3.5 px-4 rounded-2xl border border-slate-200 shadow-sm"
+            style={{ gap: 10 }}
+          >
+            {googleLoading ? (
+              <ActivityIndicator size="small" color="#1E58C8" />
+            ) : (
+              <GoogleLogo size={18} />
+            )}
+            <Text className="text-sm font-bold text-slate-800">
+              {googleLoading ? 'Connecting to Google OAuth...' : 'Continue with Google'}
+            </Text>
+          </TouchableOpacity>
+
+          {/* Quick 1-Tap & Supabase OTP Option */}
           <TouchableOpacity
             onPress={() => setQuickAuthVisible(true)}
             activeOpacity={0.85}
-            className="flex-row items-center justify-center bg-white py-3 px-4 rounded-2xl border border-slate-200 shadow-sm"
-            style={{ gap: 10 }}
+            className="flex-row items-center justify-center bg-slate-50 py-2.5 px-4 rounded-2xl border border-slate-200/90"
+            style={{ gap: 8 }}
           >
-            <GoogleLogo size={18} />
-            <Text className="text-sm font-bold text-slate-800">
-              Continue with Google / 1-Tap Auth
+            <Zap size={14} color="#1E58C8" />
+            <Text className="text-xs font-bold text-slate-700">
+              1-Tap Personas & Passwordless OTP
             </Text>
           </TouchableOpacity>
 
