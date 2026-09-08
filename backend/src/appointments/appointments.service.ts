@@ -67,7 +67,7 @@ export class AppointmentsService {
           fee: dto.fee,
           symptoms: dto.symptoms || [],
           notes: dto.notes,
-          status: AppointmentStatus.CONFIRMED,
+          status: AppointmentStatus.PENDING,
         },
         include: {
           doctor: { include: { clinic: true } },
@@ -80,15 +80,15 @@ export class AppointmentsService {
         data: [
           {
             userId: dto.patientId,
-            type: 'APPOINTMENT_CONFIRMED',
-            title: 'In-Clinic Appointment Confirmed',
-            message: `Your appointment with ${appointment.doctor.fullName} on ${dto.date} at ${dto.startTime} is confirmed.`,
+            type: 'APPOINTMENT_QUEUED',
+            title: 'Appointment Slot Queued',
+            message: `Your slot request with ${appointment.doctor.fullName} on ${dto.date} at ${dto.startTime} is awaiting doctor approval.`,
           },
           {
             userId: appointment.doctor.userId,
-            type: 'NEW_APPOINTMENT',
-            title: 'New Patient Booked',
-            message: `Patient ${appointment.patient.fullName} booked an in-clinic slot on ${dto.date} at ${dto.startTime}.`,
+            type: 'NEW_BOOKING_REQUEST',
+            title: 'New Patient Slot Request',
+            message: `${appointment.patient.fullName} requested ${dto.startTime} on ${dto.date}. Review and approve.`,
           },
         ],
       });

@@ -1,7 +1,8 @@
 import React from 'react';
-import { View, Text, TouchableOpacity } from 'react-native';
+import { View, Text, TouchableOpacity, StyleSheet } from 'react-native';
 import { FileText, Activity, Pill, Stethoscope, CheckCircle2, ChevronRight } from 'lucide-react-native';
 import { MedicalRecord } from '@/types/index';
+import { Palette, Typography, BorderRadius, Shadows, Spacing } from '@/constants/theme';
 
 interface TimelineProps {
   records: MedicalRecord[];
@@ -12,18 +13,18 @@ export function Timeline({ records, onRecordPress }: TimelineProps) {
   const getIcon = (type: MedicalRecord['type']) => {
     switch (type) {
       case 'Lab Result':
-        return <Activity size={16} color="#00B39B" />;
+        return <Activity size={16} color={Palette.healthcareTeal} />;
       case 'Prescription':
-        return <Pill size={16} color="#1E58C8" />;
+        return <Pill size={16} color={Palette.primaryBlue} />;
       case 'Scan/X-Ray':
         return <FileText size={16} color="#8B5CF6" />;
       default:
-        return <Stethoscope size={16} color="#F59E0B" />;
+        return <Stethoscope size={16} color={Palette.warning} />;
     }
   };
 
   return (
-    <View className="py-2">
+    <View style={styles.container}>
       {records.map((item, index) => {
         const isLast = index === records.length - 1;
         const cleanSummary = (item.summary || '').replace(
@@ -32,15 +33,11 @@ export function Timeline({ records, onRecordPress }: TimelineProps) {
         );
 
         return (
-          <View key={item.id} className="flex-row space-x-3.5 mb-5">
+          <View key={item.id} style={styles.timelineRow}>
             {/* Timeline Bar & Node */}
-            <View className="items-center">
-              <View className="w-8 h-8 rounded-full bg-slate-100 items-center justify-center border border-slate-200 z-10">
-                {getIcon(item.type)}
-              </View>
-              {!isLast && (
-                <View className="w-0.5 flex-1 bg-slate-200 my-1" />
-              )}
+            <View style={styles.nodeColumn}>
+              <View style={styles.iconNode}>{getIcon(item.type)}</View>
+              {!isLast && <View style={styles.verticalBar} />}
             </View>
 
             {/* Record Card */}
@@ -48,50 +45,48 @@ export function Timeline({ records, onRecordPress }: TimelineProps) {
               activeOpacity={onRecordPress ? 0.82 : 1}
               onPress={() => onRecordPress?.(item)}
               disabled={!onRecordPress}
-              className="flex-1 bg-white p-4 rounded-2xl border border-slate-200/80 shadow-sm"
+              style={styles.card}
             >
-              <View className="flex-row justify-between items-start">
-                <Text className="text-xs font-bold text-[#00B39B] uppercase tracking-wider">
+              <View style={styles.cardTopline}>
+                <Text style={styles.typeText} numberOfLines={1}>
                   {item.type} • {item.createdAt}
                 </Text>
                 {item.ocrConfidence && (
-                  <View className="flex-row items-center bg-emerald-50 px-1.5 py-0.5 rounded">
-                    <CheckCircle2 size={10} color="#10B981" />
-                    <Text className="text-[10px] font-bold text-emerald-700 ml-1">
-                      {item.ocrConfidence}% OCR
-                    </Text>
+                  <View style={styles.ocrPill}>
+                    <CheckCircle2 size={10} color={Palette.success} />
+                    <Text style={styles.ocrText}>{item.ocrConfidence}% OCR</Text>
                   </View>
                 )}
               </View>
 
-              <View className="flex-row justify-between items-center mt-1">
-                <Text className="text-sm font-bold text-slate-900 flex-1 mr-2">
+              <View style={styles.titleRow}>
+                <Text style={styles.recordTitle} numberOfLines={2}>
                   {item.title}
                 </Text>
                 {onRecordPress && item.sourceId && (
-                  <ChevronRight size={16} color="#94A3B8" />
+                  <ChevronRight size={16} color={Palette.textMuted} style={{ flexShrink: 0 }} />
                 )}
               </View>
-              <Text className="text-xs text-slate-500 mt-0.5">
-                {item.facility || 'FiYDoc AI OCR'} {item.doctorName ? `• ${item.doctorName}` : ''}
+
+              <Text style={styles.facilityText} numberOfLines={1}>
+                {item.facility || 'FiYDoc Health Records'}{' '}
+                {item.doctorName ? `• ${item.doctorName}` : ''}
               </Text>
 
               {cleanSummary ? (
-                <Text className="text-xs text-slate-600 mt-2 bg-slate-50 p-2.5 rounded-xl border border-slate-100">
-                  {cleanSummary}
-                </Text>
+                <Text style={styles.summaryBox}>{cleanSummary}</Text>
               ) : null}
 
               {/* Tag Chips */}
-              <View className="flex-row flex-wrap gap-1.5 mt-2.5">
-                {item.extractedTags?.map((tag, i) => (
-                  <View key={i} className="bg-teal-50 px-2 py-0.5 rounded-md border border-teal-100">
-                    <Text className="text-[11px] font-semibold text-teal-700">
-                      {tag}
-                    </Text>
-                  </View>
-                ))}
-              </View>
+              {item.extractedTags && item.extractedTags.length > 0 && (
+                <View style={styles.tagsRow}>
+                  {item.extractedTags.slice(0, 4).map((tag, i) => (
+                    <View key={i} style={styles.tagChip}>
+                      <Text style={styles.tagText}>{tag}</Text>
+                    </View>
+                  ))}
+                </View>
+              )}
             </TouchableOpacity>
           </View>
         );
@@ -99,3 +94,124 @@ export function Timeline({ records, onRecordPress }: TimelineProps) {
     </View>
   );
 }
+
+const styles = StyleSheet.create({
+  container: {
+    paddingVertical: Spacing.xs,
+  },
+  timelineRow: {
+    flexDirection: 'row',
+    gap: 12,
+    marginBottom: 16,
+  },
+  nodeColumn: {
+    alignItems: 'center',
+    width: 32,
+  },
+  iconNode: {
+    width: 32,
+    height: 32,
+    borderRadius: 16,
+    backgroundColor: Palette.card,
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderWidth: 1,
+    borderColor: Palette.cardBorder,
+    zIndex: 2,
+    ...Shadows.subtle,
+  },
+  verticalBar: {
+    width: 2,
+    flex: 1,
+    backgroundColor: Palette.cardBorder,
+    marginVertical: 3,
+  },
+  card: {
+    flex: 1,
+    minWidth: 0,
+    backgroundColor: Palette.card,
+    borderRadius: BorderRadius.xl,
+    padding: Spacing.md + 2,
+    borderWidth: 1,
+    borderColor: Palette.cardBorder,
+    ...Shadows.subtle,
+  },
+  cardTopline: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    gap: 6,
+    marginBottom: 4,
+  },
+  typeText: {
+    fontSize: 11,
+    fontWeight: '700',
+    color: Palette.healthcareTeal,
+    textTransform: 'uppercase',
+    letterSpacing: 0.4,
+    flex: 1,
+  },
+  ocrPill: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: Palette.successBg,
+    paddingHorizontal: 6,
+    paddingVertical: 2,
+    borderRadius: BorderRadius.sm,
+    gap: 3,
+    borderWidth: 0.5,
+    borderColor: Palette.successBorder,
+  },
+  ocrText: {
+    fontSize: 10,
+    fontWeight: '700',
+    color: Palette.success,
+  },
+  titleRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    gap: 4,
+  },
+  recordTitle: {
+    fontSize: 15,
+    fontWeight: '700',
+    color: Palette.textPrimary,
+    flex: 1,
+  },
+  facilityText: {
+    ...Typography.caption,
+    color: Palette.textSecondary,
+    marginTop: 2,
+  },
+  summaryBox: {
+    fontSize: 12,
+    lineHeight: 18,
+    color: Palette.textSecondary,
+    marginTop: 8,
+    backgroundColor: Palette.background,
+    padding: 10,
+    borderRadius: BorderRadius.md,
+    borderWidth: StyleSheet.hairlineWidth,
+    borderColor: Palette.cardBorderLight,
+  },
+  tagsRow: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 6,
+    marginTop: 8,
+  },
+  tagChip: {
+    backgroundColor: Palette.healthcareTealLight,
+    paddingHorizontal: 8,
+    paddingVertical: 2.5,
+    borderRadius: BorderRadius.sm,
+    borderWidth: 0.5,
+    borderColor: Palette.healthcareTealBorder,
+  },
+  tagText: {
+    fontSize: 10,
+    fontWeight: '700',
+    color: Palette.healthcareTeal,
+  },
+});

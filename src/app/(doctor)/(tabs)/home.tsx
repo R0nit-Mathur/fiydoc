@@ -1,502 +1,879 @@
-import React, { useState, useMemo, useCallback, useEffect } from 'react';
-import { View, Text, ScrollView, TouchableOpacity, RefreshControl, BackHandler } from 'react-native';
+/**
+ * FiYDOC - Doctor Home (Clean & Minimal 1:1 Stitch)
+ *
+ * Implements the doctor companion dashboard:
+ * - Header with hamburger menu, notification bell, doctor avatar & role switcher
+ * - Greeting ("Good morning, Dr. Rajesh") & "Ready for clinic" status badge
+ * - Today's Clinic card with live "Aarav Mehta" next patient & "Start Consultation" CTA
+ * - 2-Column Metrics (Completed: 6 / 14 with progress bar, OPD Window: 10:30 - 1:30)
+ * - 4-Column Quick Actions (Schedule, Patients, Rx Pad, Leave)
+ * - "Upcoming Today" patient list (10:30 AM, 11:00 AM, 11:30 AM) with direct consultation links
+ * - Slide-out drawer with Patient Mode switcher
+ */
+
+import React, { useState } from 'react';
+import {
+  View,
+  Text,
+  ScrollView,
+  Pressable,
+  StyleSheet,
+  Image,
+  Platform,
+  StatusBar,
+  Modal,
+} from 'react-native';
 import { useRouter } from 'expo-router';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { useQueryClient } from '@tanstack/react-query';
-import { useAuthStore } from '@/store/useAuthStore';
-import { useAppointmentsQuery } from '@/hooks/queries/useAppointmentsQuery';
-import { Avatar } from '@/components/ui/Avatar';
-import { Badge } from '@/components/ui/Badge';
+import { BlurView } from 'expo-blur';
+import Animated, { FadeInDown, FadeInUp } from 'react-native-reanimated';
+import * as Haptics from 'expo-haptics';
 import {
-  CheckCircle2,
-  Calendar,
-  Clock,
-  Building2,
-  Sparkles,
-  ChevronRight,
-  ShieldCheck,
-  Activity,
-  User,
-  Users,
-  Settings,
+  Menu,
   Bell,
+  Calendar,
+  ChevronRight,
+  ArrowRight,
+  CheckCircle2,
+  Clock,
+  CalendarDays,
+  Users,
+  FileText,
+  CalendarX,
+  X,
+  Repeat,
+  LogOut,
+  ShieldCheck,
+  Stethoscope,
 } from 'lucide-react-native';
-import { Modal } from '@/components/ui/Modal';
-import { useNotificationStore } from '@/store/useNotificationStore';
+
+import { useAuthStore } from '@/store/useAuthStore';
+import { useAppointmentStore } from '@/store/useAppointmentStore';
+import { useAppTheme } from '@/hooks/useAppTheme';
+import { BorderRadius, Shadows, Spacing, StitchColors, Palette, DEFAULT_DOCTOR_AVATAR } from '@/constants/theme';
+
+const DOCTOR_AVATAR = DEFAULT_DOCTOR_AVATAR;
+
+// No mock data — all patient data comes from real appointment store
 
 export default function DoctorHomeScreen() {
   const router = useRouter();
-  const queryClient = useQueryClient();
-  const { user } = useAuthStore();
-  const { data: appointments, isRefetching, refetch } = useAppointmentsQuery(undefined, user?.id);
-  const [notificationsVisible, setNotificationsVisible] = useState(false);
-  const [refreshing, setRefreshing] = useState(false);
+  const { colors, isDark } = useAppTheme();
+  const { user, setRole } = useAuthStore();
+  const { appointments } = useAppointmentStore();
+  const [drawerOpen, setDrawerOpen] = useState(false);
 
-  const handleRefresh = useCallback(async () => {
-    setRefreshing(true);
-    try {
-      await Promise.all([
-        queryClient.invalidateQueries({ queryKey: ['appointments'] }),
-        refetch(),
-      ]);
-    } finally {
-      setRefreshing(false);
+  // Derive today's queue dynamically
+  const today = new Date().toISOString().slice(0, 10);
+  const doctorId = user?.id;
+  const todayApts = appointments.filter(
+    (a) => a.doctorId === doctorId && a.date?.slice(0, 10) === today
+  ).sort((a, b) => a.time.localeCompare(b.time));
+
+  const completedToday = todayApts.filter((a) => a.status === 'completed').length;
+  const activeStatuses = ['confirmed', 'checked_in', 'upcoming', 'in_progress', 'pending'];
+  const nextPatient = todayApts.find((a) => activeStatuses.includes(a.status)) || null;
+  const upcomingPatients = todayApts.filter((a) => activeStatuses.includes(a.status)).slice(0, 5);
+
+  // Get first name for greeting
+  const firstName = user?.name?.split(' ')[0] || 'Doctor';
+  // Time-aware greeting
+  const hour = new Date().getHours();
+  const greeting = hour < 12 ? 'Good morning,' : hour < 17 ? 'Good afternoon,' : 'Good evening,';
+
+  const handleStartConsultation = (appointmentId: string) => {
+    if (Platform.OS !== 'web') {
+      Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
     }
-  }, [queryClient, refetch]);
+    router.push(`/(doctor)/consultation/${appointmentId}` as any);
+  };
 
-  const notifications = useNotificationStore((s) => s.notifications);
-  const markAllAsRead = useNotificationStore((s) => s.markAllAsRead);
-
-  const doctorNotifications = React.useMemo(() => {
-    return notifications.filter((n) => {
-      if (n.recipientId && user?.id && n.recipientId !== user.id) return false;
-      if (n.recipientRole && n.recipientRole !== 'all' && n.recipientRole !== 'doctor') return false;
-      return true;
-    });
-  }, [notifications, user?.id]);
-
-  const unreadCount = React.useMemo(() => {
-    return doctorNotifications.filter((n) => !n.read).length;
-  }, [doctorNotifications]);
-
-  // Consume hardware back on doctor home so React Navigation never throws GO_BACK unhandled
-  React.useEffect(() => {
-    const onBackPress = () => {
-      // Stay on doctor home or exit app safely
-      return true;
-    };
-    const sub = BackHandler.addEventListener('hardwareBackPress', onBackPress);
-    return () => sub.remove();
-  }, []);
-
-  const nextPatient = appointments?.[0];
+  const handleSwitchToPatient = () => {
+    setDrawerOpen(false);
+    setRole('patient');
+    router.replace('/(patient)/(tabs)/home');
+  };
 
   return (
-    <SafeAreaView className="flex-1 bg-slate-50" edges={['top']}>
-      {/* Doctor Header */}
-      <View
-        style={{
-          paddingHorizontal: 16,
-          paddingVertical: 12,
-          backgroundColor: '#FFFFFF',
-          flexDirection: 'row',
-          alignItems: 'center',
-          justifyContent: 'space-between',
-          borderBottomWidth: 1,
-          borderBottomColor: '#F1F5F9',
-        }}
-      >
-        <View
-          style={{
-            flexDirection: 'row',
-            alignItems: 'center',
-            flex: 1,
-            minWidth: 0,
-            marginRight: 10,
-            gap: 10,
-          }}
-        >
-          <Avatar uri={user?.avatar} name={user?.name || 'Dr. Specialist'} size="md" />
-          <View style={{ flex: 1, minWidth: 0, justifyContent: 'center' }}>
-            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4 }}>
-              <Text
-                style={{ fontSize: 15, fontWeight: '800', color: '#0F172A', flexShrink: 1 }}
-                numberOfLines={1}
-                ellipsizeMode="tail"
-              >
-                {user?.name || 'Dr. Specialist'}
-              </Text>
-              <CheckCircle2 size={15} color="#00B39B" fill="#E0F7F4" style={{ flexShrink: 0 }} />
-            </View>
-            <Text
-              style={{ fontSize: 11, fontWeight: '700', color: '#00B39B', marginTop: 1 }}
-              numberOfLines={1}
-              ellipsizeMode="tail"
-            >
-              {(user as any)?.specialty || 'Medical Specialist'}
-            </Text>
-          </View>
-        </View>
+    <SafeAreaView style={[styles.safeArea, { backgroundColor: colors.background }]} edges={['top']}>
+      <StatusBar barStyle={isDark ? 'light-content' : 'dark-content'} />
 
-        {/* Portal Tag, Notifications & Settings */}
-        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, flexShrink: 0 }}>
-          <View className="bg-blue-50 px-2 py-1 rounded-xl border border-blue-200">
-            <Text className="text-[10px] font-black text-[#1E58C8] tracking-wider">PORTAL</Text>
-          </View>
-          <TouchableOpacity
-            onPress={() => setNotificationsVisible(true)}
-            activeOpacity={0.8}
-            className="w-8 h-8 rounded-xl bg-slate-100 items-center justify-center border border-slate-200/80 relative"
+      {/* 1. Header with Hamburger Menu, Notifications & Doctor Avatar */}
+      <View style={[styles.headerBar, { borderBottomColor: colors.border, backgroundColor: colors.card }]}>
+        <Pressable
+          onPress={() => setDrawerOpen(true)}
+          hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+          style={[styles.iconButton, { backgroundColor: colors.backgroundElement, borderColor: colors.border }]}
+          accessibilityLabel="Open Navigation Menu"
+        >
+          <Menu size={20} color={colors.text} />
+        </Pressable>
+
+        <View style={styles.headerRightRow}>
+          <Pressable
+            onPress={() => router.push('/(doctor)/notifications' as any)}
+            hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+            style={[styles.iconButton, { backgroundColor: colors.backgroundElement, borderColor: colors.border }]}
+            accessibilityLabel="Notifications"
           >
-            <Bell size={16} color="#475569" />
-            {unreadCount > 0 && (
-              <View className="absolute -top-1 -right-1 bg-red-500 rounded-full min-w-[16px] h-4 px-1 items-center justify-center">
-                <Text className="text-[9px] font-black text-white">{unreadCount}</Text>
-              </View>
-            )}
-          </TouchableOpacity>
-          <TouchableOpacity
-            onPress={() => router.push('/(doctor)/settings')}
-            activeOpacity={0.8}
-            className="w-8 h-8 rounded-xl bg-slate-100 items-center justify-center border border-slate-200/80"
+            <Bell size={20} color={colors.text} />
+            <View style={styles.notifDot} />
+          </Pressable>
+
+          <Pressable
+            onPress={() => router.push('/(doctor)/(tabs)/profile')}
+            style={styles.avatarButton}
+            accessibilityLabel="Profile"
           >
-            <Settings size={16} color="#475569" />
-          </TouchableOpacity>
+            <Image source={{ uri: DOCTOR_AVATAR }} style={styles.doctorAvatarImg} />
+          </Pressable>
         </View>
       </View>
 
+      {/* Main Content ScrollView with comfortable gaps */}
       <ScrollView
-        contentContainerStyle={{ padding: 16, paddingBottom: 110, gap: 16 }}
+        contentContainerStyle={styles.scrollContent}
         showsVerticalScrollIndicator={false}
-        refreshControl={
-          <RefreshControl
-            refreshing={refreshing || isRefetching}
-            onRefresh={handleRefresh}
-            colors={['#1E58C8']}
-            tintColor="#1E58C8"
-          />
-        }
       >
-        {/* Verification Status Banner */}
-        <View className="bg-blue-50/80 p-3.5 rounded-2xl border border-blue-200/90 flex-row items-center justify-between shadow-sm">
-          <View
-            style={{
-              flexDirection: 'row',
-              alignItems: 'center',
-              flex: 1,
-              minWidth: 0,
-              marginRight: 8,
-              gap: 10,
-            }}
-          >
-            <View className="bg-[#1E58C8] p-2 rounded-xl" style={{ flexShrink: 0 }}>
-              <ShieldCheck size={20} color="#FFFFFF" />
-            </View>
-            <View style={{ flex: 1, minWidth: 0 }}>
-              <Text className="text-xs font-black text-slate-900" numberOfLines={1}>
-                NMC / State Council Verified Practitioner
-              </Text>
-              <Text className="text-[11px] text-slate-600 font-medium mt-0.5" numberOfLines={1}>
-                Reg: {(user as any)?.registrationNumber || (user as any)?.mciNumber || 'NMC-2024-DOC'} • Active for Consultations
-              </Text>
-            </View>
+        {/* 2. Greeting & Status Row */}
+        <View style={styles.greetingRow}>
+          <View>
+            <Text style={[styles.greetingSmall, { color: colors.textSecondary }]}>{greeting}</Text>
+            <Text style={[styles.greetingBig, { color: colors.text }]}>Dr. {firstName}</Text>
           </View>
-          <View style={{ flexShrink: 0 }}>
-            <Badge label="ACTIVE" variant="blue" size="sm" />
+
+          <View style={[styles.statusPill, { backgroundColor: colors.backgroundElement, borderColor: colors.border }]}>
+            <View style={styles.statusDot} />
+            <Text style={[styles.statusText, { color: colors.textSecondary }]}>Ready for clinic</Text>
           </View>
         </View>
 
-        {/* Daily Queue Stats Strip */}
-        <View className="flex-row items-center bg-white py-3.5 px-2 rounded-2xl border border-slate-200/80 shadow-sm">
-          <View className="flex-1 items-center justify-center">
-            <Text className="text-[10px] text-slate-400 font-black uppercase tracking-wider">
-              Total Today
-            </Text>
-            <Text className="text-lg font-black text-slate-900 mt-0.5" numberOfLines={1}>
-              {appointments?.length ? `${appointments.length}` : '2'}
-            </Text>
-          </View>
-          <View className="w-px h-7 bg-slate-200" />
-          <View className="flex-1 items-center justify-center">
-            <Text className="text-[10px] text-slate-400 font-black uppercase tracking-wider">
-              Completed
-            </Text>
-            <Text className="text-lg font-black text-emerald-600 mt-0.5" numberOfLines={1}>
-              3
-            </Text>
-          </View>
-          <View className="w-px h-7 bg-slate-200" />
-          <View className="flex-1 items-center justify-center">
-            <Text className="text-[10px] text-slate-400 font-black uppercase tracking-wider">
-              Next Slot
-            </Text>
-            <Text className="text-sm font-black text-[#1E58C8] mt-0.5" numberOfLines={1}>
-              {nextPatient?.time || '10:30 AM'}
-            </Text>
-          </View>
-        </View>
-
-        {/* Next Patient Card */}
-        {nextPatient ? (
-          <View className="bg-white p-4 rounded-2xl border border-slate-200/80 shadow-sm" style={{ gap: 12 }}>
-            <View className="flex-row justify-between items-center pb-2.5 border-b border-slate-100">
-              <View
-                style={{
-                  flexDirection: 'row',
-                  alignItems: 'center',
-                  flex: 1,
-                  minWidth: 0,
-                  marginRight: 8,
-                  gap: 6,
-                }}
-              >
-                <Clock size={15} color="#1E58C8" style={{ flexShrink: 0 }} />
-                <Text
-                  className="text-xs font-black text-slate-900 uppercase tracking-wide flex-1"
-                  numberOfLines={1}
-                >
-                  Next Patient in Queue
-                </Text>
-              </View>
-              <View style={{ flexShrink: 0 }}>
-                <Badge label={nextPatient.time || '10:30 AM'} variant="teal" size="sm" />
-              </View>
+        {/* 3. Today's Clinic Card */}
+        <Animated.View
+          entering={FadeInUp.delay(60).duration(350)}
+          style={[styles.todayCard, { backgroundColor: colors.card, borderColor: colors.border }]}
+        >
+          <View style={styles.todayCardHeader}>
+            <View style={styles.todayTitleRow}>
+              <Calendar size={16} color={StitchColors.primaryContainer} />
+              <Text style={styles.todayHeaderTitle}>TODAY'S CLINIC</Text>
             </View>
+            <Text style={styles.todayApptCount}>{todayApts.length} Appointment{todayApts.length !== 1 ? 's' : ''}</Text>
+          </View>
 
-            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 12 }}>
-              <Avatar
-                uri={nextPatient.patientAvatar}
-                name={nextPatient.patientName || 'Patient'}
-                size="md"
-              />
-              <View style={{ flex: 1, minWidth: 0 }}>
-                <Text className="text-base font-black text-slate-900" numberOfLines={1}>
-                  {nextPatient.patientName || 'Patient'}
-                </Text>
-                <Text className="text-xs text-slate-500 font-medium mt-0.5" numberOfLines={1}>
-                  In-Clinic Consultation • OPD Slot
-                </Text>
-              </View>
-            </View>
-
-            <View className="bg-slate-50 p-3 rounded-xl border border-slate-100">
-              <Text className="text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-1">
-                Chief Reported Symptoms
-              </Text>
-              <Text className="text-xs font-bold text-slate-800" numberOfLines={2}>
-                {nextPatient.symptoms?.join(' • ') || 'General Consultation'}
-              </Text>
-            </View>
-
-            <TouchableOpacity
-              onPress={() => router.push(`/(doctor)/consultation/${nextPatient.id}`)}
-              activeOpacity={0.85}
-              className="bg-[#1E58C8] py-3 px-4 rounded-xl flex-row justify-center items-center shadow-sm"
-              style={{ gap: 8 }}
+          {nextPatient ? (
+            /* Next Patient Sub-Card */
+            <Pressable
+              onPress={() => handleStartConsultation(nextPatient.id)}
+              style={({ pressed }) => [
+                styles.nextPatientCard,
+                { backgroundColor: colors.backgroundElement },
+                pressed && { opacity: 0.88 },
+              ]}
             >
-              <Sparkles size={16} color="#FFFFFF" style={{ flexShrink: 0 }} />
-              <Text className="text-xs font-black text-white" numberOfLines={1}>
-                Launch In-Clinic Consultation Workspace
-              </Text>
-            </TouchableOpacity>
-          </View>
-        ) : (
-          <View className="bg-white p-5 rounded-2xl border border-slate-200/80 items-center justify-center shadow-sm">
-            <View className="w-10 h-10 rounded-xl bg-slate-100 items-center justify-center mb-2">
-              <Clock size={20} color="#94A3B8" />
-            </View>
-            <Text className="text-sm font-extrabold text-slate-800">No Patients in Waiting Queue</Text>
-            <Text className="text-xs text-slate-400 text-center mt-1">
-              New patient bookings will automatically appear here in your live queue.
-            </Text>
-          </View>
-        )}
-
-        {/* Live OPD Queue Timeline (Indian Clinic Queue) */}
-        <View style={{ gap: 10 }}>
-          <View className="flex-row justify-between items-center">
-            <View className="flex-row items-center" style={{ gap: 6 }}>
-              <Clock size={16} color="#1E58C8" />
-              <Text className="text-sm font-black text-slate-900 uppercase tracking-wide">
-                Today's OPD Queue Timeline
-              </Text>
-            </View>
-            <TouchableOpacity onPress={() => router.push('/(doctor)/(tabs)/appointments')}>
-              <Text className="text-xs font-bold text-[#1E58C8]">View All →</Text>
-            </TouchableOpacity>
-          </View>
-
-          {/* Timeline Nodes */}
-          <View className="bg-white p-4 rounded-3xl border border-slate-200/90 shadow-sm" style={{ gap: 10 }}>
-            {appointments && appointments.length > 0 ? (
-              appointments.map((apt, idx) => (
-                <View
-                  key={apt.id || idx}
-                  className={`p-3 rounded-2xl border flex-row items-center justify-between ${
-                    idx === 0
-                      ? 'bg-blue-50/80 border-[#1E58C8]'
-                      : 'bg-slate-50 border-slate-200/80'
-                  }`}
-                >
-                  <View style={{ gap: 2, flex: 1, marginRight: 8 }}>
-                    <View className="flex-row items-center" style={{ gap: 6 }}>
-                      <Text className="text-xs font-black text-[#1E58C8]">Token #{String(idx + 1).padStart(2, '0')}</Text>
-                      <Text className="text-[11px] text-slate-400 font-bold">• {apt.time}</Text>
-                    </View>
-                    <Text className="text-sm font-black text-slate-900" numberOfLines={1}>
-                      {apt.patientName || 'Patient'}
-                    </Text>
-                    <Text className="text-[11px] text-slate-500" numberOfLines={1}>
-                      {apt.symptoms?.join(', ') || 'General OPD Examination'}
-                    </Text>
-                  </View>
-
-                  <View className="items-end" style={{ gap: 6 }}>
-                    <Badge label={apt.status.toUpperCase()} variant={idx === 0 ? 'blue' : 'slate'} size="sm" />
-                    {idx === 0 ? (
-                      <TouchableOpacity
-                        onPress={() => router.push(`/(doctor)/consultation/${apt.id}`)}
-                        className="bg-[#1E58C8] px-3 py-1 rounded-lg"
-                      >
-                        <Text className="text-[11px] font-bold text-white">Consult</Text>
-                      </TouchableOpacity>
-                    ) : (
-                      <Text className="text-[10px] text-slate-400 font-medium">OPD Room</Text>
-                    )}
-                  </View>
+              <View style={styles.nextPatientLeft}>
+                <View style={[styles.nextPatientInitials, { backgroundColor: '#DBEAFE' }]}>
+                  <Text style={styles.initialsText}>
+                    {nextPatient.patientName?.split(' ').map((n: string) => n[0]).join('').slice(0, 2).toUpperCase() || '?'}
+                  </Text>
                 </View>
-              ))
-            ) : (
-              <View className="py-4 items-center justify-center">
-                <Text className="text-xs font-bold text-slate-400">
-                  No appointments currently queued for today
-                </Text>
+
+                <View style={{ flex: 1, minWidth: 0 }}>
+                  <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+                    <Text style={[styles.patientNameText, { color: colors.text }]} numberOfLines={1}>
+                      {nextPatient.patientName}
+                    </Text>
+                    <View style={[styles.nextBadge, { backgroundColor: colors.card }]}>
+                      <Text style={[styles.nextBadgeText, { color: colors.textSecondary }]}>Next</Text>
+                    </View>
+                  </View>
+                  <Text style={[styles.patientMetaText, { color: colors.textSecondary }]} numberOfLines={1}>
+                    {nextPatient.time} • {nextPatient.symptoms?.join(', ') || 'Consultation'}
+                  </Text>
+                </View>
               </View>
+              <ChevronRight size={18} color={colors.textMuted} />
+            </Pressable>
+          ) : (
+            <View style={[styles.nextPatientCard, { backgroundColor: colors.backgroundElement }]}>
+              <Text style={[styles.patientMetaText, { color: colors.textSecondary, textAlign: 'center', flex: 1 }]}>
+                No more patients in queue for today
+              </Text>
+            </View>
+          )}
+
+          {/* Card Footer */}
+          <View style={styles.todayCardFooter}>
+            <Text style={[styles.timingNoticeText, { color: colors.textSecondary }]}>
+              {nextPatient ? `Next patient waiting` : 'Queue complete'}
+            </Text>
+
+            {nextPatient && (
+              <Pressable
+                onPress={() => handleStartConsultation(nextPatient.id)}
+                style={styles.startConsultBtn}
+              >
+                <Text style={styles.startConsultText}>Start Consultation</Text>
+                <ArrowRight size={14} color={StitchColors.primaryContainer} strokeWidth={2.4} />
+              </Pressable>
             )}
           </View>
-        </View>
+        </Animated.View>
 
-        {/* Clinical Suite Shortcuts */}
-        <View style={{ gap: 10 }}>
-          <Text className="text-sm font-black text-slate-900">Clinical Suite</Text>
-
-          <TouchableOpacity
-            onPress={() => router.push(`/(doctor)/consultation/${nextPatient?.id || 'apt_live'}`)}
-            activeOpacity={0.85}
-            className="bg-white p-3.5 rounded-2xl border border-slate-200/80 flex-row items-center justify-between shadow-sm"
-          >
-            <View
-              style={{
-                flexDirection: 'row',
-                alignItems: 'center',
-                flex: 1,
-                minWidth: 0,
-                marginRight: 8,
-                gap: 10,
-              }}
-            >
-              <View
-                className="bg-teal-50 p-2 rounded-xl border border-teal-100"
-                style={{ flexShrink: 0 }}
-              >
-                <Activity size={18} color="#00B39B" />
-              </View>
-              <View style={{ flex: 1, minWidth: 0 }}>
-                <Text className="text-xs font-black text-slate-900" numberOfLines={1}>
-                  3D Body Region Visualizer
-                </Text>
-                <Text
-                  className="text-[11px] text-slate-500 font-medium mt-0.5"
-                  numberOfLines={1}
-                >
-                  Interactive pain & symptom annotation
-                </Text>
-              </View>
+        {/* 4. Two Metrics Cards (Grid of 2) */}
+        <Animated.View entering={FadeInUp.delay(100).duration(350)} style={styles.metricsGrid}>
+          {/* Completed Card */}
+          <View style={[styles.metricCard, { backgroundColor: colors.card, borderColor: colors.border }]}>
+            <View style={styles.metricHeaderRow}>
+              <Text style={[styles.metricLabel, { color: colors.textSecondary }]}>Completed</Text>
+              <CheckCircle2 size={16} color={StitchColors.secondaryContainer} />
             </View>
-            <ChevronRight size={16} color="#94A3B8" style={{ flexShrink: 0 }} />
-          </TouchableOpacity>
-
-          <TouchableOpacity
-            onPress={() => router.push('/(doctor)/(tabs)/appointments')}
-            activeOpacity={0.85}
-            className="bg-white p-3.5 rounded-2xl border border-slate-200/80 flex-row items-center justify-between shadow-sm"
-          >
-            <View
-              style={{
-                flexDirection: 'row',
-                alignItems: 'center',
-                flex: 1,
-                minWidth: 0,
-                marginRight: 8,
-                gap: 10,
-              }}
-            >
-              <View
-                className="bg-blue-50 p-2 rounded-xl border border-blue-100"
-                style={{ flexShrink: 0 }}
-              >
-                <Calendar size={18} color="#1E58C8" />
-              </View>
-              <View style={{ flex: 1, minWidth: 0 }}>
-                <Text className="text-xs font-black text-slate-900" numberOfLines={1}>
-                  Patient Queue & Schedule
-                </Text>
-                <Text
-                  className="text-[11px] text-slate-500 font-medium mt-0.5"
-                  numberOfLines={1}
-                >
-                  View full roster & in-clinic bookings
-                </Text>
-              </View>
+            <View style={styles.metricValueRow}>
+              <Text style={[styles.metricMainNumber, { color: colors.text }]}>{completedToday}</Text>
+              <Text style={[styles.metricTotalNumber, { color: colors.textSecondary }]}>/ {todayApts.length}</Text>
             </View>
-            <ChevronRight size={16} color="#94A3B8" style={{ flexShrink: 0 }} />
-          </TouchableOpacity>
-        </View>
+            <View style={[styles.progressBarBg, { backgroundColor: colors.backgroundElement }]}>
+              <View style={[styles.progressBarFill, { width: todayApts.length > 0 ? `${Math.round((completedToday / todayApts.length) * 100)}%` : '0%', backgroundColor: StitchColors.secondaryContainer }]} />
+            </View>
+          </View>
+
+          {/* OPD Window Card */}
+          <View style={[styles.metricCard, { backgroundColor: colors.card, borderColor: colors.border }]}>
+            <View style={styles.metricHeaderRow}>
+              <Text style={[styles.metricLabel, { color: colors.textSecondary }]}>OPD Window</Text>
+              <Clock size={16} color={StitchColors.primaryContainer} />
+            </View>
+            <Text style={[styles.metricWindowTime, { color: colors.text }]}>10:30 - 1:30</Text>
+            <Text style={[styles.metricWindowSub, { color: colors.textSecondary }]}>Morning Session</Text>
+          </View>
+        </Animated.View>
+
+        {/* 5. Four Quick Action Buttons (Grid of 4) */}
+        <Animated.View entering={FadeInUp.delay(140).duration(350)} style={styles.actionsGrid}>
+          <Pressable
+            onPress={() => router.push('/(doctor)/(tabs)/schedule')}
+            style={[styles.actionBtn, { backgroundColor: colors.card, borderColor: colors.border }]}
+          >
+            <View style={[styles.actionIconBox, { backgroundColor: '#EFF6FF' }]}>
+              <CalendarDays size={20} color={StitchColors.primaryContainer} />
+            </View>
+            <Text style={[styles.actionBtnLabel, { color: colors.text }]}>Schedule</Text>
+          </Pressable>
+
+          <Pressable
+            onPress={() => router.push('/(doctor)/(tabs)/directory')}
+            style={[styles.actionBtn, { backgroundColor: colors.card, borderColor: colors.border }]}
+          >
+            <View style={[styles.actionIconBox, { backgroundColor: '#EFF6FF' }]}>
+              <Users size={20} color={StitchColors.primaryContainer} />
+            </View>
+            <Text style={[styles.actionBtnLabel, { color: colors.text }]}>Patients</Text>
+          </Pressable>
+
+          <Pressable
+            onPress={() => handleStartConsultation('apt_1')}
+            style={[styles.actionBtn, { backgroundColor: colors.card, borderColor: colors.border }]}
+          >
+            <View style={[styles.actionIconBox, { backgroundColor: '#EFF6FF' }]}>
+              <FileText size={20} color={StitchColors.primaryContainer} />
+            </View>
+            <Text style={[styles.actionBtnLabel, { color: colors.text }]}>Rx Pad</Text>
+          </Pressable>
+
+          <Pressable
+            onPress={() => router.push('/(doctor)/(tabs)/schedule')}
+            style={[styles.actionBtn, { backgroundColor: colors.card, borderColor: colors.border }]}
+          >
+            <View style={[styles.actionIconBox, { backgroundColor: '#EFF6FF' }]}>
+              <CalendarX size={20} color={StitchColors.primaryContainer} />
+            </View>
+            <Text style={[styles.actionBtnLabel, { color: colors.text }]}>Leave</Text>
+          </Pressable>
+        </Animated.View>
+
+        {/* 6. Upcoming Today Section */}
+        <Animated.View entering={FadeInUp.delay(180).duration(350)} style={styles.upcomingSection}>
+          <View style={styles.upcomingHeaderRow}>
+            <Text style={[styles.upcomingSectionTitle, { color: colors.text }]}>Upcoming Today</Text>
+            <Pressable
+              onPress={() => router.push('/(doctor)/(tabs)/schedule')}
+              style={{ flexDirection: 'row', alignItems: 'center', gap: 2 }}
+            >
+              <Text style={styles.viewAllText}>View All</Text>
+              <ChevronRight size={14} color={StitchColors.primaryContainer} />
+            </Pressable>
+          </View>
+
+          <View style={[styles.upcomingListCard, { backgroundColor: colors.card, borderColor: colors.border }]}>
+            {upcomingPatients.length === 0 ? (
+              <View style={{ padding: 20, alignItems: 'center' }}>
+                <Text style={[styles.patientRowReason, { color: colors.textSecondary }]}>
+                  No upcoming appointments for today.
+                </Text>
+              </View>
+            ) : (
+              upcomingPatients.map((p, index) => (
+                <Pressable
+                  key={p.id}
+                  onPress={() => handleStartConsultation(p.id)}
+                  style={({ pressed }) => [
+                    styles.patientItemRow,
+                    index > 0 && { borderTopWidth: StyleSheet.hairlineWidth, borderTopColor: colors.border },
+                    pressed && { backgroundColor: colors.backgroundElement },
+                  ]}
+                >
+                  <View style={styles.patientItemLeft}>
+                    <Text style={[styles.patientTimeCol, { color: StitchColors.primaryContainer }]}>{p.time}</Text>
+                    <View style={{ flex: 1, minWidth: 0 }}>
+                      <Text style={[styles.patientRowName, { color: colors.text }]} numberOfLines={1}>
+                        {p.patientName}
+                      </Text>
+                      <Text style={[styles.patientRowReason, { color: colors.textSecondary }]} numberOfLines={1}>
+                        {p.symptoms?.join(', ') || 'Consultation'}
+                      </Text>
+                    </View>
+                  </View>
+                  <ChevronRight size={16} color={colors.textMuted} />
+                </Pressable>
+              ))
+            )}
+          </View>
+        </Animated.View>
       </ScrollView>
 
-      {/* Doctor Notifications Modal */}
+      {/* Slide-out Navigation Drawer with Role Switcher */}
       <Modal
-        visible={notificationsVisible}
-        onClose={() => setNotificationsVisible(false)}
-        title="Doctor Alerts & Activity"
+        visible={drawerOpen}
+        transparent
+        animationType="fade"
+        onRequestClose={() => setDrawerOpen(false)}
       >
-        <View style={{ gap: 12, paddingVertical: 4 }}>
-          <View className="flex-row justify-between items-center pb-2 border-b border-slate-100">
-            <Text className="text-xs font-bold text-slate-500">
-              {doctorNotifications.length} Alert(s)
-            </Text>
-            {doctorNotifications.length > 0 && (
-              <TouchableOpacity
-                onPress={() => markAllAsRead(user?.id, 'doctor')}
-                activeOpacity={0.8}
-              >
-                <Text className="text-xs font-bold text-[#1E58C8]">Mark all as read</Text>
-              </TouchableOpacity>
-            )}
-          </View>
+        <View style={styles.drawerBackdrop}>
+          <Pressable style={StyleSheet.absoluteFill} onPress={() => setDrawerOpen(false)} />
 
-          {doctorNotifications.length === 0 ? (
-            <View className="py-8 items-center justify-center" style={{ gap: 6 }}>
-              <Bell size={28} color="#94A3B8" />
-              <Text className="text-sm font-black text-slate-800">All Caught Up!</Text>
-              <Text className="text-xs text-slate-400 text-center px-4">
-                You'll receive instant alerts here whenever a patient books or cancels an appointment.
-              </Text>
-            </View>
-          ) : (
-            <ScrollView style={{ maxHeight: 360 }} showsVerticalScrollIndicator={false}>
-              <View style={{ gap: 8 }}>
-                {doctorNotifications.map((notif) => (
-                  <TouchableOpacity
-                    key={notif.id}
-                    onPress={() => {
-                      if (notif.link) {
-                        setNotificationsVisible(false);
-                        router.push(notif.link as any);
-                      }
-                    }}
-                    activeOpacity={0.85}
-                    className={`p-3 rounded-2xl border ${
-                      notif.read ? 'bg-white border-slate-200' : 'bg-blue-50/70 border-blue-200'
-                    }`}
-                    style={{ gap: 4 }}
-                  >
-                    <View className="flex-row items-center justify-between">
-                      <Text className="text-xs font-black text-slate-900 flex-1 mr-2" numberOfLines={1}>
-                        {notif.title}
-                      </Text>
-                      <Text className="text-[10px] text-slate-400">{notif.time}</Text>
-                    </View>
-                    <Text className="text-[11px] text-slate-600 leading-4">
-                      {notif.message}
-                    </Text>
-                  </TouchableOpacity>
-                ))}
+          <View style={[styles.drawerPanel, { backgroundColor: colors.card, borderColor: colors.border }]}>
+            {/* Drawer Header */}
+            <View style={styles.drawerHeader}>
+              <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+                <Stethoscope size={22} color={StitchColors.primaryContainer} />
+                <Text style={[styles.drawerBrandText, { color: colors.text }]}>FiYDOC Doctor OS</Text>
               </View>
-            </ScrollView>
-          )}
+              <Pressable
+                onPress={() => setDrawerOpen(false)}
+                hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+                style={[styles.closeDrawerBtn, { backgroundColor: colors.backgroundElement }]}
+              >
+                <X size={18} color={colors.text} />
+              </Pressable>
+            </View>
+
+            {/* Doctor Profile Banner */}
+            <View style={[styles.drawerProfileBox, { backgroundColor: colors.backgroundElement, borderColor: colors.border }]}>
+              <Image source={{ uri: user?.avatar || DOCTOR_AVATAR }} style={styles.drawerAvatarImg} />
+              <View style={{ flex: 1, marginLeft: 12 }}>
+                <Text style={[styles.drawerDoctorName, { color: colors.text }]}>{user?.name || 'Doctor'}</Text>
+                <Text style={[styles.drawerDoctorSpec, { color: StitchColors.primaryContainer }]}>FiYDoc Doctor Account</Text>
+              </View>
+            </View>
+
+            {/* Quick Mode Switcher Pill */}
+            <Pressable
+              onPress={handleSwitchToPatient}
+              style={[styles.switchModeBtn, { backgroundColor: '#E0F2FE', borderColor: '#BAE6FD' }]}
+            >
+              <Repeat size={16} color={StitchColors.primaryContainer} />
+              <View style={{ flex: 1, marginLeft: 10 }}>
+                <Text style={styles.switchModeTitle}>Switch to Patient Mode</Text>
+                <Text style={styles.switchModeSub}>Book OPD appointments & consults</Text>
+              </View>
+              <ChevronRight size={16} color={StitchColors.primaryContainer} />
+            </Pressable>
+
+            {/* Menu Links */}
+            <View style={styles.drawerMenuList}>
+              <Pressable
+                onPress={() => {
+                  setDrawerOpen(false);
+                  router.push('/(doctor)/(tabs)/schedule');
+                }}
+                style={styles.drawerMenuItem}
+              >
+                <Calendar size={18} color={colors.text} />
+                <Text style={[styles.drawerMenuLabel, { color: colors.text }]}>Schedule & Shifts</Text>
+              </Pressable>
+
+              <Pressable
+                onPress={() => {
+                  setDrawerOpen(false);
+                  router.push('/(doctor)/(tabs)/directory');
+                }}
+                style={styles.drawerMenuItem}
+              >
+                <Users size={18} color={colors.text} />
+                <Text style={[styles.drawerMenuLabel, { color: colors.text }]}>Patient Roster</Text>
+              </Pressable>
+
+              <Pressable
+                onPress={() => {
+                  setDrawerOpen(false);
+                  router.push('/(doctor)/(tabs)/profile');
+                }}
+                style={styles.drawerMenuItem}
+              >
+                <ShieldCheck size={18} color={colors.text} />
+                <Text style={[styles.drawerMenuLabel, { color: colors.text }]}>Payout & Credentials</Text>
+              </Pressable>
+            </View>
+
+            {/* Log Out */}
+            <View style={styles.drawerFooter}>
+              <Pressable
+                onPress={() => {
+                  setDrawerOpen(false);
+                  router.replace('/(auth)/welcome');
+                }}
+                style={styles.logoutRow}
+              >
+                <LogOut size={16} color={StitchColors.error} />
+                <Text style={styles.logoutText}>Log Out</Text>
+              </Pressable>
+              <Text style={[styles.buildVersionText, { color: colors.textMuted }]}>v4.12.0</Text>
+            </View>
+          </View>
         </View>
       </Modal>
     </SafeAreaView>
   );
 }
+
+const styles = StyleSheet.create({
+  safeArea: {
+    flex: 1,
+  },
+  headerBar: {
+    height: 56,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingHorizontal: 16,
+    borderBottomWidth: StyleSheet.hairlineWidth,
+  },
+  iconButton: {
+    width: 38,
+    height: 38,
+    borderRadius: 19,
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderWidth: 1,
+  },
+  headerRightRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 10,
+  },
+  notifDot: {
+    position: 'absolute',
+    top: 9,
+    right: 9,
+    width: 7,
+    height: 7,
+    borderRadius: 4,
+    backgroundColor: StitchColors.secondaryContainer,
+  },
+  avatarButton: {
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+    overflow: 'hidden',
+  },
+  doctorAvatarImg: {
+    width: '100%',
+    height: '100%',
+    borderRadius: 18,
+  },
+
+  scrollContent: {
+    padding: 16,
+    gap: 20,
+    paddingBottom: 110,
+  },
+
+  /* Greeting */
+  greetingRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+  },
+  greetingSmall: {
+    fontSize: 13,
+    fontWeight: '500',
+  },
+  greetingBig: {
+    fontSize: 26,
+    fontWeight: '800',
+    letterSpacing: -0.4,
+    marginTop: 2,
+  },
+  statusPill: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderRadius: BorderRadius.full,
+    borderWidth: 1,
+    gap: 6,
+  },
+  statusDot: {
+    width: 7,
+    height: 7,
+    borderRadius: 4,
+    backgroundColor: StitchColors.secondaryContainer,
+  },
+  statusText: {
+    fontSize: 11,
+    fontWeight: '600',
+  },
+
+  /* Today Card */
+  todayCard: {
+    padding: 16,
+    borderRadius: BorderRadius['2xl'],
+    borderWidth: 1,
+    gap: 12,
+    ...Shadows.subtle,
+  },
+  todayCardHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+  },
+  todayTitleRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+  },
+  todayHeaderTitle: {
+    fontSize: 11,
+    fontWeight: '800',
+    letterSpacing: 0.6,
+    color: StitchColors.primaryContainer,
+  },
+  todayApptCount: {
+    fontSize: 11,
+    fontWeight: '700',
+    color: StitchColors.secondaryContainer,
+  },
+
+  nextPatientCard: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    padding: 12,
+    borderRadius: BorderRadius.xl,
+  },
+  nextPatientLeft: {
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
+  },
+  nextPatientInitials: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  initialsText: {
+    fontSize: 14,
+    fontWeight: '800',
+    color: StitchColors.primaryContainer,
+  },
+  patientNameText: {
+    fontSize: 14,
+    fontWeight: '700',
+  },
+  nextBadge: {
+    paddingHorizontal: 6,
+    paddingVertical: 1.5,
+    borderRadius: BorderRadius.full,
+  },
+  nextBadgeText: {
+    fontSize: 9,
+    fontWeight: '700',
+  },
+  patientMetaText: {
+    fontSize: 11,
+    marginTop: 2,
+  },
+
+  todayCardFooter: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingTop: 4,
+  },
+  timingNoticeText: {
+    fontSize: 11,
+  },
+  startConsultBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+  },
+  startConsultText: {
+    fontSize: 12,
+    fontWeight: '700',
+    color: StitchColors.primaryContainer,
+  },
+
+  /* Metrics */
+  metricsGrid: {
+    flexDirection: 'row',
+    gap: 12,
+  },
+  metricCard: {
+    flex: 1,
+    padding: 14,
+    borderRadius: BorderRadius.xl,
+    borderWidth: 1,
+    justifyContent: 'space-between',
+    minHeight: 96,
+    ...Shadows.subtle,
+  },
+  metricHeaderRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+  },
+  metricLabel: {
+    fontSize: 11,
+    fontWeight: '600',
+  },
+  metricValueRow: {
+    flexDirection: 'row',
+    alignItems: 'baseline',
+    gap: 4,
+    marginTop: 6,
+  },
+  metricMainNumber: {
+    fontSize: 22,
+    fontWeight: '800',
+    letterSpacing: -0.3,
+  },
+  metricTotalNumber: {
+    fontSize: 12,
+    fontWeight: '600',
+  },
+  progressBarBg: {
+    height: 5,
+    borderRadius: 3,
+    overflow: 'hidden',
+    marginTop: 8,
+  },
+  progressBarFill: {
+    height: '100%',
+    borderRadius: 3,
+  },
+  metricWindowTime: {
+    fontSize: 16,
+    fontWeight: '800',
+    marginTop: 6,
+  },
+  metricWindowSub: {
+    fontSize: 11,
+    marginTop: 2,
+  },
+
+  /* Actions */
+  actionsGrid: {
+    flexDirection: 'row',
+    gap: 10,
+  },
+  actionBtn: {
+    flex: 1,
+    alignItems: 'center',
+    paddingVertical: 12,
+    paddingHorizontal: 4,
+    borderRadius: BorderRadius.xl,
+    borderWidth: 1,
+    ...Shadows.subtle,
+  },
+  actionIconBox: {
+    width: 42,
+    height: 42,
+    borderRadius: 14,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginBottom: 6,
+  },
+  actionBtnLabel: {
+    fontSize: 11,
+    fontWeight: '600',
+  },
+
+  /* Upcoming */
+  upcomingSection: {
+    gap: 10,
+  },
+  upcomingHeaderRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+  },
+  upcomingSectionTitle: {
+    fontSize: 15,
+    fontWeight: '800',
+    letterSpacing: -0.2,
+  },
+  viewAllText: {
+    fontSize: 12,
+    fontWeight: '700',
+    color: StitchColors.primaryContainer,
+  },
+  upcomingListCard: {
+    borderRadius: BorderRadius.xl,
+    borderWidth: 1,
+    overflow: 'hidden',
+    ...Shadows.subtle,
+  },
+  patientItemRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    padding: 14,
+  },
+  patientItemLeft: {
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
+  },
+  patientTimeCol: {
+    width: 64,
+    fontSize: 12,
+    fontWeight: '800',
+  },
+  patientRowName: {
+    fontSize: 14,
+    fontWeight: '700',
+  },
+  patientRowReason: {
+    fontSize: 11,
+    marginTop: 2,
+  },
+
+  /* Drawer Modal */
+  drawerBackdrop: {
+    flex: 1,
+    backgroundColor: 'rgba(0,0,0,0.5)',
+  },
+  drawerPanel: {
+    width: 300,
+    height: '100%',
+    padding: 20,
+    paddingTop: 54,
+    borderRightWidth: 1,
+    ...Shadows.modal,
+  },
+  drawerHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    marginBottom: 20,
+  },
+  drawerBrandText: {
+    fontSize: 16,
+    fontWeight: '800',
+    letterSpacing: -0.3,
+  },
+  closeDrawerBtn: {
+    width: 32,
+    height: 32,
+    borderRadius: 16,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  drawerProfileBox: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    padding: 12,
+    borderRadius: BorderRadius.xl,
+    borderWidth: 1,
+    marginBottom: 14,
+  },
+  drawerAvatarImg: {
+    width: 44,
+    height: 44,
+    borderRadius: 22,
+  },
+  drawerDoctorName: {
+    fontSize: 14,
+    fontWeight: '700',
+  },
+  drawerDoctorSpec: {
+    fontSize: 11,
+    fontWeight: '600',
+    marginTop: 2,
+  },
+  drawerRegText: {
+    fontSize: 9.5,
+    marginTop: 2,
+    fontFamily: Platform.OS === 'ios' ? 'Courier' : 'monospace',
+  },
+  switchModeBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    padding: 12,
+    borderRadius: BorderRadius.xl,
+    borderWidth: 1,
+    marginBottom: 20,
+  },
+  switchModeTitle: {
+    fontSize: 12,
+    fontWeight: '700',
+    color: StitchColors.primaryContainer,
+  },
+  switchModeSub: {
+    fontSize: 10,
+    color: '#0369A1',
+    marginTop: 1,
+  },
+  drawerMenuList: {
+    gap: 6,
+  },
+  drawerMenuItem: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
+    paddingVertical: 12,
+    paddingHorizontal: 8,
+    borderRadius: BorderRadius.lg,
+  },
+  drawerMenuLabel: {
+    fontSize: 13,
+    fontWeight: '600',
+  },
+  drawerFooter: {
+    marginTop: 'auto',
+    paddingTop: 16,
+    borderTopWidth: StyleSheet.hairlineWidth,
+    borderTopColor: '#E2E8F0',
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+  },
+  logoutRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+  },
+  logoutText: {
+    fontSize: 12,
+    fontWeight: '700',
+    color: StitchColors.error,
+  },
+  buildVersionText: {
+    fontSize: 10,
+  },
+});

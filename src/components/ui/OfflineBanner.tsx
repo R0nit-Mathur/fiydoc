@@ -1,6 +1,7 @@
-import React, { useState, useEffect } from 'react';
-import { View, Text, TouchableOpacity } from 'react-native';
-import { WifiOff, RefreshCw, CheckCircle2 } from 'lucide-react-native';
+import React, { useState } from 'react';
+import { View, Text, Pressable, StyleSheet } from 'react-native';
+import { WifiOff, RefreshCw } from 'lucide-react-native';
+import { Palette, BorderRadius } from '@/constants/theme';
 
 export function OfflineBanner() {
   const [isOffline, setIsOffline] = useState(false);
@@ -17,25 +18,83 @@ export function OfflineBanner() {
   if (!isOffline) return null;
 
   return (
-    <View className="bg-slate-900 border-b border-slate-800 px-4 py-2.5 flex-row items-center justify-between z-50">
-      <View className="flex-row items-center space-x-2 flex-1 mr-2">
-        <WifiOff size={16} color="#EF4444" />
-        <View className="flex-1">
-          <Text className="text-xs font-bold text-white">Offline Mode Active</Text>
-          <Text className="text-[10px] text-slate-400">Serving cached demo records & offline store.</Text>
+    <View style={styles.banner}>
+      <View style={styles.messageWrap}>
+        <WifiOff size={16} color={Palette.danger} />
+        <View style={styles.textColumn}>
+          <Text style={styles.title}>Offline Mode Active</Text>
+          <Text style={styles.subtitle}>Serving cached medical records & offline store.</Text>
         </View>
       </View>
 
-      <TouchableOpacity
+      <Pressable
         onPress={handleRetry}
         disabled={isReconnecting}
-        className="bg-slate-800 px-3 py-1.5 rounded-xl border border-slate-700 flex-row items-center space-x-1"
+        style={({ pressed }) => [
+          styles.retryBtn,
+          pressed && styles.retryBtnPressed,
+        ]}
+        accessibilityRole="button"
+        accessibilityLabel="Retry connection"
       >
-        <RefreshCw size={12} color="#FFFFFF" className={isReconnecting ? 'animate-spin' : ''} />
-        <Text className="text-[11px] font-bold text-white">
+        <RefreshCw size={12} color={Palette.white} />
+        <Text style={styles.retryText}>
           {isReconnecting ? 'Testing...' : 'Reconnect'}
         </Text>
-      </TouchableOpacity>
+      </Pressable>
     </View>
   );
 }
+
+const styles = StyleSheet.create({
+  banner: {
+    backgroundColor: Palette.primaryDark,
+    borderBottomWidth: 1,
+    borderBottomColor: '#27272A',
+    paddingHorizontal: 16,
+    paddingVertical: 10,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    zIndex: 9999,
+  },
+  messageWrap: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 10,
+    flex: 1,
+    marginRight: 8,
+  },
+  textColumn: {
+    flex: 1,
+  },
+  title: {
+    fontSize: 12,
+    fontWeight: '700',
+    color: Palette.white,
+  },
+  subtitle: {
+    fontSize: 11,
+    color: Palette.textMuted,
+    marginTop: 1,
+  },
+  retryBtn: {
+    backgroundColor: '#27272A',
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderRadius: BorderRadius.md,
+    borderWidth: 1,
+    borderColor: '#3F3F46',
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+  },
+  retryBtnPressed: {
+    backgroundColor: '#3F3F46',
+  },
+  retryText: {
+    fontSize: 11,
+    fontWeight: '700',
+    color: Palette.white,
+  },
+});

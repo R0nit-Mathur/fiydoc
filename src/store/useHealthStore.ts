@@ -1,17 +1,22 @@
 import { create } from 'zustand';
 import { createJSONStorage, persist } from 'zustand/middleware';
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import { MedicalRecord, Prescription } from '@/types/index';
+import { MedicalRecord, Prescription, LabReport } from '@/types/index';
+
+// No sample/mock lab reports — all data comes from real prescriptions and backend
 
 interface HealthState {
   records: MedicalRecord[];
   prescriptions: Prescription[];
+  labReports: LabReport[];
   activeFilter: string;
   addRecord: (record: MedicalRecord) => void;
   addPrescription: (prescription: Prescription) => void;
+  addLabReport: (report: LabReport) => void;
   setActiveFilter: (filter: string) => void;
   getPrescriptionsForDoctor: (doctorId: string, doctorName?: string) => Prescription[];
   getPrescriptionsForPatient: (patientId: string, patientName?: string) => Prescription[];
+  getLabReportsForPatient: (patientId?: string, patientName?: string) => LabReport[];
 }
 
 export const useHealthStore = create<HealthState>()(
@@ -19,12 +24,32 @@ export const useHealthStore = create<HealthState>()(
     (set, get) => ({
       records: [],
       prescriptions: [],
+      labReports: [],
       activeFilter: 'All',
 
       addRecord: (record) =>
         set((state) => ({
           records: [record, ...state.records],
         })),
+
+      addLabReport: (report) =>
+        set((state) => {
+          const recordItem: MedicalRecord = {
+            id: `rec_${report.id}`,
+            patientId: report.patientId,
+            title: `Lab Test: ${report.testName} • ${report.labName}`,
+            type: 'Lab Report',
+            sourceId: report.id,
+            createdAt: 'Just now',
+            doctorName: report.doctorReferred,
+            summary: report.summary || `Verified diagnostic results from ${report.labName}.`,
+            tags: ['DIAGNOSTIC_LAB', report.category.toUpperCase()],
+          };
+          return {
+            labReports: [report, ...state.labReports.filter((r) => r.id !== report.id)],
+            records: [recordItem, ...state.records.filter((r) => r.sourceId !== report.id)],
+          };
+        }),
 
       addPrescription: (prescription) =>
         set((state) => {
@@ -76,9 +101,22 @@ export const useHealthStore = create<HealthState>()(
           return false;
         });
       },
+
+      getLabReportsForPatient: (patientId?: string, patientName?: string) => {
+        const state = get();
+        if (!patientId && !patientName) return state.labReports;
+        return state.labReports.filter((r) => {
+          if (patientId && r.patientId === patientId) return true;
+          if (patientName && r.patientName && r.patientName.trim().toLowerCase() === patientName.trim().toLowerCase()) {
+            return true;
+          }
+          // Default fallbacks for patient portal view
+          return r.patientId === 'patient_default';
+        });
+      },
     }),
     {
-      name: 'fiydoc-health-storage-v4',
+      name: 'fiydoc-health-storage-v5',
       storage: createJSONStorage(() => AsyncStorage),
     }
   )

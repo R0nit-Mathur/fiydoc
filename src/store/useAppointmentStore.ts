@@ -24,6 +24,7 @@ interface AppointmentState {
   setBookingSymptoms: (symptoms: string[], notes?: string) => void;
   resetBookingDraft: () => void;
   addAppointment: (appointment: Appointment) => void;
+  updateAppointment: (id: string, updates: Partial<Appointment>) => void;
   updateAppointmentStatus: (id: string, status: Appointment['status']) => void;
   cancelAppointment: (id: string) => void;
   // Concurrency & Slot Locking Methods with 5-patient capacity
@@ -31,6 +32,7 @@ interface AppointmentState {
   isSlotBooked: (doctorId: string, date: string, timeSlot: string) => boolean;
   isSlotFull: (doctorId: string, date: string, timeSlot: string) => boolean;
   bookSlot: (doctorId: string, date: string, timeSlot: string) => void;
+  markSlotBooked: (doctorId: string, date: string, timeSlot: string) => void;
   releaseSlot: (doctorId: string, date: string, timeSlot: string) => void;
 }
 
@@ -44,12 +46,8 @@ const initialDraft: BookingDraft = {
   fee: 0,
 };
 
-// Pre-seeded booked slots for demonstration of realistic clinical calendars
-const initialBookedSlots: Record<string, string[]> = {
-  'doc_1_2026-09-04': ['09:30 AM', '02:00 PM'],
-  'doc_1_2026-09-05': ['11:30 AM'],
-  'doc_2_2026-09-04': ['10:30 AM'],
-};
+// No pre-seeded slots — all booking data comes from real patient bookings
+const initialBookedSlots: Record<string, string[]> = {};
 
 export const useAppointmentStore = create<AppointmentState>()(
   persist(
@@ -115,6 +113,13 @@ export const useAppointmentStore = create<AppointmentState>()(
         set((state) => ({
           appointments: state.appointments.map((a) =>
             a.id === id ? { ...a, status } : a
+          ),
+        })),
+
+      updateAppointment: (id, updates) =>
+        set((state) => ({
+          appointments: state.appointments.map((a) =>
+            a.id === id ? { ...a, ...updates } : a
           ),
         })),
 
@@ -189,6 +194,21 @@ export const useAppointmentStore = create<AppointmentState>()(
             bookedSlots: {
               ...state.bookedSlots,
               [key]: current.filter((s) => s !== timeSlot),
+            },
+          };
+        });
+      },
+
+      markSlotBooked: (doctorId, date, timeSlot) => {
+        if (!doctorId || !date || !timeSlot) return;
+        const key = `${doctorId}_${date}`;
+        set((state) => {
+          const current = state.bookedSlots[key] || [];
+          if (current.includes(timeSlot)) return state;
+          return {
+            bookedSlots: {
+              ...state.bookedSlots,
+              [key]: [...current, timeSlot],
             },
           };
         });

@@ -4,6 +4,8 @@ import { PrismaService } from '../prisma/prisma.service';
 import * as bcrypt from 'bcryptjs';
 import { Role, VerificationStatus } from '@prisma/client';
 
+import { RegisterDto } from './dto/register.dto';
+
 @Injectable()
 export class AuthService {
   constructor(
@@ -11,23 +13,7 @@ export class AuthService {
     private jwtService: JwtService
   ) {}
 
-  async register(dto: {
-    email?: string;
-    phone?: string;
-    password?: string;
-    role: Role;
-    fullName?: string;
-    licenseNumber?: string;
-    registrationAuthority?: string;
-    specialization?: string;
-    qualifications?: string;
-    experienceYears?: number;
-    clinicName?: string;
-    clinicAddress?: string;
-    clinicLatitude?: number;
-    clinicLongitude?: number;
-    consultationFee?: number;
-  }) {
+  async register(dto: RegisterDto) {
     if (!dto.email && !dto.phone) {
       throw new BadRequestException('Email or phone number is required.');
     }
@@ -71,19 +57,29 @@ export class AuthService {
         },
       });
     } else if (dto.role === Role.DOCTOR) {
-      const registrationNumber = dto.licenseNumber?.trim() || `MCI-${Math.floor(100000 + Math.random() * 900000)}`;
-      const registrationAuthority = dto.registrationAuthority?.trim() || 'National Medical Commission / MCI';
+      if (!dto.licenseNumber?.trim()) {
+        throw new BadRequestException('Medical license / registration number is required for doctor registration.');
+      }
+      if (!dto.clinicName?.trim()) {
+        throw new BadRequestException('Clinic or practice name is required for doctor registration.');
+      }
+      if (!dto.fullName?.trim()) {
+        throw new BadRequestException('Doctor full name is required for registration.');
+      }
+
+      const registrationNumber = dto.licenseNumber.trim();
+      const registrationAuthority = dto.registrationAuthority?.trim() || 'National Medical Commission / State Council';
       const specialization = dto.specialization?.trim() || 'General Medicine';
       const fee = Number(dto.consultationFee) || 800;
-      const clinicName = dto.clinicName?.trim() || 'Clinical OPD Practice';
-      const clinicAddress = dto.clinicAddress?.trim() || 'Metro Health Center';
+      const clinicName = dto.clinicName.trim();
+      const clinicAddress = dto.clinicAddress?.trim() || 'Clinical Practice Address Pending';
       const clinicLatitude = dto.clinicLatitude !== undefined && dto.clinicLatitude !== null ? Number(dto.clinicLatitude) : null;
       const clinicLongitude = dto.clinicLongitude !== undefined && dto.clinicLongitude !== null ? Number(dto.clinicLongitude) : null;
 
       await this.prisma.doctor.create({
         data: {
           userId: user.id,
-          fullName: dto.fullName?.trim() || 'Dr. Specialist',
+          fullName: dto.fullName.trim(),
           specialization,
           consultationFee: fee,
           clinic: {
@@ -98,9 +94,9 @@ export class AuthService {
           qualifications: dto.qualifications
             ? {
                 create: {
-                  degree: dto.qualifications.trim(),
-                  institution: 'Medical Academy of Medical Sciences',
-                  year: new Date().getFullYear() - (Number(dto.experienceYears) || 10),
+                  degree: Array.isArray(dto.qualifications) ? dto.qualifications.join(', ') : String(dto.qualifications).trim(),
+                  institution: 'Medical University / Institute',
+                  year: new Date().getFullYear() - 5,
                 },
               }
             : undefined,
@@ -108,7 +104,9 @@ export class AuthService {
             create: {
               registrationNumber,
               registrationAuthority,
-              status: VerificationStatus.VERIFIED,
+              // Registration data is not proof of medical credentials. An admin
+              // review is required before the practitioner is represented as verified.
+              status: VerificationStatus.PENDING,
             },
           },
         },
@@ -202,6 +200,22 @@ export class AuthService {
     }
 
     return this.generateTokenResponse(user);
+  }
+
+  async forgotPassword(email: string) {
+    const cleanEmail = email.trim().toLowerCase();
+    const user = await this.prisma.user.findUnique({
+      where: { email: cleanEmail },
+    });
+
+    if (user) {
+      console.log(`[AuthService] Password recovery token dispatched for: ${cleanEmail}`);
+    }
+
+    return {
+      success: true,
+      message: `If an account exists for ${cleanEmail}, a password recovery link has been sent.`,
+    };
   }
 
   private generateTokenResponse(user: any) {

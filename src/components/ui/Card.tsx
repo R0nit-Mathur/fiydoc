@@ -1,38 +1,82 @@
 import React from 'react';
-import { View, TouchableOpacity, ViewProps } from 'react-native';
+import { View, Pressable, ViewProps, StyleSheet, ViewStyle } from 'react-native';
+import { BorderRadius, Shadows } from '@/constants/theme';
+import { useAppTheme } from '@/hooks/useAppTheme';
 
 interface CardProps extends ViewProps {
   children: React.ReactNode;
   onPress?: () => void;
   variant?: 'elevated' | 'outlined' | 'flat';
   className?: string;
+  style?: ViewStyle;
 }
 
-export function Card({ children, onPress, variant = 'elevated', className = '', ...props }: CardProps) {
-  const variantStyles = {
-    elevated: 'bg-white dark:bg-slate-800 shadow-sm border border-slate-100 dark:border-slate-700/60',
-    outlined: 'bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700',
-    flat: 'bg-slate-50 dark:bg-slate-900 border border-slate-100 dark:border-slate-800',
+export function Card({
+  children,
+  onPress,
+  variant = 'elevated',
+  style,
+  ...props
+}: CardProps) {
+  const { colors, isDark } = useAppTheme();
+
+  const dynamicVariantStyles: Record<string, ViewStyle> = {
+    elevated: {
+      backgroundColor: colors.card,
+      borderWidth: 1,
+      borderColor: isDark ? 'rgba(255, 255, 255, 0.1)' : 'rgba(19, 27, 46, 0.06)',
+    },
+    outlined: {
+      backgroundColor: colors.card,
+      borderWidth: 1,
+      borderColor: colors.border,
+    },
+    flat: {
+      backgroundColor: colors.background,
+      borderWidth: 1,
+      borderColor: isDark ? 'rgba(255, 255, 255, 0.1)' : 'rgba(19, 27, 46, 0.06)',
+    },
   };
 
   if (onPress) {
     return (
-      <TouchableOpacity
+      <Pressable
         onPress={onPress}
-        activeOpacity={0.85}
-        className={`rounded-2xl p-4 ${variantStyles[variant]} ${className}`}
+        style={({ pressed }) => [
+          styles.base,
+          dynamicVariantStyles[variant],
+          variant === 'elevated' && Shadows.card,
+          pressed && styles.pressed,
+          style,
+        ]}
+        accessibilityRole="button"
       >
         {children}
-      </TouchableOpacity>
+      </Pressable>
     );
   }
 
   return (
     <View
-      className={`rounded-2xl p-4 ${variantStyles[variant]} ${className}`}
+      style={[
+        styles.base,
+        dynamicVariantStyles[variant],
+        variant === 'elevated' && Shadows.card,
+        style,
+      ]}
       {...props}
     >
       {children}
     </View>
   );
 }
+
+const styles = StyleSheet.create({
+  base: {
+    borderRadius: BorderRadius['2xl'],
+    padding: 18,
+  },
+  pressed: {
+    opacity: 0.92,
+  },
+});

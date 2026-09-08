@@ -6,7 +6,7 @@
     "orientation": "portrait",
     "icon": "./assets/images/app logo.png",
     "scheme": "fiydoc",
-    "userInterfaceStyle": "automatic",
+    "userInterfaceStyle": "light",
     "ios": {
       "supportsTablet": true,
       "bundleIdentifier": "com.fiydoc.app",

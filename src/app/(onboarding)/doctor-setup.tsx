@@ -1,110 +1,101 @@
-import React, { useState } from 'react';
-import { View, Text, TouchableOpacity, ScrollView } from 'react-native';
+import React from 'react';
+import { View, ScrollView, StyleSheet, Platform } from 'react-native';
 import { useRouter } from 'expo-router';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { Input } from '@/components/ui/Input';
-import { Button } from '@/components/ui/Button';
-import { Stethoscope, Award, FileCheck, CheckCircle2 } from 'lucide-react-native';
-import { useAuthStore } from '@/store/useAuthStore';
+import { UniversalTopBar } from '@/components/ui/UniversalTopBar';
+import { DoctorRegistrationView } from '@/components/doctor/DoctorRegistrationView';
+import { StitchColors } from '@/constants/theme';
 
 export default function DoctorSetupScreen() {
   const router = useRouter();
-  const { user, setSession, setOnboardingCompleted, setVerificationStatus } = useAuthStore();
-
-  const [specialty, setSpecialty] = useState('Cardiology');
-  const [qualification, setQualification] = useState('MD, DM (Cardiology)');
-  const [licenseNumber, setLicenseNumber] = useState('MCI-884920-A');
-  const [hospital, setHospital] = useState('Metro Heart Institute');
-  const [fee, setFee] = useState('750');
-
-  const handleFinish = () => {
-    if (user) {
-      setSession({
-        ...user,
-        name: user.name?.startsWith('Dr.') ? user.name : `Dr. ${user.name}`,
-        role: 'doctor',
-        onboardingCompleted: true,
-        verificationStatus: 'verified',
-        specialty,
-        qualification,
-        licenseNumber,
-        hospital,
-        consultationFee: fee,
-      } as any);
-    } else {
-      setOnboardingCompleted(true);
-      setVerificationStatus('verified');
-    }
-    router.replace('/(doctor)/(tabs)/home');
-  };
 
   return (
-    <SafeAreaView className="flex-1 bg-white">
-      <ScrollView contentContainerClassName="px-6 py-4 flex-grow justify-between">
-        <View>
-          <View className="flex-row items-center justify-between mb-2">
-            <View className="bg-blue-50 px-3 py-1 rounded-full border border-blue-100">
-              <Text className="text-xs font-bold text-[#1E58C8]">Step 2 of 2: Medical Credentials</Text>
-            </View>
-          </View>
+    <SafeAreaView style={styles.safeArea} edges={['bottom']}>
+      {/* Soft Ambient Medical Glow Header Background */}
+      <View style={styles.ambientGlowContainer} pointerEvents="none">
+        <View style={styles.glow1} />
+        <View style={styles.glow2} />
+        <View style={styles.glow3} />
+      </View>
 
-          <Text className="text-2xl font-black text-slate-900 mt-2">Clinical Verification Setup</Text>
-          <Text className="text-sm text-slate-500 mt-1 mb-6">
-            Enter your medical registration details to activate your consultation workspace.
-          </Text>
+      {/* Universal Top Navigation Header */}
+      <UniversalTopBar
+        onBackPress={() => {
+          if (router.canGoBack()) {
+            router.back();
+          } else {
+            router.replace('/(auth)/login');
+          }
+        }}
+      />
 
-          <View className="space-y-4">
-            <Input
-              label="Medical Registration / License Number"
-              placeholder="e.g. MCI-884920-A"
-              value={licenseNumber}
-              onChangeText={setLicenseNumber}
-              leftIcon={<FileCheck size={18} color="#94A3B8" />}
-            />
-
-            <Input
-              label="Primary Specialty"
-              placeholder="e.g. Cardiology, Dermatology, Pediatrics"
-              value={specialty}
-              onChangeText={setSpecialty}
-              leftIcon={<Stethoscope size={18} color="#94A3B8" />}
-            />
-
-            <Input
-              label="Qualifications & Degrees"
-              placeholder="e.g. MD, DM, FACC"
-              value={qualification}
-              onChangeText={setQualification}
-              leftIcon={<Award size={18} color="#94A3B8" />}
-            />
-
-            <Input
-              label="Affiliated Hospital / Clinic Name"
-              placeholder="e.g. Metro Heart Institute"
-              value={hospital}
-              onChangeText={setHospital}
-            />
-
-            <Input
-              label="Default Consultation Fee (₹)"
-              placeholder="750"
-              keyboardType="number-pad"
-              value={fee}
-              onChangeText={setFee}
-            />
-          </View>
-        </View>
-
-        <View className="pt-6 pb-4">
-          <Button
-            title="Submit Credentials & Launch Workspace"
-            onPress={handleFinish}
-            variant="primary"
-            size="lg"
-            icon={<CheckCircle2 size={20} color="#FFFFFF" />}
+      <ScrollView
+        contentContainerStyle={styles.scrollContainer}
+        showsVerticalScrollIndicator={false}
+        keyboardShouldPersistTaps="handled"
+      >
+        <View style={styles.innerContent}>
+          <DoctorRegistrationView
+            showRoleSelector
+            onSwitchToPatient={() => {
+              router.replace({ pathname: '/(auth)/signup', params: { role: 'patient' } });
+            }}
           />
         </View>
       </ScrollView>
     </SafeAreaView>
   );
 }
+
+const styles = StyleSheet.create({
+  safeArea: {
+    flex: 1,
+    backgroundColor: StitchColors.surface,
+  },
+  ambientGlowContainer: {
+    ...StyleSheet.absoluteFill,
+    height: 380,
+    overflow: 'hidden',
+    zIndex: -1,
+  },
+  glow1: {
+    position: 'absolute',
+    top: -60,
+    right: -80,
+    width: 320,
+    height: 320,
+    borderRadius: 160,
+    backgroundColor: 'rgba(118, 244, 224, 0.2)',
+    ...Platform.select({ web: { filter: 'blur(64px)' } }),
+  },
+  glow2: {
+    position: 'absolute',
+    top: 180,
+    left: -80,
+    width: 280,
+    height: 280,
+    borderRadius: 140,
+    backgroundColor: 'rgba(216, 226, 255, 0.25)',
+    ...Platform.select({ web: { filter: 'blur(64px)' } }),
+  },
+  glow3: {
+    position: 'absolute',
+    bottom: 40,
+    right: 16,
+    width: 250,
+    height: 250,
+    borderRadius: 125,
+    backgroundColor: 'rgba(121, 247, 227, 0.15)',
+    ...Platform.select({ web: { filter: 'blur(48px)' } }),
+  },
+  scrollContainer: {
+    flexGrow: 1,
+    paddingBottom: 36,
+  },
+  innerContent: {
+    width: '100%',
+    maxWidth: 430,
+    alignSelf: 'center',
+    paddingHorizontal: 16,
+  },
+});

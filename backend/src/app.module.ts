@@ -11,6 +11,7 @@ import { PrescriptionsModule } from './prescriptions/prescriptions.module';
 import { RecordsModule } from './records/records.module';
 import { VerificationModule } from './verification/verification.module';
 import { AdminModule } from './admin/admin.module';
+import { PatientsModule } from './patients/patients.module';
 
 @Module({
   imports: [
@@ -21,6 +22,7 @@ import { AdminModule } from './admin/admin.module';
     PrismaModule,
     SupabaseModule,
     AuthModule,
+    PatientsModule,
     DoctorsModule,
     AppointmentsModule,
     ConsultationsModule,

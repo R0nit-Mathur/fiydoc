@@ -1,11 +1,13 @@
 import React, { useState } from 'react';
-import { View, Text, Image } from 'react-native';
+import { View, Text, Image, StyleSheet, StyleProp, ViewStyle, ImageStyle } from 'react-native';
+import { Palette, BorderRadius, Shadows } from '@/constants/theme';
 
 interface AvatarProps {
   uri?: string | null;
   name?: string;
   size?: 'sm' | 'md' | 'lg' | 'xl';
   className?: string;
+  style?: StyleProp<ViewStyle | ImageStyle>;
 }
 
 const SIZE_MAP = {
@@ -15,7 +17,7 @@ const SIZE_MAP = {
   xl: { size: 72, text: 22, radius: 22 },
 };
 
-export function Avatar({ uri, name = 'User', size = 'md', className = '' }: AvatarProps) {
+export function Avatar({ uri, name = 'User', size = 'md', style }: AvatarProps) {
   const [hasError, setHasError] = useState(false);
 
   const getInitials = (text: string) => {
@@ -33,16 +35,22 @@ export function Avatar({ uri, name = 'User', size = 'md', className = '' }: Avat
   if (!uri || hasError) {
     return (
       <View
-        style={{
-          width: config.size,
-          height: config.size,
-          borderRadius: config.radius,
-          flexShrink: 0,
-        }}
-        className={`bg-teal-600 items-center justify-center border border-teal-500 shadow-sm ${className}`}
+        style={[
+          styles.fallback,
+          {
+            width: config.size,
+            height: config.size,
+            borderRadius: config.radius,
+          },
+          Shadows.subtle,
+          style as StyleProp<ViewStyle>,
+        ]}
       >
         <Text
-          style={{ fontSize: config.text, fontWeight: '800', color: '#FFFFFF', letterSpacing: 0.5 }}
+          style={[
+            styles.initials,
+            { fontSize: config.text },
+          ]}
         >
           {initials}
         </Text>
@@ -54,14 +62,38 @@ export function Avatar({ uri, name = 'User', size = 'md', className = '' }: Avat
     <Image
       source={{ uri }}
       onError={() => setHasError(true)}
-      style={{
-        width: config.size,
-        height: config.size,
-        borderRadius: config.radius,
-        flexShrink: 0,
-      }}
-      className={`bg-slate-100 border border-slate-200 ${className}`}
+      style={[
+        styles.image,
+        {
+          width: config.size,
+          height: config.size,
+          borderRadius: config.radius,
+        },
+        style as StyleProp<ImageStyle>,
+      ]}
       resizeMode="cover"
     />
   );
 }
+
+const styles = StyleSheet.create({
+  fallback: {
+    backgroundColor: Palette.healthcareTeal,
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderWidth: 1,
+    borderColor: Palette.healthcareTealHover,
+    flexShrink: 0,
+  },
+  initials: {
+    fontWeight: '800',
+    color: Palette.white,
+    letterSpacing: 0.5,
+  },
+  image: {
+    backgroundColor: Palette.cardBorderLight,
+    borderWidth: 1,
+    borderColor: Palette.cardBorder,
+    flexShrink: 0,
+  },
+});

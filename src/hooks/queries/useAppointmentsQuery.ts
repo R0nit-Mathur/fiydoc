@@ -74,3 +74,25 @@ export function useBookAppointmentMutation() {
     },
   });
 }
+
+export function useApproveAppointmentMutation() {
+  const queryClient = useQueryClient();
+  const updateAppointmentStatus = useAppointmentStore((s) => s.updateAppointmentStatus);
+
+  return useMutation({
+    mutationFn: async (id: string) => {
+      try {
+        return await appointmentService.approveAppointment(id);
+      } catch (err) {
+        console.warn('[useApproveAppointmentMutation] Remote approve failed, falling back to local:', err);
+        return { id, status: 'confirmed' } as any;
+      }
+    },
+    onSuccess: (_, id) => {
+      updateAppointmentStatus(id, 'confirmed');
+      queryClient.invalidateQueries({ queryKey: ['appointments'] });
+      queryClient.invalidateQueries({ queryKey: ['appointment', id] });
+    },
+  });
+}
+

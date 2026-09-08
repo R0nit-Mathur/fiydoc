@@ -1,4 +1,6 @@
 import { apiClient } from './apiClient';
+import { DEFAULT_DOCTOR_AVATAR, DEFAULT_PATIENT_AVATAR } from '@/constants/theme';
+import { calculateAgeFromDOB } from '@/utils/formatters';
 
 export interface UserSession {
   id: string;
@@ -19,6 +21,14 @@ export interface UserSession {
   registrationNumber?: string;
   licenseNumber?: string;
   specialty?: string;
+  dob?: string;
+  address?: string;
+  age?: number | string;
+  bloodGroup?: string;
+  gender?: string;
+  allergies?: string;
+  chronicConditions?: string;
+  emergencyContact?: string;
 }
 
 export const authService = {
@@ -29,16 +39,28 @@ export const authService = {
     });
 
     const token = response.accessToken || response.access_token;
+    const role = (response.user.role || 'PATIENT').toLowerCase() as 'patient' | 'doctor' | 'admin';
+    const defaultAvatar = role === 'doctor' ? DEFAULT_DOCTOR_AVATAR : DEFAULT_PATIENT_AVATAR;
+    const pat = response.user.patient;
+    const doc = response.user.doctor;
+    const calculatedAge = pat?.dob ? calculateAgeFromDOB(pat.dob) ?? undefined : undefined;
+
     return {
       id: response.user.id,
-      name: response.user.patient?.fullName || response.user.doctor?.fullName || 'User',
+      name: pat?.fullName || doc?.fullName || 'User',
       email: response.user.email,
-      role: (response.user.role || 'PATIENT').toLowerCase() as 'patient' | 'doctor' | 'admin',
-      avatar: response.user.patient?.profilePhoto || response.user.doctor?.profilePhoto || '',
+      role,
+      avatar: pat?.profilePhoto || doc?.profilePhoto || defaultAvatar,
       phone: response.user.phone || '',
+      dob: pat?.dob,
+      address: pat?.address,
+      age: calculatedAge,
+      bloodGroup: pat?.bloodGroup,
+      gender: pat?.gender,
+      allergies: Array.isArray(pat?.allergies) ? pat.allergies.join(', ') : pat?.allergies,
       isLoggedIn: true,
       onboardingCompleted: true,
-      verificationStatus: response.user.doctor?.verification?.status?.toLowerCase() || 'registered',
+      verificationStatus: doc?.verification?.status?.toLowerCase() || 'registered',
       accessToken: token,
     };
   },
@@ -48,6 +70,7 @@ export const authService = {
     password: string,
     role: string,
     fullName: string,
+    phone?: string,
     extraDoctorFields?: {
       licenseNumber?: string;
       registrationAuthority?: string;
@@ -68,21 +91,26 @@ export const authService = {
         password,
         role: role.toUpperCase(),
         fullName: fullName.trim(),
+        ...(phone?.trim() ? { phone: phone.trim() } : {}),
         ...(extraDoctorFields || {}),
       }),
     });
 
     const token = response.accessToken || response.access_token;
+    const userRole = (response.user.role || role).toLowerCase() as 'patient' | 'doctor' | 'admin';
+    const defaultAvatar = userRole === 'doctor' ? DEFAULT_DOCTOR_AVATAR : DEFAULT_PATIENT_AVATAR;
     return {
       id: response.user.id,
       name: response.user.patient?.fullName || response.user.doctor?.fullName || fullName,
       email: response.user.email,
-      role: (response.user.role || role).toLowerCase() as 'patient' | 'doctor' | 'admin',
-      avatar: response.user.patient?.profilePhoto || response.user.doctor?.profilePhoto || '',
+      role: userRole,
+      avatar: response.user.patient?.profilePhoto || response.user.doctor?.profilePhoto || defaultAvatar,
       phone: response.user.phone || '',
+      dob: response.user.patient?.dob,
+      address: response.user.patient?.address,
       isLoggedIn: true,
       onboardingCompleted: true,
-      verificationStatus: response.user.doctor?.verification?.status?.toLowerCase() || 'verified',
+      verificationStatus: response.user.doctor?.verification?.status?.toLowerCase() || 'pending',
       accessToken: token,
     };
   },
@@ -109,50 +137,53 @@ export const authService = {
 
       const token = response.accessToken || response.access_token;
       const hasDoctorProfile = Boolean(response.user.doctor && response.user.doctor.specialty);
-      const hasPatientProfile = Boolean(response.user.patient && (response.user.patient.age || response.user.patient.gender));
+      const hasPatientProfile = Boolean(response.user.patient && (response.user.patient.age || response.user.patient.gender || response.user.patient.dob));
       const isProfileConfigured = hasDoctorProfile || hasPatientProfile;
+
+      const userRole = hasDoctorProfile ? 'doctor' : (response.user.role || 'PATIENT').toLowerCase() as 'patient' | 'doctor';
+      const defaultAvatar = userRole === 'doctor' ? DEFAULT_DOCTOR_AVATAR : DEFAULT_PATIENT_AVATAR;
+      const pat = response.user.patient;
+      const doc = response.user.doctor;
+      const calculatedAge = pat?.dob ? calculateAgeFromDOB(pat.dob) ?? undefined : undefined;
 
       return {
         id: response.user.id,
-        name: response.user.patient?.fullName || response.user.doctor?.fullName || name,
+        name: pat?.fullName || doc?.fullName || name,
         email: response.user.email,
-        role: hasDoctorProfile ? 'doctor' : (response.user.role || 'PATIENT').toLowerCase() as 'patient' | 'doctor',
-        avatar: response.user.patient?.profilePhoto || response.user.doctor?.profilePhoto || avatarUrl || '',
+        role: userRole,
+        avatar: pat?.profilePhoto || doc?.profilePhoto || avatarUrl || defaultAvatar,
         phone: response.user.phone || '',
+        dob: pat?.dob,
+        address: pat?.address,
+        age: calculatedAge,
+        bloodGroup: pat?.bloodGroup,
+        gender: pat?.gender,
+        allergies: Array.isArray(pat?.allergies) ? pat.allergies.join(', ') : pat?.allergies,
         isLoggedIn: true,
         onboardingCompleted: isProfileConfigured,
         verificationStatus: hasDoctorProfile ? 'verified' : 'registered',
         accessToken: token,
       };
-    } catch (err) {
-      console.warn('[authService] Google endpoint login fallback for account', email, err);
-      // Clean session for new Google identity requiring role and profile selection
-      const isDoctorEmail = email.toLowerCase().includes('doctor') || email.toLowerCase().includes('dr.') || name.toLowerCase().includes('dr.');
-      return {
-        id: 'usr_' + Math.random().toString(36).substring(2, 9),
-        name,
-        email,
-        role: isDoctorEmail ? 'doctor' : 'patient',
-        avatar: avatarUrl || '',
-        phone: '',
-        isLoggedIn: true,
-        onboardingCompleted: false, // Always prompts for profile creation (Patient or Doctor)
-        verificationStatus: 'registered',
-      };
+    } catch (err: any) {
+      console.error('[authService] Google login failed:', err);
+      throw new Error(
+        err?.message || 'Google authentication was not completed. Please try again.'
+      );
     }
-  },
-
-  async verifyOtp(otp: string): Promise<boolean> {
-    if (otp === '1234') {
-      return true;
-    }
-    throw new Error('Invalid verification code. Please enter 1234.');
   },
 
   async requestPasswordReset(email: string): Promise<{ success: boolean; message: string }> {
-    return {
-      success: true,
-      message: `Password reset link sent to ${email}. Check your inbox.`,
-    };
+    try {
+      const res = await apiClient.post<{ success: boolean; message: string }>('/auth/forgot-password', {
+        email: email.trim().toLowerCase(),
+      });
+      return {
+        success: true,
+        message: res.message || `Password recovery link dispatched to ${email}. Check your inbox.`,
+      };
+    } catch (err: any) {
+      const msg = err?.message || 'Failed to send password recovery link. Please verify your email and try again.';
+      throw new Error(msg);
+    }
   },
 };

@@ -1,16 +1,18 @@
 import React, { useEffect } from 'react';
-import { View, ActivityIndicator } from 'react-native';
+import { View, ActivityIndicator, StyleSheet } from 'react-native';
 import { useRouter, useRootNavigationState } from 'expo-router';
 import { useAuthStore } from '@/store/useAuthStore';
 import { FiYLogo } from '@/components/ui/FiYLogo';
+import { useAppTheme } from '@/hooks/useAppTheme';
 
 export default function Index() {
   const router = useRouter();
-  const { isAuthenticated, role, onboardingCompleted } = useAuthStore();
+  const { colors } = useAppTheme();
+  const { isAuthenticated, role, onboardingCompleted, hasHydrated } = useAuthStore();
   const rootNavigationState = useRootNavigationState();
 
   useEffect(() => {
-    if (!rootNavigationState?.key) return;
+    if (!rootNavigationState?.key || !hasHydrated) return;
 
     const timer = setTimeout(() => {
       if (!isAuthenticated) {
@@ -22,15 +24,26 @@ export default function Index() {
       } else {
         router.replace('/(patient)/(tabs)/home');
       }
-    }, 400);
+    }, 200);
 
     return () => clearTimeout(timer);
-  }, [isAuthenticated, role, onboardingCompleted, rootNavigationState?.key]);
+  }, [isAuthenticated, role, onboardingCompleted, hasHydrated, rootNavigationState?.key]);
 
   return (
-    <View className="flex-1 bg-white items-center justify-center space-y-4">
+    <View style={[styles.container, { backgroundColor: colors.background }]}>
       <FiYLogo size="2xl" />
-      <ActivityIndicator size="large" color="#00B39B" className="mt-8" />
+      <ActivityIndicator size="large" color={colors.primary} style={styles.spinner} />
     </View>
   );
 }
+
+const styles = StyleSheet.create({
+  container: {
+    flex: 1,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  spinner: {
+    marginTop: 28,
+  },
+});

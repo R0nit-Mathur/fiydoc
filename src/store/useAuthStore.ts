@@ -9,12 +9,14 @@ interface AuthState {
   isAuthenticated: boolean;
   onboardingCompleted: boolean;
   verificationStatus: 'registered' | 'pending' | 'verified' | 'rejected' | 'info_required';
+  hasHydrated: boolean;
 
   // Actions
   setSession: (session: UserSession) => void;
   setRole: (role: 'patient' | 'doctor' | 'admin') => void;
   setOnboardingCompleted: (completed: boolean) => void;
   setVerificationStatus: (status: 'registered' | 'pending' | 'verified' | 'rejected' | 'info_required') => void;
+  setHasHydrated: (hydrated: boolean) => void;
   updateUser: (fields: Partial<UserSession>) => void;
   logout: () => void;
 }
@@ -27,6 +29,7 @@ export const useAuthStore = create<AuthState>()(
       isAuthenticated: false,
       onboardingCompleted: false,
       verificationStatus: 'registered',
+      hasHydrated: false,
 
       setSession: (session) =>
         set({
@@ -60,6 +63,8 @@ export const useAuthStore = create<AuthState>()(
           user: state.user ? { ...state.user, verificationStatus } : null,
         })),
 
+      setHasHydrated: (hasHydrated) => set({ hasHydrated }),
+
       logout: () =>
         set({
           user: null,
@@ -72,6 +77,9 @@ export const useAuthStore = create<AuthState>()(
     {
       name: 'fiydoc-auth-storage',
       storage: createJSONStorage(() => AsyncStorage),
+      onRehydrateStorage: () => (state) => {
+        state?.setHasHydrated(true);
+      },
     }
   )
 );

@@ -18,6 +18,22 @@ export interface BookAppointmentInput {
   patientAvatar?: string;
 }
 
+function endTimeFor(startTime: string): string {
+  const match = startTime.trim().match(/^(\d{1,2}):(\d{2})\s*(AM|PM)?$/i);
+  if (!match) return startTime;
+
+  let hours = Number(match[1]);
+  const minutes = Number(match[2]);
+  const meridiem = match[3]?.toUpperCase();
+  if (meridiem) {
+    if (meridiem === 'PM' && hours !== 12) hours += 12;
+    if (meridiem === 'AM' && hours === 12) hours = 0;
+  }
+
+  const totalMinutes = (hours * 60 + minutes + 30) % (24 * 60);
+  return `${String(Math.floor(totalMinutes / 60)).padStart(2, '0')}:${String(totalMinutes % 60).padStart(2, '0')}`;
+}
+
 export const appointmentService = {
   getPatientAppointments: async (patientId: string): Promise<Appointment[]> => {
     return apiClient<Appointment[]>(`/appointments/patient/${patientId}`);
@@ -45,7 +61,17 @@ export const appointmentService = {
   bookAppointment: async (input: BookAppointmentInput): Promise<Appointment> => {
     return apiClient<Appointment>('/appointments', {
       method: 'POST',
-      body: JSON.stringify(input),
+      body: JSON.stringify({
+        patientId: input.patientId,
+        doctorId: input.doctorId,
+        date: input.date,
+        startTime: input.time,
+        endTime: endTimeFor(input.time),
+        consultationType: input.mode === 'video' ? 'VIDEO' : 'CLINIC',
+        fee: input.fee,
+        symptoms: input.symptoms,
+        notes: input.notes,
+      }),
     });
   },
 

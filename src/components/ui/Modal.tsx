@@ -3,12 +3,14 @@ import {
   Modal as RNModal,
   View,
   Text,
-  TouchableOpacity,
-  TouchableWithoutFeedback,
+  Pressable,
   KeyboardAvoidingView,
   Platform,
+  StyleSheet,
+  ViewStyle,
 } from 'react-native';
 import { X } from 'lucide-react-native';
+import { Palette, BorderRadius, Shadows } from '@/constants/theme';
 
 interface ModalProps {
   visible: boolean;
@@ -16,7 +18,7 @@ interface ModalProps {
   title?: string;
   children: React.ReactNode;
   fullscreen?: boolean;
-  contentStyle?: any;
+  contentStyle?: ViewStyle;
 }
 
 export function Modal({
@@ -36,97 +38,52 @@ export function Modal({
     >
       <KeyboardAvoidingView
         behavior={Platform.OS === 'ios' ? 'padding' : undefined}
-        style={{ flex: 1 }}
+        style={styles.keyboardAvoid}
       >
-        <TouchableWithoutFeedback onPress={onClose}>
-          <View
-            style={{
-              flex: 1,
-              backgroundColor: 'rgba(15, 23, 42, 0.65)',
-              justifyContent: 'center',
-              alignItems: 'center',
-              padding: fullscreen ? 8 : 16,
-            }}
+        <Pressable style={styles.backdrop} onPress={onClose}>
+          <Pressable
+            style={[
+              styles.modalCard,
+              fullscreen ? styles.modalCardFullscreen : styles.modalCardStandard,
+              Shadows.modal,
+              contentStyle,
+            ]}
+            onPress={(e) => e.stopPropagation()}
           >
-            <TouchableWithoutFeedback>
-              <View
-                style={[
-                  {
-                    width: '100%',
-                    maxWidth: fullscreen ? 640 : 440,
-                    backgroundColor: '#FFFFFF',
-                    borderRadius: 24,
-                    padding: 18,
-                    shadowColor: '#000',
-                    shadowOffset: { width: 0, height: 10 },
-                    shadowOpacity: 0.18,
-                    shadowRadius: 20,
-                    elevation: 10,
-                    borderWidth: 1,
-                    borderColor: '#E2E8F0',
-                  },
-                  fullscreen
-                    ? { height: '94%', display: 'flex', flexDirection: 'column' }
-                    : { maxHeight: '90%' },
-                  contentStyle,
-                ]}
-              >
-                {title && (
-                  <View
-                    style={{
-                      flexDirection: 'row',
-                      alignItems: 'center',
-                      justifyContent: 'space-between',
-                      paddingBottom: 12,
-                      borderBottomWidth: 1,
-                      borderBottomColor: '#F1F5F9',
-                      marginBottom: 12,
-                      flexShrink: 0,
-                    }}
-                  >
-                    <Text
-                      style={{
-                        fontSize: 16,
-                        fontWeight: '800',
-                        color: '#0F172A',
-                        flex: 1,
-                        marginRight: 8,
-                      }}
-                      numberOfLines={1}
-                    >
-                      {title}
-                    </Text>
-                    <TouchableOpacity
-                      onPress={onClose}
-                      activeOpacity={0.7}
-                      style={{
-                        width: 32,
-                        height: 32,
-                        borderRadius: 16,
-                        backgroundColor: '#F1F5F9',
-                        alignItems: 'center',
-                        justifyContent: 'center',
-                      }}
-                    >
-                      <X size={16} color="#64748B" />
-                    </TouchableOpacity>
-                  </View>
-                )}
-                {fullscreen ? (
-                  <View style={{ flex: 1, minHeight: 0 }}>{children}</View>
-                ) : (
-                  <View style={{ flexShrink: 1 }}>{children}</View>
-                )}
+            {title && (
+              <View style={styles.headerRow}>
+                <Text style={styles.titleText} numberOfLines={1}>
+                  {title}
+                </Text>
+                <Pressable
+                  onPress={onClose}
+                  style={({ pressed }) => [
+                    styles.closeButton,
+                    pressed && styles.closeButtonPressed,
+                  ]}
+                  accessibilityRole="button"
+                  accessibilityLabel="Close modal"
+                >
+                  <X size={18} color={Palette.textSecondary} />
+                </Pressable>
               </View>
-            </TouchableWithoutFeedback>
-          </View>
-        </TouchableWithoutFeedback>
+            )}
+            <View style={styles.contentWrap}>{children}</View>
+          </Pressable>
+        </Pressable>
       </KeyboardAvoidingView>
     </RNModal>
   );
 }
 
-export function BottomSheet({ visible, onClose, title, children }: ModalProps) {
+interface BottomSheetProps {
+  visible: boolean;
+  onClose: () => void;
+  title?: string;
+  children: React.ReactNode;
+}
+
+export function BottomSheet({ visible, onClose, title, children }: BottomSheetProps) {
   return (
     <RNModal
       visible={visible}
@@ -136,79 +93,118 @@ export function BottomSheet({ visible, onClose, title, children }: ModalProps) {
     >
       <KeyboardAvoidingView
         behavior={Platform.OS === 'ios' ? 'padding' : undefined}
-        style={{ flex: 1 }}
+        style={styles.keyboardAvoid}
       >
-        <TouchableWithoutFeedback onPress={onClose}>
-          <View
-            style={{
-              flex: 1,
-              backgroundColor: 'rgba(15, 23, 42, 0.6)',
-              justifyContent: 'flex-end',
-            }}
+        <Pressable style={styles.bottomSheetBackdrop} onPress={onClose}>
+          <Pressable
+            style={[styles.bottomSheetCard, Shadows.modal]}
+            onPress={(e) => e.stopPropagation()}
           >
-            <TouchableWithoutFeedback>
-              <View
-                style={{
-                  backgroundColor: '#FFFFFF',
-                  borderTopLeftRadius: 28,
-                  borderTopRightRadius: 28,
-                  padding: 20,
-                  maxHeight: '85%',
-                  shadowColor: '#000',
-                  shadowOffset: { width: 0, height: -4 },
-                  shadowOpacity: 0.15,
-                  shadowRadius: 15,
-                  elevation: 10,
-                  borderTopWidth: 1,
-                  borderTopColor: '#E2E8F0',
-                }}
-              >
-                <View
-                  style={{
-                    width: 44,
-                    height: 5,
-                    backgroundColor: '#CBD5E1',
-                    borderRadius: 99,
-                    alignSelf: 'center',
-                    marginBottom: 16,
-                  }}
-                />
-                {title && (
-                  <View
-                    style={{
-                      flexDirection: 'row',
-                      alignItems: 'center',
-                      justifyContent: 'space-between',
-                      paddingBottom: 12,
-                      borderBottomWidth: 1,
-                      borderBottomColor: '#F1F5F9',
-                      marginBottom: 14,
-                    }}
-                  >
-                    <Text style={{ fontSize: 17, fontWeight: '800', color: '#0F172A' }}>
-                      {title}
-                    </Text>
-                    <TouchableOpacity
-                      onPress={onClose}
-                      style={{
-                        width: 32,
-                        height: 32,
-                        borderRadius: 16,
-                        backgroundColor: '#F1F5F9',
-                        alignItems: 'center',
-                        justifyContent: 'center',
-                      }}
-                    >
-                      <X size={16} color="#64748B" />
-                    </TouchableOpacity>
-                  </View>
-                )}
-                <View style={{ flexShrink: 1 }}>{children}</View>
+            <View style={styles.handleBar} />
+            {title && (
+              <View style={styles.headerRow}>
+                <Text style={styles.titleText} numberOfLines={1}>
+                  {title}
+                </Text>
+                <Pressable
+                  onPress={onClose}
+                  style={({ pressed }) => [
+                    styles.closeButton,
+                    pressed && styles.closeButtonPressed,
+                  ]}
+                  accessibilityRole="button"
+                  accessibilityLabel="Close bottom sheet"
+                >
+                  <X size={18} color={Palette.textSecondary} />
+                </Pressable>
               </View>
-            </TouchableWithoutFeedback>
-          </View>
-        </TouchableWithoutFeedback>
+            )}
+            <View style={styles.contentWrap}>{children}</View>
+          </Pressable>
+        </Pressable>
       </KeyboardAvoidingView>
     </RNModal>
   );
 }
+
+const styles = StyleSheet.create({
+  keyboardAvoid: {
+    flex: 1,
+  },
+  backdrop: {
+    flex: 1,
+    backgroundColor: 'rgba(15, 23, 42, 0.65)',
+    justifyContent: 'center',
+    alignItems: 'center',
+    padding: 16,
+  },
+  bottomSheetBackdrop: {
+    flex: 1,
+    backgroundColor: 'rgba(15, 23, 42, 0.65)',
+    justifyContent: 'flex-end',
+  },
+  modalCard: {
+    width: '100%',
+    backgroundColor: Palette.card,
+    borderRadius: BorderRadius['2xl'],
+    padding: 20,
+    borderWidth: 1,
+    borderColor: Palette.cardBorderLight,
+  },
+  modalCardStandard: {
+    maxWidth: 460,
+    maxHeight: '90%',
+  },
+  modalCardFullscreen: {
+    maxWidth: 680,
+    height: '92%',
+  },
+  bottomSheetCard: {
+    width: '100%',
+    backgroundColor: Palette.card,
+    borderTopLeftRadius: BorderRadius['2xl'],
+    borderTopRightRadius: BorderRadius['2xl'],
+    padding: 20,
+    maxHeight: '85%',
+    borderTopWidth: 1,
+    borderTopColor: Palette.cardBorderLight,
+  },
+  handleBar: {
+    width: 40,
+    height: 4,
+    backgroundColor: Palette.cardBorder,
+    borderRadius: BorderRadius.full,
+    alignSelf: 'center',
+    marginBottom: 16,
+  },
+  headerRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingBottom: 12,
+    borderBottomWidth: 1,
+    borderBottomColor: Palette.cardBorderLight,
+    marginBottom: 16,
+  },
+  titleText: {
+    fontSize: 18,
+    fontWeight: '800',
+    color: Palette.textPrimary,
+    flex: 1,
+    letterSpacing: -0.3,
+  },
+  closeButton: {
+    width: 32,
+    height: 32,
+    borderRadius: BorderRadius.full,
+    backgroundColor: Palette.background,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  closeButtonPressed: {
+    backgroundColor: Palette.cardBorderLight,
+  },
+  contentWrap: {
+    flexShrink: 1,
+  },
+});

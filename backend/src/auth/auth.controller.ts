@@ -1,28 +1,47 @@
-import { Controller, Post, Get, Body, Query, Res, HttpCode, HttpStatus } from '@nestjs/common';
+import {
+  Controller,
+  Post,
+  Get,
+  Body,
+  Query,
+  Res,
+  HttpCode,
+  HttpStatus,
+  UseGuards,
+} from '@nestjs/common';
 import { AuthService } from './auth.service';
-import { Role } from '@prisma/client';
+import { RegisterDto } from './dto/register.dto';
+import { LoginDto } from './dto/login.dto';
+import { GoogleAuthDto } from './dto/google-auth.dto';
+import { ForgotPasswordDto } from './dto/forgot-password.dto';
+import { AuthRateLimitGuard } from './auth-rate-limit.guard';
 
 @Controller('auth')
+@UseGuards(AuthRateLimitGuard)
 export class AuthController {
   constructor(private authService: AuthService) {}
 
   @Post('register')
-  async register(
-    @Body() body: { email?: string; phone?: string; password?: string; role: Role; fullName?: string }
-  ) {
-    return this.authService.register(body);
+  async register(@Body() dto: RegisterDto) {
+    return this.authService.register(dto);
   }
 
   @HttpCode(HttpStatus.OK)
   @Post('login')
-  async login(@Body() body: { email?: string; phone?: string; password?: string }) {
-    return this.authService.login(body);
+  async login(@Body() dto: LoginDto) {
+    return this.authService.login(dto);
   }
 
   @HttpCode(HttpStatus.OK)
   @Post('google')
-  async googleAuth(@Body() body: { googleId: string; email: string; name: string }) {
-    return this.authService.googleOAuthLogin(body);
+  async googleAuth(@Body() dto: GoogleAuthDto) {
+    return this.authService.googleOAuthLogin(dto);
+  }
+
+  @HttpCode(HttpStatus.OK)
+  @Post('forgot-password')
+  async forgotPassword(@Body() dto: ForgotPasswordDto) {
+    return this.authService.forgotPassword(dto.email);
   }
 
   @Get('google/callback')
@@ -57,4 +76,3 @@ export class AuthController {
     `);
   }
 }
-

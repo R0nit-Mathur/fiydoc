@@ -23,28 +23,9 @@ interface NotificationState {
   getUnreadCount: (userId?: string, role?: 'patient' | 'doctor') => number;
 }
 
-const initialNotifications: NotificationItem[] = [
-  {
-    id: 'notif_welcome',
-    title: 'Welcome to FiYDoc Health Network',
-    message: 'Your unified healthcare profile is active. Book consultations and access verified medical records anytime.',
-    time: 'Just now',
-    timestamp: 'Today',
-    read: false,
-    type: 'system',
-    recipientRole: 'all',
-  },
-  {
-    id: 'notif_system_security',
-    title: 'ABDM Medical Standards Connected',
-    message: 'All clinical interactions are secured with 256-bit HIPAA and Ayushman Bharat Digital Mission compliance.',
-    time: '1 hour ago',
-    timestamp: 'Today',
-    read: true,
-    type: 'verification',
-    recipientRole: 'all',
-  },
-];
+// No pre-seeded notifications. All notifications are pushed dynamically by real events.
+const initialNotifications: NotificationItem[] = [];
+
 
 export const useNotificationStore = create<NotificationState>()(
   persist(

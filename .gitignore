@@ -31,8 +31,14 @@ yarn-error.*
 *.pem
 
 # local env files
-.env*.local
+.env
+.env*
+!.env.example
+!backend/.env.example
 *.production
+package-lock.json
+backend/package-lock.json
+backend/dist/
 
 # typescript
 *.tsbuildinfo
@@ -45,4 +51,3 @@ example
 
 # Backend secrets / local IDE
 .idea/git
-backend/.env

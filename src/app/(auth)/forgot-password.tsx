@@ -1,79 +1,140 @@
 import React, { useState } from 'react';
-import { View, Text, TouchableOpacity } from 'react-native';
+import { View, Text, Pressable, StyleSheet, ScrollView } from 'react-native';
 import { useRouter } from 'expo-router';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { FiYLogo } from '@/components/ui/FiYLogo';
+import { Mail, ArrowLeft } from 'lucide-react-native';
+import { authService } from '@/services/authService';
 import { Input } from '@/components/ui/Input';
 import { Button } from '@/components/ui/Button';
-import { Mail, ArrowLeft, CheckCircle2 } from 'lucide-react-native';
-import { authService } from '@/services/authService';
+import { useAppTheme } from '@/hooks/useAppTheme';
+import { Spacing, Typography } from '@/constants/theme';
 
 export default function ForgotPasswordScreen() {
   const router = useRouter();
+  const { colors } = useAppTheme();
   const [email, setEmail] = useState('');
   const [loading, setLoading] = useState(false);
-  const [sentMessage, setSentMessage] = useState('');
+  const [error, setError] = useState('');
 
   const handleReset = async () => {
-    if (!email) return;
+    if (!email.trim()) {
+      setError('Please enter your email address.');
+      return;
+    }
     try {
+      setError('');
       setLoading(true);
-      const res = await authService.requestPasswordReset(email);
-      setSentMessage(res.message);
-    } catch (err) {
-      console.error(err);
+      await authService.requestPasswordReset(email);
+      router.push({ pathname: '/(auth)/verify-otp', params: { email: email.trim(), from: 'reset' } });
+    } catch (err: any) {
+      setError(err?.message || 'Failed to send password recovery instructions.');
     } finally {
       setLoading(false);
     }
   };
 
   return (
-    <SafeAreaView className="flex-1 bg-white px-6 py-4 justify-between">
-      <View>
-        <TouchableOpacity onPress={() => router.back()} className="p-2 -ml-2 mb-4 self-start">
-          <ArrowLeft size={24} color="#0F172A" />
-        </TouchableOpacity>
+    <SafeAreaView style={[styles.safeArea, { backgroundColor: colors.background }]} edges={['top', 'bottom']}>
+      <ScrollView
+        contentContainerStyle={styles.scrollContainer}
+        showsVerticalScrollIndicator={false}
+        keyboardShouldPersistTaps="handled"
+      >
+        <View style={styles.container}>
+          {/* Back Button */}
+          <Pressable
+            onPress={() => router.back()}
+            hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+            style={[styles.backButton, { backgroundColor: colors.card, borderColor: colors.border }]}
+            accessibilityRole="button"
+            accessibilityLabel="Go back"
+          >
+            <ArrowLeft size={20} color={colors.text} />
+          </Pressable>
 
-        <FiYLogo size="lg" />
-        <Text className="text-2xl font-black text-slate-900 mt-4">Reset Password</Text>
-        <Text className="text-sm text-slate-500 mt-1 mb-6">
-          Enter your registered email address and we will send you a password recovery link.
-        </Text>
-
-        {sentMessage ? (
-          <View className="bg-emerald-50 p-4 rounded-2xl border border-emerald-200 flex-row items-center space-x-3 mb-6">
-            <CheckCircle2 size={24} color="#10B981" />
-            <Text className="text-xs font-bold text-emerald-800 flex-1">{sentMessage}</Text>
+          {/* Title */}
+          <View style={styles.header}>
+            <Text style={[styles.title, Typography.h2, { color: colors.text }]}>Reset password</Text>
+            <Text style={[styles.subtitle, Typography.body, { color: colors.textSecondary }]}>
+              Enter your registered email address and we will send you a 6-digit verification code.
+            </Text>
           </View>
-        ) : (
+
+          {/* Email Input */}
           <Input
             label="Email Address"
             placeholder="name@example.com"
             value={email}
-            onChangeText={setEmail}
-            leftIcon={<Mail size={18} color="#94A3B8" />}
+            onChangeText={(text) => {
+              setEmail(text);
+              if (error) setError('');
+            }}
+            error={error}
+            autoCapitalize="none"
+            keyboardType="email-address"
+            leftIcon={<Mail size={18} color={colors.textMuted} />}
           />
-        )}
-      </View>
 
-      <View className="pb-4">
-        {sentMessage ? (
-          <Button
-            title="Back to Sign In"
-            onPress={() => router.replace('/(auth)/login')}
-            variant="primary"
-            size="lg"
-          />
-        ) : (
-          <Button
-            title="Send Reset Instructions"
-            onPress={handleReset}
-            loading={loading}
-            variant="teal"
-            size="lg"
-          />
-        )}
+          {error ? (
+            <Text style={[styles.errorText, { color: colors.danger }]}>{error}</Text>
+          ) : null}
+        </View>
+      </ScrollView>
+
+      {/* Footer */}
+      <View style={styles.footerWrap}>
+        <Button
+          title="Send Reset Code"
+          onPress={handleReset}
+          loading={loading}
+          variant="primary"
+          size="lg"
+          fullWidth
+        />
       </View>
     </SafeAreaView>
   );
 }
+
+const styles = StyleSheet.create({
+  safeArea: {
+    flex: 1,
+  },
+  scrollContainer: {
+    flexGrow: 1,
+    paddingHorizontal: Spacing.md,
+    paddingTop: Spacing.md,
+    paddingBottom: Spacing.lg,
+  },
+  container: {
+    width: '100%',
+  },
+  backButton: {
+    width: 44,
+    height: 44,
+    borderRadius: 12,
+    borderWidth: 1,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginBottom: Spacing.md,
+  },
+  header: {
+    marginBottom: Spacing.xl,
+  },
+  title: {
+    letterSpacing: -0.02,
+    marginBottom: Spacing.xs,
+  },
+  subtitle: {
+    lineHeight: 22,
+  },
+  errorText: {
+    fontSize: 13,
+    fontWeight: '500',
+  },
+  footerWrap: {
+    width: '100%',
+    paddingHorizontal: Spacing.md,
+    paddingBottom: Spacing.lg,
+  },
+});

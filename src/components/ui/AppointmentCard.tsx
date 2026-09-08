@@ -1,9 +1,10 @@
 import React from 'react';
-import { View, Text, TouchableOpacity } from 'react-native';
+import { View, Text, Pressable, StyleSheet } from 'react-native';
 import { Appointment } from '@/types/index';
 import { Calendar, Clock, Building2, ChevronRight } from 'lucide-react-native';
 import { Badge } from './Badge';
 import { Avatar } from './Avatar';
+import { Palette, BorderRadius, Shadows } from '@/constants/theme';
 
 interface AppointmentCardProps {
   appointment: Appointment;
@@ -14,6 +15,7 @@ export function AppointmentCard({ appointment, onPress }: AppointmentCardProps) 
   const statusBadge = {
     upcoming: { label: 'Upcoming', variant: 'blue' as const },
     confirmed: { label: 'Confirmed', variant: 'teal' as const },
+    checked_in: { label: 'Checked In', variant: 'teal' as const },
     completed: { label: 'Completed', variant: 'success' as const },
     cancelled: { label: 'Cancelled', variant: 'danger' as const },
     in_progress: { label: 'In Consultation', variant: 'teal' as const },
@@ -21,83 +23,157 @@ export function AppointmentCard({ appointment, onPress }: AppointmentCardProps) 
   }[appointment.status] || { label: 'Confirmed', variant: 'teal' as const };
 
   return (
-    <TouchableOpacity
+    <Pressable
       onPress={onPress}
-      activeOpacity={0.88}
-      className="bg-white/95 rounded-2xl p-3.5 mb-3 border border-slate-200/80 shadow-sm"
+      style={({ pressed }) => [
+        styles.card,
+        Shadows.card,
+        pressed && styles.cardPressed,
+      ]}
+      accessibilityRole="button"
+      accessibilityLabel={`Appointment with ${appointment.doctorName} on ${appointment.date} at ${appointment.time}`}
     >
-      <View
-        style={{
-          flexDirection: 'row',
-          alignItems: 'center',
-          justifyContent: 'space-between',
-          marginBottom: 10,
-          paddingBottom: 8,
-          borderBottomWidth: 1,
-          borderBottomColor: '#F1F5F9',
-        }}
-      >
-        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, flex: 1, minWidth: 0, marginRight: 8 }}>
-          <View style={{ backgroundColor: '#EFF6FF', padding: 5, borderRadius: 8, flexShrink: 0 }}>
-            <Building2 size={13} color="#1E58C8" />
+      <View style={styles.headerRow}>
+        <View style={styles.typeBadge}>
+          <View style={styles.buildingIconWrapper}>
+            <Building2 size={13} color={Palette.primaryBlue} />
           </View>
-          <Text style={{ fontSize: 11, fontWeight: '700', color: '#1E293B', flex: 1 }} numberOfLines={1}>
+          <Text style={styles.consultationTypeText} numberOfLines={1}>
             In-Clinic Consultation
           </Text>
         </View>
-        <View style={{ flexShrink: 0 }}>
-          <Badge label={statusBadge.label} variant={statusBadge.variant} size="sm" />
-        </View>
+        <Badge label={statusBadge.label} variant={statusBadge.variant} size="sm" />
       </View>
 
-      <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10 }}>
+      <View style={styles.doctorInfoRow}>
         <Avatar uri={appointment.doctorAvatar} name={appointment.doctorName} size="md" />
 
-        <View style={{ flex: 1, minWidth: 0 }}>
-          <Text style={{ fontSize: 14, fontWeight: '800', color: '#0F172A' }} numberOfLines={1}>
+        <View style={styles.doctorDetails}>
+          <Text style={styles.doctorName} numberOfLines={1}>
             {appointment.doctorName}
           </Text>
-          <Text style={{ fontSize: 11, fontWeight: '700', color: '#00B39B', marginTop: 1 }} numberOfLines={1}>
+          <Text style={styles.doctorSpecialty} numberOfLines={1}>
             {appointment.doctorSpecialty}
           </Text>
-          <Text style={{ fontSize: 11, fontWeight: '500', color: '#64748B', marginTop: 1 }} numberOfLines={1}>
+          <Text style={styles.hospitalText} numberOfLines={1}>
             {appointment.hospital}
           </Text>
         </View>
 
-        <ChevronRight size={16} color="#94A3B8" style={{ flexShrink: 0 }} />
+        <ChevronRight size={18} color={Palette.textMuted} style={styles.chevron} />
       </View>
 
-      <View
-        style={{
-          flexDirection: 'row',
-          alignItems: 'center',
-          justifyContent: 'space-between',
-          marginTop: 10,
-          backgroundColor: '#F8FAFC',
-          borderRadius: 12,
-          paddingHorizontal: 12,
-          paddingVertical: 8,
-          borderWidth: 1,
-          borderColor: '#F1F5F9',
-        }}
-      >
-        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4 }}>
-          <Calendar size={12} color="#64748B" />
-          <Text style={{ fontSize: 11, fontWeight: '700', color: '#334155' }}>
-            {appointment.date}
-          </Text>
+      <View style={styles.footerRow}>
+        <View style={styles.timeTag}>
+          <Calendar size={13} color={Palette.textSecondary} />
+          <Text style={styles.timeTagText}>{appointment.date}</Text>
         </View>
-        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4 }}>
-          <Clock size={12} color="#64748B" />
-          <Text style={{ fontSize: 11, fontWeight: '700', color: '#334155' }}>
-            {appointment.time}
-          </Text>
+        <View style={styles.timeTag}>
+          <Clock size={13} color={Palette.textSecondary} />
+          <Text style={styles.timeTagText}>{appointment.time}</Text>
         </View>
-        <Text style={{ fontSize: 12, fontWeight: '800', color: '#1E58C8' }}>
-          ₹{appointment.fee}
-        </Text>
+        <Text style={styles.feeText}>₹{appointment.fee}</Text>
       </View>
-    </TouchableOpacity>
+    </Pressable>
   );
 }
+
+const styles = StyleSheet.create({
+  card: {
+    backgroundColor: Palette.card,
+    borderRadius: BorderRadius.lg,
+    padding: 14,
+    marginBottom: 12,
+    borderWidth: 1,
+    borderColor: Palette.cardBorder,
+  },
+  cardPressed: {
+    opacity: 0.9,
+    backgroundColor: Palette.cardBorderLight,
+  },
+  headerRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    marginBottom: 10,
+    paddingBottom: 8,
+    borderBottomWidth: 1,
+    borderBottomColor: Palette.cardBorderLight,
+  },
+  typeBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    flex: 1,
+    minWidth: 0,
+    marginRight: 8,
+  },
+  buildingIconWrapper: {
+    backgroundColor: Palette.primaryBlueLight,
+    padding: 5,
+    borderRadius: BorderRadius.sm,
+    flexShrink: 0,
+  },
+  consultationTypeText: {
+    fontSize: 12,
+    fontWeight: '700',
+    color: Palette.textPrimary,
+    flex: 1,
+  },
+  doctorInfoRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
+  },
+  doctorDetails: {
+    flex: 1,
+    minWidth: 0,
+  },
+  doctorName: {
+    fontSize: 15,
+    fontWeight: '800',
+    color: Palette.textPrimary,
+  },
+  doctorSpecialty: {
+    fontSize: 12,
+    fontWeight: '700',
+    color: Palette.healthcareTeal,
+    marginTop: 1,
+  },
+  hospitalText: {
+    fontSize: 12,
+    fontWeight: '500',
+    color: Palette.textSecondary,
+    marginTop: 2,
+  },
+  chevron: {
+    flexShrink: 0,
+  },
+  footerRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    marginTop: 12,
+    backgroundColor: Palette.background,
+    borderRadius: BorderRadius.md,
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    borderWidth: 1,
+    borderColor: Palette.cardBorderLight,
+  },
+  timeTag: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 5,
+  },
+  timeTagText: {
+    fontSize: 12,
+    fontWeight: '700',
+    color: Palette.textPrimary,
+  },
+  feeText: {
+    fontSize: 13,
+    fontWeight: '800',
+    color: Palette.primaryBlue,
+  },
+});

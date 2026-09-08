@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import {
   View,
   Text,
@@ -6,15 +6,23 @@ import {
   Modal,
   ScrollView,
   StyleSheet,
+  Animated,
+  Dimensions,
+  Platform,
+  BackHandler,
+  Pressable,
+  Linking,
   Alert,
 } from 'react-native';
 import { useRouter } from 'expo-router';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useAuthStore } from '@/store/useAuthStore';
 import { useLocationStore } from '@/store/useLocationStore';
-import { updateService } from '@/services/updateService';
 import { Avatar } from '@/components/ui/Avatar';
 import { Badge } from '@/components/ui/Badge';
 import { FiYLogo } from '@/components/ui/FiYLogo';
+import { ConfirmationDialog } from '@/components/ui/ConfirmationDialog';
+import { Palette, Typography, BorderRadius, Shadows, Spacing } from '@/constants/theme';
 import {
   X,
   FileText,
@@ -24,10 +32,11 @@ import {
   RefreshCw,
   LogOut,
   ChevronRight,
-  Sparkles,
-  Heart,
-  HelpCircle,
+  User,
 } from 'lucide-react-native';
+
+const SCREEN_WIDTH = Dimensions.get('window').width;
+const DRAWER_WIDTH = Math.min(SCREEN_WIDTH * 0.82, 340);
 
 interface SidebarDrawerProps {
   visible: boolean;
@@ -37,57 +46,130 @@ interface SidebarDrawerProps {
 
 export function SidebarDrawer({ visible, onClose, onOpenLocationPicker }: SidebarDrawerProps) {
   const router = useRouter();
+  const insets = useSafeAreaInsets();
   const { user, logout } = useAuthStore();
   const { city, formattedAddress } = useLocationStore();
+  const [logoutConfirmVisible, setLogoutConfirmVisible] = useState(false);
 
-  const handleLogout = () => {
-    onClose();
-    logout();
-    router.replace('/(auth)/login');
-  };
+  // Animation values: slide from right (DRAWER_WIDTH -> 0) & backdrop opacity (0 -> 1)
+  const slideAnim = useRef(new Animated.Value(DRAWER_WIDTH)).current;
+  const fadeAnim = useRef(new Animated.Value(0)).current;
 
-  const handleCheckUpdates = async () => {
-    try {
-      const update = await updateService.checkForUpdate();
-      if (update.isAvailable) {
-        Alert.alert('Update Available', 'A new version of FiYDoc is ready.', [
-          { text: 'Install Now', onPress: () => updateService.fetchAndApplyUpdate() },
-          { text: 'Later', style: 'cancel' },
-        ]);
-      } else {
-        Alert.alert('FiYDoc is Up to Date', 'You are running the latest clinical version.');
-      }
-    } catch {
-      Alert.alert('FiYDoc', 'App is running latest version.');
+  useEffect(() => {
+    if (visible) {
+      Animated.parallel([
+        Animated.timing(fadeAnim, {
+          toValue: 1,
+          duration: 220,
+          useNativeDriver: true,
+        }),
+        Animated.spring(slideAnim, {
+          toValue: 0,
+          bounciness: 4,
+          speed: 14,
+          useNativeDriver: true,
+        }),
+      ]).start();
+    } else {
+      Animated.parallel([
+        Animated.timing(fadeAnim, {
+          toValue: 0,
+          duration: 180,
+          useNativeDriver: true,
+        }),
+        Animated.timing(slideAnim, {
+          toValue: DRAWER_WIDTH,
+          duration: 200,
+          useNativeDriver: true,
+        }),
+      ]).start();
     }
+  }, [visible]);
+
+  // Handle hardware back button on Android
+  useEffect(() => {
+    if (!visible) return;
+    const onBackPress = () => {
+      handleClose();
+      return true;
+    };
+    const subscription = BackHandler.addEventListener('hardwareBackPress', onBackPress);
+    return () => subscription.remove();
+  }, [visible]);
+
+  const handleClose = () => {
+    Animated.parallel([
+      Animated.timing(fadeAnim, {
+        toValue: 0,
+        duration: 180,
+        useNativeDriver: true,
+      }),
+      Animated.timing(slideAnim, {
+        toValue: DRAWER_WIDTH,
+        duration: 200,
+        useNativeDriver: true,
+      }),
+    ]).start(() => {
+      onClose();
+    });
   };
 
-  const handleEmergencyCall = () => {
-    Alert.alert(
-      'National Emergency Healthcare Helpline',
-      'Call 112 (National Emergency) or 108 (Ambulance)?',
-      [
-        { text: 'Cancel', style: 'cancel' },
-        { text: 'Call 108 (Ambulance)', style: 'destructive' },
-      ]
-    );
+  const handleConfirmLogout = () => {
+    setLogoutConfirmVisible(false);
+    handleClose();
+    setTimeout(() => {
+      logout();
+      router.replace('/(auth)/login');
+    }, 250);
   };
+
+  if (!visible) return null;
 
   return (
-    <Modal visible={visible} transparent animationType="fade" onRequestClose={onClose}>
-      <View style={styles.overlay}>
-        <TouchableOpacity
-          activeOpacity={1}
-          style={styles.backdrop}
-          onPress={onClose}
-        />
+    <Modal
+      visible={visible}
+      transparent
+      animationType="none"
+      onRequestClose={handleClose}
+    >
+      <View style={styles.container}>
+        {/* Animated Dimming Backdrop */}
+        <Pressable style={StyleSheet.absoluteFill} onPress={handleClose}>
+          <Animated.View
+            style={[
+              styles.backdrop,
+              {
+                opacity: fadeAnim.interpolate({
+                  inputRange: [0, 1],
+                  outputRange: [0, 0.5],
+                }),
+              },
+            ]}
+          />
+        </Pressable>
 
-        <View style={styles.drawerContent}>
-          {/* Drawer Top Header */}
+        {/* Animated Right Drawer Content */}
+        <Animated.View
+          style={[
+            styles.drawer,
+            {
+              width: DRAWER_WIDTH,
+              paddingTop: Math.max(insets.top, 20),
+              paddingBottom: Math.max(insets.bottom, 20),
+              transform: [{ translateX: slideAnim }],
+            },
+          ]}
+        >
+          {/* Drawer Top Header with close button on right */}
           <View style={styles.topHeader}>
             <FiYLogo size="md" />
-            <TouchableOpacity onPress={onClose} style={styles.closeBtn}>
-              <X size={20} color="#0F172A" />
+            <TouchableOpacity
+              onPress={handleClose}
+              activeOpacity={0.7}
+              style={styles.closeBtn}
+              hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+            >
+              <X size={20} color={Palette.textPrimary} />
             </TouchableOpacity>
           </View>
 
@@ -96,10 +178,10 @@ export function SidebarDrawer({ visible, onClose, onOpenLocationPicker }: Sideba
             <Avatar uri={user?.avatar} name={user?.name || 'Patient'} size="lg" />
             <View style={{ flex: 1, minWidth: 0 }}>
               <Text style={styles.userName} numberOfLines={1}>
-                {user?.name || 'Verified Patient'}
+                {user?.name || (user?.role === 'doctor' ? 'Dr. Specialist' : 'Verified Patient')}
               </Text>
               <Text style={styles.userEmail} numberOfLines={1}>
-                {user?.email || 'patient@fiydoc.app'}
+                {user?.email || (user?.role === 'doctor' ? 'doctor@fiydoc.app' : 'patient@fiydoc.app')}
               </Text>
               <View style={{ marginTop: 6, alignSelf: 'flex-start' }}>
                 <Badge
@@ -111,19 +193,22 @@ export function SidebarDrawer({ visible, onClose, onOpenLocationPicker }: Sideba
             </View>
           </View>
 
-          {/* Drawer Menu Items */}
-          <ScrollView contentContainerStyle={styles.menuList} showsVerticalScrollIndicator={false}>
-            {/* Current Location Quick Action */}
+          {/* Drawer Navigation List */}
+          <ScrollView
+            contentContainerStyle={styles.menuList}
+            showsVerticalScrollIndicator={false}
+          >
+            {/* Locality Selector */}
             <TouchableOpacity
               onPress={() => {
-                onClose();
+                handleClose();
                 onOpenLocationPicker?.();
               }}
               style={styles.menuItem}
               activeOpacity={0.7}
             >
-              <View style={[styles.menuIconBox, { backgroundColor: '#F0FDFA' }]}>
-                <MapPin size={18} color="#00B39B" />
+              <View style={[styles.menuIconBox, { backgroundColor: Palette.healthcareTealLight }]}>
+                <MapPin size={18} color={Palette.healthcareTeal} />
               </View>
               <View style={{ flex: 1, minWidth: 0 }}>
                 <Text style={styles.menuLabel}>Current Locality</Text>
@@ -131,212 +216,215 @@ export function SidebarDrawer({ visible, onClose, onOpenLocationPicker }: Sideba
                   {city ? `${city} • ` : ''}{formattedAddress || 'Set location'}
                 </Text>
               </View>
-              <ChevronRight size={16} color="#CBD5E1" />
+              <ChevronRight size={16} color={Palette.textMuted} />
             </TouchableOpacity>
 
-            {/* Medical Records & Prescriptions */}
+            {/* Prescriptions & Records */}
             <TouchableOpacity
               onPress={() => {
-                onClose();
-                router.push('/(patient)/(tabs)/health');
+                handleClose();
+                if (user?.role === 'doctor') {
+                  router.push('/(doctor)/(tabs)/appointments');
+                } else {
+                  router.push('/(patient)/(tabs)/health');
+                }
               }}
               style={styles.menuItem}
               activeOpacity={0.7}
             >
-              <View style={[styles.menuIconBox, { backgroundColor: '#EFF6FF' }]}>
-                <FileText size={18} color="#1E58C8" />
+              <View style={[styles.menuIconBox, { backgroundColor: Palette.primaryBlueLight }]}>
+                <FileText size={18} color={Palette.primaryBlue} />
               </View>
               <View style={{ flex: 1, minWidth: 0 }}>
-                <Text style={styles.menuLabel}>Prescriptions & Health Records</Text>
-                <Text style={styles.menuSub}>Official digital Rx & lab reports</Text>
+                <Text style={styles.menuLabel}>Prescriptions & Records</Text>
+                <Text style={styles.menuSub}>Digital Rx & clinical history</Text>
               </View>
-              <ChevronRight size={16} color="#CBD5E1" />
+              <ChevronRight size={16} color={Palette.textMuted} />
             </TouchableOpacity>
 
-            {/* ABDM & ABHA National Health ID */}
+            {/* Account Profile */}
             <TouchableOpacity
               onPress={() => {
+                handleClose();
+                if (user?.role === 'doctor') {
+                  router.push('/(doctor)/(tabs)/profile');
+                } else {
+                  router.push('/(patient)/(tabs)/profile');
+                }
+              }}
+              style={styles.menuItem}
+              activeOpacity={0.7}
+            >
+              <View style={[styles.menuIconBox, { backgroundColor: '#F1F5F9' }]}>
+                <User size={18} color={Palette.textSecondary} />
+              </View>
+              <View style={{ flex: 1, minWidth: 0 }}>
+                <Text style={styles.menuLabel}>Personal Profile</Text>
+                <Text style={styles.menuSub}>Account details & settings</Text>
+              </View>
+              <ChevronRight size={16} color={Palette.textMuted} />
+            </TouchableOpacity>
+
+            {/* Medical Emergency Helpline */}
+            <TouchableOpacity
+              onPress={() => {
+                handleClose();
                 Alert.alert(
-                  'Ayushman Bharat Digital Mission (ABDM)',
-                  'Your FiYDoc profile is securely configured with ABDM digital interoperability standards.'
+                  'Emergency Helpline',
+                  'Which service would you like to call?',
+                  [
+                    { text: 'Ambulance (108)', onPress: () => Linking.openURL('tel:108') },
+                    { text: 'National Emergency (112)', onPress: () => Linking.openURL('tel:112') },
+                    { text: 'Cancel', style: 'cancel' }
+                  ]
                 );
               }}
               style={styles.menuItem}
               activeOpacity={0.7}
             >
-              <View style={[styles.menuIconBox, { backgroundColor: '#ECFDF5' }]}>
-                <ShieldCheck size={18} color="#059669" />
+              <View style={[styles.menuIconBox, { backgroundColor: Palette.dangerBg }]}>
+                <PhoneCall size={18} color={Palette.danger} />
               </View>
               <View style={{ flex: 1, minWidth: 0 }}>
-                <Text style={styles.menuLabel}>ABDM & ABHA Integration</Text>
-                <Text style={styles.menuSub}>Government verified health records</Text>
-              </View>
-              <ChevronRight size={16} color="#CBD5E1" />
-            </TouchableOpacity>
-
-            {/* 24x7 Emergency Helpline */}
-            <TouchableOpacity
-              onPress={handleEmergencyCall}
-              style={styles.menuItem}
-              activeOpacity={0.7}
-            >
-              <View style={[styles.menuIconBox, { backgroundColor: '#FEF2F2' }]}>
-                <PhoneCall size={18} color="#DC2626" />
-              </View>
-              <View style={{ flex: 1, minWidth: 0 }}>
-                <Text style={styles.menuLabel}>24x7 Emergency Helplines</Text>
+                <Text style={styles.menuLabel}>Emergency Helpline</Text>
                 <Text style={styles.menuSub}>Ambulance 108 • National 112</Text>
               </View>
-              <ChevronRight size={16} color="#CBD5E1" />
-            </TouchableOpacity>
-
-            {/* Check for Updates */}
-            <TouchableOpacity
-              onPress={handleCheckUpdates}
-              style={styles.menuItem}
-              activeOpacity={0.7}
-            >
-              <View style={[styles.menuIconBox, { backgroundColor: '#F8FAFC' }]}>
-                <RefreshCw size={18} color="#64748B" />
-              </View>
-              <View style={{ flex: 1, minWidth: 0 }}>
-                <Text style={styles.menuLabel}>App Updates & System Status</Text>
-                <Text style={styles.menuSub}>v1.0.0 • Verified Build</Text>
-              </View>
-              <ChevronRight size={16} color="#CBD5E1" />
+              <ChevronRight size={16} color={Palette.textMuted} />
             </TouchableOpacity>
           </ScrollView>
 
-          {/* Drawer Bottom Sign Out */}
+          {/* Drawer Bottom Bar with Sign Out */}
           <View style={styles.bottomBar}>
             <TouchableOpacity
-              onPress={handleLogout}
+              onPress={() => setLogoutConfirmVisible(true)}
               style={styles.logoutBtn}
               activeOpacity={0.85}
             >
-              <LogOut size={18} color="#DC2626" />
+              <LogOut size={18} color={Palette.danger} />
               <Text style={styles.logoutText}>Sign Out</Text>
             </TouchableOpacity>
           </View>
-        </View>
+        </Animated.View>
       </View>
+
+      {/* Confirmation Dialog on Sign Out */}
+      <ConfirmationDialog
+        visible={logoutConfirmVisible}
+        title="Sign Out?"
+        message="Are you sure you want to sign out of your FiYDoc account on this device?"
+        confirmText="Sign Out"
+        cancelText="Stay Signed In"
+        confirmVariant="danger"
+        iconVariant="warning"
+        onConfirm={handleConfirmLogout}
+        onCancel={() => setLogoutConfirmVisible(false)}
+      />
     </Modal>
   );
 }
 
 const styles = StyleSheet.create({
-  overlay: {
+  container: {
     flex: 1,
     flexDirection: 'row',
+    justifyContent: 'flex-end', // Aligns drawer to the RIGHT side of the screen
   },
   backdrop: {
     position: 'absolute',
     top: 0,
-    bottom: 0,
     left: 0,
     right: 0,
-    backgroundColor: 'rgba(15, 23, 42, 0.45)',
+    bottom: 0,
+    backgroundColor: '#0D172D',
   },
-  drawerContent: {
-    width: '82%',
-    maxWidth: 320,
-    backgroundColor: '#FFFFFF',
+  drawer: {
+    backgroundColor: Palette.card,
     height: '100%',
-    shadowColor: '#000000',
-    shadowOffset: { width: 4, height: 0 },
-    shadowOpacity: 0.15,
-    shadowRadius: 12,
-    elevation: 16,
-    paddingTop: 48,
-    paddingBottom: 24,
-    display: 'flex',
     flexDirection: 'column',
+    ...Shadows.modal,
+    borderLeftWidth: 1,
+    borderLeftColor: Palette.cardBorderLight,
   },
   topHeader: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    paddingHorizontal: 20,
-    paddingBottom: 16,
+    paddingHorizontal: Spacing.xl,
+    paddingBottom: Spacing.lg,
     borderBottomWidth: 1,
-    borderBottomColor: '#F1F5F9',
+    borderBottomColor: Palette.cardBorderLight,
   },
   closeBtn: {
-    padding: 6,
-    borderRadius: 12,
-    backgroundColor: '#F8FAFC',
+    padding: Spacing.xs + 2,
+    borderRadius: BorderRadius.md,
+    backgroundColor: Palette.background,
   },
   userCard: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 12,
-    paddingHorizontal: 20,
-    paddingVertical: 16,
+    gap: Spacing.md,
+    paddingHorizontal: Spacing.xl,
+    paddingVertical: Spacing.lg,
     borderBottomWidth: 1,
-    borderBottomColor: '#F1F5F9',
-    backgroundColor: '#F8FAFC',
+    borderBottomColor: Palette.cardBorderLight,
+    backgroundColor: Palette.background,
   },
   userName: {
-    fontSize: 15,
-    fontWeight: '800',
-    color: '#0F172A',
+    ...Typography.h3,
+    color: Palette.textPrimary,
   },
   userEmail: {
-    fontSize: 11,
-    color: '#64748B',
-    marginTop: 1,
+    ...Typography.caption,
+    marginTop: 2,
   },
   menuList: {
-    paddingHorizontal: 16,
-    paddingVertical: 14,
-    gap: 6,
+    paddingHorizontal: Spacing.lg,
+    paddingVertical: Spacing.md,
+    gap: Spacing.xs + 2,
   },
   menuItem: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 12,
-    paddingVertical: 10,
-    paddingHorizontal: 10,
-    borderRadius: 14,
+    gap: Spacing.md,
+    paddingVertical: Spacing.sm + 2,
+    paddingHorizontal: Spacing.sm,
+    borderRadius: BorderRadius.xl,
   },
   menuIconBox: {
-    width: 36,
-    height: 36,
-    borderRadius: 12,
+    width: 38,
+    height: 38,
+    borderRadius: BorderRadius.lg,
     alignItems: 'center',
     justifyContent: 'center',
     borderWidth: 1,
-    borderColor: '#E2E8F0',
+    borderColor: Palette.cardBorder,
   },
   menuLabel: {
-    fontSize: 13,
-    fontWeight: '700',
-    color: '#0F172A',
+    ...Typography.bodyMedium,
   },
   menuSub: {
-    fontSize: 11,
-    color: '#64748B',
+    ...Typography.caption,
     marginTop: 1,
   },
   bottomBar: {
-    paddingHorizontal: 20,
-    paddingTop: 12,
+    paddingHorizontal: Spacing.xl,
+    paddingTop: Spacing.md,
     borderTopWidth: 1,
-    borderTopColor: '#F1F5F9',
+    borderTopColor: Palette.cardBorderLight,
   },
   logoutBtn: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 8,
-    paddingVertical: 12,
-    paddingHorizontal: 14,
-    borderRadius: 14,
-    backgroundColor: '#FEF2F2',
+    gap: Spacing.sm,
+    paddingVertical: Spacing.md,
+    paddingHorizontal: Spacing.lg,
+    borderRadius: BorderRadius.xl,
+    backgroundColor: Palette.dangerBg,
     justifyContent: 'center',
   },
   logoutText: {
-    fontSize: 13,
+    fontSize: 14,
     fontWeight: '800',
-    color: '#DC2626',
+    color: Palette.danger,
   },
 });

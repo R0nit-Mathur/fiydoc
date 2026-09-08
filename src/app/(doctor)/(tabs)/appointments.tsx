@@ -1,93 +1,329 @@
-import React, { useState, useCallback } from 'react';
-import { View, Text, ScrollView, TouchableOpacity, TextInput, RefreshControl } from 'react-native';
+/**
+ * Doctor Appointments Screen — Stitch Clinical Clarity design
+ *
+ * Features:
+ * - HeaderBar with title
+ * - Filter tabs: Today / Upcoming / Completed
+ * - Appointment cards with patient info, status, time
+ * - Approve/Postpone/Start Consultation actions
+ * - Empty state
+ *
+ * Part of FiYDoc Clinical Clarity design system
+ */
+import React, { useState, useCallback, useMemo } from 'react';
+import {
+  View,
+  Text,
+  ScrollView,
+  Pressable,
+  RefreshControl,
+  StyleSheet,
+  Platform,
+} from 'react-native';
 import { useRouter } from 'expo-router';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useQueryClient } from '@tanstack/react-query';
-import { useAppointmentsQuery } from '@/hooks/queries/useAppointmentsQuery';
-import { useAuthStore } from '@/store/useAuthStore';
-import { useAppointmentStore } from '@/store/useAppointmentStore';
-import { useNotificationStore } from '@/store/useNotificationStore';
-import { Badge } from '@/components/ui/Badge';
-import { Avatar } from '@/components/ui/Avatar';
-import { Modal } from '@/components/ui/Modal';
-import { ConfirmationAnimation } from '@/components/ui/ConfirmationAnimation';
-import { appointmentService } from '@/services/appointmentService';
+import Animated, {
+  FadeIn,
+  SlideInDown,
+  useSharedValue,
+  useAnimatedStyle,
+  withSpring,
+} from 'react-native-reanimated';
+import * as Haptics from 'expo-haptics';
 import {
-  Calendar,
-  Clock,
-  Video,
-  Building2,
-  ChevronRight,
-  ArrowLeft,
-  AlertCircle,
   Clock3,
   CheckCircle2,
-  UserCheck,
+  XCircle,
   Stethoscope,
+  Video,
+  Calendar,
+  ChevronRight,
+  UserCheck,
+  AlertCircle,
+  PlayCircle,
 } from 'lucide-react-native';
+import { HeaderBar } from '@/components/ui/HeaderBar';
+import { Pill } from '@/components/ui/Pill';
+import { Avatar } from '@/components/ui/Avatar';
+import { StitchCard } from '@/components/ui/StitchCard';
+import { EmptyState } from '@/components/ui/EmptyState';
+import { useAppointmentsQuery } from '@/hooks/queries/useAppointmentsQuery';
+import { useAuthStore } from '@/store/useAuthStore';
+import { useNotificationStore } from '@/store/useNotificationStore';
+import { useAppointmentStore } from '@/store/useAppointmentStore';
+import { StitchColors, BorderRadius, Shadows, Spacing, Palette } from '@/constants/theme';
+import { useAppTheme } from '@/hooks/useAppTheme';
+import { formatHumanDate, formatTimeSlot } from '@/utils/formatters';
 
-function addMinutesToTimeString(timeStr: string, minutesToAdd: number): string {
-  try {
-    const match = timeStr.match(/(\d+):(\d+)\s*(AM|PM)?/i);
-    if (!match) return timeStr;
-    let hours = parseInt(match[1], 10);
-    const mins = parseInt(match[2], 10);
-    const meridian = (match[3] || 'AM').toUpperCase();
+type FilterKey = 'today' | 'upcoming' | 'completed';
 
-    if (meridian === 'PM' && hours < 12) hours += 12;
-    if (meridian === 'AM' && hours === 12) hours = 0;
-
-    const totalMins = hours * 60 + mins + minutesToAdd;
-    let newHours = Math.floor(totalMins / 60) % 24;
-    const newMins = totalMins % 60;
-    const newMeridian = newHours >= 12 ? 'PM' : 'AM';
-    if (newHours > 12) newHours -= 12;
-    if (newHours === 0) newHours = 12;
-
-    const formattedMins = newMins < 10 ? `0${newMins}` : `${newMins}`;
-    return `${newHours}:${formattedMins} ${newMeridian}`;
-  } catch {
-    return timeStr;
-  }
+interface FilterConfig {
+  key: FilterKey;
+  label: string;
 }
 
-const POSTPONE_PRESETS = [
-  { label: '+15m', minutes: 15 },
-  { label: '+30m', minutes: 30 },
-  { label: '+45m', minutes: 45 },
-  { label: '+1h', minutes: 60 },
+const FILTERS: FilterConfig[] = [
+  { key: 'today', label: 'Today' },
+  { key: 'upcoming', label: 'Upcoming' },
+  { key: 'completed', label: 'Completed' },
 ];
 
-const REASON_PRESETS = [
-  'OPD running behind schedule',
-  'Attending emergency clinical case',
-  'Inpatient hospital rounds extension',
-  'Emergency surgical review',
-];
+const AnimatedPressable = Animated.createAnimatedComponent(Pressable);
 
-export default function DoctorAppointmentsQueueScreen() {
+function AppointmentCard({
+  item,
+  index,
+  onStart,
+  onApprove,
+  onPostpone,
+  onConfirmArrival,
+  onCancel,
+}: {
+  item: any;
+  index: number;
+  onStart: () => void;
+  onApprove: () => void;
+  onPostpone: () => void;
+  onConfirmArrival: () => void;
+  onCancel: () => void;
+}) {
+  const { colors, isDark } = useAppTheme();
+  const scale = useSharedValue(1);
+
+  const animatedStyle = useAnimatedStyle(() => ({
+    transform: [{ scale: scale.value }],
+  }));
+
+  const statusConfig = (() => {
+    switch (item.status) {
+      case 'in_progress':
+        return { label: 'In Progress', variant: 'primary' as const, icon: PlayCircle, tint: StitchColors.primaryContainer };
+      case 'confirmed':
+        return { label: 'Confirmed', variant: 'teal' as const, icon: CheckCircle2, tint: StitchColors.secondary };
+      case 'checked_in':
+        return { label: 'Checked In', variant: 'teal' as const, icon: UserCheck, tint: StitchColors.secondary };
+      case 'upcoming':
+        return { label: 'Upcoming', variant: 'default' as const, icon: Clock3, tint: StitchColors.outline };
+      case 'pending':
+        return { label: 'Pending', variant: 'warning' as const, icon: AlertCircle, tint: '#B45309' };
+      case 'completed':
+        return { label: 'Completed', variant: 'default' as const, icon: CheckCircle2, tint: StitchColors.secondary };
+      case 'cancelled':
+        return { label: 'Cancelled', variant: 'danger' as const, icon: XCircle, tint: StitchColors.error };
+      default:
+        return { label: item.status, variant: 'default' as const, icon: Clock3, tint: StitchColors.outline };
+    }
+  })();
+  const StatusIcon = statusConfig.icon;
+
+  return (
+    <Animated.View
+      entering={SlideInDown.delay(index * 50).springify().damping(18)}
+      style={animatedStyle}
+    >
+      <StitchCard style={styles.appointmentCard} noPadding>
+        <View style={styles.cardTopline}>
+          <View style={styles.dateGroup}>
+            <Calendar size={13} color={StitchColors.primaryContainer} />
+            <Text style={[styles.dateText, { color: StitchColors.primaryContainer }]}>
+              {formatHumanDate(item.date)} · {formatTimeSlot(item.time)}
+            </Text>
+          </View>
+          <Pill
+            label={statusConfig.label}
+            variant={statusConfig.variant}
+            size="sm"
+            icon={<StatusIcon size={10} color={statusConfig.tint} />}
+          />
+        </View>
+
+        <View style={styles.patientRow}>
+          <Avatar uri={item.patientAvatar} name={item.patientName} size="md" />
+          <View style={styles.patientDetails}>
+            <Text style={[styles.patientName, { color: colors.text }]} numberOfLines={1}>
+              {item.patientName || 'Patient'}
+            </Text>
+            <Text style={[styles.symptomsText, { color: colors.textSecondary }]} numberOfLines={1}>
+              {item.symptoms?.join(' · ') || 'General consultation'}
+            </Text>
+            <View style={styles.modeRow}>
+              {item.mode === 'video' ? (
+                <>
+                  <Video size={11} color={StitchColors.primaryContainer} />
+                  <Text style={[styles.modeText, { color: StitchColors.primaryContainer }]}>
+                    Video consult
+                  </Text>
+                </>
+              ) : (
+                <>
+                  <Stethoscope size={11} color={StitchColors.secondary} />
+                  <Text style={[styles.modeText, { color: StitchColors.secondary }]}>
+                    In-clinic visit
+                  </Text>
+                </>
+              )}
+            </View>
+          </View>
+        </View>
+
+        {['upcoming', 'confirmed', 'pending', 'in_progress'].includes(item.status) && (
+          <View style={[styles.actionsBlock, { borderTopColor: colors.border }]}>
+            <Pressable
+              onPress={() => {
+                if (Platform.OS !== 'web') {
+                  Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+                }
+                onStart();
+              }}
+              hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+              style={({ pressed }) => [
+                styles.primaryBtn,
+                { backgroundColor: StitchColors.primaryContainer, opacity: pressed ? 0.85 : 1 },
+              ]}
+              accessibilityRole="button"
+              accessibilityLabel="Start consultation"
+            >
+              <Stethoscope size={14} color={StitchColors.onPrimary} />
+              <Text style={[styles.primaryBtnText, { color: StitchColors.onPrimary }]}>
+                Start Consultation
+              </Text>
+            </Pressable>
+
+            <View style={styles.secondaryRow}>
+              {item.status !== 'confirmed' && (
+                <Pressable
+                  onPress={() => {
+                    if (Platform.OS !== 'web') {
+                      Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+                    }
+                    onApprove();
+                  }}
+                  hitSlop={{ top: 6, bottom: 6, left: 6, right: 6 }}
+                  style={({ pressed }) => [
+                    styles.secondaryBtn,
+                    {
+                      backgroundColor: isDark
+                        ? 'rgba(0,168,150,0.16)'
+                        : Palette.healthcareTealLight,
+                      borderColor: Palette.successBorder,
+                      opacity: pressed ? 0.85 : 1,
+                    },
+                  ]}
+                  accessibilityRole="button"
+                >
+                  <CheckCircle2 size={12} color={StitchColors.secondary} />
+                  <Text style={[styles.secondaryBtnText, { color: StitchColors.secondary }]}>
+                    Approve
+                  </Text>
+                </Pressable>
+              )}
+
+              <Pressable
+                onPress={() => {
+                  if (Platform.OS !== 'web') {
+                    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+                  }
+                  onConfirmArrival();
+                }}
+                hitSlop={{ top: 6, bottom: 6, left: 6, right: 6 }}
+                style={({ pressed }) => [
+                  styles.secondaryBtn,
+                  {
+                    backgroundColor: isDark
+                      ? 'rgba(20,80,163,0.16)'
+                      : Palette.primaryBlueLight,
+                    borderColor: Palette.primaryBlueBorder,
+                    opacity: pressed ? 0.85 : 1,
+                  },
+                ]}
+                accessibilityRole="button"
+              >
+                <UserCheck size={12} color={StitchColors.primaryContainer} />
+                <Text style={[styles.secondaryBtnText, { color: StitchColors.primaryContainer }]}>
+                  Arrived
+                </Text>
+              </Pressable>
+
+              <Pressable
+                onPress={() => {
+                  if (Platform.OS !== 'web') {
+                    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+                  }
+                  onPostpone();
+                }}
+                hitSlop={{ top: 6, bottom: 6, left: 6, right: 6 }}
+                style={({ pressed }) => [
+                  styles.secondaryBtn,
+                  {
+                    backgroundColor: isDark
+                      ? 'rgba(180,83,9,0.18)'
+                      : Palette.warningBg,
+                    borderColor: Palette.warningBorder,
+                    opacity: pressed ? 0.85 : 1,
+                  },
+                ]}
+                accessibilityRole="button"
+              >
+                <Clock3 size={12} color="#B45309" />
+                <Text style={[styles.secondaryBtnText, { color: '#B45309' }]}>
+                  Postpone
+                </Text>
+              </Pressable>
+
+              <Pressable
+                onPress={() => {
+                  if (Platform.OS !== 'web') {
+                    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+                  }
+                  onCancel();
+                }}
+                hitSlop={{ top: 6, bottom: 6, left: 6, right: 6 }}
+                style={({ pressed }) => [
+                  styles.secondaryBtn,
+                  {
+                    backgroundColor: isDark ? 'rgba(220,38,38,0.14)' : '#FEE2E2',
+                    borderColor: '#FECACA',
+                    opacity: pressed ? 0.85 : 1,
+                  },
+                ]}
+                accessibilityRole="button"
+              >
+                <XCircle size={12} color="#DC2626" />
+                <Text style={[styles.secondaryBtnText, { color: '#DC2626' }]}>
+                  Cancel
+                </Text>
+              </Pressable>
+            </View>
+          </View>
+        )}
+
+        {item.status === 'completed' && (
+          <Pressable
+            onPress={onStart}
+            hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+            style={styles.viewSummaryBtn}
+            accessibilityRole="button"
+          >
+            <Text style={[styles.viewSummaryText, { color: StitchColors.primaryContainer }]}>
+              View consultation summary
+            </Text>
+            <ChevronRight size={14} color={StitchColors.primaryContainer} />
+          </Pressable>
+        )}
+      </StitchCard>
+    </Animated.View>
+  );
+}
+
+export default function DoctorAppointmentsScreen() {
   const router = useRouter();
   const queryClient = useQueryClient();
   const { user } = useAuthStore();
-  const [activeTab, setActiveTab] = useState<'upcoming' | 'completed' | 'cancelled'>('upcoming');
+  const { colors, isDark } = useAppTheme();
   const { data: appointments, isRefetching, refetch } = useAppointmentsQuery(undefined, user?.id);
+  const [activeFilter, setActiveFilter] = useState<FilterKey>('today');
   const [refreshing, setRefreshing] = useState(false);
-
-  // Postpone State
-  const [selectedApt, setSelectedApt] = useState<any | null>(null);
-  const [selectedMinutes, setSelectedMinutes] = useState<number>(30);
-  const [selectedReason, setSelectedReason] = useState<string>(REASON_PRESETS[0]);
-  const [customReason, setCustomReason] = useState<string>('');
-  const [postponeModalVisible, setPostponeModalVisible] = useState(false);
-  const [successToast, setSuccessToast] = useState(false);
-
-  // Confirm Arrival State
-  const [confirmedApt, setConfirmedApt] = useState<any | null>(null);
-  const [confirmModalVisible, setConfirmModalVisible] = useState(false);
-
-  // Slot Approval State
-  const [approvingApt, setApprovingApt] = useState<any | null>(null);
-  const [approveModalVisible, setApproveModalVisible] = useState(false);
 
   const handleRefresh = useCallback(async () => {
     setRefreshing(true);
@@ -96,520 +332,386 @@ export default function DoctorAppointmentsQueueScreen() {
         queryClient.invalidateQueries({ queryKey: ['appointments'] }),
         refetch(),
       ]);
+      await new Promise((r) => setTimeout(r, 400));
     } finally {
       setRefreshing(false);
     }
   }, [queryClient, refetch]);
 
-  const handleConfirmArrival = (apt: any) => {
-    setConfirmedApt(apt);
-    setConfirmModalVisible(true);
-
-    // Alert Patient via Notification
-    useNotificationStore.getState().addNotification({
-      recipientId: apt.patientId || 'pat_1',
-      recipientRole: 'patient',
-      title: 'Doctor Confirmed Arrival',
-      message: `${user?.name || apt.doctorName || 'Your doctor'} has confirmed your OPD arrival. Please proceed to Consultation Room.`,
-      type: 'appointment',
-      link: `/(patient)/appointments/${apt.id}`,
-    });
-  };
-
-  const handleOpenApproveSlot = (apt: any) => {
-    setApprovingApt(apt);
-    setApproveModalVisible(true);
-  };
-
-  const handleSaveApproveSlot = async () => {
-    if (!approvingApt) return;
-    const aptStore = useAppointmentStore.getState();
-    aptStore.updateAppointmentStatus(approvingApt.id, 'confirmed');
-
-    // Sync to backend
-    try {
-      await appointmentService.approveAppointment(approvingApt.id);
-    } catch {
-      // Offline / fallback to local state
-    }
-
-    // Notify Patient
-    useNotificationStore.getState().addNotification({
-      recipientId: approvingApt.patientId || 'pat_1',
-      recipientRole: 'patient',
-      title: 'Time Slot Approved!',
-      message: `Dr. ${user?.name || approvingApt.doctorName || 'Specialist'} has approved your appointment slot for ${approvingApt.time} on ${approvingApt.date}.`,
-      type: 'appointment',
-      link: `/(patient)/appointments/${approvingApt.id}`,
-    });
-
-    setApproveModalVisible(false);
-    setSuccessToast(true);
-    setTimeout(() => setSuccessToast(false), 3000);
-  };
-
-  const filtered = appointments?.filter((a) => {
-    if (activeTab === 'upcoming') {
-      return a.status === 'upcoming' || a.status === 'confirmed' || a.status === 'pending';
-    }
-    return a.status === activeTab;
-  });
-
-  const handleOpenPostpone = (apt: any) => {
-    setSelectedApt(apt);
-    setSelectedMinutes(30);
-    setSelectedReason(REASON_PRESETS[0]);
-    setCustomReason('');
-    setPostponeModalVisible(true);
-  };
-
-  const handleConfirmPostpone = () => {
-    if (!selectedApt) return;
-
-    const oldTime = selectedApt.time || '10:30 AM';
-    const newTime = addMinutesToTimeString(oldTime, selectedMinutes);
-    const finalReason = customReason.trim() || selectedReason;
-
-    // 1. Update appointment locally
-    const aptStore = useAppointmentStore.getState();
-    const existing = aptStore.appointments.find((a) => a.id === selectedApt.id) || selectedApt;
-    const updatedApt = {
-      ...existing,
-      time: newTime,
-      notes: finalReason ? `[Postponed: ${finalReason}] ${existing.notes || ''}` : existing.notes,
+  const counts = useMemo(() => {
+    const today = new Date().toISOString().slice(0, 10);
+    return {
+      today:
+        appointments?.filter(
+          (a) =>
+            a.date?.slice(0, 10) === today &&
+            ['upcoming', 'confirmed', 'checked_in', 'in_progress', 'pending'].includes(a.status)
+        ).length || 0,
+      upcoming:
+        appointments?.filter((a) =>
+          ['upcoming', 'confirmed', 'checked_in', 'pending'].includes(a.status)
+        ).length || 0,
+      completed:
+        appointments?.filter((a) => a.status === 'completed').length || 0,
     };
-    aptStore.addAppointment(updatedApt);
+  }, [appointments]);
 
-    // 2. Alert Patient via Notification
+  const filtered = useMemo(() => {
+    if (!appointments) return [];
+    const today = new Date().toISOString().slice(0, 10);
+    if (activeFilter === 'today') {
+      return appointments.filter(
+        (a) =>
+          a.date?.slice(0, 10) === today &&
+          ['upcoming', 'confirmed', 'checked_in', 'in_progress', 'pending'].includes(a.status)
+      );
+    }
+    if (activeFilter === 'upcoming') {
+      return appointments.filter((a) =>
+        ['upcoming', 'confirmed', 'checked_in', 'pending'].includes(a.status)
+      );
+    }
+    return appointments.filter((a) => a.status === 'completed');
+  }, [appointments, activeFilter]);
+
+  const handleApprove = (apt: any) => {
+    if (Platform.OS !== 'web') {
+      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+    }
     useNotificationStore.getState().addNotification({
-      recipientId: selectedApt.patientId || 'pat_1',
+      recipientId: apt.patientId,
       recipientRole: 'patient',
-      title: 'Appointment Rescheduled by Doctor',
-      message: `${user?.name || selectedApt.doctorName || 'Your doctor'} has rescheduled your appointment to ${newTime}. Reason: ${finalReason}.`,
+      title: 'Slot Approved',
+      message: `Dr. ${user?.name || 'Doctor'} has approved your appointment slot.`,
       type: 'appointment',
-      link: `/(patient)/appointments/${selectedApt.id}`,
+      link: '/(patient)/appointments',
     });
+  };
 
-    // 3. Confirm to Doctor
+  const handlePostpone = (apt: any) => {
+    if (Platform.OS !== 'web') {
+      Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+    }
     useNotificationStore.getState().addNotification({
-      recipientId: user?.id || selectedApt.doctorId || 'doc_live',
-      recipientRole: 'doctor',
-      title: 'Schedule Updated',
-      message: `Patient ${selectedApt.patientName} was notified of postponement to ${newTime}.`,
+      recipientId: apt.patientId,
+      recipientRole: 'patient',
+      title: '📅 Appointment Rescheduled',
+      message: `Dr. ${user?.name || 'Doctor'} has postponed your appointment. Please check for the new available slot.`,
       type: 'appointment',
-      link: '/(doctor)/(tabs)/appointments',
+      link: '/(patient)/(tabs)/appointments',
     });
+  };
 
-    setPostponeModalVisible(false);
-    setSuccessToast(true);
-    setTimeout(() => setSuccessToast(false), 3000);
+  const handleCancel = (apt: any) => {
+    if (Platform.OS !== 'web') {
+      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error);
+    }
+    // Update local store to cancelled
+    useAppointmentStore.getState().cancelAppointment(apt.id);
+    // Notify patient with refund message
+    useNotificationStore.getState().addNotification({
+      recipientId: apt.patientId,
+      recipientRole: 'patient',
+      title: '❌ Appointment Cancelled',
+      message: `Dr. ${user?.name || 'Doctor'} has cancelled your appointment on ${apt.date} at ${apt.time}. A full refund will be processed to your original payment method within 3–5 business days.`,
+      type: 'appointment',
+      link: '/(patient)/(tabs)/appointments',
+    });
+  };
+
+  const handleConfirmArrival = (apt: any) => {
+    if (Platform.OS !== 'web') {
+      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+    }
+    // Update status to checked_in
+    useAppointmentStore.getState().updateAppointment(apt.id, { status: 'checked_in' });
+    useNotificationStore.getState().addNotification({
+      recipientId: apt.patientId,
+      recipientRole: 'patient',
+      title: '✅ Arrival Confirmed',
+      message: `Dr. ${user?.name || 'Doctor'} confirmed your arrival. Please proceed to the consultation room.`,
+      type: 'appointment',
+      link: '/(patient)/(tabs)/appointments',
+    });
   };
 
   return (
-    <SafeAreaView className="flex-1 bg-slate-50">
-      {/* Header */}
-      <View className="px-4 py-3 bg-white/95 border-b border-slate-100 shadow-sm" style={{ gap: 10 }}>
-        <Text style={{ fontSize: 18, fontWeight: '800', color: '#0F172A' }}>Appointments Schedule</Text>
+    <SafeAreaView style={styles.safeArea} edges={['top']}>
+      <HeaderBar
+        title="Appointments"
+        subtitle="Manage your patient queue"
+      />
 
-        {/* Tab Filters */}
-        <View style={{ flexDirection: 'row', gap: 6 }}>
-          {(['upcoming', 'completed', 'cancelled'] as const).map((tab) => (
-            <TouchableOpacity
-              key={tab}
-              onPress={() => setActiveTab(tab)}
-              className={`flex-1 py-2 rounded-xl border items-center capitalize ${
-                activeTab === tab ? 'bg-[#1E58C8] border-[#1E58C8]' : 'bg-slate-50 border-slate-200'
-              }`}
-            >
-              <Text className={`text-xs font-bold ${activeTab === tab ? 'text-white' : 'text-slate-700'}`}>
-                {tab}
-              </Text>
-            </TouchableOpacity>
-          ))}
+      {/* Filter Tabs */}
+      <View style={styles.tabsWrap}>
+        <View
+          style={[
+            styles.tabsContainer,
+            { backgroundColor: isDark ? 'rgba(255,255,255,0.06)' : StitchColors.surfaceContainer },
+          ]}
+        >
+          {FILTERS.map((f) => {
+            const isActive = activeFilter === f.key;
+            const count = counts[f.key];
+            return (
+              <Pressable
+                key={f.key}
+                onPress={() => {
+                  if (Platform.OS !== 'web') {
+                    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+                  }
+                  setActiveFilter(f.key);
+                }}
+                hitSlop={{ top: 6, bottom: 6, left: 6, right: 6 }}
+                style={[
+                  styles.tabButton,
+                  isActive && { backgroundColor: colors.card },
+                ]}
+                accessibilityRole="tab"
+                accessibilityState={{ selected: isActive }}
+              >
+                <Text
+                  style={[
+                    styles.tabLabel,
+                    { color: isActive ? colors.text : colors.textSecondary },
+                  ]}
+                >
+                  {f.label}
+                </Text>
+                {count > 0 && (
+                  <View
+                    style={[
+                      styles.tabBadge,
+                      {
+                        backgroundColor: isActive
+                          ? StitchColors.primaryContainer
+                          : isDark
+                          ? 'rgba(255,255,255,0.08)'
+                          : StitchColors.surfaceContainerHigh,
+                      },
+                    ]}
+                  >
+                    <Text
+                      style={[
+                        styles.tabBadgeText,
+                        {
+                          color: isActive
+                            ? StitchColors.onPrimary
+                            : colors.textSecondary,
+                        },
+                      ]}
+                    >
+                      {count}
+                    </Text>
+                  </View>
+                )}
+              </Pressable>
+            );
+          })}
         </View>
       </View>
 
-      {/* Success Notification Banner */}
-      {successToast && (
-        <View className="mx-4 mt-3 bg-emerald-50 border border-emerald-200 p-3 rounded-2xl flex-row items-center" style={{ gap: 8 }}>
-          <CheckCircle2 size={18} color="#059669" />
-          <Text className="text-xs font-bold text-emerald-800 flex-1">
-            Appointment rescheduled successfully. The patient has been notified.
-          </Text>
-        </View>
-      )}
-
       <ScrollView
-        contentContainerStyle={{ padding: 16, paddingBottom: 110, gap: 12 }}
+        contentContainerStyle={styles.scrollContent}
+        showsVerticalScrollIndicator={false}
         refreshControl={
           <RefreshControl
             refreshing={refreshing || isRefetching}
             onRefresh={handleRefresh}
-            colors={['#1E58C8']}
-            tintColor="#1E58C8"
+            tintColor={StitchColors.primaryContainer}
+            colors={[StitchColors.primaryContainer]}
           />
         }
       >
-        {filtered?.length === 0 ? (
-          <View className="bg-white p-8 rounded-3xl border border-slate-200 items-center justify-center mt-6" style={{ gap: 8 }}>
-            <Calendar size={32} color="#94A3B8" />
-            <Text className="text-sm font-black text-slate-800">No {activeTab} appointments</Text>
-            <Text className="text-xs text-slate-400 text-center">
-              New patient bookings for this queue will appear here in real-time.
-            </Text>
-          </View>
+        {filtered.length === 0 ? (
+          <Animated.View entering={FadeIn.duration(300)} style={styles.emptyWrap}>
+            <EmptyState
+              title={`No ${activeFilter} appointments`}
+              description={
+                activeFilter === 'today'
+                  ? "Your day is clear. New patient bookings will appear here."
+                  : activeFilter === 'upcoming'
+                  ? "No upcoming appointments scheduled."
+                  : "Completed consultations will appear here."
+              }
+              illustration="calendar"
+            />
+          </Animated.View>
         ) : (
-          filtered?.map((apt) => (
-            <View
+          filtered.map((apt, i) => (
+            <AppointmentCard
               key={apt.id}
-              className="bg-white/95 p-4 rounded-2xl border border-slate-200/80 shadow-sm"
-              style={{ gap: 12 }}
-            >
-              <View className="flex-row items-center justify-between pb-2 border-b border-slate-100">
-                <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
-                  <Clock size={14} color="#1E58C8" />
-                  <Text style={{ fontSize: 12, fontWeight: '800', color: '#0F172A' }}>
-                    {apt.date} at {apt.time}
-                  </Text>
-                </View>
-                <Badge
-                  label={apt.status === 'confirmed' ? 'SLOT APPROVED' : apt.status === 'upcoming' ? 'IN-CLINIC' : apt.status.toUpperCase()}
-                  variant={apt.status === 'confirmed' ? 'teal' : apt.status === 'completed' ? 'teal' : apt.status === 'cancelled' ? 'danger' : 'blue'}
-                  size="sm"
-                />
-              </View>
-
-              <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10 }}>
-                <Avatar
-                  uri={apt.patientAvatar}
-                  name={apt.patientName}
-                  size="md"
-                />
-                <View className="flex-1">
-                  <Text className="text-base font-black text-slate-900">{apt.patientName}</Text>
-                  <Text className="text-xs text-slate-500 mt-0.5" numberOfLines={1}>
-                    Symptoms: {apt.symptoms?.join(', ') || 'General OPD Evaluation'}
-                  </Text>
-                </View>
-              </View>
-
-              {(apt.status === 'upcoming' || apt.status === 'confirmed' || apt.status === 'pending') && (
-                <View style={{ gap: 8, paddingTop: 4 }}>
-                  {/* Primary Action Button */}
-                  <View style={{ flexDirection: 'row', gap: 8 }}>
-                    <TouchableOpacity
-                      onPress={() => router.push(`/(doctor)/consultation/${apt.id}`)}
-                      activeOpacity={0.85}
-                      style={{
-                        flex: 1,
-                        backgroundColor: '#1E58C8',
-                        paddingVertical: 10,
-                        borderRadius: 12,
-                        flexDirection: 'row',
-                        alignItems: 'center',
-                        justifyContent: 'center',
-                        gap: 6,
-                      }}
-                    >
-                      <Stethoscope size={15} color="#FFFFFF" />
-                      <Text style={{ fontSize: 13, fontWeight: '800', color: '#FFFFFF' }}>
-                        Start Consultation
-                      </Text>
-                    </TouchableOpacity>
-
-                    {apt.status !== 'confirmed' && (
-                      <TouchableOpacity
-                        onPress={() => handleOpenApproveSlot(apt)}
-                        activeOpacity={0.85}
-                        style={{
-                          backgroundColor: '#F0FDFA',
-                          borderWidth: 1,
-                          borderColor: '#99F6E4',
-                          paddingHorizontal: 12,
-                          paddingVertical: 10,
-                          borderRadius: 12,
-                          flexDirection: 'row',
-                          alignItems: 'center',
-                          justifyContent: 'center',
-                          gap: 5,
-                        }}
-                      >
-                        <CheckCircle2 size={15} color="#0D9488" />
-                        <Text style={{ fontSize: 12, fontWeight: '800', color: '#0D9488' }}>
-                          Approve Slot
-                        </Text>
-                      </TouchableOpacity>
-                    )}
-                  </View>
-
-                  {/* Secondary Actions: Check-in and Reschedule */}
-                  <View style={{ flexDirection: 'row', gap: 8 }}>
-                    <TouchableOpacity
-                      onPress={() => handleConfirmArrival(apt)}
-                      activeOpacity={0.8}
-                      style={{
-                        flex: 1,
-                        backgroundColor: '#F8FAFC',
-                        borderWidth: 1,
-                        borderColor: '#E2E8F0',
-                        paddingVertical: 8,
-                        borderRadius: 10,
-                        flexDirection: 'row',
-                        alignItems: 'center',
-                        justifyContent: 'center',
-                        gap: 5,
-                      }}
-                    >
-                      <UserCheck size={14} color="#059669" />
-                      <Text style={{ fontSize: 12, fontWeight: '700', color: '#334155' }}>
-                        Mark Patient Arrived
-                      </Text>
-                    </TouchableOpacity>
-
-                    <TouchableOpacity
-                      onPress={() => handleOpenPostpone(apt)}
-                      activeOpacity={0.8}
-                      style={{
-                        flex: 1,
-                        backgroundColor: '#F8FAFC',
-                        borderWidth: 1,
-                        borderColor: '#E2E8F0',
-                        paddingVertical: 8,
-                        borderRadius: 10,
-                        flexDirection: 'row',
-                        alignItems: 'center',
-                        justifyContent: 'center',
-                        gap: 5,
-                      }}
-                    >
-                      <Clock3 size={14} color="#D97706" />
-                      <Text style={{ fontSize: 12, fontWeight: '700', color: '#334155' }}>
-                        Postpone / Delay
-                      </Text>
-                    </TouchableOpacity>
-                  </View>
-                </View>
-              )}
-            </View>
+              item={apt}
+              index={i}
+              onStart={() => router.push(`/(doctor)/consultation/${apt.id}`)}
+              onApprove={() => handleApprove(apt)}
+              onPostpone={() => handlePostpone(apt)}
+              onConfirmArrival={() => handleConfirmArrival(apt)}
+              onCancel={() => handleCancel(apt)}
+            />
           ))
         )}
       </ScrollView>
-
-      {/* Doctor Postpone / Reschedule Modal */}
-      {selectedApt && (
-        <Modal
-          visible={postponeModalVisible}
-          onClose={() => setPostponeModalVisible(false)}
-          title="Postpone Patient Appointment"
-        >
-          <View style={{ gap: 14, paddingVertical: 4 }}>
-            {/* Patient Header Card */}
-            <View className="bg-slate-50 p-3 rounded-2xl border border-slate-200/90 flex-row items-center" style={{ gap: 10 }}>
-              <Avatar uri={selectedApt.patientAvatar} name={selectedApt.patientName} size="md" />
-              <View className="flex-1">
-                <Text className="text-sm font-black text-slate-900">{selectedApt.patientName}</Text>
-                <Text className="text-xs text-slate-500 font-medium">
-                  Current Schedule: {selectedApt.date} at {selectedApt.time}
-                </Text>
-              </View>
-            </View>
-
-            {/* Delay Interval Picker */}
-            <View style={{ gap: 6 }}>
-              <Text className="text-xs font-bold text-slate-700">Add Delay to Schedule</Text>
-              <View className="flex-row" style={{ gap: 6 }}>
-                {POSTPONE_PRESETS.map((p) => {
-                  const isSelected = selectedMinutes === p.minutes;
-                  return (
-                    <TouchableOpacity
-                      key={p.minutes}
-                      onPress={() => setSelectedMinutes(p.minutes)}
-                      className={`flex-1 py-2.5 rounded-xl border items-center ${
-                        isSelected ? 'bg-[#1E58C8] border-[#1E58C8]' : 'bg-slate-50 border-slate-200'
-                      }`}
-                    >
-                      <Text className={`text-xs font-black ${isSelected ? 'text-white' : 'text-slate-700'}`}>
-                        {p.label}
-                      </Text>
-                    </TouchableOpacity>
-                  );
-                })}
-              </View>
-            </View>
-
-            {/* New Projected Time */}
-            <View className="bg-blue-50 border border-blue-200/80 p-3 rounded-2xl flex-row items-center justify-between">
-              <View>
-                <Text className="text-[10px] font-black text-[#1E58C8] uppercase tracking-wider">
-                  New Projected Slot
-                </Text>
-                <Text className="text-sm font-black text-slate-900 mt-0.5">
-                  {addMinutesToTimeString(selectedApt.time || '10:30 AM', selectedMinutes)}
-                </Text>
-              </View>
-              <Badge label={`+${selectedMinutes} MINS`} variant="blue" size="sm" />
-            </View>
-
-            {/* Reason Presets */}
-            <View style={{ gap: 6 }}>
-              <Text className="text-xs font-bold text-slate-700">Clinical Reason for Delay</Text>
-              <View style={{ gap: 6 }}>
-                {REASON_PRESETS.map((reason) => {
-                  const isSelected = selectedReason === reason && !customReason;
-                  return (
-                    <TouchableOpacity
-                      key={reason}
-                      onPress={() => {
-                        setSelectedReason(reason);
-                        setCustomReason('');
-                      }}
-                      className={`p-2.5 rounded-xl border flex-row items-center ${
-                        isSelected ? 'bg-amber-50 border-amber-300' : 'bg-slate-50 border-slate-200'
-                      }`}
-                      style={{ gap: 8 }}
-                    >
-                      <View
-                        className={`w-3.5 h-3.5 rounded-full border ${
-                          isSelected ? 'border-amber-600 bg-amber-600' : 'border-slate-400 bg-white'
-                        }`}
-                      />
-                      <Text
-                        className={`text-xs font-semibold ${
-                          isSelected ? 'text-amber-900 font-bold' : 'text-slate-600'
-                        }`}
-                      >
-                        {reason}
-                      </Text>
-                    </TouchableOpacity>
-                  );
-                })}
-              </View>
-
-              <TextInput
-                placeholder="Or type custom reason..."
-                placeholderTextColor="#94A3B8"
-                value={customReason}
-                onChangeText={setCustomReason}
-                style={{
-                  height: 40,
-                  backgroundColor: '#F8FAFC',
-                  borderWidth: 1,
-                  borderColor: '#CBD5E1',
-                  borderRadius: 12,
-                  paddingHorizontal: 12,
-                  fontSize: 12,
-                  color: '#0F172A',
-                  marginTop: 4,
-                }}
-              />
-            </View>
-
-            {/* Confirm Action */}
-            <TouchableOpacity
-              onPress={handleConfirmPostpone}
-              activeOpacity={0.85}
-              className="bg-amber-600 py-3.5 rounded-2xl flex-row items-center justify-center mt-2 shadow-sm"
-              style={{ gap: 8 }}
-            >
-              <Clock3 size={16} color="#FFFFFF" />
-              <Text className="text-sm font-black text-white">Confirm Delay & Alert Patient</Text>
-            </TouchableOpacity>
-          </View>
-        </Modal>
-      )}
-
-      {/* Patient Confirmation Animation Modal */}
-      {confirmedApt && (
-        <Modal
-          visible={confirmModalVisible}
-          onClose={() => setConfirmModalVisible(false)}
-          title="Patient Arrival Confirmed"
-        >
-          <View style={{ gap: 16, paddingVertical: 8, alignItems: 'center' }}>
-            <ConfirmationAnimation
-              title="Patient Arrival Confirmed!"
-              subtitle={`Patient ${confirmedApt.patientName} has been checked into the OPD priority queue.`}
-              color="#10B981"
-              size={68}
-            />
-
-            <View className="w-full bg-slate-50 p-4 rounded-2xl border border-slate-200" style={{ gap: 8 }}>
-              <View className="flex-row justify-between items-center">
-                <Text className="text-xs text-slate-500 font-bold uppercase">Queue Status</Text>
-                <Badge label="IN-CLINIC READY" variant="teal" size="sm" />
-              </View>
-              <View className="flex-row justify-between items-center">
-                <Text className="text-xs text-slate-500 font-bold uppercase">Scheduled Slot</Text>
-                <Text className="text-xs font-black text-slate-900">{confirmedApt.date} at {confirmedApt.time}</Text>
-              </View>
-              <View className="flex-row justify-between items-center">
-                <Text className="text-xs text-slate-500 font-bold uppercase">Symptoms</Text>
-                <Text className="text-xs font-bold text-slate-700" numberOfLines={1}>
-                  {confirmedApt.symptoms?.join(', ') || 'General OPD Evaluation'}
-                </Text>
-              </View>
-            </View>
-
-            <View className="flex-row gap-2 w-full">
-              <TouchableOpacity
-                onPress={() => {
-                  setConfirmModalVisible(false);
-                  router.push(`/(doctor)/consultation/${confirmedApt.id}`);
-                }}
-                activeOpacity={0.85}
-                className="flex-1 bg-[#1E58C8] py-3.5 rounded-2xl items-center justify-center shadow-sm"
-              >
-                <Text className="text-sm font-black text-white">Open Consultation Room</Text>
-              </TouchableOpacity>
-            </View>
-          </View>
-        </Modal>
-      )}
-
-      {/* Doctor Slot Approval Modal with Save Button */}
-      {approvingApt && (
-        <Modal
-          visible={approveModalVisible}
-          onClose={() => setApproveModalVisible(false)}
-          title="Approve Patient Time Slot"
-        >
-          <View style={{ gap: 14, paddingVertical: 6 }}>
-            <View className="bg-slate-50 p-3.5 rounded-2xl border border-slate-200" style={{ gap: 8 }}>
-              <View className="flex-row items-center" style={{ gap: 10 }}>
-                <Avatar uri={approvingApt.patientAvatar} name={approvingApt.patientName} size="md" />
-                <View className="flex-1">
-                  <Text className="text-base font-black text-slate-900">{approvingApt.patientName}</Text>
-                  <Text className="text-xs text-slate-500 font-medium">
-                    Requested Slot: {approvingApt.date} at {approvingApt.time}
-                  </Text>
-                </View>
-              </View>
-
-              <View className="pt-2 border-t border-slate-200/80 flex-row justify-between items-center">
-                <Text className="text-xs text-slate-500 font-bold uppercase">Slot Allocation</Text>
-                <Badge label="1 / 5 Patients Booked" variant="teal" size="sm" />
-              </View>
-
-              <View className="flex-row justify-between items-center">
-                <Text className="text-xs text-slate-500 font-bold uppercase">Symptoms</Text>
-                <Text className="text-xs font-bold text-slate-800" numberOfLines={1}>
-                  {approvingApt.symptoms?.join(', ') || 'General OPD Evaluation'}
-                </Text>
-              </View>
-            </View>
-
-            <TouchableOpacity
-              onPress={handleSaveApproveSlot}
-              activeOpacity={0.88}
-              className="bg-[#00B39B] py-3.5 rounded-2xl flex-row items-center justify-center shadow-sm"
-              style={{ gap: 8 }}
-            >
-              <CheckCircle2 size={18} color="#FFFFFF" />
-              <Text className="text-sm font-black text-white">Save & Approve Time Slot</Text>
-            </TouchableOpacity>
-          </View>
-        </Modal>
-      )}
     </SafeAreaView>
   );
 }
+
+const styles = StyleSheet.create({
+  safeArea: {
+    flex: 1,
+    backgroundColor: StitchColors.background,
+  },
+
+  /* Tabs */
+  tabsWrap: {
+    paddingHorizontal: Spacing.md,
+    paddingVertical: Spacing.sm,
+  },
+  tabsContainer: {
+    flexDirection: 'row',
+    padding: 4,
+    borderRadius: BorderRadius.full,
+    gap: 4,
+  },
+  tabButton: {
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 6,
+    paddingVertical: 8,
+    paddingHorizontal: 12,
+    borderRadius: BorderRadius.full,
+  },
+  tabLabel: {
+    fontSize: 13,
+    fontWeight: '600',
+    letterSpacing: -0.1,
+  },
+  tabBadge: {
+    minWidth: 18,
+    height: 18,
+    paddingHorizontal: 6,
+    borderRadius: 9,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  tabBadgeText: {
+    fontSize: 10,
+    fontWeight: '700',
+  },
+
+  /* List */
+  scrollContent: {
+    paddingHorizontal: Spacing.md,
+    paddingTop: 4,
+    paddingBottom: 110,
+    gap: 12,
+  },
+  appointmentCard: {
+    padding: 14,
+  },
+  cardTopline: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    marginBottom: 12,
+  },
+  dateGroup: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 5,
+  },
+  dateText: {
+    fontSize: 12,
+    fontWeight: '700',
+    letterSpacing: -0.1,
+  },
+  patientRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
+  },
+  patientDetails: {
+    flex: 1,
+    minWidth: 0,
+  },
+  patientName: {
+    fontSize: 16,
+    fontWeight: '700',
+    letterSpacing: -0.2,
+  },
+  symptomsText: {
+    fontSize: 13,
+    lineHeight: 18,
+    marginTop: 2,
+  },
+  modeRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    marginTop: 6,
+  },
+  modeText: {
+    fontSize: 11,
+    fontWeight: '700',
+    letterSpacing: 0.2,
+  },
+
+  /* Actions */
+  actionsBlock: {
+    marginTop: 14,
+    paddingTop: 14,
+    borderTopWidth: StyleSheet.hairlineWidth,
+    gap: 8,
+  },
+  primaryBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 6,
+    paddingVertical: 11,
+    borderRadius: BorderRadius.full,
+  },
+  primaryBtnText: {
+    fontSize: 13,
+    fontWeight: '700',
+    letterSpacing: -0.1,
+  },
+  secondaryRow: {
+    flexDirection: 'row',
+    gap: 6,
+  },
+  secondaryBtn: {
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 4,
+    paddingVertical: 8,
+    borderRadius: BorderRadius.full,
+    borderWidth: 1,
+  },
+  secondaryBtnText: {
+    fontSize: 11,
+    fontWeight: '700',
+    letterSpacing: 0.1,
+  },
+  viewSummaryBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 4,
+    marginTop: 12,
+    paddingTop: 12,
+    borderTopWidth: StyleSheet.hairlineWidth,
+    borderTopColor: StitchColors.outlineVariant,
+  },
+  viewSummaryText: {
+    fontSize: 12,
+    fontWeight: '700',
+  },
+  emptyWrap: {
+    marginTop: 16,
+  },
+});

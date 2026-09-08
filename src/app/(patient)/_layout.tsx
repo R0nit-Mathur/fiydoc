@@ -8,12 +8,13 @@ export default function PatientLayout() {
       <Stack.Screen name="doctor/[id]" options={{ headerShown: false }} />
       <Stack.Screen name="booking/slot-select" options={{ headerShown: false }} />
       <Stack.Screen name="booking/confirm" options={{ headerShown: false }} />
-      <Stack.Screen name="booking/payment" options={{ headerShown: false }} />
       <Stack.Screen name="booking/success" options={{ headerShown: false }} />
+      <Stack.Screen name="appointments/index" options={{ headerShown: false }} />
       <Stack.Screen name="appointments/[id]" options={{ headerShown: false }} />
       <Stack.Screen name="health/[id]" options={{ headerShown: false }} />
+      <Stack.Screen name="health/prescription/[id]" options={{ headerShown: false }} />
+      <Stack.Screen name="search" options={{ headerShown: false, animation: 'fade' }} />
       <Stack.Screen name="notifications" options={{ headerShown: false }} />
     </Stack>
   );
 }
-

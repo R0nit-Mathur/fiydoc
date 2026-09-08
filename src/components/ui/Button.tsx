@@ -1,7 +1,26 @@
-import React from 'react';
-import { TouchableOpacity, Text, ActivityIndicator, View, ViewStyle, TextStyle } from 'react-native';
+/**
+ * Button - Clinical Clarity design system button
+ * Apple HIG-style with Stitch Clinical Clarity colors
+ */
+import React, { useState } from 'react';
+import {
+  Pressable,
+  Text,
+  ActivityIndicator,
+  View,
+  StyleSheet,
+  ViewStyle,
+  Platform,
+} from 'react-native';
+import Animated, {
+  useAnimatedStyle,
+  useSharedValue,
+  withSpring,
+} from 'react-native-reanimated';
+import * as Haptics from 'expo-haptics';
+import { StitchColors, BorderRadius } from '@/constants/theme';
 
-interface ButtonProps {
+export interface ButtonProps {
   title: string;
   onPress: () => void;
   variant?: 'primary' | 'secondary' | 'outline' | 'ghost' | 'danger' | 'teal' | 'glass';
@@ -10,7 +29,6 @@ interface ButtonProps {
   disabled?: boolean;
   icon?: React.ReactNode;
   fullWidth?: boolean;
-  className?: string;
   style?: ViewStyle;
 }
 
@@ -23,68 +41,192 @@ export function Button({
   disabled = false,
   icon,
   fullWidth = true,
-  className = '',
   style,
 }: ButtonProps) {
-  const sizeClasses = {
-    sm: 'py-2 px-3 rounded-xl',
-    md: 'py-2.5 px-4 rounded-xl',
-    lg: 'py-3.5 px-5 rounded-2xl',
+  const scale = useSharedValue(1);
+  const [pressed, setPressed] = useState(false);
+
+  const animatedStyle = useAnimatedStyle(() => ({
+    transform: [{ scale: scale.value }],
+  }));
+
+  const handlePressIn = () => {
+    if (!disabled && !loading) {
+      setPressed(true);
+      scale.value = withSpring(0.97, { damping: 15, stiffness: 220 });
+      if (Platform.OS !== 'web') {
+        Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+      }
+    }
   };
 
-  const textSizes = {
-    sm: 'text-xs font-bold',
-    md: 'text-sm font-bold',
-    lg: 'text-sm font-black',
+  const handlePressOut = () => {
+    if (!disabled && !loading) {
+      setPressed(false);
+      scale.value = withSpring(1, { damping: 15, stiffness: 220 });
+    }
   };
 
-  const variantClasses = {
-    primary: 'bg-[#1E58C8] active:bg-[#15429B] shadow-sm',
-    teal: 'bg-[#00B39B] active:bg-[#008C7A] shadow-sm',
-    secondary: 'bg-slate-100 active:bg-slate-200 border border-slate-200/80',
-    outline: 'border border-[#1E58C8] bg-transparent active:bg-blue-50/50',
-    ghost: 'bg-transparent active:bg-slate-100',
-    danger: 'bg-red-500 active:bg-red-600 shadow-sm',
-    glass: 'bg-white/85 active:bg-white border border-slate-200/80 shadow-sm',
+  const handlePress = () => {
+    if (!disabled && !loading) {
+      if (Platform.OS !== 'web') {
+        Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+      }
+      onPress();
+    }
   };
 
-  const textVariantClasses = {
-    primary: 'text-white',
-    teal: 'text-white',
-    secondary: 'text-slate-800',
-    outline: 'text-[#1E58C8]',
-    ghost: 'text-slate-700',
-    danger: 'text-white',
-    glass: 'text-slate-800',
+  // Clinical Clarity button styles
+  const variantStyles = {
+    primary: {
+      backgroundColor: StitchColors.primaryContainer,
+      borderColor: StitchColors.primaryContainer,
+    },
+    teal: {
+      backgroundColor: StitchColors.secondaryContainer,
+      borderColor: StitchColors.secondaryContainer,
+    },
+    secondary: {
+      backgroundColor: StitchColors.surfaceContainerLow,
+      borderColor: StitchColors.outlineVariant,
+    },
+    outline: {
+      backgroundColor: 'transparent',
+      borderColor: StitchColors.primaryContainer,
+      borderWidth: 1.5,
+    },
+    ghost: {
+      backgroundColor: 'transparent',
+      borderColor: 'transparent',
+    },
+    danger: {
+      backgroundColor: StitchColors.error,
+      borderColor: StitchColors.error,
+    },
+    glass: {
+      backgroundColor: 'rgba(255, 255, 255, 0.85)',
+      borderColor: StitchColors.outlineVariant,
+      borderWidth: 1,
+    },
+  };
+
+  const pressedStyles = {
+    primary: { opacity: 0.88 },
+    teal: { opacity: 0.88 },
+    secondary: { opacity: 0.75 },
+    outline: { backgroundColor: 'rgba(20, 80, 163, 0.08)' },
+    ghost: { backgroundColor: 'rgba(0, 0, 0, 0.04)' },
+    danger: { opacity: 0.85 },
+    glass: { opacity: 0.8 },
+  };
+
+  const textColors = {
+    primary: StitchColors.onPrimaryContainer,
+    teal: StitchColors.onSecondaryContainer,
+    secondary: StitchColors.onSurface,
+    outline: StitchColors.primaryContainer,
+    ghost: StitchColors.onSurfaceVariant,
+    danger: StitchColors.onError,
+    glass: StitchColors.onSurface,
   };
 
   return (
-    <TouchableOpacity
-      onPress={onPress}
-      disabled={disabled || loading}
-      activeOpacity={0.8}
-      style={[{ flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 6 }, style]}
-      className={`${sizeClasses[size]} ${variantClasses[variant]} ${
-        fullWidth ? 'w-full' : ''
-      } ${disabled ? 'opacity-50' : 'opacity-100'} ${className}`}
-    >
-      {loading ? (
-        <ActivityIndicator
-          color={variant === 'outline' || variant === 'ghost' || variant === 'glass' ? '#1E58C8' : '#FFFFFF'}
-          size="small"
-        />
-      ) : (
-        <>
-          {icon && <View style={{ flexShrink: 0 }}>{icon}</View>}
-          <Text
-            numberOfLines={1}
-            ellipsizeMode="tail"
-            className={`${textSizes[size]} ${textVariantClasses[variant]}`}
-          >
-            {title}
-          </Text>
-        </>
-      )}
-    </TouchableOpacity>
+    <Animated.View style={[fullWidth ? styles.fullWidth : styles.autoWidth, animatedStyle]}>
+      <Pressable
+        onPress={handlePress}
+        onPressIn={handlePressIn}
+        onPressOut={handlePressOut}
+        disabled={disabled || loading}
+        accessibilityRole="button"
+        accessibilityLabel={title}
+        hitSlop={{ top: 6, bottom: 6, left: 6, right: 6 }}
+        style={[
+          styles.base,
+          sizeStyles[size],
+          variantStyles[variant],
+          (variant === 'primary' || variant === 'teal') && styles.shadows,
+          disabled && styles.disabled,
+          pressed && !disabled && !loading && pressedStyles[variant],
+          style,
+        ]}
+      >
+        {loading ? (
+          <ActivityIndicator
+            color={variant === 'outline' || variant === 'ghost' ? StitchColors.primaryContainer : '#fff'}
+            size="small"
+          />
+        ) : (
+          <>
+            {icon && <View style={styles.iconWrap}>{icon}</View>}
+            <Text
+              numberOfLines={1}
+              ellipsizeMode="tail"
+              style={[textSizeStyles[size], { color: textColors[variant] }]}
+            >
+              {title}
+            </Text>
+          </>
+        )}
+      </Pressable>
+    </Animated.View>
   );
 }
+
+const styles = StyleSheet.create({
+  base: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 8,
+    borderWidth: 1,
+  },
+  fullWidth: { width: '100%' },
+  autoWidth: { alignSelf: 'flex-start' },
+  disabled: { opacity: 0.45 },
+  iconWrap: { flexShrink: 0 },
+  shadows: {
+    shadowColor: '#1450a3',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.25,
+    shadowRadius: 8,
+    elevation: 3,
+  },
+});
+
+const sizeStyles = StyleSheet.create({
+  sm: {
+    paddingVertical: 8,
+    paddingHorizontal: 16,
+    minHeight: 38,
+    borderRadius: BorderRadius.full,
+  },
+  md: {
+    paddingVertical: 14,
+    paddingHorizontal: 22,
+    minHeight: 52,
+    borderRadius: BorderRadius.full,
+  },
+  lg: {
+    paddingVertical: 16,
+    paddingHorizontal: 26,
+    minHeight: 56,
+    borderRadius: BorderRadius.full,
+  },
+});
+
+const textSizeStyles = StyleSheet.create({
+  sm: {
+    fontSize: 14,
+    fontWeight: '600',
+  },
+  md: {
+    fontSize: 16,
+    fontWeight: '600',
+    letterSpacing: -0.2,
+  },
+  lg: {
+    fontSize: 17,
+    fontWeight: '600',
+    letterSpacing: -0.3,
+  },
+});

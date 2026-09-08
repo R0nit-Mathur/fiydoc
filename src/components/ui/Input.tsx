@@ -1,13 +1,28 @@
 import React, { useState } from 'react';
-import { View, Text, TextInput, TextInputProps, Platform } from 'react-native';
+import {
+  View,
+  Text,
+  TextInput,
+  TextInputProps,
+  Platform,
+  StyleSheet,
+  ViewStyle,
+} from 'react-native';
+import Animated, {
+  useAnimatedStyle,
+  withTiming,
+  useDerivedValue,
+  interpolateColor,
+} from 'react-native-reanimated';
+import { BorderRadius, Shadows } from '@/constants/theme';
+import { useAppTheme } from '@/hooks/useAppTheme';
 
 interface InputProps extends TextInputProps {
   label?: string;
   error?: string;
   leftIcon?: React.ReactNode;
   rightIcon?: React.ReactNode;
-  containerClassName?: string;
-  activeColor?: string;
+  containerStyle?: ViewStyle;
 }
 
 export function Input({
@@ -15,57 +30,61 @@ export function Input({
   error,
   leftIcon,
   rightIcon,
-  containerClassName = '',
-  activeColor = '#1E58C8',
   multiline,
   style,
+  containerStyle,
   onFocus,
   onBlur,
   ...props
 }: InputProps) {
+  const { colors } = useAppTheme();
+  const errorColor = colors.danger;
   const [isFocused, setIsFocused] = useState(false);
 
+  // Animate border color
+  const focusProgress = useDerivedValue(() => {
+    return withTiming(isFocused ? 1 : 0, { duration: 200 });
+  });
+
+  const animatedBorderStyle = useAnimatedStyle(() => {
+    const borderColor = error
+      ? errorColor
+      : interpolateColor(
+          focusProgress.value,
+          [0, 1],
+          [colors.border, colors.primary]
+        );
+
+    return {
+      borderColor,
+      ...(isFocused && !error ? Shadows.focus : {}),
+    };
+  });
+
   return (
-    <View className={`w-full ${containerClassName}`}>
-      {label && (
-        <Text className="text-xs font-bold text-slate-700 uppercase tracking-wider mb-1.5">
-          {label}
-        </Text>
-      )}
-      <View
-        style={{
-          height: multiline ? undefined : 48,
-          minHeight: multiline ? 84 : 48,
-          maxHeight: multiline ? 160 : 48,
-          flexDirection: 'row',
-          alignItems: multiline ? 'flex-start' : 'center',
-          backgroundColor: 'rgba(248, 250, 252, 0.95)',
-          borderWidth: 1.5,
-          borderColor: error
-            ? '#EF4444'
-            : isFocused
-            ? activeColor
-            : '#E2E8F0',
-          borderRadius: 14,
-          paddingHorizontal: 12,
-          paddingVertical: multiline ? 10 : 0,
-        }}
+    <View style={[styles.container, containerStyle]}>
+      {label && <Text style={[styles.label, { color: colors.textSecondary }]}>{label}</Text>}
+      <Animated.View
+        style={[
+          styles.inputRow,
+          { backgroundColor: colors.card },
+          multiline ? styles.multilineRow : styles.singleLineRow,
+          animatedBorderStyle,
+        ]}
       >
         {leftIcon && (
           <View
-            style={{
-              marginRight: 8,
-              justifyContent: 'center',
-              alignItems: 'center',
-              flexShrink: 0,
-              marginTop: multiline ? (Platform.OS === 'ios' ? 2 : 4) : 0,
-            }}
+            style={[
+              styles.iconWrapper,
+              styles.leftIcon,
+              multiline && styles.multilineIcon,
+            ]}
           >
             {leftIcon}
           </View>
         )}
         <TextInput
-          placeholderTextColor="#94A3B8"
+          placeholderTextColor={colors.textMuted}
           multiline={multiline}
           onFocus={(e) => {
             setIsFocused(true);
@@ -76,39 +95,92 @@ export function Input({
             onBlur?.(e);
           }}
           style={[
-            {
-              flex: 1,
-              height: multiline ? undefined : 48,
-              minHeight: multiline ? 64 : undefined,
-              maxHeight: multiline ? 140 : undefined,
-              textAlignVertical: multiline ? 'top' : 'center',
-              includeFontPadding: false,
-              paddingVertical: 0,
-              paddingHorizontal: 0,
-              margin: 0,
-              fontSize: 14,
-              fontWeight: '600',
-              color: '#0F172A',
-            },
+            styles.inputField,
+            { color: colors.text },
+            multiline ? styles.multilineField : styles.singleLineField,
             style,
           ]}
           {...props}
         />
         {rightIcon && (
           <View
-            style={{
-              marginLeft: 8,
-              justifyContent: 'center',
-              alignItems: 'center',
-              flexShrink: 0,
-              marginTop: multiline ? (Platform.OS === 'ios' ? 2 : 4) : 0,
-            }}
+            style={[
+              styles.iconWrapper,
+              styles.rightIcon,
+              multiline && styles.multilineIcon,
+            ]}
           >
             {rightIcon}
           </View>
         )}
-      </View>
-      {error && <Text className="text-xs text-red-500 font-medium mt-1">{error}</Text>}
+      </Animated.View>
+      {error ? <Text style={[styles.errorText, { color: errorColor }]}>{error}</Text> : null}
     </View>
   );
 }
+
+const styles = StyleSheet.create({
+  container: {
+    width: '100%',
+  },
+  label: {
+    fontSize: 12,
+    fontWeight: '700',
+    textTransform: 'uppercase',
+    letterSpacing: 0.6,
+    marginBottom: 8,
+    marginLeft: 4,
+  },
+  inputRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    borderWidth: 1.5,
+    borderRadius: BorderRadius.xl, // Softer borders
+    paddingHorizontal: 16,
+  },
+  singleLineRow: {
+    height: 54, // slightly taller for a premium feel
+  },
+  multilineRow: {
+    minHeight: 100,
+    maxHeight: 180,
+    alignItems: 'flex-start',
+    paddingVertical: 12,
+  },
+  iconWrapper: {
+    justifyContent: 'center',
+    alignItems: 'center',
+    flexShrink: 0,
+  },
+  leftIcon: {
+    marginRight: 12,
+  },
+  rightIcon: {
+    marginLeft: 12,
+  },
+  multilineIcon: {
+    marginTop: Platform.OS === 'ios' ? 2 : 4,
+  },
+  inputField: {
+    flex: 1,
+    fontSize: 16,
+    fontWeight: '500',
+    paddingVertical: 0,
+    paddingHorizontal: 0,
+    margin: 0,
+  },
+  singleLineField: {
+    height: 54,
+  },
+  multilineField: {
+    minHeight: 76,
+    maxHeight: 156,
+    textAlignVertical: 'top',
+  },
+  errorText: {
+    fontSize: 13,
+    fontWeight: '600',
+    marginTop: 6,
+    marginLeft: 4,
+  },
+});

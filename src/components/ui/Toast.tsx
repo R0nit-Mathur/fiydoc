@@ -1,6 +1,7 @@
 import React from 'react';
-import { View, Text, Animated } from 'react-native';
+import { View, Text, StyleSheet } from 'react-native';
 import { CheckCircle2, AlertTriangle, XCircle, Info } from 'lucide-react-native';
+import { Palette, BorderRadius, Shadows } from '@/constants/theme';
 
 export interface ToastMessage {
   id: string;
@@ -18,34 +19,74 @@ export function Toast({ toast }: ToastProps) {
   if (!toast) return null;
 
   const icons = {
-    success: <CheckCircle2 size={20} color="#10B981" />,
-    error: <XCircle size={20} color="#EF4444" />,
-    warning: <AlertTriangle size={20} color="#F59E0B" />,
-    info: <Info size={20} color="#1E58C8" />,
-  };
-
-  const bgStyles = {
-    success: 'bg-emerald-900/90 border-emerald-700',
-    error: 'bg-red-900/90 border-red-700',
-    warning: 'bg-amber-900/90 border-amber-700',
-    info: 'bg-blue-900/90 border-blue-700',
+    success: <CheckCircle2 size={20} color={Palette.success} />,
+    error: <XCircle size={20} color={Palette.danger} />,
+    warning: <AlertTriangle size={20} color={Palette.warning} />,
+    info: <Info size={20} color={Palette.primaryBlue} />,
   };
 
   return (
-    <View className="absolute top-12 left-4 right-4 z-50">
-      <View
-        className={`flex-row items-center space-x-3 p-4 rounded-2xl border shadow-lg ${
-          bgStyles[toast.type]
-        }`}
-      >
+    <View style={styles.outerContainer} pointerEvents="box-none">
+      <View style={[styles.card, cardVariantStyles[toast.type], Shadows.modal]}>
         {icons[toast.type]}
-        <View className="flex-1">
-          <Text className="text-sm font-bold text-white">{toast.title}</Text>
-          {toast.message && (
-            <Text className="text-xs text-slate-200 mt-0.5">{toast.message}</Text>
-          )}
+        <View style={styles.textContainer}>
+          <Text style={styles.title}>{toast.title}</Text>
+          {toast.message && <Text style={styles.message}>{toast.message}</Text>}
         </View>
       </View>
     </View>
   );
 }
+
+const styles = StyleSheet.create({
+  outerContainer: {
+    position: 'absolute',
+    top: 50,
+    left: 16,
+    right: 16,
+    zIndex: 9999,
+    alignItems: 'center',
+  },
+  card: {
+    width: '100%',
+    maxWidth: 440,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
+    padding: 16,
+    borderRadius: BorderRadius.xl,
+    borderWidth: 1,
+  },
+  textContainer: {
+    flex: 1,
+  },
+  title: {
+    fontSize: 14,
+    fontWeight: '700',
+    color: Palette.white,
+  },
+  message: {
+    fontSize: 12,
+    color: 'rgba(255, 255, 255, 0.85)',
+    marginTop: 2,
+  },
+});
+
+const cardVariantStyles = StyleSheet.create({
+  success: {
+    backgroundColor: '#064E3B',
+    borderColor: '#059669',
+  },
+  error: {
+    backgroundColor: '#7F1D1D',
+    borderColor: '#DC2626',
+  },
+  warning: {
+    backgroundColor: '#78350F',
+    borderColor: '#D97706',
+  },
+  info: {
+    backgroundColor: '#1E3A8A',
+    borderColor: '#2563EB',
+  },
+});

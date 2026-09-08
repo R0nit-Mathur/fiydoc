@@ -84,12 +84,15 @@ export interface Appointment {
   hospital: string;
   date: string;
   time: string;
-  status: 'upcoming' | 'confirmed' | 'completed' | 'cancelled' | 'in_progress' | 'pending';
+  status: 'upcoming' | 'confirmed' | 'checked_in' | 'completed' | 'cancelled' | 'in_progress' | 'pending';
   mode: 'video' | 'clinic' | 'in_person';
   fee: number;
   symptoms?: string[];
   notes?: string;
   prescriptionId?: string;
+  tokenNumber?: string | number;
+  paymentMethod?: string;
+  paidAmount?: number;
 }
 
 export interface ClinicalNote {
@@ -201,4 +204,30 @@ export interface Patient {
     phone: string;
     relation: string;
   };
+}
+
+export interface LabParameter {
+  name: string;
+  value: string;
+  unit: string;
+  referenceRange: string;
+  isAbnormal?: boolean;
+}
+
+export interface LabReport {
+  id: string;
+  patientId: string;
+  patientName?: string;
+  testName: string;
+  category: 'Hematology' | 'Biochemistry' | 'Lipid Panel' | 'Thyroid' | 'Urine' | 'Radiology' | 'General';
+  labName: string;
+  collectedDate: string;
+  reportedDate: string;
+  status: 'Normal' | 'Abnormal' | 'Pending Review';
+  doctorReferred?: string;
+  parameters: LabParameter[];
+  summary?: string;
+  fileUrl?: string;
+  fileName?: string;
+  fileSize?: string;
 }

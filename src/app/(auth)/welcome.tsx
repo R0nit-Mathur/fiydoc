@@ -1,185 +1,403 @@
+/**
+ * Welcome Screen — Stitch Clinical Clarity
+ *
+ * Pixel-perfect rebuild from Stitch HTML (welcome.html)
+ *
+ * Features:
+ * - Full-screen 3D medical illustration wallpaper
+ * - Apple-style porcelain translucent gradient transitions
+ * - Centered brand & copy stage
+ * - Primary pill CTA with Apple activity spinner state
+ * - Secondary clean pill action with backdrop-blur
+ * - Discreet legal disclaimer
+ * - Apple home indicator bar
+ */
 import React, { useState } from 'react';
-import { View, Text, TouchableOpacity, StyleSheet } from 'react-native';
+import {
+  View,
+  Text,
+  Pressable,
+  StyleSheet,
+  ActivityIndicator,
+  Platform,
+  Image,
+  ImageBackground,
+} from 'react-native';
 import { useRouter } from 'expo-router';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { FiYLogo } from '@/components/ui/FiYLogo';
-import { Stethoscope, ArrowRight } from 'lucide-react-native';
-import { UserSession } from '@/services/authService';
-import { useAuthStore } from '@/store/useAuthStore';
-import { PremadeAuthModal } from '@/components/auth/PremadeAuthModal';
+import { BlurView } from 'expo-blur';
+import * as Haptics from 'expo-haptics';
+import Animated, { FadeIn } from 'react-native-reanimated';
+import { useAppTheme } from '@/hooks/useAppTheme';
+import { BorderRadius, Spacing, StitchColors } from '@/constants/theme';
+import { ChevronRight } from 'lucide-react-native';
+import { LinearGradient } from 'expo-linear-gradient';
+
+const LOGO_SOURCE =
+  'https://lh3.googleusercontent.com/aida-public/AB6AXuD5y4hxrqMIyv35mNr7U3flxK5wyvDXkUKgDWQFZB8HC2su2ztOJxAclRjQY2sjw6Fqf32ORvXfR7j8LsKWj4D7FemJ0J-zYHiNxyfRmGb5NM-JecLcFAeWpgu6afoNBzWwvEOyH7Bc4XYXSg2nFbO6MADEufPdrN6JiFNf8_1u-mN_PihzoL4iWJVY8NUK7OO4B4sAmB6tKN8-bXhn8fCpfsLRSYsNxZR-uPHJopjzKSXb8L6bGo7YqpSdqaRC8WjZPA';
+const WALLPAPER_IMAGE = require('../../../assets/images/ultra_minimalist_apple_style_3d_medical_illustration_on_a_clean_soft_porcelain.png');
 
 export default function WelcomeScreen() {
   const router = useRouter();
-  const setSession = useAuthStore((s) => s.setSession);
-  const [quickAuthVisible, setQuickAuthVisible] = useState(false);
+  const { colors, isDark } = useAppTheme();
+  const [isLoading, setIsLoading] = useState(false);
 
-  const handleAuthenticated = (session: UserSession) => {
-    setSession(session);
-    if (!session.onboardingCompleted) {
-      router.replace('/(onboarding)/role-select');
-    } else if (session.role === 'doctor') {
-      router.replace('/(doctor)/(tabs)/home');
-    } else {
-      router.replace('/(patient)/(tabs)/home');
+  const handleGetStarted = async () => {
+    if (isLoading) return;
+    setIsLoading(true);
+
+    if (Platform.OS !== 'web') {
+      Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
     }
+
+    setTimeout(() => {
+      setIsLoading(false);
+      router.push('/(auth)/signup');
+    }, 2200);
+  };
+
+  const handleSignIn = () => {
+    if (Platform.OS !== 'web') {
+      Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+    }
+    router.push('/(auth)/login');
   };
 
   return (
-    <SafeAreaView style={styles.safeArea} edges={['top', 'bottom']}>
-      <View style={styles.container}>
-        {/* Top Centered Brand Logo */}
-        <View style={styles.header}>
-          <FiYLogo size="lg" />
-        </View>
-
-        {/* Center Minimalist Hero (Inspired by Reference Images 2 & 3) */}
-        <View style={styles.heroSection}>
-          <View style={styles.iconCircle}>
-            <Stethoscope size={44} color="#00B39B" strokeWidth={2.2} />
-          </View>
-
-          <Text style={styles.title}>Care Made Simple</Text>
-          <Text style={styles.subtitle}>
-            Directly connect with experienced doctors, schedule appointments in seconds, and receive prescriptions on your app.
-          </Text>
-        </View>
-
-        {/* Bottom Actions */}
-        <View style={styles.bottomSection}>
-          <TouchableOpacity
-            style={styles.pillButton}
-            activeOpacity={0.88}
-            onPress={() => router.push('/(auth)/login')}
-          >
-            <Text style={styles.pillButtonText}>Get started</Text>
-            <View style={styles.arrowCircle}>
-              <ArrowRight size={16} color="#FFFFFF" strokeWidth={2.5} />
-            </View>
-          </TouchableOpacity>
-
-          <View style={styles.footerRow}>
-            <Text style={styles.footerText}>Already have an account? </Text>
-            <TouchableOpacity onPress={() => router.push('/(auth)/login')}>
-              <Text style={styles.footerLink}>Sign In</Text>
-            </TouchableOpacity>
-          </View>
-
-          {/* Discreet Developer / Testing Helper */}
-          <TouchableOpacity
-            onPress={() => setQuickAuthVisible(true)}
-            style={styles.demoLink}
-            activeOpacity={0.7}
-          >
-            <Text style={styles.demoLinkText}>Demo Persona Login</Text>
-          </TouchableOpacity>
-        </View>
+    <View style={styles.container}>
+      {/* 3D Medical Illustration Wallpaper Layer */}
+      <View style={styles.wallpaperLayer} pointerEvents="none">
+        <Image
+          source={WALLPAPER_IMAGE}
+          style={styles.wallpaper}
+          resizeMode="cover"
+        />
+        {/* Soft porcelain transition at the bottom to ensure crisp CTA contrast without hiding the 3D illustration */}
+        <LinearGradient
+          colors={[
+            'rgba(245, 247, 251, 0)',
+            'rgba(245, 247, 251, 0.45)',
+            'rgba(245, 247, 251, 0.88)',
+            'rgba(245, 247, 251, 0.98)',
+          ]}
+          locations={[0, 0.35, 0.7, 1]}
+          style={styles.bottomGradient}
+        />
       </View>
 
-      <PremadeAuthModal
-        visible={quickAuthVisible}
-        onClose={() => setQuickAuthVisible(false)}
-        onAuthenticated={handleAuthenticated}
-      />
+      {/* Main Minimalist iOS Viewport */}
+      <SafeAreaView style={styles.safeArea}>
+        <View style={styles.viewport}>
+          {/* Top spacer gives breathing room for the 3D Stethoscope & Glowing Crystal Cross */}
+          <View style={styles.topSpacer} />
+
+          {/* Center Brand & Copy Stage */}
+          <Animated.View
+            entering={FadeIn.duration(600)}
+            style={styles.brandStage}
+          >
+          {/* Apple Minimal Squircle App Icon */}
+          <View style={styles.logoWrapper}>
+            <Image
+              source={{ uri: LOGO_SOURCE }}
+              style={styles.logo}
+              resizeMode="contain"
+              accessibilityLabel="FiYDOC Logo"
+            />
+          </View>
+
+          {/* Typography Stack */}
+          <View style={styles.typographyStack}>
+            <Text
+              style={[
+                styles.title,
+                { color: StitchColors.onSurface },
+              ]}
+            >
+              Find Your Doctor
+            </Text>
+            <Text
+              style={[
+                styles.subtitle,
+                { color: StitchColors.onSurfaceVariant },
+              ]}
+            >
+              Healthcare simplified. Connect with verified medical professionals instantly.
+            </Text>
+          </View>
+        </Animated.View>
+
+        {/* Bottom Actions Container */}
+        <View style={styles.actionsContainer}>
+          {/* Primary Apple Pill CTA */}
+          <Pressable
+            onPress={handleGetStarted}
+            disabled={isLoading}
+            style={({ pressed }) => [
+              styles.primaryCta,
+              pressed && { transform: [{ scale: 0.97 }] },
+            ]}
+            accessibilityRole="button"
+            accessibilityLabel="Get Started"
+            hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+          >
+            {/* Default state content */}
+            <View
+              style={[
+                styles.ctaContent,
+                isLoading && styles.ctaContentHidden,
+              ]}
+            >
+              <Text style={styles.primaryCtaText}>Get Started</Text>
+              <ChevronRight size={20} color={StitchColors.onPrimary} strokeWidth={2.5} />
+            </View>
+
+            {/* Apple Activity Spinner State */}
+            {isLoading && (
+              <View style={styles.ctaSpinner}>
+                <ActivityIndicator size="small" color={StitchColors.onPrimary} />
+                <Text style={styles.ctaSpinnerText}>Connecting to Care Portal...</Text>
+              </View>
+            )}
+          </Pressable>
+
+          {/* Secondary Clean Pill Action */}
+          {Platform.OS === 'ios' ? (
+            <Pressable
+              onPress={handleSignIn}
+              hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+              style={({ pressed }) => [
+                styles.secondaryCta,
+                pressed && { transform: [{ scale: 0.98 }] },
+              ]}
+              accessibilityRole="button"
+              accessibilityLabel="I already have an account"
+            >
+              <BlurView
+                tint="light"
+                intensity={90}
+                style={StyleSheet.absoluteFill}
+              />
+              <View style={styles.secondaryCtaOverlay} />
+              <Text style={styles.secondaryCtaText}>I already have an account</Text>
+            </Pressable>
+          ) : (
+            <Pressable
+              onPress={handleSignIn}
+              hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+              style={({ pressed }) => [
+                styles.secondaryCtaAndroid,
+                pressed && { transform: [{ scale: 0.98 }] },
+              ]}
+              accessibilityRole="button"
+              accessibilityLabel="I already have an account"
+            >
+              <Text style={styles.secondaryCtaText}>I already have an account</Text>
+            </Pressable>
+          )}
+
+          {/* Discreet Legal Disclaimer */}
+          <Text style={[styles.legalText, { color: StitchColors.outline }]}>
+            By continuing, you acknowledge FiYDOC's{' '}
+            <Text style={styles.legalLink} onPress={() => {}}>
+              Terms
+            </Text>{' '}
+            and{' '}
+            <Text style={styles.legalLink} onPress={() => {}}>
+              Privacy Policy
+            </Text>
+            .
+          </Text>
+
+          {/* Apple Home Indicator Bar */}
+          <View style={styles.homeIndicatorWrap}>
+            <View style={styles.homeIndicator} />
+          </View>
+        </View>
+      </View>
     </SafeAreaView>
+  </View>
   );
 }
 
 const styles = StyleSheet.create({
-  safeArea: {
-    flex: 1,
-    backgroundColor: '#FFFFFF',
-  },
   container: {
     flex: 1,
-    paddingHorizontal: 28,
-    paddingVertical: 20,
-    justifyContent: 'space-between',
-    alignItems: 'center',
+    backgroundColor: '#eff2f7',
   },
-  header: {
-    paddingTop: 16,
-    alignItems: 'center',
+  safeArea: {
+    flex: 1,
   },
-  heroSection: {
-    alignItems: 'center',
-    paddingHorizontal: 12,
-  },
-  iconCircle: {
-    width: 104,
-    height: 104,
-    borderRadius: 52,
-    backgroundColor: '#F0FDFA',
-    borderWidth: 1.5,
-    borderColor: '#CCFBF1',
+  wallpaperLayer: {
+    ...StyleSheet.absoluteFill,
+    zIndex: 0,
     alignItems: 'center',
     justifyContent: 'center',
-    marginBottom: 32,
+  },
+  wallpaper: {
+    width: '100%',
+    height: '100%',
+    maxWidth: 540,
+    alignSelf: 'center',
+  },
+  bottomGradient: {
+    position: 'absolute',
+    bottom: 0,
+    left: 0,
+    right: 0,
+    height: '38%',
+  },
+  viewport: {
+    flex: 1,
+    paddingHorizontal: Spacing.lg,
+    paddingTop: 12,
+    paddingBottom: 8,
+    maxWidth: 384,
+    width: '100%',
+    alignSelf: 'center',
+    zIndex: 10,
+    justifyContent: 'space-between',
+  },
+  topSpacer: {
+    flex: 1,
+    minHeight: 120,
+  },
+  brandStage: {
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingBottom: Spacing.md,
+  },
+  logoWrapper: {
+    marginBottom: Spacing.lg,
+    alignItems: 'center',
+  },
+  logo: {
+    height: 74,
+    width: 126,
+  },
+  typographyStack: {
+    maxWidth: 320,
+    paddingHorizontal: Spacing.sm,
+    alignItems: 'center',
+    gap: 10,
   },
   title: {
     fontSize: 28,
-    fontWeight: '900',
-    color: '#0F172A',
+    lineHeight: 34,
+    fontWeight: '700',
+    letterSpacing: -0.56,
     textAlign: 'center',
-    marginBottom: 12,
-    letterSpacing: -0.5,
   },
   subtitle: {
     fontSize: 15,
-    lineHeight: 23,
+    lineHeight: 22,
     fontWeight: '400',
-    color: '#64748B',
+    letterSpacing: -0.15,
     textAlign: 'center',
   },
-  bottomSection: {
+  actionsContainer: {
     width: '100%',
-    alignItems: 'center',
-    gap: 14,
+    gap: 12,
     paddingBottom: 8,
   },
-  pillButton: {
+  primaryCta: {
     width: '100%',
-    backgroundColor: '#0F172A',
-    height: 56,
-    borderRadius: 999,
+    height: 54,
+    borderRadius: 9999,
+    backgroundColor: StitchColors.primaryContainer,
+    shadowColor: StitchColors.primaryContainer,
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.2,
+    shadowRadius: 8,
+    elevation: 4,
+    alignItems: 'center',
+    justifyContent: 'center',
+    overflow: 'hidden',
+  },
+  ctaContent: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+  },
+  ctaContentHidden: {
+    opacity: 0,
+  },
+  ctaSpinner: {
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    right: 0,
+    bottom: 0,
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
-    paddingHorizontal: 20,
+    gap: 10,
   },
-  pillButtonText: {
-    fontSize: 16,
-    fontWeight: '700',
-    color: '#FFFFFF',
-    marginRight: 10,
-  },
-  arrowCircle: {
-    width: 32,
-    height: 32,
-    borderRadius: 16,
-    backgroundColor: 'rgba(255, 255, 255, 0.16)',
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  footerRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  footerText: {
-    fontSize: 14,
-    color: '#64748B',
-  },
-  footerLink: {
-    fontSize: 14,
-    fontWeight: '800',
-    color: '#0F172A',
-  },
-  demoLink: {
-    paddingVertical: 4,
-  },
-  demoLinkText: {
-    fontSize: 11,
-    color: '#94A3B8',
+  primaryCtaText: {
+    color: StitchColors.onPrimary,
+    fontSize: 17,
     fontWeight: '600',
+    letterSpacing: -0.43,
+  },
+  ctaSpinnerText: {
+    color: StitchColors.onPrimary,
+    fontSize: 15,
+    fontWeight: '500',
+    letterSpacing: -0.3,
+  },
+  secondaryCta: {
+    width: '100%',
+    height: 50,
+    borderRadius: 9999,
+    overflow: 'hidden',
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderWidth: 1,
+    borderColor: 'rgba(195, 198, 211, 0.4)',
+    backgroundColor: 'rgba(255, 255, 255, 0.8)',
+  },
+  secondaryCtaAndroid: {
+    width: '100%',
+    height: 50,
+    borderRadius: 9999,
+    backgroundColor: 'rgba(255, 255, 255, 0.8)',
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderWidth: 1,
+    borderColor: 'rgba(195, 198, 211, 0.4)',
+  },
+  secondaryCtaOverlay: {
+    ...StyleSheet.absoluteFill,
+    backgroundColor: 'rgba(255, 255, 255, 0.2)',
+  },
+  secondaryCtaText: {
+    color: StitchColors.primaryContainer,
+    fontSize: 15,
+    fontWeight: '500',
+    letterSpacing: -0.075,
+  },
+  legalText: {
+    fontSize: 12,
+    textAlign: 'center',
+    paddingHorizontal: Spacing.md,
+    paddingTop: 4,
+    lineHeight: 16,
+    fontWeight: '400',
+  },
+  legalLink: {
+    textDecorationLine: 'underline',
+    color: StitchColors.onSurfaceVariant,
+  },
+  homeIndicatorWrap: {
+    width: '100%',
+    alignItems: 'center',
+    paddingTop: 8,
+    paddingBottom: 4,
+  },
+  homeIndicator: {
+    width: 128,
+    height: 5,
+    borderRadius: 9999,
+    backgroundColor: 'rgba(19, 27, 46, 0.2)',
   },
 });

@@ -2,45 +2,84 @@ import React, { useState } from 'react';
 import {
   View,
   Text,
-  TouchableOpacity,
+  TextInput,
+  Pressable,
   ScrollView,
   ActivityIndicator,
-  TextInput,
   StyleSheet,
+  Platform,
 } from 'react-native';
 import { useRouter } from 'expo-router';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { FiYLogo } from '@/components/ui/FiYLogo';
+import * as Haptics from 'expo-haptics';
+import {
+  Mail,
+  Lock,
+  Eye,
+  EyeOff,
+  ArrowRight,
+  ShieldCheck,
+  Award,
+  Check,
+} from 'lucide-react-native';
+import { UniversalTopBar } from '@/components/ui/UniversalTopBar';
+import { SegmentedRoleSelector } from '@/components/ui/SegmentedRoleSelector';
 import { GoogleLogo } from '@/components/ui/GoogleLogo';
-import { Mail, Lock, Eye, EyeOff } from 'lucide-react-native';
-import { authService, UserSession } from '@/services/authService';
-import { useAuthStore } from '@/store/useAuthStore';
-import { PremadeAuthModal } from '@/components/auth/PremadeAuthModal';
+import { authService } from '@/services/authService';
 import { googleAuthService } from '@/services/googleAuth';
+import { useAuthStore } from '@/store/useAuthStore';
+import { StitchColors } from '@/constants/theme';
 
 export default function LoginScreen() {
   const router = useRouter();
   const setSession = useAuthStore((s) => s.setSession);
 
-  const [selectedRole, setSelectedRole] = useState<'patient' | 'doctor'>('patient');
-  const [email, setEmail] = useState('');
+  const [role, setRole] = useState<'patient' | 'doctor'>('patient');
+  const [isSignUpMode, setIsSignUpMode] = useState(false);
+  const [doctorLicense, setDoctorLicense] = useState('');
+  const [identity, setIdentity] = useState('');
   const [password, setPassword] = useState('');
   const [showPassword, setShowPassword] = useState(false);
+  const [rememberDevice, setRememberDevice] = useState(true);
   const [loading, setLoading] = useState(false);
   const [googleLoading, setGoogleLoading] = useState(false);
-  const [quickAuthVisible, setQuickAuthVisible] = useState(false);
   const [error, setError] = useState('');
 
-  const handleLogin = async () => {
+  const handleRoleChange = (newRole: 'patient' | 'doctor') => {
+    if (Platform.OS !== 'web') {
+      Haptics.selectionAsync();
+    }
+    setRole(newRole);
     setError('');
-    if (!email.trim() || !password) {
-      setError('Please fill in both email and password.');
+  };
+
+  const toggleAuthMode = () => {
+    if (Platform.OS !== 'web') {
+      Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+    }
+    if (!isSignUpMode && role === 'doctor') {
+      router.push('/(onboarding)/doctor-setup');
+    } else if (!isSignUpMode && role === 'patient') {
+      router.push('/(auth)/signup');
+    } else {
+      setIsSignUpMode(!isSignUpMode);
+    }
+  };
+
+  const handleAuth = async () => {
+    setError('');
+    if (!identity.trim() || !password.trim()) {
+      setError('Please enter both identity and password.');
       return;
     }
 
     try {
       setLoading(true);
-      const session = await authService.loginWithEmail(email.trim(), password);
+      if (Platform.OS !== 'web') {
+        Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+      }
+
+      const session = await authService.loginWithEmail(identity.trim(), password);
       setSession(session);
 
       if (session.role === 'doctor') {
@@ -49,31 +88,27 @@ export default function LoginScreen() {
         router.replace('/(patient)/(tabs)/home');
       }
     } catch (err: any) {
-      setError(err.message || 'Login failed. Please check your credentials.');
+      setError(err.message || 'Authentication failed. Please check your credentials.');
     } finally {
       setLoading(false);
     }
   };
 
-  const handleAuthenticated = (session: UserSession) => {
-    setSession(session);
-    if (!session.onboardingCompleted) {
-      router.replace('/(onboarding)/role-select');
-    } else if (session.role === 'doctor') {
-      router.replace('/(doctor)/(tabs)/home');
-    } else {
-      router.replace('/(patient)/(tabs)/home');
-    }
-  };
-
-  const handleGooglePress = async () => {
+  const handleGoogleAuth = async () => {
     setError('');
     setGoogleLoading(true);
     try {
+      if (Platform.OS !== 'web') {
+        Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+      }
       const session = await googleAuthService.signInWithGoogle();
       if (session) {
-        handleAuthenticated(session);
-        return;
+        setSession(session);
+        if (session.role === 'doctor') {
+          router.replace('/(doctor)/(tabs)/home');
+        } else {
+          router.replace('/(patient)/(tabs)/home');
+        }
       }
     } catch (err: any) {
       setError(err.message || 'Google Sign-In failed.');
@@ -83,183 +118,239 @@ export default function LoginScreen() {
   };
 
   return (
-    <SafeAreaView style={styles.safeArea} edges={['top', 'bottom']}>
+    <SafeAreaView style={styles.safeArea} edges={['bottom']}>
+      {/* Universal Top Navigation & Subtle Brand Bar */}
+      <UniversalTopBar
+        onBackPress={() => {
+          if (router.canGoBack()) {
+            router.back();
+          } else {
+            router.replace('/(auth)/welcome');
+          }
+        }}
+      />
+
       <ScrollView
         contentContainerStyle={styles.scrollContainer}
         showsVerticalScrollIndicator={false}
         keyboardShouldPersistTaps="handled"
       >
-        {/* Top Header - Centered Logo & Breathing Room */}
-        <View style={styles.header}>
-          <FiYLogo size="lg" />
-          <Text style={styles.title}>Welcome back</Text>
-
-          {/* Minimalist Role Toggle */}
-          <View style={styles.roleToggle}>
-            <TouchableOpacity
-              activeOpacity={0.8}
-              onPress={() => {
-                setSelectedRole('patient');
-                if (email.includes('doctor')) setEmail('');
-              }}
-              style={[
-                styles.roleTab,
-                selectedRole === 'patient' && styles.roleTabActive,
-              ]}
-            >
-              <Text
-                style={[
-                  styles.roleText,
-                  selectedRole === 'patient' && styles.roleTextActive,
-                ]}
-              >
-                Patient
-              </Text>
-            </TouchableOpacity>
-
-            <TouchableOpacity
-              activeOpacity={0.8}
-              onPress={() => {
-                setSelectedRole('doctor');
-                if (email.includes('patient')) setEmail('');
-              }}
-              style={[
-                styles.roleTab,
-                selectedRole === 'doctor' && styles.roleTabActive,
-              ]}
-            >
-              <Text
-                style={[
-                  styles.roleText,
-                  selectedRole === 'doctor' && styles.roleTextActive,
-                ]}
-              >
-                Doctor
-              </Text>
-            </TouchableOpacity>
+        <View style={styles.innerContent}>
+          {/* Header Section */}
+          <View style={styles.headerSection}>
+            <Text style={styles.heading}>
+              {isSignUpMode ? 'Join FiYDOC' : 'Welcome Back'}
+            </Text>
+            <Text style={styles.subheading}>
+              {isSignUpMode
+                ? 'Connect with top-rated medical specialists in your network today.'
+                : 'Sign in to access your consultations, digital prescriptions, and health vault.'}
+            </Text>
           </View>
-        </View>
 
-        {/* Error Banner */}
-        {error ? (
-          <View style={styles.errorCard}>
-            <Text style={styles.errorText}>{error}</Text>
-          </View>
-        ) : null}
-
-        {/* Form Inputs */}
-        <View style={styles.form}>
-          <View style={styles.inputWrapper}>
-            <Mail size={18} color="#94A3B8" style={styles.inputIcon} />
-            <TextInput
-              style={styles.input}
-              placeholder={
-                selectedRole === 'doctor' ? 'doctor@fiydoc.app' : 'patient@fiydoc.app'
-              }
-              placeholderTextColor="#94A3B8"
-              value={email}
-              onChangeText={(t) => {
-                setEmail(t);
-                if (error) setError('');
-              }}
-              keyboardType="email-address"
-              autoCapitalize="none"
-              autoCorrect={false}
+          {/* Apple Native Segmented Control */}
+          <View style={styles.segmentedControlWrap}>
+            <SegmentedRoleSelector
+              selectedRole={role}
+              onSelectRole={handleRoleChange}
+              patientLabel="Patient"
+              doctorLabel="Doctor"
+              showIcons
             />
           </View>
 
-          <View style={styles.inputWrapper}>
-            <Lock size={18} color="#94A3B8" style={styles.inputIcon} />
-            <TextInput
-              style={styles.input}
-              placeholder="Password"
-              placeholderTextColor="#94A3B8"
-              value={password}
-              onChangeText={(t) => {
-                setPassword(t);
-                if (error) setError('');
-              }}
-              secureTextEntry={!showPassword}
-              autoCapitalize="none"
-            />
-            <TouchableOpacity
-              onPress={() => setShowPassword(!showPassword)}
-              hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+          {/* Practitioner Notice Banner (Doctor mode dynamic reveal) */}
+          {role === 'doctor' && (
+            <View style={styles.doctorBanner}>
+              <View style={styles.doctorBannerIconBox}>
+                <ShieldCheck size={20} color="#ffffff" strokeWidth={2.2} />
+              </View>
+              <View style={styles.doctorBannerTextBox}>
+                <Text style={styles.doctorBannerTitle}>Verified Medical Portal</Text>
+                <Text style={styles.doctorBannerDesc}>
+                  Please provide your authorized license identifier or registered provider credentials.
+                </Text>
+              </View>
+            </View>
+          )}
+
+          {/* Primary Interactive Card */}
+          <View style={styles.interactiveCard}>
+            {/* Fast Social Identity CTA */}
+            <Pressable
+              onPress={handleGoogleAuth}
+              disabled={googleLoading}
+              style={({ pressed }) => [
+                styles.googleButton,
+                pressed && styles.buttonPressed,
+              ]}
+              accessibilityRole="button"
+              accessibilityLabel="Continue with Google"
             >
-              {showPassword ? (
-                <EyeOff size={18} color="#94A3B8" />
+              {googleLoading ? (
+                <ActivityIndicator size="small" color={StitchColors.primary} />
               ) : (
-                <Eye size={18} color="#94A3B8" />
+                <>
+                  <GoogleLogo size={20} />
+                  <Text style={styles.googleButtonText}>Continue with Google</Text>
+                </>
               )}
-            </TouchableOpacity>
+            </Pressable>
+
+            {/* Subtle Clean Divider */}
+            <View style={styles.dividerRow}>
+              <View style={styles.dividerLine} />
+              <Text style={styles.dividerText}>or sign in with email</Text>
+              <View style={styles.dividerLine} />
+            </View>
+
+            {/* Error Message */}
+            {error ? (
+              <View style={styles.errorBox}>
+                <Text style={styles.errorText}>{error}</Text>
+              </View>
+            ) : null}
+
+            {/* Auth Form */}
+            <View style={styles.formContainer}>
+              {/* Doctor License Registration Field (Shown for Doctor) */}
+              {role === 'doctor' && (
+                <View style={styles.inputGroup}>
+                  <Text style={styles.inputLabel}>Medical License / NPI Number</Text>
+                  <View style={styles.inputWrapper}>
+                    <Award size={19} color="#737783" style={styles.inputIcon} />
+                    <TextInput
+                      value={doctorLicense}
+                      onChangeText={setDoctorLicense}
+                      placeholder="e.g. MED-849201-US"
+                      placeholderTextColor="#737783"
+                      style={styles.textInput}
+                      autoCapitalize="characters"
+                    />
+                  </View>
+                </View>
+              )}
+
+              {/* Identity Field (Email or Mobile) */}
+              <View style={styles.inputGroup}>
+                <Text style={styles.inputLabel}>
+                  {role === 'doctor' ? 'Medical Provider Email' : 'Email or Mobile Number'}
+                </Text>
+                <View style={styles.inputWrapper}>
+                  <Mail size={19} color="#737783" style={styles.inputIcon} />
+                  <TextInput
+                    value={identity}
+                    onChangeText={setIdentity}
+                    placeholder="name@domain.com"
+                    placeholderTextColor="#737783"
+                    style={styles.textInput}
+                    keyboardType="email-address"
+                    autoCapitalize="none"
+                    autoCorrect={false}
+                  />
+                </View>
+              </View>
+
+              {/* Password Field */}
+              <View style={styles.inputGroup}>
+                <View style={styles.labelRow}>
+                  <Text style={styles.inputLabel}>Password</Text>
+                  <Pressable
+                    onPress={() => router.push('/(auth)/forgot-password')}
+                    hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+                  >
+                    <Text style={styles.forgotPasswordText}>Forgot password?</Text>
+                  </Pressable>
+                </View>
+                <View style={styles.inputWrapper}>
+                  <Lock size={19} color="#737783" style={styles.inputIcon} />
+                  <TextInput
+                    value={password}
+                    onChangeText={setPassword}
+                    placeholder="Enter secure password"
+                    placeholderTextColor="#737783"
+                    style={styles.textInput}
+                    secureTextEntry={!showPassword}
+                    autoCapitalize="none"
+                  />
+                  <Pressable
+                    onPress={() => setShowPassword(!showPassword)}
+                    hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+                    style={styles.eyeButton}
+                  >
+                    {showPassword ? (
+                      <EyeOff size={19} color="#737783" />
+                    ) : (
+                      <Eye size={19} color="#737783" />
+                    )}
+                  </Pressable>
+                </View>
+              </View>
+
+              {/* Preferences & Session row */}
+              <Pressable
+                onPress={() => setRememberDevice(!rememberDevice)}
+                style={styles.rememberRow}
+              >
+                <View
+                  style={[
+                    styles.checkbox,
+                    rememberDevice && styles.checkboxChecked,
+                  ]}
+                >
+                  {rememberDevice && <Check size={13} color="#ffffff" strokeWidth={3} />}
+                </View>
+                <Text style={styles.rememberText}>Remember this device</Text>
+              </Pressable>
+
+              {/* Action Button */}
+              <Pressable
+                onPress={handleAuth}
+                disabled={loading}
+                style={({ pressed }) => [
+                  styles.submitButton,
+                  pressed && styles.buttonPressed,
+                ]}
+                accessibilityRole="button"
+                accessibilityLabel="Sign In to Care Portal"
+              >
+                {loading ? (
+                  <ActivityIndicator size="small" color="#ffffff" />
+                ) : (
+                  <>
+                    <Text style={styles.submitButtonText}>
+                      {isSignUpMode ? 'Create Free Account' : 'Sign In to Care Portal'}
+                    </Text>
+                    <ArrowRight size={18} color="#ffffff" strokeWidth={2.4} />
+                  </>
+                )}
+              </Pressable>
+            </View>
           </View>
 
-          <TouchableOpacity
-            onPress={() => router.push('/(auth)/forgot-password')}
-            style={styles.forgotBtn}
-          >
-            <Text style={styles.forgotText}>Forgot password?</Text>
-          </TouchableOpacity>
-
-          {/* Primary Action Button */}
-          <TouchableOpacity
-            onPress={handleLogin}
-            activeOpacity={0.88}
-            disabled={loading}
-            style={styles.signInBtn}
-          >
-            {loading ? (
-              <ActivityIndicator color="#FFFFFF" size="small" />
-            ) : (
-              <Text style={styles.signInBtnText}>
-                Sign In as {selectedRole === 'doctor' ? 'Doctor' : 'Patient'}
+          {/* Sign Up Toggle Footer */}
+          <View style={styles.footerSection}>
+            <View style={styles.togglePromptRow}>
+              <Text style={styles.promptText}>
+                {isSignUpMode ? 'Already have an account?' : "Don't have an account?"}
               </Text>
-            )}
-          </TouchableOpacity>
+              <Pressable onPress={toggleAuthMode} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}>
+                <Text style={styles.promptLink}>
+                  {isSignUpMode ? 'Sign in' : 'Create an account'}
+                </Text>
+              </Pressable>
+            </View>
 
-          {/* Google Sign-In */}
-          <TouchableOpacity
-            onPress={handleGooglePress}
-            activeOpacity={0.85}
-            disabled={googleLoading}
-            style={styles.googleBtn}
-          >
-            {googleLoading ? (
-              <ActivityIndicator size="small" color="#0F172A" />
-            ) : (
-              <>
-                <GoogleLogo size={18} />
-                <Text style={styles.googleBtnText}>Continue with Google</Text>
-              </>
-            )}
-          </TouchableOpacity>
-        </View>
-
-        {/* Footer */}
-        <View style={styles.footer}>
-          <View style={styles.footerRow}>
-            <Text style={styles.footerText}>Don't have an account? </Text>
-            <TouchableOpacity onPress={() => router.push('/(auth)/signup')}>
-              <Text style={styles.footerLink}>Sign Up</Text>
-            </TouchableOpacity>
+            <View style={styles.legalLinksRow}>
+              <Text style={styles.legalLinkText}>Privacy Policy</Text>
+              <Text style={styles.bulletDot}>•</Text>
+              <Text style={styles.legalLinkText}>Terms of Care</Text>
+              <Text style={styles.bulletDot}>•</Text>
+              <Text style={styles.legalLinkText}>HIPAA Compliance</Text>
+            </View>
           </View>
-
-          {/* Discreet 1-tap persona testing helper */}
-          <TouchableOpacity
-            onPress={() => setQuickAuthVisible(true)}
-            style={styles.devLink}
-          >
-            <Text style={styles.devLinkText}>Test Accounts & OTP</Text>
-          </TouchableOpacity>
         </View>
       </ScrollView>
-
-      {/* Premade Auth Modal */}
-      <PremadeAuthModal
-        visible={quickAuthVisible}
-        onClose={() => setQuickAuthVisible(false)}
-        onAuthenticated={handleAuthenticated}
-      />
     </SafeAreaView>
   );
 }
@@ -267,153 +358,293 @@ export default function LoginScreen() {
 const styles = StyleSheet.create({
   safeArea: {
     flex: 1,
-    backgroundColor: '#FFFFFF',
+    backgroundColor: StitchColors.surface,
   },
   scrollContainer: {
     flexGrow: 1,
-    paddingHorizontal: 28,
-    paddingTop: 20,
-    paddingBottom: 24,
-    justifyContent: 'space-between',
+    paddingBottom: 28,
   },
-  header: {
-    alignItems: 'center',
-    paddingBottom: 10,
-  },
-  title: {
-    fontSize: 26,
-    fontWeight: '900',
-    color: '#0F172A',
-    marginTop: 18,
-    marginBottom: 20,
-    letterSpacing: -0.5,
-  },
-  roleToggle: {
-    flexDirection: 'row',
+  innerContent: {
     width: '100%',
-    backgroundColor: '#F1F5F9',
-    borderRadius: 999,
-    padding: 3,
+    maxWidth: 420,
+    alignSelf: 'center',
+    paddingHorizontal: 16,
   },
-  roleTab: {
-    flex: 1,
-    paddingVertical: 10,
-    borderRadius: 999,
+  headerSection: {
+    alignItems: 'center',
+    marginVertical: 14,
+  },
+  heading: {
+    fontSize: 28,
+    fontWeight: '700',
+    color: StitchColors.onSurface,
+    letterSpacing: -0.5,
+    textAlign: 'center',
+  },
+  subheading: {
+    fontSize: 14,
+    color: StitchColors.onSurfaceVariant,
+    marginTop: 6,
+    textAlign: 'center',
+    maxWidth: 290,
+    lineHeight: 20,
+  },
+  segmentedControlWrap: {
+    marginBottom: 16,
+  },
+  doctorBanner: {
+    backgroundColor: StitchColors.surfaceContainerLow,
+    borderRadius: 16,
+    padding: 12,
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    gap: 12,
+    marginBottom: 14,
+    borderWidth: 1,
+    borderColor: 'rgba(218, 226, 253, 0.6)',
+  },
+  doctorBannerIconBox: {
+    width: 32,
+    height: 32,
+    borderRadius: 16,
+    backgroundColor: StitchColors.primaryContainer,
     alignItems: 'center',
     justifyContent: 'center',
+    marginTop: 1,
   },
-  roleTabActive: {
-    backgroundColor: '#0F172A',
+  doctorBannerTextBox: {
+    flex: 1,
   },
-  roleText: {
-    fontSize: 14,
-    fontWeight: '600',
-    color: '#64748B',
-  },
-  roleTextActive: {
-    color: '#FFFFFF',
+  doctorBannerTitle: {
+    fontSize: 15,
     fontWeight: '700',
+    color: StitchColors.primary,
   },
-  errorCard: {
-    backgroundColor: '#FEF2F2',
+  doctorBannerDesc: {
+    fontSize: 12,
+    color: StitchColors.onSurfaceVariant,
+    marginTop: 2,
+    lineHeight: 16,
+  },
+  interactiveCard: {
+    backgroundColor: StitchColors.surfaceContainerLowest,
+    borderRadius: 24,
+    padding: 18,
+    borderWidth: 1,
+    borderColor: 'rgba(226, 232, 240, 0.8)',
+    ...Platform.select({
+      ios: {
+        shadowColor: '#002350',
+        shadowOffset: { width: 0, height: 4 },
+        shadowOpacity: 0.05,
+        shadowRadius: 10,
+      },
+      android: {
+        elevation: 2,
+      },
+      web: {
+        boxShadow: '0 4px 16px rgba(0, 35, 80, 0.05)',
+      },
+    }),
+  },
+  googleButton: {
+    width: '100%',
+    height: 48,
+    backgroundColor: StitchColors.surfaceContainerLowest,
+    borderRadius: 9999,
+    borderWidth: 1,
+    borderColor: '#e2e8f0',
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 10,
+    marginBottom: 14,
+    ...Platform.select({
+      ios: {
+        shadowColor: '#000000',
+        shadowOffset: { width: 0, height: 1 },
+        shadowOpacity: 0.04,
+        shadowRadius: 3,
+      },
+      android: {
+        elevation: 1,
+      },
+      web: {
+        boxShadow: '0 1px 3px rgba(0, 0, 0, 0.04)',
+      },
+    }),
+  },
+  buttonPressed: {
+    transform: [{ scale: 0.98 }],
+    opacity: 0.92,
+  },
+  googleButtonText: {
+    fontSize: 15,
+    fontWeight: '600',
+    color: StitchColors.onSurface,
+  },
+  dividerRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginBottom: 14,
+  },
+  dividerLine: {
+    flex: 1,
+    height: 1,
+    backgroundColor: StitchColors.surfaceVariant,
+  },
+  dividerText: {
+    paddingHorizontal: 10,
+    fontSize: 11,
+    fontWeight: '600',
+    color: StitchColors.outline,
+    textTransform: 'uppercase',
+    letterSpacing: 0.4,
+  },
+  errorBox: {
+    backgroundColor: '#fef2f2',
+    borderWidth: 1,
+    borderColor: '#fecaca',
     borderRadius: 12,
-    padding: 12,
-    marginVertical: 10,
+    padding: 10,
+    marginBottom: 12,
   },
   errorText: {
-    fontSize: 13,
-    color: '#DC2626',
+    color: '#b91c1c',
+    fontSize: 12,
     textAlign: 'center',
-    fontWeight: '600',
   },
-  form: {
-    width: '100%',
-    gap: 14,
-    marginVertical: 16,
+  formContainer: {
+    gap: 12,
+  },
+  inputGroup: {
+    gap: 5,
+  },
+  labelRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+  },
+  inputLabel: {
+    fontSize: 12,
+    fontWeight: '600',
+    color: StitchColors.onSurfaceVariant,
+  },
+  forgotPasswordText: {
+    fontSize: 12,
+    fontWeight: '600',
+    color: StitchColors.primary,
   },
   inputWrapper: {
     flexDirection: 'row',
     alignItems: 'center',
-    borderWidth: 1,
-    borderColor: '#E2E8F0',
+    backgroundColor: StitchColors.surfaceContainerLow,
     borderRadius: 16,
-    paddingHorizontal: 16,
-    height: 52,
-    backgroundColor: '#FAFAFA',
+    paddingHorizontal: 14,
+    height: 48,
+    borderWidth: 1,
+    borderColor: 'transparent',
   },
   inputIcon: {
-    marginRight: 12,
+    marginRight: 8,
   },
-  input: {
+  textInput: {
     flex: 1,
-    fontSize: 15,
-    fontWeight: '500',
-    color: '#0F172A',
+    fontSize: 14,
+    color: StitchColors.onSurface,
+    height: '100%',
   },
-  forgotBtn: {
-    alignSelf: 'flex-end',
-    marginTop: -4,
+  eyeButton: {
+    padding: 4,
   },
-  forgotText: {
+  rememberRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    paddingTop: 4,
+  },
+  checkbox: {
+    width: 18,
+    height: 18,
+    borderRadius: 5,
+    borderWidth: 1.5,
+    borderColor: '#94a3b8',
+    backgroundColor: '#ffffff',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  checkboxChecked: {
+    backgroundColor: StitchColors.secondary,
+    borderColor: StitchColors.secondary,
+  },
+  rememberText: {
     fontSize: 13,
-    color: '#64748B',
-    fontWeight: '600',
+    color: StitchColors.onSurfaceVariant,
   },
-  signInBtn: {
-    width: '100%',
-    backgroundColor: '#0F172A',
-    height: 54,
-    borderRadius: 999,
-    alignItems: 'center',
-    justifyContent: 'center',
+  submitButton: {
     marginTop: 6,
-  },
-  signInBtnText: {
-    fontSize: 15,
-    fontWeight: '700',
-    color: '#FFFFFF',
-  },
-  googleBtn: {
     width: '100%',
-    borderWidth: 1,
-    borderColor: '#E2E8F0',
-    height: 52,
-    borderRadius: 999,
+    height: 50,
+    borderRadius: 9999,
+    backgroundColor: StitchColors.primaryContainer,
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
-    backgroundColor: '#FFFFFF',
-    gap: 10,
+    gap: 8,
+    ...Platform.select({
+      ios: {
+        shadowColor: StitchColors.primaryContainer,
+        shadowOffset: { width: 0, height: 4 },
+        shadowOpacity: 0.25,
+        shadowRadius: 8,
+      },
+      android: {
+        elevation: 3,
+      },
+      web: {
+        boxShadow: '0 4px 14px rgba(20, 80, 163, 0.28)',
+      },
+    }),
   },
-  googleBtnText: {
-    fontSize: 14,
+  submitButtonText: {
+    fontSize: 16,
     fontWeight: '600',
-    color: '#0F172A',
+    color: '#ffffff',
+    letterSpacing: -0.2,
   },
-  footer: {
+  footerSection: {
+    marginTop: 20,
     alignItems: 'center',
-    gap: 10,
-    paddingTop: 16,
+    gap: 12,
   },
-  footerRow: {
+  togglePromptRow: {
     flexDirection: 'row',
     alignItems: 'center',
+    justifyContent: 'center',
   },
-  footerText: {
+  promptText: {
     fontSize: 14,
-    color: '#64748B',
+    color: StitchColors.onSurfaceVariant,
   },
-  footerLink: {
+  promptLink: {
     fontSize: 14,
-    fontWeight: '800',
-    color: '#0F172A',
+    fontWeight: '700',
+    color: StitchColors.primary,
+    marginLeft: 6,
   },
-  devLink: {
-    paddingVertical: 4,
+  legalLinksRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 6,
   },
-  devLinkText: {
+  legalLinkText: {
     fontSize: 11,
-    color: '#CBD5E1',
-    fontWeight: '600',
+    color: StitchColors.outline,
+    fontWeight: '500',
+  },
+  bulletDot: {
+    color: StitchColors.outline,
+    fontSize: 11,
   },
 });

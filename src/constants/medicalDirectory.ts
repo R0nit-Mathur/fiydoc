@@ -1,3 +1,18 @@
+export const MEDICAL_SPECIALTIES = [
+  'General Medicine',
+  'Cardiology',
+  'Dermatology',
+  'Pediatrics',
+  'Orthopedics',
+  'Gynecology',
+  'ENT Specialist',
+  'Neurology',
+  'Psychiatry',
+  'Ophthalmology',
+] as const;
+
+export type MedicalSpecialty = (typeof MEDICAL_SPECIALTIES)[number];
+
 export interface MedicineItem {
   id: string;
   name: string;

@@ -1,1884 +1,3224 @@
-import React, { useState, useMemo, useEffect } from 'react';
+/**
+ * FiYDOC - Doctor Consultation & Step Carousel Prescription (1:1 Google Stitch)
+ *
+ * Implements the full doctor consultation experience:
+ * 1. Active Consultation & Patient History View:
+ *    - Running live timer resetting for every fresh patient with quick reset button
+ *    - Patient Identity Hero Card (Aarav Mehta, 38 M, B+, UHID: 8021-9811)
+ *    - Editable Vitals Row (BP, Pulse, Temp, SpO2, Resp Rate, Weight) with dedicated edit modal
+ *    - Editable Chief Complaint with clinical ghost autocompletion
+ *    - Editable Physical observations and clinical impression
+ *    - Segmented Tabs: Today's Visit, Past History, Lab Reports
+ *    - Bottom Action Bar: Audio Dictation toggle, Freehand MS Paint Style Drawing Notepad, Proceed to Prescription
+ * 2. 5-Step Prescription Builder Deck:
+ *    - Step 1: Diagnosis (ICD-10) with complete medical catalog recommendations & search
+ *    - Step 2: Prescribed Medications with dosage, frequency, timing & duration modal editor
+ *    - Step 3: Labs & Imaging with comprehensive diagnostics library
+ *    - Step 4: Advice, Lifestyle checklist & Emergency warning autocompletion
+ *    - Step 5: Digital Prescription Summary, EHR SVG signature & multi-channel delivery
+ */
+
+import React, { useState, useEffect } from 'react';
 import {
   View,
   Text,
   ScrollView,
-  TouchableOpacity,
+  Pressable,
+  StyleSheet,
   TextInput,
+  Image,
   Platform,
-  BackHandler,
-  Share,
+  Modal,
 } from 'react-native';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { useAppointmentDetailQuery } from '@/hooks/queries/useAppointmentsQuery';
-import { BodyRegion3D } from '@/components/doctor/BodyRegion3D';
-import { Input } from '@/components/ui/Input';
-import { Button } from '@/components/ui/Button';
-import { Modal } from '@/components/ui/Modal';
-import { Badge } from '@/components/ui/Badge';
-import { Avatar } from '@/components/ui/Avatar';
+import Animated, { FadeIn, FadeInUp } from 'react-native-reanimated';
+import * as Haptics from 'expo-haptics';
+import {
+  ArrowLeft,
+  Mic,
+  MicOff,
+  Edit3,
+  ArrowRight,
+  Stethoscope,
+  Calendar,
+  AlertTriangle,
+  History,
+  X,
+  Plus,
+  Trash2,
+  Clock,
+  ShieldCheck,
+  Check,
+  RotateCcw,
+  Sparkles,
+  Share2,
+  FileCheck,
+  MessageCircle,
+  Activity,
+  Sliders,
+  CheckCircle2,
+  Camera,
+  Image as ImageIcon,
+  Pill,
+  ExternalLink,
+} from 'lucide-react-native';
+import Svg, { Path } from 'react-native-svg';
+
+import { useAppTheme } from '@/hooks/useAppTheme';
+import { useAppointmentStore } from '@/store/useAppointmentStore';
 import { useAuthStore } from '@/store/useAuthStore';
 import { useHealthStore } from '@/store/useHealthStore';
 import { useNotificationStore } from '@/store/useNotificationStore';
-import { useAppointmentStore } from '@/store/useAppointmentStore';
-import { healthService } from '@/services/healthService';
+import { BorderRadius, Shadows, Spacing, StitchColors, DEFAULT_DOCTOR_AVATAR, DEFAULT_PATIENT_AVATAR } from '@/constants/theme';
 import {
-  MEDICINES_DIRECTORY,
-  DIAGNOSTIC_TESTS_DIRECTORY,
-  MedicineItem,
-  DiagnosticTestItem,
-} from '@/constants/medicalDirectory';
-import {
-  ArrowLeft,
-  Pill,
-  Activity,
-  FileCheck,
-  CheckCircle2,
-  Plus,
-  Trash2,
-  Search,
-  Clock,
-  ShieldCheck,
-  Building2,
-  Calendar,
-  ClipboardList,
-  History,
-  FileText,
-  ChevronDown,
-  ChevronUp,
-  Share2,
-  Download,
-  Sparkles,
-  SlidersHorizontal,
-  Stethoscope,
-  HeartPulse,
-  Edit3,
-  Bookmark,
-  Check,
-  ZoomIn,
-  ZoomOut,
-  Maximize2,
-  Minimize2,
-  RotateCcw,
-} from 'lucide-react-native';
+  MEDICAL_DIAGNOSES,
+  MEDICATIONS_CATALOG,
+  LAB_TESTS_CATALOG,
+  LIFESTYLE_ADVICE_PRESETS,
+  type MedicationCatalogItem,
+} from '@/constants/medicalCatalog';
+import SmartMedicalTextInput from '@/components/doctor/SmartMedicalTextInput';
+import ClinicalDrawingNotepad from '@/components/doctor/ClinicalDrawingNotepad';
 
-interface PrescribedMedicine {
+const DOCTOR_AVATAR = DEFAULT_DOCTOR_AVATAR;
+const PATIENT_AVATAR = DEFAULT_PATIENT_AVATAR;
+
+interface PrescriptionItem {
   id: string;
   name: string;
   generic: string;
   dosage: string;
   frequency: string;
   duration: string;
+  timing: string;
   instructions: string;
 }
 
-interface PrescribedTest {
-  id: string;
-  name: string;
-  category: string;
-  turnaroundTime: string;
-  fastingRequired: boolean;
-}
-
-interface RxPreset {
-  id: string;
-  label: string;
-  icon: string;
-  diagnosis: string;
-  notes: string;
-  advice: string;
-  meds: {
-    name: string;
-    generic: string;
-    dosage: string;
-    frequency: string;
-    duration: string;
-    instructions: string;
-  }[];
-  tests?: {
-    name: string;
-    category: string;
-    turnaroundTime: string;
-    fastingRequired: boolean;
-  }[];
-}
-
-const COMMON_PATIENT_VOICE_CHIPS = [
-  'Fever x 3 days (बुखार)',
-  'Throbbing headache (सिरदर्द)',
-  'Persistent dry cough (खांसी)',
-  'Chest tightness / discomfort',
-  'Stomach cramps & acidity (गैस/एसिडिटी)',
-  'Body ache & fatigue (कमजोरी)',
-  'Sore throat & cold (गले में खराश)',
-  'Dizziness on standing (चक्कर)',
-];
-
-const CLINICAL_PRESETS: RxPreset[] = [
-  {
-    id: 'fever_flu',
-    label: 'Viral Fever / URI',
-    icon: '🌡️',
-    diagnosis: 'Acute Viral Upper Respiratory Infection with Pyrexia',
-    notes: 'Patient presented with 3 days fever, body ache, throat irritation. Chest clear on auscultation.',
-    advice: 'Steam inhalation twice daily, saline gargles, maintain high fluid intake (2.5L/day), light khichdi/soup diet.',
-    meds: [
-      {
-        name: 'Dolo 650',
-        generic: 'Paracetamol IP 650mg',
-        dosage: '1 Tab',
-        frequency: '1-0-1 (Morning & Night)',
-        duration: '5 Days',
-        instructions: 'Take after meals for fever > 100°F (SOS if needed)',
-      },
-      {
-        name: 'Levocet 5',
-        generic: 'Levocetirizine Dihydrochloride 5mg',
-        dosage: '1 Tab',
-        frequency: '0-0-1 (Night only)',
-        duration: '5 Days',
-        instructions: 'Take at bedtime after food',
-      },
-      {
-        name: 'Limcee 500',
-        generic: 'Vitamin C (Ascorbic Acid) 500mg',
-        dosage: '1 Tab',
-        frequency: '1-0-0 (Morning only)',
-        duration: '10 Days',
-        instructions: 'Chewable tablet after breakfast',
-      },
-    ],
-    tests: [
-      {
-        name: 'Complete Blood Count (CBC)',
-        category: 'Hematology',
-        turnaroundTime: '4 Hours',
-        fastingRequired: false,
-      },
-    ],
-  },
-  {
-    id: 'hypertension',
-    label: 'Hypertension Protocol',
-    icon: '🫀',
-    diagnosis: 'Essential Stage-1 Systemic Hypertension',
-    notes: 'Serial BP monitoring indicates persistent elevations (144/92 mmHg). No end-organ damage symptoms.',
-    advice: 'Strict low sodium diet (<2g salt/day), 30 mins brisk walking daily, maintain home BP diary morning & night.',
-    meds: [
-      {
-        name: 'Telma 40',
-        generic: 'Telmisartan IP 40mg',
-        dosage: '1 Tab',
-        frequency: '1-0-0 (Morning only)',
-        duration: '30 Days',
-        instructions: 'Take once daily after breakfast at fixed time',
-      },
-      {
-        name: 'Amlong 5',
-        generic: 'Amlodipine Besylate 5mg',
-        dosage: '1 Tab',
-        frequency: '0-0-1 (Night only)',
-        duration: '30 Days',
-        instructions: 'Take after dinner',
-      },
-    ],
-    tests: [
-      {
-        name: 'Comprehensive Lipid Profile',
-        category: 'Biochemistry',
-        turnaroundTime: '8 Hours',
-        fastingRequired: true,
-      },
-      {
-        name: 'Serum Creatinine & Electrolytes',
-        category: 'Renal Function',
-        turnaroundTime: '6 Hours',
-        fastingRequired: false,
-      },
-    ],
-  },
-  {
-    id: 'acidity_gerd',
-    label: 'GERD & Acidity',
-    icon: '💊',
-    diagnosis: 'Gastroesophageal Reflux Disease (GERD) with Non-Ulcer Dyspepsia',
-    notes: 'Retrosternal burning sensation, postprandial fullness, acid regurgitation aggravated by spicy foods.',
-    advice: 'Avoid spicy/deep-fried food, chocolate, coffee. Eat small frequent meals. Keep 2 hours gap between dinner and sleep.',
-    meds: [
-      {
-        name: 'Pan 40',
-        generic: 'Pantoprazole Gastro-resistant 40mg',
-        dosage: '1 Tab',
-        frequency: '1-0-0 (Morning only)',
-        duration: '14 Days',
-        instructions: 'Take empty stomach 30 mins before morning breakfast',
-      },
-      {
-        name: 'Domstal 10',
-        generic: 'Domperidone 10mg',
-        dosage: '1 Tab',
-        frequency: '1-0-1 (Morning & Night)',
-        duration: '7 Days',
-        instructions: 'Take 15 minutes before meals',
-      },
-    ],
-  },
-  {
-    id: 'diabetes_t2',
-    label: 'Diabetes Type-2',
-    icon: '🩸',
-    diagnosis: 'Type-2 Diabetes Mellitus with Suboptimal Glycemic Control',
-    notes: 'HbA1c elevated (7.8%). Fasting blood sugars 142 mg/dL. No microvascular complications detected on exam.',
-    advice: 'Dietary carbohydrate restriction. Avoid refined sugars, sweets, and processed snacks. Daily 45 mins exercise.',
-    meds: [
-      {
-        name: 'Glycomet GP 1',
-        generic: 'Metformin 500mg + Glimepiride 1mg',
-        dosage: '1 Tab',
-        frequency: '1-0-1 (Morning & Night)',
-        duration: '30 Days',
-        instructions: 'Take with or immediately after major meals',
-      },
-    ],
-    tests: [
-      {
-        name: 'Glycated Hemoglobin (HbA1c)',
-        category: 'Biochemistry',
-        turnaroundTime: '6 Hours',
-        fastingRequired: false,
-      },
-      {
-        name: 'Fasting & Post-Prandial Blood Sugar',
-        category: 'Biochemistry',
-        turnaroundTime: '4 Hours',
-        fastingRequired: true,
-      },
-    ],
-  },
-  {
-    id: 'cough_bronchitis',
-    label: 'Acute Bronchitis / Cough',
-    icon: '🫁',
-    diagnosis: 'Acute Tracheobronchitis with Spasmodic Cough',
-    notes: 'Persistent dry & productive cough x 5 days, nocturnal worsening, chest clear on auscultation.',
-    advice: 'Avoid cold beverages, warm water sips, steam inhalation twice daily. Review if breathing difficulty occurs.',
-    meds: [
-      {
-        name: 'Augmentin 625 Duo',
-        generic: 'Amoxicillin 500mg + Clavulanic Acid 125mg',
-        dosage: '1 Tab',
-        frequency: '1-0-1 (Morning & Night)',
-        duration: '5 Days',
-        instructions: 'Complete full 5-day antibiotic course after meals',
-      },
-      {
-        name: 'Ascoril D Plus',
-        generic: 'Dextromethorphan + Phenylephrine + CPM Syrup',
-        dosage: '10 ml',
-        frequency: '1-1-1 (Morning, Noon, Night)',
-        duration: '5 Days',
-        instructions: 'Take 10ml with measuring cup after food',
-      },
-    ],
-  },
-];
-
-const TIMING_OPTIONS = [
-  '1-0-1 (Morning & Night)',
-  '1-0-0 (Morning only)',
-  '0-0-1 (Night only)',
-  '1-1-1 (Morning, Noon, Night)',
-  '0-1-0 (Afternoon only)',
-  'SOS (As needed / जरूरत पर)',
-];
-
-const FOOD_INSTRUCTION_OPTIONS = [
-  'After Meals (खाने के बाद)',
-  'Before Meals / Empty Stomach (खाली पेट)',
-  'With Meals (खाने के साथ)',
-  'At Bedtime (रात को सोते समय)',
-];
-
-const DURATION_OPTIONS = ['3 Days', '5 Days', '7 Days', '10 Days', '14 Days', '30 Days'];
-const DOSAGE_FORM_OPTIONS = ['1 Tab', '2 Tabs', '1 Cap', '5 ml', '10 ml', '1 Sachet', '1 Inj'];
-
-export default function DoctorConsultationWorkspaceScreen() {
+export default function DoctorConsultationScreen() {
   const router = useRouter();
+  const params = useLocalSearchParams<{ id?: string }>();
+  const { colors, isDark } = useAppTheme();
+
+  const appointmentId = params.id || 'apt_1';
+  const { appointments, updateAppointmentStatus } = useAppointmentStore();
   const { user } = useAuthStore();
-  const { id } = useLocalSearchParams<{ id: string }>();
-  const { data: apt } = useAppointmentDetailQuery(id as string);
+  const currentApt = appointments.find((a) => a.id === appointmentId);
 
-  const handleSafeBack = () => {
-    if (router.canGoBack()) {
-      router.back();
-    } else {
-      router.replace('/(doctor)/(tabs)/home');
+  // Determine next patient in today's queue (same doctor, confirmed/checked_in, future in the list)
+  const nextPatient = (() => {
+    const today = new Date().toISOString().slice(0, 10);
+    const activeStatuses = ['confirmed', 'checked_in', 'upcoming', 'pending'];
+    const todayQueue = appointments
+      .filter((a) => a.doctorId === currentApt?.doctorId && a.date?.slice(0, 10) === today && activeStatuses.includes(a.status) && a.id !== appointmentId)
+      .sort((a, b) => a.time.localeCompare(b.time));
+    return todayQueue[0] || null;
+  })();
+
+  // 1. ACTIVE SESSION TIMER — Resets for every patient and when opening fresh
+  const [sessionSeconds, setSessionSeconds] = useState(0);
+
+  useEffect(() => {
+    setSessionSeconds(0);
+    const timer = setInterval(() => {
+      setSessionSeconds((prev) => prev + 1);
+    }, 1000);
+    return () => clearInterval(timer);
+  }, [appointmentId]);
+
+  const formatTimer = (totalSec: number) => {
+    const m = Math.floor(totalSec / 60);
+    const s = totalSec % 60;
+    return `${m.toString().padStart(2, '0')}:${s.toString().padStart(2, '0')}`;
+  };
+
+  const handleResetTimer = () => {
+    if (Platform.OS !== 'web') {
+      Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+    }
+    setSessionSeconds(0);
+  };
+
+  // 2. EDITABLE VITALS
+  const [vitals, setVitals] = useState({
+    bpSystolic: '120',
+    bpDiastolic: '80',
+    pulse: '72',
+    temp: '98.4',
+    spO2: '98',
+    respRate: '18',
+    weight: '74',
+  });
+  const [showVitalsModal, setShowVitalsModal] = useState(false);
+  const [tempVitals, setTempVitals] = useState(vitals);
+
+  const handleOpenVitalsModal = () => {
+    setTempVitals(vitals);
+    setShowVitalsModal(true);
+  };
+
+  const handleSaveVitals = () => {
+    setVitals(tempVitals);
+    setShowVitalsModal(false);
+    if (Platform.OS !== 'web') {
+      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
     }
   };
 
-  useEffect(() => {
-    const onBackPress = () => {
-      handleSafeBack();
-      return true;
-    };
-    const sub = BackHandler.addEventListener('hardwareBackPress', onBackPress);
-    return () => sub.remove();
-  }, []);
+  // 3. EDITABLE CHIEF COMPLAINT & OBSERVATIONS
+  const [chiefComplaint, setChiefComplaint] = useState(
+    'Persistent dry cough & mild chest tightness for 4 days. No fever recorded.'
+  );
+  const [physicalObservation, setPhysicalObservation] = useState(
+    'Clear bilateral vesicular sounds, mild bronchial wheeze heard on forced expiration. S1, S2 audible, no heart murmurs.'
+  );
 
-  // SOAP Clinical Evaluation State - Starts EMPTY so doctor is not forced with mock data
-  const [subjective, setSubjective] = useState('');
-  const [objective, setObjective] = useState('');
-  const [assessment, setAssessment] = useState('');
-  const [adviceNotes, setAdviceNotes] = useState('');
+  // Attached Clinical Examination Images (Lesions, Throat, Radiographs)
+  const [clinicalImages, setClinicalImages] = useState<
+    Array<{ id: string; title: string; uri: string; date: string }>
+  >([
+    {
+      id: 'img_1',
+      title: 'Pharyngeal Examination View',
+      uri: 'https://images.unsplash.com/photo-1584515979956-d9f6e5d09982?w=600&auto=format&fit=crop&q=80',
+      date: 'Today, 10:32 AM',
+    },
+  ]);
+  const [showAddImageModal, setShowAddImageModal] = useState(false);
+  const [selectedPreviewImage, setSelectedPreviewImage] = useState<{ title: string; uri: string } | null>(null);
+  const [customImageTitle, setCustomImageTitle] = useState('');
+  const [customImageUri, setCustomImageUri] = useState('');
 
-  // Auto-fill patient complaints from booking if available
-  useEffect(() => {
-    if (apt?.symptoms && apt.symptoms.length > 0 && !subjective) {
-      setSubjective(`Patient reported symptoms: ${apt.symptoms.join(', ')}`);
-    }
-  }, [apt]);
+  // Dedicated Patient Clinical History (past surgeries, hospitalizations, illnesses — not family)
+  const [patientClinicalHistory, setPatientClinicalHistory] = useState(
+    'Past Hospitalizations: None\nPrevious Surgeries: Appendectomy (2018, laparoscopic, uncomplicated)\nPast Illnesses: COVID-19 pneumonitis (2021, resolved without long-term sequelae)\nChronic Management: Mild dyslipidemia on lifestyle modification'
+  );
 
-  // Prescribed Medicines & Tests - Starts clean and empty
-  const [prescribedMeds, setPrescribedMeds] = useState<PrescribedMedicine[]>([]);
-  const [prescribedTests, setPrescribedTests] = useState<PrescribedTest[]>([]);
+  // Allergies
+  const [allergies, setAllergies] = useState([
+    { id: 'a1', name: 'Penicillin (Severe)', isSevere: true },
+    { id: 'a2', name: 'Shellfish', isSevere: false },
+  ]);
+  const [newAllergyInput, setNewAllergyInput] = useState('');
+  const [showAddAllergy, setShowAddAllergy] = useState(false);
 
-  // Modals
-  const [showMedicineModal, setShowMedicineModal] = useState(false);
-  const [showTestModal, setShowTestModal] = useState(false);
-  const [showPrescriptionPass, setShowPrescriptionPass] = useState(false);
-  const [rxZoomScale, setRxZoomScale] = useState(1);
-  const [rxFullscreen, setRxFullscreen] = useState(false);
-  const [showDosageModal, setShowDosageModal] = useState(false);
-  const [activeEditingMed, setActiveEditingMed] = useState<PrescribedMedicine | null>(null);
+  // Chronic conditions
+  const [chronicConditions, setChronicConditions] = useState([
+    { id: 'c1', name: 'Mild Essential Hypertension', detail: 'Telmisartan 40mg (OD) • Diagnosed 2021', status: 'Controlled' },
+    { id: 'c2', name: 'Seasonal Allergic Bronchitis', detail: 'Recurrent during seasonal shifts', status: 'Mild' },
+  ]);
 
-  const handleZoomIn = () => {
-    setRxZoomScale((prev) => Math.min(1.4, +(prev + 0.1).toFixed(2)));
-  };
+  // Consultation Tabs
+  const [activeTab, setActiveTab] = useState<'today' | 'history' | 'labs'>('today');
 
-  const handleZoomOut = () => {
-    setRxZoomScale((prev) => Math.max(0.85, +(prev - 0.1).toFixed(2)));
-  };
+  // Audio dictation
+  const [isRecording, setIsRecording] = useState(false);
 
-  const handleResetZoom = () => {
-    setRxZoomScale(1);
-  };
+  // Freehand Drawing Notepad Modal
+  const [showDrawingModal, setShowDrawingModal] = useState(false);
+  const [savedNotesCount, setSavedNotesCount] = useState(0);
 
-  // Dosage Form State
-  const [selectedTiming, setSelectedTiming] = useState(TIMING_OPTIONS[0]);
-  const [selectedFood, setSelectedFood] = useState(FOOD_INSTRUCTION_OPTIONS[0]);
-  const [selectedDuration, setSelectedDuration] = useState(DURATION_OPTIONS[1]);
-  const [selectedDosageForm, setSelectedDosageForm] = useState(DOSAGE_FORM_OPTIONS[0]);
-  const [customDosageInstruction, setCustomDosageInstruction] = useState('');
+  // Prescription builder state
+  const [rxPadVisible, setRxPadVisible] = useState(false);
+  const [rxStep, setRxStep] = useState<1 | 2 | 3 | 4 | 5>(1);
 
-  // Medicine Search & Filter
+  // Clinical diagnoses
+  const [diagnoses, setDiagnoses] = useState([
+    { code: 'J20.9', name: 'Acute Bronchitis', priority: 'Primary' },
+    { code: 'J02.9', name: 'Mild Pharyngitis', priority: 'Secondary' },
+  ]);
+  const [diagSearch, setDiagSearch] = useState('');
+  const [selectedDiagCategory, setSelectedDiagCategory] = useState<string>('All');
+
+  // Medications
+  const [medications, setMedications] = useState<PrescriptionItem[]>([
+    {
+      id: 'm1',
+      name: 'Augmentin 625mg',
+      generic: 'Amoxicillin (500mg) + Clavulanic Acid (125mg)',
+      dosage: '1 - 0 - 1',
+      frequency: 'Twice daily',
+      duration: '5 Days',
+      timing: 'After meals',
+      instructions: 'Complete full course',
+    },
+    {
+      id: 'm2',
+      name: 'Ascoril D Plus Syrup',
+      generic: 'Dextromethorphan + Phenylephrine + CPM',
+      dosage: '10 ml',
+      frequency: 'Thrice daily',
+      duration: '3 Days',
+      timing: 'After meals',
+      instructions: 'For dry cough relief',
+    },
+    {
+      id: 'm3',
+      name: 'Pantocid 40mg',
+      generic: 'Pantoprazole Gastro-resistant',
+      dosage: '1 - 0 - 0',
+      frequency: 'Once daily',
+      duration: '5 Days',
+      timing: 'Before breakfast',
+      instructions: 'Antacid coverage',
+    },
+  ]);
   const [medSearch, setMedSearch] = useState('');
-  const [selectedMedCategory, setSelectedMedCategory] = useState('All');
+  const [editingMed, setEditingMed] = useState<PrescriptionItem | null>(null);
+  const [showMedModal, setShowMedModal] = useState(false);
 
-  // Test Search & Filter
+  // Lab Tests
+  const [labTests, setLabTests] = useState(['Chest X-Ray (PA View)', 'CBC with ESR']);
   const [testSearch, setTestSearch] = useState('');
-  const [selectedTestCategory, setSelectedTestCategory] = useState('All');
+  const [customTestInput, setCustomTestInput] = useState('');
 
-  const [downloadToast, setDownloadToast] = useState(false);
-  const [showPatientHistory, setShowPatientHistory] = useState(false);
+  // Lifestyle advice & emergency warning
+  const [lifestyleInstructions, setLifestyleInstructions] = useState([
+    { id: 'l1', text: 'Drink warm water regularly (2.5 - 3 Liters)', checked: true },
+    { id: 'l2', text: 'Avoid cold exposure & chilled fluids', checked: true },
+    { id: 'l3', text: 'Steam inhalation twice daily (5–10 mins)', checked: true },
+  ]);
+  const [followUpDays, setFollowUpDays] = useState('5 Days (18 March)');
+  const [emergencyWarning, setEmergencyWarning] = useState(
+    'Seek immediate emergency medical attention if shortness of breath, severe chest pain or high fever (>102°F) develops.'
+  );
 
-  const medCategories = ['All', 'Antibiotics', 'Analgesics', 'Cardiovascular', 'Antidiabetic', 'Gastrointestinal', 'Vitamins'];
-  const testCategories = ['All', 'Hematology', 'Metabolic', 'Cardiac', 'Biochemistry', 'Renal', 'Radiology'];
+  // Delivery toggles
+  const [deliveryApp, setDeliveryApp] = useState(true);
+  const [deliveryWhatsapp, setDeliveryWhatsapp] = useState(true);
+  const [deliverySms, setDeliverySms] = useState(false);
 
-  const filteredMedicines = useMemo(() => {
-    return MEDICINES_DIRECTORY.filter((m) => {
-      const matchesQuery =
-        m.name.toLowerCase().includes(medSearch.toLowerCase()) ||
-        m.generic.toLowerCase().includes(medSearch.toLowerCase());
-      const matchesCategory =
-        selectedMedCategory === 'All' ||
-        m.category.toLowerCase().includes(selectedMedCategory.toLowerCase());
-      return matchesQuery && matchesCategory;
-    });
-  }, [medSearch, selectedMedCategory]);
+  // Signing state
+  const [isSigning, setIsSigning] = useState(false);
+  const [signSuccess, setSignSuccess] = useState(false);
 
-  const filteredTests = useMemo(() => {
-    return DIAGNOSTIC_TESTS_DIRECTORY.filter((t) => {
-      const matchesQuery =
-        t.name.toLowerCase().includes(testSearch.toLowerCase()) ||
-        t.category.toLowerCase().includes(testSearch.toLowerCase());
-      const matchesCategory =
-        selectedTestCategory === 'All' ||
-        t.category.toLowerCase().includes(selectedTestCategory.toLowerCase());
-      return matchesQuery && matchesCategory;
-    });
-  }, [testSearch, selectedTestCategory]);
-
-  const appendPatientVoiceChip = (chip: string) => {
-    setSubjective((prev) => (prev ? `${prev}, ${chip}` : chip));
-  };
-
-  const fillNormalVitals = () => {
-    setObjective('Vitals: BP 120/80 mmHg, Pulse 74 bpm (Regular), SpO2 99% on room air, Temp 98.4°F, Chest clear S1 S2 normal.');
-  };
-
-  const applyPreset = (preset: RxPreset) => {
-    setAssessment(preset.diagnosis);
-    setAdviceNotes(preset.advice);
-    if (!objective) {
-      setObjective(preset.notes);
+  const toggleDictation = () => {
+    if (Platform.OS !== 'web') {
+      Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
     }
-
-    // Map preset meds
-    const newMeds: PrescribedMedicine[] = preset.meds.map((m, idx) => ({
-      id: `med_preset_${preset.id}_${idx}_${Date.now()}`,
-      name: m.name,
-      generic: m.generic,
-      dosage: m.dosage,
-      frequency: m.frequency,
-      duration: m.duration,
-      instructions: m.instructions,
-    }));
-    setPrescribedMeds(newMeds);
-
-    // Map preset tests
-    if (preset.tests && preset.tests.length > 0) {
-      const newTests: PrescribedTest[] = preset.tests.map((t, idx) => ({
-        id: `test_preset_${preset.id}_${idx}_${Date.now()}`,
-        name: t.name,
-        category: t.category,
-        turnaroundTime: t.turnaroundTime,
-        fastingRequired: t.fastingRequired,
-      }));
-      setPrescribedTests(newTests);
-    }
+    setIsRecording(!isRecording);
   };
 
-  const openDosageModalForMed = (med: PrescribedMedicine) => {
-    setActiveEditingMed(med);
-    setSelectedDosageForm(med.dosage || DOSAGE_FORM_OPTIONS[0]);
-    setSelectedTiming(med.frequency || TIMING_OPTIONS[0]);
-    setSelectedDuration(med.duration || DURATION_OPTIONS[1]);
-    setSelectedFood(FOOD_INSTRUCTION_OPTIONS[0]);
-    setCustomDosageInstruction(med.instructions || '');
-    setShowDosageModal(true);
+  const handleAddCustomDiagnosis = (name: string, code = 'Unspecified') => {
+    if (!name.trim()) return;
+    if (diagnoses.some((d) => d.name.toLowerCase() === name.toLowerCase())) return;
+    setDiagnoses([
+      ...diagnoses,
+      { code, name: name.trim(), priority: diagnoses.length === 0 ? 'Primary' : 'Secondary' },
+    ]);
+    setDiagSearch('');
   };
 
-  const saveDosageConfiguration = () => {
-    if (!activeEditingMed) return;
-    const combinedInstructions = `${selectedFood}${customDosageInstruction ? ' • ' + customDosageInstruction : ''}`;
-
-    setPrescribedMeds((prev) =>
-      prev.map((m) =>
-        m.id === activeEditingMed.id
-          ? {
-              ...m,
-              dosage: selectedDosageForm,
-              frequency: selectedTiming,
-              duration: selectedDuration,
-              instructions: combinedInstructions,
-            }
-          : m
+  const handleToggleDiagPriority = (code: string) => {
+    setDiagnoses(
+      diagnoses.map((d) =>
+        d.code === code ? { ...d, priority: d.priority === 'Primary' ? 'Secondary' : 'Primary' } : d
       )
     );
-    setShowDosageModal(false);
-    setActiveEditingMed(null);
   };
 
-  const addMedicineFromDirectory = (med: MedicineItem) => {
-    if (prescribedMeds.some((m) => m.name === med.name)) {
-      return;
-    }
-    const newMed: PrescribedMedicine = {
-      id: med.id + '_' + Date.now(),
-      name: med.name,
-      generic: med.generic,
-      dosage: med.defaultDosage,
-      frequency: med.defaultFrequency,
-      duration: med.defaultDuration,
-      instructions: med.instructions,
+  const handleRemoveDiag = (code: string) => {
+    setDiagnoses(diagnoses.filter((d) => d.code !== code));
+  };
+
+  const handleAddMedicationFromCatalog = (item: MedicationCatalogItem) => {
+    const newMed: PrescriptionItem = {
+      id: `med_${Date.now()}_${Math.random().toString(36).substring(2, 6)}`,
+      name: item.name,
+      generic: item.generic,
+      dosage: item.defaultDosage,
+      frequency: item.defaultFrequency,
+      duration: item.defaultDuration,
+      timing: item.defaultTiming,
+      instructions: item.defaultInstructions,
     };
-    setPrescribedMeds([...prescribedMeds, newMed]);
-    setShowMedicineModal(false);
-    // Optionally open dosage customization immediately
-    openDosageModalForMed(newMed);
+    setMedications([...medications, newMed]);
+    setMedSearch('');
+    if (Platform.OS !== 'web') Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
   };
 
-  const removeMedicine = (id: string) => {
-    setPrescribedMeds(prescribedMeds.filter((m) => m.id !== id));
+  const handleSaveMedicationEdit = () => {
+    if (!editingMed) return;
+    setMedications(medications.map((m) => (m.id === editingMed.id ? editingMed : m)));
+    setShowMedModal(false);
+    setEditingMed(null);
   };
 
-  const addTestFromDirectory = (test: DiagnosticTestItem) => {
-    if (prescribedTests.some((t) => t.name === test.name)) {
-      return;
+  const handleSignAndSend = async () => {
+    setIsSigning(true);
+    if (Platform.OS !== 'web') {
+      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
     }
-    setPrescribedTests([
-      ...prescribedTests,
-      {
-        id: test.id + '_' + Date.now(),
-        name: test.name,
-        category: test.category,
-        turnaroundTime: test.turnaroundTime,
-        fastingRequired: test.fastingRequired,
-      },
-    ]);
-    setShowTestModal(false);
-  };
 
-  const removeTest = (id: string) => {
-    setPrescribedTests(prescribedTests.filter((t) => t.id !== id));
-  };
+    await new Promise((resolve) => setTimeout(resolve, 1000));
 
-  const doctorName = user?.name || apt?.doctorName || 'Dr. Specialist';
-  const doctorSpecialty = (user as any)?.specialty || apt?.doctorSpecialty || 'Senior Consultant Specialist';
-  const doctorMciNumber = (user as any)?.registrationNumber || (user as any)?.mciNumber || 'NMC-Verified';
-  const clinicName = (user as any)?.clinicName || apt?.hospital || 'FiYDoc Specialty Clinic';
-  const clinicAddress = (user as any)?.clinicAddress || 'Healthcare OPD Suites';
-  const doctorPhone = user?.phone || '+91 Clinic Reception';
+    const doctorName = user?.name ? `Dr. ${user.name}` : (currentApt?.doctorName || 'Doctor');
+    const doctorSpecialty = currentApt?.doctorSpecialty || 'Specialist';
+    const clinicName = currentApt?.hospital || 'FiYDoc Clinic';
 
-  const handleSignPrescription = () => {
     const rxId = `rx_${Date.now()}`;
-    const verificationCode = `FYD-RX-${Math.floor(100000 + Math.random() * 900000)}`;
-    const formattedDate = new Date().toLocaleDateString('en-IN', {
-      day: '2-digit',
-      month: 'short',
-      year: 'numeric',
-    });
-
     const newPrescription = {
       id: rxId,
-      consultationId: (id as string) || 'apt_live',
-      patientId: apt?.patientId || 'pat_live',
-      doctorId: user?.id || apt?.doctorId || 'doc_live',
-      doctorName,
-      doctorSpecialty,
-      doctorMciNumber,
-      clinicName,
-      clinicAddress,
-      patientName: apt?.patientName || 'Patient',
-      patientAge: 32,
-      patientGender: 'Male',
-      diagnosis: assessment || 'Acute Clinical Evaluation',
-      doctorNotes: objective || 'Clinical examination within physiological tolerance.',
-      followUpInstructions: adviceNotes || 'Review after 7 days in clinic or SOS if symptoms persist. Low sodium diet and high fluids recommended.',
-      verificationCode,
-      signedAt: new Date().toISOString(),
-      createdAt: formattedDate,
+      consultationId: appointmentId,
+      patientId: currentApt?.patientId || 'pat_1',
+      patientName: currentApt?.patientName || 'Patient',
+      doctorId: user?.id || currentApt?.doctorId || 'doc_1',
+      doctorName: doctorName,
+      doctorSpecialty: doctorSpecialty,
+      clinicName: clinicName,
+      diagnosis: diagnoses.map((d) => `${d.name} (${d.code})`).join(', '),
+      doctorNotes: chiefComplaint,
+      followUpInstructions: `Review after ${followUpDays} in clinic. ${emergencyWarning}`,
       vitals: {
-        bp: '128/82 mmHg',
-        pulse: '74 bpm',
-        temp: '98.4°F',
-        spo2: '99%',
+        bpSystolic: vitals.bpSystolic,
+        bpDiastolic: vitals.bpDiastolic,
+        heartRate: vitals.pulse,
+        temperature: vitals.temp,
+        weight: vitals.weight,
+        height: '176',
+        spO2: vitals.spO2,
       },
-      medicines: prescribedMeds.map((m) => ({
+      verificationCode: `FYD-RX-${Math.floor(100000 + Math.random() * 900000)}-MH`,
+      createdAt: new Date().toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' }),
+      signedAt: new Date().toISOString(),
+      medicines: medications.map((m) => ({
         id: m.id,
         name: m.name,
         dosage: m.dosage,
         frequency: m.frequency,
-        durationDays: parseInt(m.duration) || 5,
-        instructions: m.instructions,
+        durationDays: 5,
+        instructions: `${m.timing} • ${m.instructions}`,
       })),
-      tests: prescribedTests.map((t) => ({
-        id: t.id,
-        name: t.name,
-        category: t.category,
-        turnaroundTime: t.turnaroundTime,
-        fastingRequired: t.fastingRequired,
-      })),
+      tests: labTests.map((t, idx) => ({ id: `test_${idx}`, name: t, category: 'Diagnostic' })),
     };
 
     useHealthStore.getState().addPrescription(newPrescription);
+    // Mark current appointment as completed — removes from queue
+    updateAppointmentStatus(appointmentId, 'completed');
 
-    // Persist real prescription to NestJS backend
-    healthService
-      .createPrescription({
-        consultationId: (id as string) || 'apt_live',
-        patientId: apt?.patientId || 'pat_1',
-        doctorId: user?.id || apt?.doctorId || 'doc_live',
-        doctorNotes: objective || 'Clinical examination within physiological tolerance.',
-        followUpInstructions: adviceNotes || 'Review after 7 days in clinic or SOS if symptoms persist.',
-        medicines: prescribedMeds.map((m) => ({
-          name: m.name,
-          dosage: m.dosage,
-          frequency: m.frequency,
-          durationDays: parseInt(m.duration) || 5,
-          instructions: m.instructions,
-        })),
-        tests: prescribedTests.map((t) => ({
-          name: t.name,
-          category: t.category,
-        })),
-      })
-      .catch((err) => {
-        console.warn('[handleSignPrescription] Server sync notice:', err.message);
-      });
-
-    // Notify patient of digital Rx pass
+    // Notify patient — prescription dispatched
     useNotificationStore.getState().addNotification({
-      recipientId: apt?.patientId || 'pat_1',
+      recipientId: currentApt?.patientId,
       recipientRole: 'patient',
-      title: 'Digital Prescription (Rx) Issued',
-      message: `${doctorName} has issued your official digital prescription with ${prescribedMeds.length} medication(s). Tap to review dosage instructions.`,
+      title: '📝 Prescription Dispatched',
+      message: `${doctorName} has sent your official digital prescription. View it in Health Records.`,
       type: 'prescription',
-      link: '/(patient)/health',
+      link: '/(patient)/(tabs)/health',
     });
 
-    if (apt?.id) {
-      const aptStore = useAppointmentStore.getState();
-      const existing = aptStore.appointments.find((a) => a.id === apt.id);
-      if (existing) {
-        aptStore.addAppointment({ ...existing, status: 'completed' });
+    setIsSigning(false);
+    setSignSuccess(true);
+
+    setTimeout(() => {
+      setRxPadVisible(false);
+      setSignSuccess(false);
+      // Queue auto-advance: navigate to next patient if exists, else go to appointments
+      if (nextPatient) {
+        router.replace(`/(doctor)/consultation/${nextPatient.id}` as any);
+      } else {
+        router.replace('/(doctor)/(tabs)/appointments');
       }
-    }
-
-    setShowPrescriptionPass(true);
+    }, 2000);
   };
 
-  const handleShareRx = async () => {
-    try {
-      await Share.share({
-        title: `Digital Prescription (Rx) • ${doctorName}`,
-        message: `FiYDoc Official Medical Prescription (Rx)\nDoctor: ${doctorName} (${doctorMciNumber})\nClinic: ${clinicName}\nPatient: ${apt?.patientName || 'Patient'}\nDiagnosis: ${assessment || 'Clinical Assessment'}\nMedications (${prescribedMeds.length}):\n${prescribedMeds.map((m, i) => `${i + 1}. ${m.name} - ${m.dosage} [${m.frequency}] x ${m.duration} (${m.instructions})`).join('\n')}\nAdvice: ${adviceNotes || 'Take rest and adequate hydration.'}\nRef: ${doctorMciNumber}`,
-      });
-    } catch (e) {
-      console.error(e);
-    }
-  };
+  // Filter diagnoses
+  const filteredDiagnoses = MEDICAL_DIAGNOSES.filter((d) => {
+    const matchesCategory = selectedDiagCategory === 'All' || d.category === selectedDiagCategory;
+    const matchesSearch =
+      !diagSearch ||
+      d.name.toLowerCase().includes(diagSearch.toLowerCase()) ||
+      d.code.toLowerCase().includes(diagSearch.toLowerCase());
+    return matchesCategory && matchesSearch;
+  });
 
-  const handleDownloadPdf = () => {
-    setDownloadToast(true);
-    setTimeout(() => setDownloadToast(false), 2500);
-  };
+  // Filter medicines
+  const filteredMeds = MEDICATIONS_CATALOG.filter((m) =>
+    medSearch ? m.name.toLowerCase().includes(medSearch.toLowerCase()) || m.generic.toLowerCase().includes(medSearch.toLowerCase()) : false
+  );
+
+  // Filter tests
+  const filteredTests = LAB_TESTS_CATALOG.filter((t) =>
+    testSearch ? t.name.toLowerCase().includes(testSearch.toLowerCase()) : true
+  );
 
   return (
-    <SafeAreaView className="flex-1 bg-slate-50 justify-between" edges={['top']}>
-      {/* Top Navigation Bar */}
-      <View
-        style={{
-          paddingHorizontal: 16,
-          paddingVertical: 12,
-          backgroundColor: '#FFFFFF',
-          flexDirection: 'row',
-          alignItems: 'center',
-          justifyContent: 'space-between',
-          borderBottomWidth: 1,
-          borderBottomColor: '#F1F5F9',
-        }}
-      >
-        <TouchableOpacity
-          onPress={handleSafeBack}
-          activeOpacity={0.7}
-          style={{ flexDirection: 'row', alignItems: 'center', gap: 6, flexShrink: 0 }}
+    <SafeAreaView style={[styles.safeArea, { backgroundColor: colors.background }]} edges={['top']}>
+      {/* 1. Top Bar: Back, "Consultation", Active Timer & Doctor Avatar */}
+      <View style={[styles.headerBar, { borderBottomColor: colors.border, backgroundColor: colors.card }]}>
+        <Pressable
+          onPress={() => router.back()}
+          hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+          style={[styles.backBtn, { backgroundColor: colors.backgroundElement }]}
         >
-          <View className="w-8 h-8 rounded-xl bg-slate-100 items-center justify-center">
-            <ArrowLeft size={18} color="#0F172A" />
+          <ArrowLeft size={18} color={colors.text} strokeWidth={2.2} />
+        </Pressable>
+
+        <View style={styles.headerCenterCol}>
+          <Text style={[styles.headerTitle, { color: colors.text }]}>Consultation</Text>
+          <View style={styles.timerBadge}>
+            <View style={styles.pulseDot} />
+            <Text style={styles.activeText}>ACTIVE</Text>
+            <Text style={styles.dotSeparator}>•</Text>
+            <Text style={[styles.timerDigit, { color: colors.textSecondary }]}>{formatTimer(sessionSeconds)}</Text>
+            <Pressable
+              onPress={handleResetTimer}
+              hitSlop={{ top: 4, bottom: 4, left: 4, right: 4 }}
+              style={styles.resetTimerBtn}
+            >
+              <RotateCcw size={11} color={colors.textMuted} />
+            </Pressable>
           </View>
-        </TouchableOpacity>
-        <View className="items-center">
-          <Text style={{ fontSize: 16, fontWeight: '800', color: '#0F172A' }} numberOfLines={1}>
-            OPD Clinical Suite
-          </Text>
-          <Text className="text-[10px] text-teal-600 font-bold">NMC / MCI VERIFIED PRACTITIONER</Text>
         </View>
-        <View style={{ flexShrink: 0 }}>
-          <Badge label="IN-CLINIC" variant="blue" size="sm" />
-        </View>
+
+        <Image source={{ uri: DOCTOR_AVATAR }} style={styles.headerDoctorImg} />
       </View>
 
       <ScrollView
-        contentContainerStyle={{ paddingHorizontal: 16, paddingTop: 14, paddingBottom: 110, gap: 14 }}
+        contentContainerStyle={styles.scrollContent}
         showsVerticalScrollIndicator={false}
       >
-        {/* Patient Identity Header Card */}
-        <View className="bg-white p-4 rounded-3xl border border-slate-200/90 shadow-sm flex-row items-center" style={{ gap: 12 }}>
-          <Avatar uri={apt?.patientAvatar} name={apt?.patientName || 'Patient'} size="lg" />
-          <View className="flex-1" style={{ minWidth: 0 }}>
-            <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: 8 }}>
-              <Text className="text-base font-black text-slate-900" numberOfLines={1} style={{ flex: 1, minWidth: 0 }}>
-                {apt?.patientName || 'Patient'}
-              </Text>
-              <View style={{ flexShrink: 0 }}>
-                <Badge label="TOKEN #02" variant="teal" size="sm" />
+        {/* 2. Patient Identity & Clinical Summary Hero Card */}
+        <Animated.View
+          entering={FadeInUp.delay(50).duration(350)}
+          style={[styles.patientHeroCard, { backgroundColor: colors.card, borderColor: colors.border }]}
+        >
+          {/* Identity Header */}
+          <View style={styles.patientInfoRow}>
+            <Image source={{ uri: PATIENT_AVATAR }} style={styles.patientAvatar} />
+            <View style={{ flex: 1, marginLeft: 12 }}>
+              <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }}>
+                <Text style={[styles.heroPatientName, { color: colors.text }]}>
+                  {currentApt?.patientName || 'Aarav Mehta'}
+                </Text>
+                <View style={{ flexDirection: 'row', gap: 4 }}>
+                  <View style={[styles.demogBadge, { backgroundColor: colors.backgroundElement }]}>
+                    <Text style={[styles.demogText, { color: colors.textSecondary }]}>38 M</Text>
+                  </View>
+                  <View style={[styles.demogBadge, { backgroundColor: '#DBEAFE' }]}>
+                    <Text style={[styles.demogText, { color: StitchColors.primaryContainer, fontWeight: '800' }]}>B+</Text>
+                  </View>
+                </View>
               </View>
+
+              <Text style={[styles.uhidText, { color: colors.textSecondary }]}>
+                UHID: 8021-9811 • MRN: #FD-99420
+              </Text>
             </View>
-            <Text className="text-xs text-slate-500 font-medium mt-0.5" numberOfLines={1}>
-              Age: 32 Yrs • Gender: Male • Blood: O+
+          </View>
+
+          {/* EDITABLE VITALS GRID — Clickable with edit modal */}
+          <View style={styles.vitalsHeaderRow}>
+            <Text style={[styles.vitalsSectionTitle, { color: colors.textSecondary }]}>BASELINE CLINICAL VITALS</Text>
+            <Pressable onPress={handleOpenVitalsModal} style={styles.editVitalsBtn}>
+              <Edit3 size={12} color={StitchColors.primaryContainer} />
+              <Text style={styles.editVitalsBtnText}>Edit Vitals</Text>
+            </Pressable>
+          </View>
+
+          <Pressable
+            onPress={handleOpenVitalsModal}
+            style={[styles.vitalsGrid, { backgroundColor: colors.backgroundElement }]}
+          >
+            <View style={styles.vitalCol}>
+              <Text style={[styles.vitalLabel, { color: colors.textMuted }]}>BP</Text>
+              <Text style={[styles.vitalVal, { color: StitchColors.secondaryContainer }]}>
+                {vitals.bpSystolic}/{vitals.bpDiastolic}
+              </Text>
+            </View>
+            <View style={[styles.vitalCol, styles.vitalBorderLeft, { borderLeftColor: colors.border }]}>
+              <Text style={[styles.vitalLabel, { color: colors.textMuted }]}>PULSE</Text>
+              <Text style={[styles.vitalVal, { color: colors.text }]}>
+                {vitals.pulse} <Text style={styles.vitalUnit}>bpm</Text>
+              </Text>
+            </View>
+            <View style={[styles.vitalCol, styles.vitalBorderLeft, { borderLeftColor: colors.border }]}>
+              <Text style={[styles.vitalLabel, { color: colors.textMuted }]}>TEMP</Text>
+              <Text style={[styles.vitalVal, { color: colors.text }]}>
+                {vitals.temp}<Text style={styles.vitalUnit}>°F</Text>
+              </Text>
+            </View>
+            <View style={[styles.vitalCol, styles.vitalBorderLeft, { borderLeftColor: colors.border }]}>
+              <Text style={[styles.vitalLabel, { color: colors.textMuted }]}>SPO₂</Text>
+              <Text style={[styles.vitalVal, { color: StitchColors.secondaryContainer }]}>
+                {vitals.spO2}<Text style={styles.vitalUnit}>%</Text>
+              </Text>
+            </View>
+          </Pressable>
+
+          {/* Additional Vitals summary row */}
+          <View style={styles.extraVitalsRow}>
+            <Text style={[styles.extraVitalText, { color: colors.textSecondary }]}>
+              Resp Rate: <Text style={{ color: colors.text, fontWeight: '700' }}>{vitals.respRate} /min</Text>
             </Text>
-            <View style={{ flexDirection: 'row', alignItems: 'center', marginTop: 6, gap: 6, flexWrap: 'wrap' }}>
-              <View className="bg-red-50 px-2 py-0.5 rounded-md border border-red-200">
-                <Text className="text-[10px] font-bold text-red-600">Allergies: Penicillin</Text>
-              </View>
-              <View className="bg-blue-50 px-2 py-0.5 rounded-md border border-blue-200">
-                <Text className="text-[10px] font-bold text-[#1E58C8]">OPD Follow-up</Text>
-              </View>
-            </View>
-          </View>
-        </View>
-
-        {/* Patient Longitudinal Medical History & EHR Card (Indian MedTech EHR) */}
-        <View className="bg-white rounded-3xl border border-slate-200/90 shadow-sm overflow-hidden">
-          <TouchableOpacity
-            onPress={() => setShowPatientHistory(!showPatientHistory)}
-            activeOpacity={0.8}
-            style={{
-              padding: 14,
-              flexDirection: 'row',
-              alignItems: 'center',
-              justifyContent: 'space-between',
-              backgroundColor: '#F8FAFC',
-              borderBottomWidth: 1,
-              borderBottomColor: '#F1F5F9',
-              gap: 8,
-            }}
-          >
-            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8, flex: 1, minWidth: 0 }}>
-              <View className="w-8 h-8 rounded-xl bg-blue-50 items-center justify-center border border-blue-200" style={{ flexShrink: 0 }}>
-                <History size={16} color="#1E58C8" />
-              </View>
-              <View style={{ flex: 1, minWidth: 0 }}>
-                <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, flexWrap: 'wrap' }}>
-                  <Text className="text-xs font-black text-slate-900 uppercase tracking-wide" numberOfLines={1}>
-                    Patient EHR History
-                  </Text>
-                  <Badge label="ABDM CONNECTED" variant="teal" size="sm" />
-                </View>
-                <Text className="text-[11px] text-slate-500 font-medium" numberOfLines={1}>
-                  Past visits, conditions & prescriptions
-                </Text>
-              </View>
-            </View>
-            <View style={{ flexShrink: 0 }}>
-              {showPatientHistory ? (
-                <ChevronUp size={18} color="#64748B" />
-              ) : (
-                <ChevronDown size={18} color="#64748B" />
-              )}
-            </View>
-          </TouchableOpacity>
-
-          {showPatientHistory && (
-            <View className="p-4" style={{ gap: 12 }}>
-              <View className="bg-slate-50 p-3 rounded-2xl border border-slate-200/70" style={{ gap: 6 }}>
-                <Text className="text-[10px] font-black text-slate-400 uppercase tracking-wider">
-                  Active Clinical Conditions & Vitals Baseline
-                </Text>
-                <View className="flex-row flex-wrap gap-2">
-                  <View className="bg-blue-50 px-2.5 py-1 rounded-lg border border-blue-200">
-                    <Text className="text-xs font-bold text-[#1E58C8]">Stage-1 Hypertension (2 yrs)</Text>
-                  </View>
-                  <View className="bg-teal-50 px-2.5 py-1 rounded-lg border border-teal-200">
-                    <Text className="text-xs font-bold text-teal-700">Type-2 Diabetes Borderline (3 yrs)</Text>
-                  </View>
-                  <View className="bg-rose-50 px-2.5 py-1 rounded-lg border border-rose-200">
-                    <Text className="text-xs font-bold text-rose-700">Allergy: Penicillin (Rash)</Text>
-                  </View>
-                </View>
-              </View>
-
-              <View style={{ gap: 6 }}>
-                <Text className="text-[10px] font-black text-slate-400 uppercase tracking-wider">
-                  Past Prescriptions & Encounters
-                </Text>
-                <View className="bg-slate-50 p-3 rounded-xl border border-slate-200/80" style={{ gap: 4 }}>
-                  <View className="flex-row justify-between items-center">
-                    <Text className="text-xs font-black text-slate-900">
-                      {apt?.doctorName || user?.name || 'Clinical Specialist'} • Prior OPD Review
-                    </Text>
-                    <Text className="text-[10px] font-bold text-slate-500">12 Aug 2026</Text>
-                  </View>
-                  <Text className="text-[11px] text-slate-600">
-                    Rx: Tab Telmisartan 40mg (1-0-0), Tab Atorvastatin 10mg (0-0-1). Good response, BP controlled.
-                  </Text>
-                </View>
-              </View>
-            </View>
-          )}
-        </View>
-
-        {/* Quick Clinical Rx Presets (One-tap Indian OPD Protocol Loader) */}
-        <View className="bg-white p-4 rounded-3xl border border-slate-200/90 shadow-sm" style={{ gap: 10 }}>
-          <View className="flex-row justify-between items-center">
-            <View className="flex-row items-center" style={{ gap: 6 }}>
-              <Bookmark size={16} color="#1E58C8" />
-              <Text className="text-xs font-black text-slate-900 uppercase tracking-wider">
-                Clinical Rx Presets & Protocols
-              </Text>
-            </View>
-            <Text className="text-[10px] text-slate-400 font-bold">1-TAP LOAD</Text>
-          </View>
-
-          <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap: 8 }}>
-            {CLINICAL_PRESETS.map((preset) => (
-              <TouchableOpacity
-                key={preset.id}
-                onPress={() => applyPreset(preset)}
-                activeOpacity={0.8}
-                className="bg-blue-50/70 border border-blue-200/80 px-3.5 py-2.5 rounded-2xl flex-row items-center"
-                style={{ gap: 6 }}
-              >
-                <Text style={{ fontSize: 15 }}>{preset.icon}</Text>
-                <View>
-                  <Text className="text-xs font-black text-[#1E58C8]">{preset.label}</Text>
-                  <Text className="text-[10px] text-slate-500">{preset.meds.length} Meds</Text>
-                </View>
-              </TouchableOpacity>
-            ))}
-          </ScrollView>
-        </View>
-
-        {/* Anatomical Examination Focus (Responsive 3D Annotator) */}
-        <BodyRegion3D />
-
-        {/* 1. WHAT THE PATIENT IS SAYING (Chief Complaints / Subjective) */}
-        <View
-          style={{
-            backgroundColor: '#FFFFFF',
-            padding: 16,
-            borderRadius: 24,
-            borderWidth: 1,
-            borderColor: '#E2E8F0',
-            gap: 12,
-            shadowColor: '#000',
-            shadowOffset: { width: 0, height: 2 },
-            shadowOpacity: 0.04,
-            shadowRadius: 6,
-          }}
-        >
-          <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: 8 }}>
-            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8, flex: 1, minWidth: 0 }}>
-              <View className="w-8 h-8 rounded-xl bg-blue-50 items-center justify-center" style={{ flexShrink: 0 }}>
-                <Stethoscope size={17} color="#1E58C8" />
-              </View>
-              <Text style={{ fontSize: 13, fontWeight: '800', color: '#0F172A', textTransform: 'uppercase', letterSpacing: 0.3, flex: 1, minWidth: 0 }} numberOfLines={1}>
-                Chief Complaints (Patient Voice)
-              </Text>
-            </View>
-            <View style={{ flexShrink: 0 }}>
-              <Badge label="SUBJECTIVE" variant="blue" size="sm" />
-            </View>
-          </View>
-
-          {/* Quick Tap Complaint Chips */}
-          <Text className="text-[10px] font-black text-slate-400 uppercase tracking-wider">
-            Quick Symptom Tags (Tap to Append)
-          </Text>
-          <View className="flex-row flex-wrap gap-2">
-            {COMMON_PATIENT_VOICE_CHIPS.map((chip, idx) => (
-              <TouchableOpacity
-                key={idx}
-                onPress={() => appendPatientVoiceChip(chip)}
-                activeOpacity={0.75}
-                style={{
-                  backgroundColor: '#F1F5F9',
-                  borderWidth: 1,
-                  borderColor: '#E2E8F0',
-                  paddingHorizontal: 10,
-                  paddingVertical: 6,
-                  borderRadius: 12,
-                  flexDirection: 'row',
-                  alignItems: 'center',
-                  gap: 4,
-                }}
-              >
-                <Plus size={12} color="#475569" />
-                <Text style={{ fontSize: 11, fontWeight: '700', color: '#334155' }}>{chip}</Text>
-              </TouchableOpacity>
-            ))}
-          </View>
-
-          <Input
-            placeholder="Type verbatim what the patient is describing: onset, duration, triggers..."
-            value={subjective}
-            onChangeText={setSubjective}
-            multiline
-            numberOfLines={3}
-          />
-        </View>
-
-        {/* 2. OBJECTIVE (Vitals & Clinical Examination) */}
-        <View
-          style={{
-            backgroundColor: '#FFFFFF',
-            padding: 16,
-            borderRadius: 24,
-            borderWidth: 1,
-            borderColor: '#E2E8F0',
-            gap: 12,
-            shadowColor: '#000',
-            shadowOffset: { width: 0, height: 2 },
-            shadowOpacity: 0.04,
-            shadowRadius: 6,
-          }}
-        >
-          <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: 8 }}>
-            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8, flex: 1, minWidth: 0 }}>
-              <View className="w-8 h-8 rounded-xl bg-teal-50 items-center justify-center" style={{ flexShrink: 0 }}>
-                <HeartPulse size={17} color="#00B39B" />
-              </View>
-              <Text style={{ fontSize: 13, fontWeight: '800', color: '#0F172A', textTransform: 'uppercase', letterSpacing: 0.3, flex: 1, minWidth: 0 }} numberOfLines={1}>
-                Vitals & Physical Exam
-              </Text>
-            </View>
-            <TouchableOpacity
-              onPress={fillNormalVitals}
-              style={{ flexShrink: 0 }}
-              className="bg-teal-50 px-2.5 py-1 rounded-lg border border-teal-200"
-            >
-              <Text className="text-[10px] font-bold text-[#00B39B]">+ Normal Vitals</Text>
-            </TouchableOpacity>
-          </View>
-
-          <Input
-            placeholder="e.g. BP: 120/80 mmHg, Pulse: 74 bpm, SpO2: 99%, Heart/Lung sounds..."
-            value={objective}
-            onChangeText={setObjective}
-            multiline
-            numberOfLines={2}
-          />
-        </View>
-
-        {/* 3. ASSESSMENT (Clinical Diagnosis) */}
-        <View
-          style={{
-            backgroundColor: '#FFFFFF',
-            padding: 16,
-            borderRadius: 24,
-            borderWidth: 1,
-            borderColor: '#E2E8F0',
-            gap: 10,
-            shadowColor: '#000',
-            shadowOffset: { width: 0, height: 2 },
-            shadowOpacity: 0.04,
-            shadowRadius: 6,
-          }}
-        >
-          <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: 8 }}>
-            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8, flex: 1, minWidth: 0 }}>
-              <View className="w-8 h-8 rounded-xl bg-purple-50 items-center justify-center" style={{ flexShrink: 0 }}>
-                <ClipboardList size={17} color="#8B5CF6" />
-              </View>
-              <Text style={{ fontSize: 13, fontWeight: '800', color: '#0F172A', textTransform: 'uppercase', letterSpacing: 0.3, flex: 1, minWidth: 0 }} numberOfLines={1}>
-                Clinical Assessment
-              </Text>
-            </View>
-            <View style={{ flexShrink: 0 }}>
-              <Badge label="ASSESSMENT" variant="purple" size="sm" />
-            </View>
-          </View>
-
-          <Input
-            placeholder="e.g. Acute Viral Bronchitis, Essential Hypertension..."
-            value={assessment}
-            onChangeText={setAssessment}
-          />
-        </View>
-
-        {/* 4. PRESCRIBED MEDICINES SECTION WITH DOSAGE SELECTOR */}
-        <View
-          style={{
-            backgroundColor: '#FFFFFF',
-            padding: 16,
-            borderRadius: 24,
-            borderWidth: 1,
-            borderColor: '#E2E8F0',
-            gap: 14,
-            shadowColor: '#000',
-            shadowOffset: { width: 0, height: 2 },
-            shadowOpacity: 0.04,
-            shadowRadius: 6,
-          }}
-        >
-          <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: 8 }}>
-            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8, flex: 1, minWidth: 0 }}>
-              <View style={{ width: 32, height: 32, borderRadius: 10, backgroundColor: '#F0FDF4', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
-                <Pill size={17} color="#00B39B" />
-              </View>
-              <Text style={{ fontSize: 13, fontWeight: '800', color: '#0F172A', textTransform: 'uppercase', letterSpacing: 0.3, flex: 1, minWidth: 0 }} numberOfLines={1}>
-                Prescribed Medicines (Rx)
-              </Text>
-            </View>
-            <View style={{ flexShrink: 0 }}>
-              <Badge label={`${prescribedMeds.length} Added`} variant="teal" size="sm" />
-            </View>
-          </View>
-
-          {/* Medicines List */}
-          {prescribedMeds.length === 0 ? (
-            <View style={{ backgroundColor: '#F8FAFC', padding: 20, borderRadius: 18, borderWidth: 1, borderColor: '#CBD5E1', borderStyle: 'dashed', alignItems: 'center', gap: 6 }}>
-              <Pill size={24} color="#94A3B8" />
-              <Text style={{ fontSize: 13, color: '#475569', fontWeight: '700' }}>No medicines prescribed yet.</Text>
-              <Text style={{ fontSize: 11, color: '#94A3B8', textAlign: 'center' }}>
-                Pick from a clinical preset above or tap "+ Add Medicine from Directory" below.
-              </Text>
-            </View>
-          ) : (
-            <View style={{ gap: 10 }}>
-              {prescribedMeds.map((med, idx) => (
-                <View
-                  key={med.id}
-                  style={{
-                    backgroundColor: '#F8FAFC',
-                    padding: 14,
-                    borderRadius: 18,
-                    borderWidth: 1,
-                    borderColor: '#E2E8F0',
-                    gap: 8,
-                  }}
-                >
-                  <View style={{ flexDirection: 'row', alignItems: 'flex-start', justifyContent: 'space-between', gap: 8 }}>
-                    <View style={{ flex: 1, minWidth: 0 }}>
-                      <Text style={{ fontSize: 14, fontWeight: '800', color: '#0F172A' }} numberOfLines={1}>
-                        {idx + 1}. {med.name}
-                      </Text>
-                      <Text style={{ fontSize: 11, color: '#64748B', fontWeight: '500' }} numberOfLines={1}>
-                        {med.generic}
-                      </Text>
-                    </View>
-                    <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
-                      <TouchableOpacity
-                        onPress={() => openDosageModalForMed(med)}
-                        className="bg-blue-50 px-2.5 py-1 rounded-lg border border-blue-200 flex-row items-center"
-                        style={{ gap: 4 }}
-                      >
-                        <SlidersHorizontal size={12} color="#1E58C8" />
-                        <Text className="text-[10px] font-bold text-[#1E58C8]">Dosage</Text>
-                      </TouchableOpacity>
-                      <TouchableOpacity
-                        onPress={() => removeMedicine(med.id)}
-                        className="p-1 rounded-lg bg-rose-50 border border-rose-200"
-                      >
-                        <Trash2 size={15} color="#E11D48" />
-                      </TouchableOpacity>
-                    </View>
-                  </View>
-
-                  <View className="flex-row items-center justify-between pt-1 border-t border-slate-200/80">
-                    <View className="bg-teal-50 px-2 py-0.5 rounded-md border border-teal-200">
-                      <Text className="text-[11px] font-bold text-teal-800">{med.dosage} • {med.frequency}</Text>
-                    </View>
-                    <Text className="text-[11px] font-bold text-slate-600">Duration: {med.duration}</Text>
-                  </View>
-
-                  {med.instructions && (
-                    <Text className="text-[10px] text-slate-500 font-medium italic">
-                      Instruction: {med.instructions}
-                    </Text>
-                  )}
-                </View>
-              ))}
-            </View>
-          )}
-
-          {/* Button to Open Medicine Directory */}
-          <TouchableOpacity
-            onPress={() => setShowMedicineModal(true)}
-            activeOpacity={0.8}
-            style={{
-              height: 48,
-              backgroundColor: '#F0FDF4',
-              borderWidth: 1.5,
-              borderColor: '#86EFAC',
-              borderRadius: 16,
-              flexDirection: 'row',
-              alignItems: 'center',
-              justifyContent: 'center',
-              gap: 6,
-            }}
-          >
-            <Plus size={16} color="#00B39B" />
-            <Text style={{ fontSize: 12, fontWeight: '800', color: '#00B39B', textTransform: 'uppercase', letterSpacing: 0.5 }}>
-              Add Medicine from Directory
+            <Text style={styles.dotSeparator}>•</Text>
+            <Text style={[styles.extraVitalText, { color: colors.textSecondary }]}>
+              Weight: <Text style={{ color: colors.text, fontWeight: '700' }}>{vitals.weight} kg</Text>
             </Text>
-          </TouchableOpacity>
-        </View>
-
-        {/* 5. DIAGNOSTIC LAB TESTS SECTION */}
-        <View
-          style={{
-            backgroundColor: '#FFFFFF',
-            padding: 16,
-            borderRadius: 24,
-            borderWidth: 1,
-            borderColor: '#E2E8F0',
-            gap: 14,
-            shadowColor: '#000',
-            shadowOffset: { width: 0, height: 2 },
-            shadowOpacity: 0.04,
-            shadowRadius: 6,
-          }}
-        >
-          <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: 8 }}>
-            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8, flex: 1, minWidth: 0 }}>
-              <View style={{ width: 32, height: 32, borderRadius: 10, backgroundColor: '#EFF6FF', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
-                <Activity size={17} color="#1E58C8" />
-              </View>
-              <Text style={{ fontSize: 13, fontWeight: '800', color: '#0F172A', textTransform: 'uppercase', letterSpacing: 0.3, flex: 1, minWidth: 0 }} numberOfLines={1}>
-                Diagnostic Investigations
-              </Text>
-            </View>
-            <View style={{ flexShrink: 0 }}>
-              <Badge label={`${prescribedTests.length} Tests`} variant="blue" size="sm" />
-            </View>
-          </View>
-
-          {prescribedTests.length === 0 ? (
-            <View style={{ backgroundColor: '#F8FAFC', padding: 18, borderRadius: 16, borderWidth: 1, borderColor: '#CBD5E1', borderStyle: 'dashed', alignItems: 'center' }}>
-              <Text style={{ fontSize: 12, color: '#64748B', fontWeight: '500' }}>No investigations ordered yet.</Text>
-            </View>
-          ) : (
-            <View style={{ gap: 8 }}>
-              {prescribedTests.map((test) => (
-                <View
-                  key={test.id}
-                  className="bg-slate-50 p-3 rounded-2xl border border-slate-200 flex-row justify-between items-center"
-                >
-                  <View className="flex-1 mr-2">
-                    <Text className="text-xs font-bold text-slate-900" numberOfLines={1}>
-                      {test.name}
-                    </Text>
-                    <Text className="text-[10px] text-slate-500">
-                      {test.category} • Turnaround: {test.turnaroundTime}
-                    </Text>
-                  </View>
-                  <View className="flex-row items-center" style={{ gap: 8 }}>
-                    <Badge
-                      label={test.fastingRequired ? 'FASTING' : 'ROUTINE'}
-                      variant={test.fastingRequired ? 'warning' : 'teal'}
-                      size="sm"
-                    />
-                    <TouchableOpacity
-                      onPress={() => removeTest(test.id)}
-                      className="p-1 rounded-lg bg-rose-50 border border-rose-200"
-                    >
-                      <Trash2 size={14} color="#E11D48" />
-                    </TouchableOpacity>
-                  </View>
-                </View>
-              ))}
-            </View>
-          )}
-
-          <TouchableOpacity
-            onPress={() => setShowTestModal(true)}
-            activeOpacity={0.8}
-            style={{
-              height: 48,
-              backgroundColor: '#EFF6FF',
-              borderWidth: 1.5,
-              borderColor: '#93C5FD',
-              borderRadius: 16,
-              flexDirection: 'row',
-              alignItems: 'center',
-              justifyContent: 'center',
-              gap: 6,
-            }}
-          >
-            <Plus size={16} color="#1E58C8" />
-            <Text style={{ fontSize: 12, fontWeight: '800', color: '#1E58C8', textTransform: 'uppercase', letterSpacing: 0.5 }}>
-              Add Diagnostic Test / Lab
+            <Text style={styles.dotSeparator}>•</Text>
+            <Text style={[styles.extraVitalText, { color: colors.textSecondary }]}>
+              BMI: <Text style={{ color: colors.text, fontWeight: '700' }}>23.9 (Normal)</Text>
             </Text>
-          </TouchableOpacity>
-        </View>
-
-        {/* 6. GENERAL ADVICE & DIET SECTION */}
-        <View
-          style={{
-            backgroundColor: '#FFFFFF',
-            padding: 16,
-            borderRadius: 24,
-            borderWidth: 1,
-            borderColor: '#E2E8F0',
-            gap: 10,
-            shadowColor: '#000',
-            shadowOffset: { width: 0, height: 2 },
-            shadowOpacity: 0.04,
-            shadowRadius: 6,
-          }}
-        >
-          <Text style={{ fontSize: 13, fontWeight: '800', color: '#0F172A', textTransform: 'uppercase', letterSpacing: 0.5 }}>
-            General Advice & Dietary Precautions
-          </Text>
-          <Input
-            placeholder="e.g. Low salt diet (<2g/day), warm saline gargles, plenty of fluids, review after 7 days..."
-            value={adviceNotes}
-            onChangeText={setAdviceNotes}
-            multiline
-            numberOfLines={2}
-          />
-        </View>
-      </ScrollView>
-
-      {/* Bottom Sticky Action Bar */}
-      <View className="p-4 bg-white border-t border-slate-100 shadow-lg">
-        <Button
-          title={`Sign & Issue Digital Prescription (${prescribedMeds.length} Meds)`}
-          onPress={handleSignPrescription}
-          variant="teal"
-          size="lg"
-          icon={<FileCheck size={20} color="#FFFFFF" />}
-        />
-      </View>
-
-      {/* ========================================================================= */}
-      {/* 1. MEDICINES DIRECTORY MODAL */}
-      {/* ========================================================================= */}
-      <Modal
-        visible={showMedicineModal}
-        onClose={() => setShowMedicineModal(false)}
-        title="Clinical Medicines Directory"
-      >
-        <View style={{ gap: 12, paddingVertical: 4 }}>
-          <View
-            style={{
-              height: 48,
-              backgroundColor: '#F8FAFC',
-              borderWidth: 1,
-              borderColor: '#E2E8F0',
-              borderRadius: 14,
-              flexDirection: 'row',
-              alignItems: 'center',
-              paddingHorizontal: 12,
-              gap: 8,
-            }}
-          >
-            <Search size={16} color="#64748B" />
-            <TextInput
-              placeholder="Search brand (e.g. Dolo, Pan) or salt (e.g. Paracetamol)..."
-              placeholderTextColor="#94A3B8"
-              value={medSearch}
-              onChangeText={setMedSearch}
-              style={{ flex: 1, fontSize: 13, color: '#0F172A', fontWeight: '500' }}
-            />
           </View>
 
-          <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap: 6 }}>
-            {medCategories.map((cat) => (
-              <TouchableOpacity
-                key={cat}
-                onPress={() => setSelectedMedCategory(cat)}
-                className={`px-3 py-1.5 rounded-xl border ${
-                  selectedMedCategory === cat
-                    ? 'bg-[#00B39B] border-[#00B39B]'
-                    : 'bg-slate-50 border-slate-200'
-                }`}
-              >
-                <Text
-                  style={{
-                    fontSize: 11,
-                    fontWeight: '700',
-                    color: selectedMedCategory === cat ? '#FFFFFF' : '#475569',
-                  }}
-                >
-                  {cat}
-                </Text>
-              </TouchableOpacity>
-            ))}
-          </ScrollView>
-
-          <ScrollView style={{ height: 320 }} showsVerticalScrollIndicator={true} nestedScrollEnabled={true}>
-            <View style={{ gap: 8, paddingBottom: 16 }}>
-              {filteredMedicines.map((med) => (
-                <TouchableOpacity
-                  key={med.id}
-                  onPress={() => addMedicineFromDirectory(med)}
-                  activeOpacity={0.8}
-                  style={{
-                    backgroundColor: '#FFFFFF',
-                    borderWidth: 1,
-                    borderColor: '#E2E8F0',
-                    borderRadius: 16,
-                    padding: 12,
-                    gap: 6,
-                  }}
-                >
-                  <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
-                    <View style={{ flex: 1, marginRight: 8 }}>
-                      <Text style={{ fontSize: 13, fontWeight: '800', color: '#0F172A' }}>{med.name}</Text>
-                      <Text style={{ fontSize: 11, fontWeight: '500', color: '#64748B' }}>{med.generic}</Text>
-                    </View>
-                    <View style={{ backgroundColor: '#00B39B', paddingHorizontal: 10, paddingVertical: 5, borderRadius: 10 }}>
-                      <Text style={{ fontSize: 11, fontWeight: '800', color: '#FFFFFF' }}>+ Prescribe</Text>
-                    </View>
-                  </View>
-                  <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
-                    <Badge label={med.defaultFrequency} variant="teal" size="sm" />
-                    <Text style={{ fontSize: 10, color: '#94A3B8' }}>• Default: {med.defaultDuration}</Text>
-                  </View>
-                </TouchableOpacity>
-              ))}
-            </View>
-          </ScrollView>
-        </View>
-      </Modal>
-
-      {/* ========================================================================= */}
-      {/* 2. DOSAGE & TIMING CONFIGURATION MODAL */}
-      {/* ========================================================================= */}
-      <Modal
-        visible={showDosageModal}
-        onClose={() => setShowDosageModal(false)}
-        title={activeEditingMed ? `Set Dosage: ${activeEditingMed.name}` : 'Configure Medication Dosage'}
-      >
-        <ScrollView style={{ maxHeight: 420 }} showsVerticalScrollIndicator={false}>
-          <View style={{ gap: 14, paddingVertical: 4 }}>
-            {/* Timing */}
-            <View style={{ gap: 6 }}>
-              <Text className="text-xs font-black text-slate-700 uppercase tracking-wider">
-                Frequency / Timings (कितनी बार)
-              </Text>
-              <View className="flex-row flex-wrap gap-2">
-                {TIMING_OPTIONS.map((opt) => (
-                  <TouchableOpacity
-                    key={opt}
-                    onPress={() => setSelectedTiming(opt)}
-                    activeOpacity={0.8}
-                    className={`px-3 py-2 rounded-xl border ${
-                      selectedTiming === opt
-                        ? 'bg-[#1E58C8] border-[#1E58C8]'
-                        : 'bg-slate-50 border-slate-200'
-                    }`}
-                  >
-                    <Text
-                      style={{
-                        fontSize: 11,
-                        fontWeight: '700',
-                        color: selectedTiming === opt ? '#FFFFFF' : '#334155',
-                      }}
-                    >
-                      {opt}
-                    </Text>
-                  </TouchableOpacity>
-                ))}
-              </View>
-            </View>
-
-            {/* Food Instruction */}
-            <View style={{ gap: 6 }}>
-              <Text className="text-xs font-black text-slate-700 uppercase tracking-wider">
-                Meal Relationship (भोजन निर्देश)
-              </Text>
-              <View className="flex-row flex-wrap gap-2">
-                {FOOD_INSTRUCTION_OPTIONS.map((opt) => (
-                  <TouchableOpacity
-                    key={opt}
-                    onPress={() => setSelectedFood(opt)}
-                    activeOpacity={0.8}
-                    className={`px-3 py-2 rounded-xl border ${
-                      selectedFood === opt
-                        ? 'bg-[#00B39B] border-[#00B39B]'
-                        : 'bg-slate-50 border-slate-200'
-                    }`}
-                  >
-                    <Text
-                      style={{
-                        fontSize: 11,
-                        fontWeight: '700',
-                        color: selectedFood === opt ? '#FFFFFF' : '#334155',
-                      }}
-                    >
-                      {opt}
-                    </Text>
-                  </TouchableOpacity>
-                ))}
-              </View>
-            </View>
-
-            {/* Duration */}
-            <View style={{ gap: 6 }}>
-              <Text className="text-xs font-black text-slate-700 uppercase tracking-wider">
-                Duration (दवा कितने दिन लेनी है)
-              </Text>
-              <View className="flex-row flex-wrap gap-2">
-                {DURATION_OPTIONS.map((opt) => (
-                  <TouchableOpacity
-                    key={opt}
-                    onPress={() => setSelectedDuration(opt)}
-                    activeOpacity={0.8}
-                    className={`px-3 py-2 rounded-xl border ${
-                      selectedDuration === opt
-                        ? 'bg-[#1E58C8] border-[#1E58C8]'
-                        : 'bg-slate-50 border-slate-200'
-                    }`}
-                  >
-                    <Text
-                      style={{
-                        fontSize: 11,
-                        fontWeight: '700',
-                        color: selectedDuration === opt ? '#FFFFFF' : '#334155',
-                      }}
-                    >
-                      {opt}
-                    </Text>
-                  </TouchableOpacity>
-                ))}
-              </View>
-            </View>
-
-            {/* Dosage Form / Quantity */}
-            <View style={{ gap: 6 }}>
-              <Text className="text-xs font-black text-slate-700 uppercase tracking-wider">
-                Unit Dose (मात्रा)
-              </Text>
-              <View className="flex-row flex-wrap gap-2">
-                {DOSAGE_FORM_OPTIONS.map((opt) => (
-                  <TouchableOpacity
-                    key={opt}
-                    onPress={() => setSelectedDosageForm(opt)}
-                    activeOpacity={0.8}
-                    className={`px-3 py-2 rounded-xl border ${
-                      selectedDosageForm === opt
-                        ? 'bg-purple-600 border-purple-600'
-                        : 'bg-slate-50 border-slate-200'
-                    }`}
-                  >
-                    <Text
-                      style={{
-                        fontSize: 11,
-                        fontWeight: '700',
-                        color: selectedDosageForm === opt ? '#FFFFFF' : '#334155',
-                      }}
-                    >
-                      {opt}
-                    </Text>
-                  </TouchableOpacity>
-                ))}
-              </View>
-            </View>
-
-            {/* Custom Notes */}
-            <Input
-              label="Special Patient Advice (Optional)"
-              placeholder="e.g. Take with warm water, avoid alcohol, don't crush..."
-              value={customDosageInstruction}
-              onChangeText={setCustomDosageInstruction}
+          {/* EDITABLE CHIEF COMPLAINT with Ghost Medical Autocomplete */}
+          <View style={[styles.complaintBox, { borderTopColor: colors.border }]}>
+            <SmartMedicalTextInput
+              label="Chief Complaint (Click to edit)"
+              value={chiefComplaint}
+              onChangeText={setChiefComplaint}
+              placeholder="e.g. Cough and cold with fever for 3 days..."
+              multiline
+              numberOfLines={2}
+              quickSuggestions={[
+                'Persistent dry cough for 4 days',
+                'Mild chest tightness on exertion',
+                'Sore throat & painful swallowing',
+                'No recorded fever',
+              ]}
             />
 
-            <Button
-              title="Save Dosage Configuration"
-              onPress={saveDosageConfiguration}
-              variant="teal"
-              size="lg"
-              icon={<Check size={18} color="#FFFFFF" />}
-            />
-          </View>
-        </ScrollView>
-      </Modal>
-
-      {/* ========================================================================= */}
-      {/* 3. DIAGNOSTIC TESTS DIRECTORY MODAL */}
-      {/* ========================================================================= */}
-      <Modal
-        visible={showTestModal}
-        onClose={() => setShowTestModal(false)}
-        title="Diagnostic Tests Directory"
-      >
-        <View style={{ gap: 12, paddingVertical: 4 }}>
-          <View
-            style={{
-              height: 48,
-              backgroundColor: '#F8FAFC',
-              borderWidth: 1,
-              borderColor: '#E2E8F0',
-              borderRadius: 14,
-              flexDirection: 'row',
-              alignItems: 'center',
-              paddingHorizontal: 12,
-              gap: 8,
-            }}
-          >
-            <Search size={16} color="#64748B" />
-            <TextInput
-              placeholder="Search test (e.g. CBC, ECG, Lipid, HbA1c)..."
-              placeholderTextColor="#94A3B8"
-              value={testSearch}
-              onChangeText={setTestSearch}
-              style={{ flex: 1, fontSize: 13, color: '#0F172A', fontWeight: '500' }}
-            />
-          </View>
-
-          <ScrollView style={{ height: 320 }} showsVerticalScrollIndicator={true} nestedScrollEnabled={true}>
-            <View style={{ gap: 8, paddingBottom: 16 }}>
-              {filteredTests.map((test) => (
-                <TouchableOpacity
-                  key={test.id}
-                  onPress={() => addTestFromDirectory(test)}
-                  activeOpacity={0.8}
-                  style={{
-                    backgroundColor: '#FFFFFF',
-                    borderWidth: 1,
-                    borderColor: '#E2E8F0',
-                    borderRadius: 16,
-                    padding: 12,
-                    gap: 6,
-                  }}
+            {/* Allergies tags with Add/Remove action */}
+            <View style={styles.allergiesSection}>
+              <View style={styles.allergiesHeader}>
+                <Text style={[styles.allergiesLabel, { color: colors.textSecondary }]}>RECORDED ALLERGIES:</Text>
+                <Pressable
+                  onPress={() => setShowAddAllergy(!showAddAllergy)}
+                  style={styles.addAllergyBtn}
                 >
-                  <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
-                    <View style={{ flex: 1, marginRight: 8 }}>
-                      <Text style={{ fontSize: 13, fontWeight: '800', color: '#0F172A' }}>{test.name}</Text>
-                      <Text style={{ fontSize: 11, fontWeight: '500', color: '#64748B' }}>
-                        {test.category} • {test.turnaroundTime}
-                      </Text>
-                    </View>
-                    <View style={{ backgroundColor: '#1E58C8', paddingHorizontal: 10, paddingVertical: 5, borderRadius: 10 }}>
-                      <Text style={{ fontSize: 11, fontWeight: '800', color: '#FFFFFF' }}>+ Order</Text>
-                    </View>
+                  <Plus size={12} color={StitchColors.primaryContainer} />
+                  <Text style={styles.addAllergyBtnText}>Add</Text>
+                </Pressable>
+              </View>
+
+              <View style={styles.allergiesRow}>
+                {allergies.map((al) => (
+                  <View
+                    key={al.id}
+                    style={[
+                      styles.allergyTag,
+                      { backgroundColor: al.isSevere ? '#FEE2E2' : colors.backgroundElement },
+                    ]}
+                  >
+                    {al.isSevere && <AlertTriangle size={11} color={StitchColors.error} />}
+                    <Text style={[styles.allergyTagText, al.isSevere && { color: StitchColors.error }]}>
+                      {al.name}
+                    </Text>
+                    <Pressable
+                      onPress={() => setAllergies(allergies.filter((x) => x.id !== al.id))}
+                      hitSlop={{ top: 4, bottom: 4, left: 4, right: 4 }}
+                    >
+                      <X size={12} color={al.isSevere ? StitchColors.error : colors.textMuted} />
+                    </Pressable>
                   </View>
-                  <Badge
-                    label={test.fastingRequired ? 'FASTING REQUIRED' : 'ROUTINE (NON-FASTING)'}
-                    variant={test.fastingRequired ? 'warning' : 'teal'}
-                    size="sm"
+                ))}
+              </View>
+
+              {showAddAllergy && (
+                <View style={styles.addAllergyInputRow}>
+                  <TextInput
+                    value={newAllergyInput}
+                    onChangeText={setNewAllergyInput}
+                    placeholder="Type allergy (e.g. Sulfa, NSAIDs)..."
+                    placeholderTextColor={colors.textMuted}
+                    style={[styles.smallInput, { color: colors.text, borderColor: colors.border }]}
                   />
-                </TouchableOpacity>
-              ))}
-            </View>
-          </ScrollView>
-        </View>
-      </Modal>
-
-      {/* ========================================================================= */}
-      {/* 4. REDESIGNED OFFICIAL DIGITAL PRESCRIPTION PASS (Rx PAPER SHEET) */}
-      {/* ========================================================================= */}
-      <Modal
-        visible={showPrescriptionPass}
-        onClose={() => setShowPrescriptionPass(false)}
-        title="Official Medical Prescription Pass (Rx)"
-        fullscreen={rxFullscreen}
-      >
-        {/* Prescription Zoom & View Toolbar */}
-        <View
-          style={{
-            flexDirection: 'row',
-            alignItems: 'center',
-            justifyContent: 'space-between',
-            backgroundColor: '#F1F5F9',
-            paddingHorizontal: 12,
-            paddingVertical: 8,
-            borderRadius: 14,
-            marginBottom: 10,
-            borderWidth: 1,
-            borderColor: '#E2E8F0',
-          }}
-        >
-          <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
-            <TouchableOpacity
-              onPress={handleZoomOut}
-              activeOpacity={0.7}
-              disabled={rxZoomScale <= 0.85}
-              style={{
-                width: 32,
-                height: 32,
-                borderRadius: 10,
-                backgroundColor: rxZoomScale <= 0.85 ? '#E2E8F0' : '#FFFFFF',
-                alignItems: 'center',
-                justifyContent: 'center',
-                borderWidth: 1,
-                borderColor: '#CBD5E1',
-              }}
-            >
-              <ZoomOut size={16} color={rxZoomScale <= 0.85 ? '#94A3B8' : '#0F172A'} />
-            </TouchableOpacity>
-
-            <TouchableOpacity
-              onPress={handleResetZoom}
-              activeOpacity={0.7}
-              style={{
-                paddingHorizontal: 10,
-                height: 32,
-                borderRadius: 10,
-                backgroundColor: '#FFFFFF',
-                alignItems: 'center',
-                justifyContent: 'center',
-                borderWidth: 1,
-                borderColor: '#CBD5E1',
-                flexDirection: 'row',
-                gap: 4,
-              }}
-            >
-              <RotateCcw size={12} color="#64748B" />
-              <Text style={{ fontSize: 11, fontWeight: '800', color: '#0F172A' }}>
-                {Math.round(rxZoomScale * 100)}%
-              </Text>
-            </TouchableOpacity>
-
-            <TouchableOpacity
-              onPress={handleZoomIn}
-              activeOpacity={0.7}
-              disabled={rxZoomScale >= 1.4}
-              style={{
-                width: 32,
-                height: 32,
-                borderRadius: 10,
-                backgroundColor: rxZoomScale >= 1.4 ? '#E2E8F0' : '#FFFFFF',
-                alignItems: 'center',
-                justifyContent: 'center',
-                borderWidth: 1,
-                borderColor: '#CBD5E1',
-              }}
-            >
-              <ZoomIn size={16} color={rxZoomScale >= 1.4 ? '#94A3B8' : '#0F172A'} />
-            </TouchableOpacity>
-          </View>
-
-          <TouchableOpacity
-            onPress={() => setRxFullscreen(!rxFullscreen)}
-            activeOpacity={0.7}
-            style={{
-              flexDirection: 'row',
-              alignItems: 'center',
-              gap: 5,
-              backgroundColor: rxFullscreen ? '#0F172A' : '#FFFFFF',
-              paddingHorizontal: 10,
-              height: 32,
-              borderRadius: 10,
-              borderWidth: 1,
-              borderColor: rxFullscreen ? '#0F172A' : '#CBD5E1',
-            }}
-          >
-            {rxFullscreen ? (
-              <>
-                <Minimize2 size={14} color="#FFFFFF" />
-                <Text style={{ fontSize: 11, fontWeight: '800', color: '#FFFFFF' }}>Compact</Text>
-              </>
-            ) : (
-              <>
-                <Maximize2 size={14} color="#0F172A" />
-                <Text style={{ fontSize: 11, fontWeight: '800', color: '#0F172A' }}>Fullscreen</Text>
-              </>
-            )}
-          </TouchableOpacity>
-        </View>
-
-        {/* Smooth ScrollView with zoom scale container */}
-        <ScrollView
-          style={{ flex: 1 }}
-          contentContainerStyle={{ paddingBottom: 60 }}
-          nestedScrollEnabled={true}
-          showsVerticalScrollIndicator={true}
-        >
-          <View
-            style={{
-              transform: [{ scale: rxZoomScale }],
-              gap: 14,
-              paddingVertical: 4,
-            }}
-          >
-            {downloadToast && (
-              <View className="bg-emerald-50 p-3 rounded-xl border border-emerald-200 flex-row items-center justify-center" style={{ gap: 6 }}>
-                <CheckCircle2 size={16} color="#10B981" />
-                <Text className="text-xs font-bold text-emerald-800">Prescription Saved to Downloads</Text>
-              </View>
-            )}
-
-            {/* Official Indian Clinic Letterhead Paper Sheet */}
-            <View
-              style={{
-                backgroundColor: '#FFFFFF',
-                borderRadius: 20,
-                borderWidth: 1.5,
-                borderColor: '#CBD5E1',
-                padding: 16,
-                gap: 12,
-                shadowColor: '#000',
-                shadowOffset: { width: 0, height: 4 },
-                shadowOpacity: 0.08,
-                shadowRadius: 10,
-                elevation: 4,
-              }}
-            >
-              {/* Header: Clinic & Doctor Info */}
-              <View className="pb-3 border-b-2 border-slate-900" style={{ gap: 4 }}>
-                <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: 10 }}>
-                  <View style={{ flexDirection: 'row', alignItems: 'center', flex: 1, minWidth: 0, gap: 6 }}>
-                    <Building2 size={18} color="#00B39B" style={{ flexShrink: 0 }} />
-                    <Text
-                      numberOfLines={1}
-                      ellipsizeMode="tail"
-                      style={{ fontSize: 12, fontWeight: '900', color: '#0F172A', textTransform: 'uppercase', letterSpacing: 0.5, flex: 1 }}
-                    >
-                      {clinicName}
-                    </Text>
-                  </View>
-                  <Badge label="NMC / MCI VERIFIED" variant="teal" size="sm" />
-                </View>
-
-                <Text className="text-lg font-black text-slate-900 mt-1">{doctorName}</Text>
-                <Text className="text-xs font-bold text-[#1E58C8]">
-                  {doctorSpecialty} • Reg No: {doctorMciNumber}
-                </Text>
-                <Text className="text-[10px] text-slate-500">
-                  {clinicAddress} • Ph: {doctorPhone}
-                </Text>
-                <Text className="text-[10px] text-slate-400">
-                  OPD Timings: 09:30 AM – 01:30 PM, 05:00 PM – 08:30 PM (Mon – Sat)
-                </Text>
-              </View>
-
-              {/* Patient & Date Meta Strip */}
-              <View className="bg-slate-50 p-3 rounded-xl border border-slate-200 flex-row justify-between items-center">
-                <View>
-                  <Text className="text-[10px] font-bold text-slate-400 uppercase">Patient Details</Text>
-                  <Text className="text-sm font-black text-slate-900">
-                    {apt?.patientName || 'Patient'}
-                  </Text>
-                  <Text className="text-[11px] text-slate-500 font-semibold">
-                    Age: 32 Yrs • Male • Blood: O+ • Token #02
-                  </Text>
-                </View>
-                <View className="items-end">
-                  <Text className="text-[10px] font-bold text-slate-400 uppercase">Prescription Date</Text>
-                  <Text className="text-xs font-bold text-slate-900">
-                    {new Date().toLocaleDateString('en-IN', {
-                      day: '2-digit',
-                      month: 'short',
-                      year: 'numeric',
-                    })}
-                  </Text>
-                  <Text className="text-[10px] font-mono font-bold text-teal-700 mt-0.5">
-                    FYD-RX-OFFICIAL
-                  </Text>
-                </View>
-              </View>
-
-              {/* Clinical Diagnosis */}
-              {assessment ? (
-                <View className="bg-blue-50/70 p-3 rounded-xl border border-blue-200">
-                  <Text className="text-[10px] font-black text-[#1E58C8] uppercase tracking-wider">
-                    Clinical Diagnosis & Impression
-                  </Text>
-                  <Text className="text-xs font-black text-slate-900 mt-0.5">{assessment}</Text>
-                </View>
-              ) : null}
-
-              {/* Prominent Rx Latin Symbol & Medicines Table */}
-              <View style={{ gap: 8 }}>
-                <View className="flex-row items-center justify-between pb-1 border-b border-slate-200">
-                  <View className="flex-row items-center" style={{ gap: 6 }}>
-                    <Text className="text-2xl font-serif font-black text-slate-900 leading-none">℞</Text>
-                    <Text className="text-xs font-black text-slate-900 uppercase tracking-wider">
-                      Prescribed Medications ({prescribedMeds.length})
-                    </Text>
-                  </View>
-                  <Text className="text-[10px] text-slate-400 font-bold">Standard Indian Dosage</Text>
-                </View>
-
-                {prescribedMeds.length === 0 ? (
-                  <Text className="text-xs text-slate-400 italic py-2">No medications prescribed.</Text>
-                ) : (
-                  prescribedMeds.map((m, idx) => (
-                    <View
-                      key={idx}
-                      className="bg-slate-50 p-3 rounded-xl border border-slate-200/90"
-                      style={{ gap: 4 }}
-                    >
-                      <View className="flex-row justify-between items-start">
-                        <View className="flex-1 mr-2">
-                          <Text className="text-xs font-black text-slate-900">
-                            {idx + 1}. {m.name}
-                          </Text>
-                          <Text className="text-[10px] text-slate-500">{m.generic}</Text>
-                        </View>
-                        <Badge label={m.frequency} variant="teal" size="sm" />
-                      </View>
-
-                      <View className="flex-row justify-between items-center text-slate-600 pt-1 border-t border-slate-100">
-                        <Text className="text-[11px] font-bold text-slate-700">
-                          Dose: {m.dosage} • Duration: {m.duration}
-                        </Text>
-                      </View>
-
-                      {m.instructions ? (
-                        <Text className="text-[10px] text-teal-800 font-medium bg-teal-50/80 p-1.5 rounded-md border border-teal-100">
-                          {m.instructions}
-                        </Text>
-                      ) : null}
-                    </View>
-                  ))
-                )}
-              </View>
-
-              {/* Prescribed Tests */}
-              {prescribedTests.length > 0 && (
-                <View style={{ gap: 6 }}>
-                  <View className="flex-row items-center" style={{ gap: 6 }}>
-                    <Activity size={15} color="#1E58C8" />
-                    <Text className="text-xs font-black text-slate-900 uppercase tracking-wider">
-                      Investigations Ordered ({prescribedTests.length})
-                    </Text>
-                  </View>
-
-                  {prescribedTests.map((t, idx) => (
-                    <View
-                      key={idx}
-                      className="bg-slate-50 p-2.5 rounded-xl border border-slate-200 flex-row justify-between items-center"
-                    >
-                      <Text className="text-xs font-bold text-slate-900 flex-1 mr-2" numberOfLines={1}>
-                        • {t.name}
-                      </Text>
-                      <Text className="text-[10px] font-bold text-[#1E58C8]">
-                        {t.fastingRequired ? 'Fasting Required' : 'Routine'}
-                      </Text>
-                    </View>
-                  ))}
+                  <Pressable
+                    onPress={() => {
+                      if (newAllergyInput.trim()) {
+                        setAllergies([
+                          ...allergies,
+                          { id: `a_${Date.now()}`, name: newAllergyInput.trim(), isSevere: false },
+                        ]);
+                        setNewAllergyInput('');
+                        setShowAddAllergy(false);
+                      }
+                    }}
+                    style={[styles.smallAddBtn, { backgroundColor: StitchColors.primaryContainer }]}
+                  >
+                    <Check size={14} color="#FFFFFF" />
+                  </Pressable>
                 </View>
               )}
+            </View>
+          </View>
+        </Animated.View>
 
-              {/* General Advice */}
-              {adviceNotes ? (
-                <View className="bg-amber-50/80 p-3 rounded-xl border border-amber-200" style={{ gap: 2 }}>
-                  <Text className="text-[10px] font-black text-amber-900 uppercase tracking-wider">
-                    Doctor's Advice & Lifestyle Precautions
+        {/* 3. Segmented Navigation Tabs */}
+        <View style={[styles.tabsWrap, { backgroundColor: colors.backgroundElement }]}>
+          <Pressable
+            onPress={() => setActiveTab('today')}
+            style={[styles.segTab, activeTab === 'today' && [styles.segTabActive, { backgroundColor: colors.card }]]}
+          >
+            <Text style={[styles.segTabText, activeTab === 'today' && { color: StitchColors.primaryContainer, fontWeight: '700' }]}>
+              Today's Visit
+            </Text>
+          </Pressable>
+
+          <Pressable
+            onPress={() => setActiveTab('history')}
+            style={[styles.segTab, activeTab === 'history' && [styles.segTabActive, { backgroundColor: colors.card }]]}
+          >
+            <Text style={[styles.segTabText, activeTab === 'history' && { color: StitchColors.primaryContainer, fontWeight: '700' }]}>
+              Past History
+            </Text>
+          </Pressable>
+
+          <Pressable
+            onPress={() => setActiveTab('labs')}
+            style={[styles.segTab, activeTab === 'labs' && [styles.segTabActive, { backgroundColor: colors.card }]]}
+          >
+            <Text style={[styles.segTabText, activeTab === 'labs' && { color: StitchColors.primaryContainer, fontWeight: '700' }]}>
+              Lab Reports
+            </Text>
+          </Pressable>
+        </View>
+
+        {/* TAB 1: Today's Visit */}
+        {activeTab === 'today' && (
+          <Animated.View entering={FadeIn.duration(200)} style={styles.tabContentBlock}>
+            {/* Clinical Examination (Formerly Physical Observations) — Directly Editable + Image Attachments */}
+            <View style={[styles.sectionCard, { backgroundColor: colors.card, borderColor: colors.border }]}>
+              <View style={styles.sectionCardHeader}>
+                <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+                  <Stethoscope size={16} color={StitchColors.secondaryContainer} />
+                  <Text style={[styles.sectionCardTitle, { color: colors.text }]}>Clinical Examination</Text>
+                </View>
+                <Pressable
+                  onPress={() => {
+                    if (Platform.OS !== 'web') {
+                      Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+                    }
+                    setShowAddImageModal(true);
+                  }}
+                  style={[styles.addImageBtn, { backgroundColor: StitchColors.primaryContainer }]}
+                  accessibilityRole="button"
+                  accessibilityLabel="Add clinical examination photo"
+                >
+                  <Camera size={13} color="#FFFFFF" />
+                  <Text style={styles.addImageBtnText}>+ Add Image</Text>
+                </Pressable>
+              </View>
+
+              <SmartMedicalTextInput
+                label="Chest & Respiratory Auscultation / General Exam"
+                value={physicalObservation}
+                onChangeText={setPhysicalObservation}
+                placeholder="Type clinical examination findings..."
+                multiline
+                numberOfLines={3}
+                quickSuggestions={[
+                  'Clear bilateral vesicular breath sounds',
+                  'Mild bronchial wheeze on forced expiration',
+                  'S1, S2 audible, no murmurs',
+                  'Throat mild pharyngeal erythema',
+                ]}
+              />
+
+              {/* Attached Clinical Examination Images Gallery */}
+              {clinicalImages.length > 0 && (
+                <View style={styles.clinicalImagesContainer}>
+                  <Text style={[styles.clinicalImagesSubhead, { color: colors.textSecondary }]}>
+                    Attached Clinical Photos & Imaging ({clinicalImages.length})
                   </Text>
-                  <Text className="text-xs text-amber-800 leading-5">{adviceNotes}</Text>
+                  <ScrollView
+                    horizontal
+                    showsHorizontalScrollIndicator={false}
+                    contentContainerStyle={styles.clinicalImagesScroll}
+                  >
+                    {clinicalImages.map((img) => (
+                      <View
+                        key={img.id}
+                        style={[
+                          styles.clinicalImageCard,
+                          { backgroundColor: colors.backgroundElement, borderColor: colors.border },
+                        ]}
+                      >
+                        <Pressable onPress={() => setSelectedPreviewImage(img)}>
+                          <Image source={{ uri: img.uri }} style={styles.clinicalImageThumb} />
+                        </Pressable>
+                        <View style={styles.clinicalImageMeta}>
+                          <Text numberOfLines={1} style={[styles.clinicalImageTitle, { color: colors.text }]}>
+                            {img.title}
+                          </Text>
+                          <Text style={[styles.clinicalImageDate, { color: colors.textMuted }]}>
+                            {img.date}
+                          </Text>
+                        </View>
+                        <Pressable
+                          onPress={() => setClinicalImages(clinicalImages.filter((ci) => ci.id !== img.id))}
+                          style={styles.removeImageBtn}
+                          hitSlop={{ top: 6, bottom: 6, left: 6, right: 6 }}
+                          accessibilityLabel="Remove image"
+                        >
+                          <X size={12} color="#FFFFFF" />
+                        </Pressable>
+                      </View>
+                    ))}
+                  </ScrollView>
                 </View>
-              ) : null}
+              )}
+            </View>
 
-              {/* Digital Authentication & Council Seal */}
-              <View className="bg-emerald-50/90 p-3.5 rounded-2xl border border-emerald-200 flex-row items-center justify-between">
-                <View className="flex-row items-center" style={{ gap: 8 }}>
-                  <ShieldCheck size={24} color="#10B981" />
-                  <View>
-                    <Text className="text-xs font-black text-emerald-900">
-                      Digitally Signed by {doctorName}
-                    </Text>
-                    <Text className="text-[10px] text-emerald-700">
-                      National Medical Commission Reg No: {doctorMciNumber}
-                    </Text>
-                  </View>
+            {/* Dedicated Patient Clinical History (Past Medical / Surgical / Illnesses — Not Family) */}
+            <View style={[styles.sectionCard, { backgroundColor: colors.card, borderColor: colors.border }]}>
+              <View style={styles.sectionCardHeader}>
+                <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+                  <History size={16} color={StitchColors.primaryContainer} />
+                  <Text style={[styles.sectionCardTitle, { color: colors.text }]}>Patient Clinical History</Text>
                 </View>
-                <Text className="text-[10px] font-bold text-emerald-800 font-mono">VERIFIED</Text>
+                <View style={[styles.loggedBadge, { backgroundColor: colors.backgroundElement }]}>
+                  <Text style={[styles.loggedText, { color: colors.textSecondary }]}>Directly Editable</Text>
+                </View>
               </View>
 
-              {/* Action Buttons: WhatsApp, PDF, Done */}
-              <View className="flex-row gap-2 pt-1 border-t border-slate-200">
-                <TouchableOpacity
-                  onPress={handleDownloadPdf}
-                  activeOpacity={0.8}
-                  className="flex-1 bg-slate-100 py-3 rounded-2xl flex-row items-center justify-center border border-slate-200"
-                  style={{ gap: 6 }}
-                >
-                  <Download size={16} color="#0F172A" />
-                  <Text className="text-xs font-black text-slate-800">Save PDF</Text>
-                </TouchableOpacity>
+              <Text style={[styles.sectionCardDesc, { color: colors.textSecondary }]}>
+                Record patient's personal clinical history: past surgeries, hospitalizations, prior major illnesses & long-term therapies (not family records).
+              </Text>
 
-                <TouchableOpacity
-                  onPress={handleShareRx}
-                  activeOpacity={0.8}
-                  className="flex-1 bg-teal-50 py-3 rounded-2xl flex-row items-center justify-center border border-teal-200"
-                  style={{ gap: 6 }}
-                >
-                  <Share2 size={16} color="#00B39B" />
-                  <Text className="text-xs font-black text-[#00B39B]">Share WhatsApp</Text>
-                </TouchableOpacity>
-              </View>
-
-              <Button
-                title="Finish & Return to OPD Queue"
-                onPress={() => {
-                  setShowPrescriptionPass(false);
-                  router.replace('/(doctor)/(tabs)/home');
-                }}
-                variant="primary"
-                size="lg"
+              <SmartMedicalTextInput
+                label="Clinical Past History Notes"
+                value={patientClinicalHistory}
+                onChangeText={setPatientClinicalHistory}
+                placeholder="Record past surgeries, hospital admissions, previous illness episodes..."
+                multiline
+                numberOfLines={4}
+                quickSuggestions={[
+                  'No past surgical procedures or hospital admissions',
+                  'History of COVID-19 pneumonitis (2021, resolved)',
+                  'Appendectomy (2018, laparoscopic, uncomplicated)',
+                  'Diagnosed dyslipidemia on regular Statin therapy',
+                  'No history of TB, Asthma, Epilepsy or CAD',
+                ]}
               />
             </View>
+
+            {/* Chronic Conditions */}
+            <View style={[styles.sectionCard, { backgroundColor: colors.card, borderColor: colors.border }]}>
+              <Text style={[styles.sectionCardTitle, { color: colors.text, marginBottom: 10 }]}>Chronic Conditions</Text>
+
+              <View style={styles.conditionList}>
+                {chronicConditions.map((cond) => (
+                  <View key={cond.id} style={[styles.conditionItem, { backgroundColor: colors.backgroundElement }]}>
+                    <View style={{ flex: 1 }}>
+                      <Text style={[styles.condName, { color: colors.text }]}>{cond.name}</Text>
+                      <Text style={[styles.condSub, { color: colors.textSecondary }]}>{cond.detail}</Text>
+                    </View>
+                    <View style={[styles.condTag, { backgroundColor: '#DBEAFE' }]}>
+                      <Text style={styles.condTagText}>{cond.status}</Text>
+                    </View>
+                  </View>
+                ))}
+              </View>
+            </View>
+
+            {/* Recent Visits */}
+            <View style={[styles.sectionCard, { backgroundColor: colors.card, borderColor: colors.border }]}>
+              <View style={styles.sectionCardHeader}>
+                <Text style={[styles.sectionCardTitle, { color: colors.text }]}>Recent Consultations</Text>
+                <Text style={[styles.viewAllLink, { color: StitchColors.primaryContainer }]}>View Full Timeline</Text>
+              </View>
+
+              <View style={styles.recentVisitsList}>
+                <View style={[styles.recentVisitItem, { backgroundColor: colors.backgroundElement }]}>
+                  <View style={styles.recentVisitLeft}>
+                    <View style={[styles.recentVisitIcon, { backgroundColor: '#EFF6FF' }]}>
+                      <Calendar size={16} color={StitchColors.primaryContainer} />
+                    </View>
+                    <View>
+                      <Text style={[styles.recentVisitName, { color: colors.text }]}>Routine Checkup</Text>
+                      <Text style={[styles.recentVisitDate, { color: colors.textSecondary }]}>12 Jan 2026 • Dr. Rajesh Sharma</Text>
+                    </View>
+                  </View>
+                  <Text style={[styles.recentVisitBp, { color: colors.textSecondary }]}>BP 124/82</Text>
+                </View>
+
+                <View style={[styles.recentVisitItem, { backgroundColor: colors.backgroundElement }]}>
+                  <View style={styles.recentVisitLeft}>
+                    <View style={[styles.recentVisitIcon, { backgroundColor: '#EFF6FF' }]}>
+                      <Stethoscope size={16} color={StitchColors.primaryContainer} />
+                    </View>
+                    <View>
+                      <Text style={[styles.recentVisitName, { color: colors.text }]}>Acute Gastritis</Text>
+                      <Text style={[styles.recentVisitDate, { color: colors.textSecondary }]}>04 Oct 2025 • Dr. Anita Roy</Text>
+                    </View>
+                  </View>
+                  <View style={[styles.resolvedBadge, { backgroundColor: '#CCFBF1' }]}>
+                    <Text style={styles.resolvedBadgeText}>Resolved</Text>
+                  </View>
+                </View>
+              </View>
+            </View>
+          </Animated.View>
+        )}
+
+        {/* TAB 2: Past History */}
+        {activeTab === 'history' && (
+          <Animated.View entering={FadeIn.duration(200)} style={styles.tabContentBlock}>
+            <View style={[styles.sectionCard, { backgroundColor: colors.card, borderColor: colors.border }]}>
+              <Text style={[styles.sectionCardTitle, { color: colors.text, marginBottom: 12 }]}>Comprehensive History</Text>
+
+              <View style={styles.historyList}>
+                <View style={[styles.historyItem, { backgroundColor: colors.backgroundElement }]}>
+                  <Text style={[styles.historyLabel, { color: colors.text }]}>Family History</Text>
+                  <Text style={[styles.historyDesc, { color: colors.textSecondary }]}>
+                    Paternal: Type-2 Diabetes, CAD at 62. Maternal: No major cardiovascular issues.
+                  </Text>
+                </View>
+
+                <View style={[styles.historyItem, { backgroundColor: colors.backgroundElement }]}>
+                  <Text style={[styles.historyLabel, { color: colors.text }]}>Surgical History</Text>
+                  <Text style={[styles.historyDesc, { color: colors.textSecondary }]}>
+                    Laparoscopic Appendectomy (2018). Uneventful recovery.
+                  </Text>
+                </View>
+
+                <View style={[styles.historyItem, { backgroundColor: colors.backgroundElement }]}>
+                  <Text style={[styles.historyLabel, { color: colors.text }]}>Active Routine Medications</Text>
+                  <Text style={[styles.historyDesc, { color: colors.textSecondary }]}>
+                    Telmisartan 40mg (OD morning). Montelukast 10mg PRN for cough/wheezing.
+                  </Text>
+                </View>
+              </View>
+            </View>
+          </Animated.View>
+        )}
+
+        {/* TAB 3: Lab Reports */}
+        {activeTab === 'labs' && (
+          <Animated.View entering={FadeIn.duration(200)} style={styles.tabContentBlock}>
+            <View style={[styles.sectionCard, { backgroundColor: colors.card, borderColor: colors.border }]}>
+              <Text style={[styles.sectionCardTitle, { color: colors.text, marginBottom: 12 }]}>Diagnostic Reports</Text>
+
+              <View style={styles.labsList}>
+                <View style={[styles.labReportCard, { backgroundColor: colors.backgroundElement }]}>
+                  <View>
+                    <Text style={[styles.labReportTitle, { color: colors.text }]}>Complete Blood Count (CBC)</Text>
+                    <Text style={[styles.labReportMeta, { color: colors.textSecondary }]}>12 Jan 2026 • FiYDOC Diagnostics</Text>
+                  </View>
+                  <View style={[styles.labStatusBadge, { backgroundColor: '#CCFBF1' }]}>
+                    <Text style={styles.labStatusBadgeText}>All Normal</Text>
+                  </View>
+                </View>
+
+                <View style={[styles.labReportCard, { backgroundColor: colors.backgroundElement }]}>
+                  <View>
+                    <Text style={[styles.labReportTitle, { color: colors.text }]}>Lipid Profile & HbA1c</Text>
+                    <Text style={[styles.labReportMeta, { color: colors.textSecondary }]}>12 Jan 2026 • HbA1c: 5.6% | LDL: 108</Text>
+                  </View>
+                  <View style={[styles.labStatusBadge, { backgroundColor: '#EFF6FF' }]}>
+                    <Text style={[styles.labStatusBadgeText, { color: StitchColors.primaryContainer }]}>In Range</Text>
+                  </View>
+                </View>
+              </View>
+            </View>
+          </Animated.View>
+        )}
+      </ScrollView>
+
+      {/* 4. Bottom Action Bar: Audio Dictation, MS Paint Style Drawing Notepad, Proceed to Rx */}
+      <View style={[styles.bottomBar, { borderTopColor: colors.border, backgroundColor: colors.card }]}>
+        {/* Voice Dictation */}
+        <Pressable
+          onPress={toggleDictation}
+          style={[
+            styles.bottomToolBtn,
+            { backgroundColor: colors.backgroundElement, borderColor: colors.border },
+            isRecording && { backgroundColor: '#FEE2E2', borderColor: '#FCA5A5' },
+          ]}
+          accessibilityLabel="Audio Dictation"
+        >
+          {isRecording ? <MicOff size={20} color={StitchColors.error} /> : <Mic size={20} color={colors.text} />}
+        </Pressable>
+
+        {/* Freehand MS Paint Style Drawing & Notepad Canvas Button */}
+        <Pressable
+          onPress={() => setShowDrawingModal(true)}
+          style={[
+            styles.bottomToolBtn,
+            { backgroundColor: colors.backgroundElement, borderColor: colors.border },
+            savedNotesCount > 0 && { backgroundColor: '#EFF6FF', borderColor: StitchColors.primaryContainer },
+          ]}
+          accessibilityLabel="Open Freehand Drawing Notepad"
+        >
+          <Edit3 size={20} color={savedNotesCount > 0 ? StitchColors.primaryContainer : colors.text} />
+        </Pressable>
+
+        {/* Primary Action: Proceed to Prescription */}
+        <Pressable
+          onPress={() => {
+            if (Platform.OS !== 'web') {
+              Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+            }
+            setRxPadVisible(true);
+            setRxStep(1);
+          }}
+          style={[styles.proceedRxBtn, { backgroundColor: StitchColors.primaryContainer }]}
+        >
+          <Text style={styles.proceedRxBtnText}>Proceed to Prescription</Text>
+          <ArrowRight size={16} color="#FFFFFF" strokeWidth={2.4} />
+        </Pressable>
+      </View>
+
+      {/* 5. Freehand MS Paint Style Drawing Canvas Modal */}
+      <ClinicalDrawingNotepad
+        visible={showDrawingModal}
+        patientName={currentApt?.patientName || 'Aarav Mehta'}
+        initialNotes={physicalObservation}
+        onClose={() => setShowDrawingModal(false)}
+        onSaveNotes={(notes, hasDrawing) => {
+          if (notes) setPhysicalObservation(notes);
+          if (hasDrawing) setSavedNotesCount((prev) => prev + 1);
+        }}
+      />
+
+      {/* 6. EDIT VITALS MODAL */}
+      <Modal visible={showVitalsModal} transparent animationType="slide">
+        <View style={styles.modalBackdrop}>
+          <View style={[styles.modalCard, { backgroundColor: colors.card, borderColor: colors.border }]}>
+            <View style={styles.modalHeader}>
+              <Text style={[styles.modalTitle, { color: colors.text }]}>Update Patient Vitals</Text>
+              <Pressable onPress={() => setShowVitalsModal(false)} style={styles.modalCloseBtn}>
+                <X size={18} color={colors.text} />
+              </Pressable>
+            </View>
+
+            <View style={styles.vitalsEditGrid}>
+              <View style={styles.vitalsEditItem}>
+                <Text style={[styles.vitalsEditLabel, { color: colors.textSecondary }]}>Systolic BP (mmHg)</Text>
+                <TextInput
+                  value={tempVitals.bpSystolic}
+                  onChangeText={(val) => setTempVitals({ ...tempVitals, bpSystolic: val })}
+                  keyboardType="numeric"
+                  style={[styles.vitalsEditInput, { color: colors.text, borderColor: colors.border }]}
+                />
+              </View>
+
+              <View style={styles.vitalsEditItem}>
+                <Text style={[styles.vitalsEditLabel, { color: colors.textSecondary }]}>Diastolic BP (mmHg)</Text>
+                <TextInput
+                  value={tempVitals.bpDiastolic}
+                  onChangeText={(val) => setTempVitals({ ...tempVitals, bpDiastolic: val })}
+                  keyboardType="numeric"
+                  style={[styles.vitalsEditInput, { color: colors.text, borderColor: colors.border }]}
+                />
+              </View>
+
+              <View style={styles.vitalsEditItem}>
+                <Text style={[styles.vitalsEditLabel, { color: colors.textSecondary }]}>Pulse Rate (bpm)</Text>
+                <TextInput
+                  value={tempVitals.pulse}
+                  onChangeText={(val) => setTempVitals({ ...tempVitals, pulse: val })}
+                  keyboardType="numeric"
+                  style={[styles.vitalsEditInput, { color: colors.text, borderColor: colors.border }]}
+                />
+              </View>
+
+              <View style={styles.vitalsEditItem}>
+                <Text style={[styles.vitalsEditLabel, { color: colors.textSecondary }]}>Temperature (°F)</Text>
+                <TextInput
+                  value={tempVitals.temp}
+                  onChangeText={(val) => setTempVitals({ ...tempVitals, temp: val })}
+                  keyboardType="numeric"
+                  style={[styles.vitalsEditInput, { color: colors.text, borderColor: colors.border }]}
+                />
+              </View>
+
+              <View style={styles.vitalsEditItem}>
+                <Text style={[styles.vitalsEditLabel, { color: colors.textSecondary }]}>SpO₂ Saturation (%)</Text>
+                <TextInput
+                  value={tempVitals.spO2}
+                  onChangeText={(val) => setTempVitals({ ...tempVitals, spO2: val })}
+                  keyboardType="numeric"
+                  style={[styles.vitalsEditInput, { color: colors.text, borderColor: colors.border }]}
+                />
+              </View>
+
+              <View style={styles.vitalsEditItem}>
+                <Text style={[styles.vitalsEditLabel, { color: colors.textSecondary }]}>Weight (kg)</Text>
+                <TextInput
+                  value={tempVitals.weight}
+                  onChangeText={(val) => setTempVitals({ ...tempVitals, weight: val })}
+                  keyboardType="numeric"
+                  style={[styles.vitalsEditInput, { color: colors.text, borderColor: colors.border }]}
+                />
+              </View>
+            </View>
+
+            <Pressable
+              onPress={handleSaveVitals}
+              style={[styles.saveModalBtn, { backgroundColor: StitchColors.primaryContainer }]}
+            >
+              <Check size={16} color="#FFFFFF" />
+              <Text style={styles.saveModalBtnText}>Save Baseline Vitals</Text>
+            </Pressable>
           </View>
-        </ScrollView>
+        </View>
       </Modal>
+
+      {/* 7. COMPREHENSIVE PRESCRIPTION BUILDER MODAL */}
+      <Modal visible={rxPadVisible} animationType="slide">
+        <SafeAreaView style={[styles.safeArea, { backgroundColor: colors.background }]} edges={['top', 'bottom']}>
+          {/* Rx Pad Header */}
+          <View style={[styles.headerBar, { borderBottomColor: colors.border, backgroundColor: colors.card }]}>
+            <Pressable
+              onPress={() => {
+                if (rxStep > 1) {
+                  setRxStep((rxStep - 1) as any);
+                } else {
+                  setRxPadVisible(false);
+                }
+              }}
+              style={[styles.backBtn, { backgroundColor: colors.backgroundElement }]}
+            >
+              <ArrowLeft size={18} color={colors.text} />
+            </Pressable>
+
+            <View style={{ alignItems: 'center' }}>
+              <Text style={[styles.headerTitle, { color: colors.text }]}>Write Prescription</Text>
+              <Text style={[styles.headerSub, { color: colors.textSecondary }]}>
+                {currentApt?.patientName || 'Aarav Mehta'} (38M, UHID-9042)
+              </Text>
+            </View>
+
+            <Image source={{ uri: DOCTOR_AVATAR }} style={styles.headerDoctorImg} />
+          </View>
+
+          {/* Rx Steps Tab Strip (Horizontal Scrollable, Never Clips on Small Screens) */}
+          <View style={[styles.stepTabsContainer, { backgroundColor: colors.card, borderBottomColor: colors.border }]}>
+            <ScrollView
+              horizontal
+              showsHorizontalScrollIndicator={false}
+              contentContainerStyle={styles.stepTabsScrollContent}
+            >
+              {[
+                { num: 1, label: 'Diagnosis' },
+                { num: 2, label: 'Medicines' },
+                { num: 3, label: 'Tests' },
+                { num: 4, label: 'Advice' },
+                { num: 5, label: 'Summary' },
+              ].map((st) => {
+                const isActive = rxStep === st.num;
+                const isCompleted = rxStep > st.num;
+
+                return (
+                  <Pressable
+                    key={st.num}
+                    onPress={() => {
+                      if (Platform.OS !== 'web') {
+                        Haptics.selectionAsync();
+                      }
+                      setRxStep(st.num as any);
+                    }}
+                    style={[
+                      styles.stepTabChip,
+                      {
+                        backgroundColor: isActive
+                          ? StitchColors.primaryContainer
+                          : isCompleted
+                          ? '#ECFDF5'
+                          : colors.backgroundElement,
+                        borderColor: isActive
+                          ? StitchColors.primaryContainer
+                          : isCompleted
+                          ? '#A7F3D0'
+                          : colors.border,
+                      },
+                    ]}
+                  >
+                    <View
+                      style={[
+                        styles.stepBadgeCircle,
+                        {
+                          backgroundColor: isActive
+                            ? 'rgba(255, 255, 255, 0.25)'
+                            : isCompleted
+                            ? '#059669'
+                            : colors.border,
+                        },
+                      ]}
+                    >
+                      {isCompleted ? (
+                        <Check size={10} color="#FFFFFF" strokeWidth={3} />
+                      ) : (
+                        <Text
+                          style={[
+                            styles.stepBadgeNum,
+                            { color: isActive ? '#FFFFFF' : colors.textSecondary },
+                          ]}
+                        >
+                          {st.num}
+                        </Text>
+                      )}
+                    </View>
+                    <Text
+                      numberOfLines={1}
+                      style={[
+                        styles.stepTabChipText,
+                        {
+                          color: isActive ? '#FFFFFF' : isCompleted ? '#065F46' : colors.text,
+                          fontWeight: isActive ? '700' : '600',
+                        },
+                      ]}
+                    >
+                      {st.label}
+                    </Text>
+                  </Pressable>
+                );
+              })}
+            </ScrollView>
+          </View>
+
+          <ScrollView contentContainerStyle={styles.scrollContent} showsVerticalScrollIndicator={false}>
+            {/* STEP 1: Diagnosis with Complete Catalog & Recommendations */}
+            {rxStep === 1 && (
+              <Animated.View entering={FadeIn.duration(200)} style={styles.rxCardBody}>
+                <View style={[styles.sectionCard, { backgroundColor: colors.card, borderColor: colors.border }]}>
+                  <View style={styles.rxCardHeader}>
+                    <Text style={[styles.cardHeaderTitle, { color: colors.text }]}>Diagnosis (ICD-10)</Text>
+                    <Text style={[styles.cardHeaderSub, { color: colors.textSecondary }]}>
+                      {diagnoses.length} selected
+                    </Text>
+                  </View>
+
+                  {/* Diagnosis Search Bar with Comprehensive Autocomplete */}
+                  <View style={[styles.rxSearchBox, { backgroundColor: colors.backgroundElement, borderColor: colors.border }]}>
+                    <TextInput
+                      placeholder="Search any ICD-10 diagnosis (e.g. Bronchitis, Hypertension, Diabetes)..."
+                      placeholderTextColor={colors.textMuted}
+                      value={diagSearch}
+                      onChangeText={setDiagSearch}
+                      style={[styles.rxSearchInput, { color: colors.text }]}
+                    />
+                    {diagSearch.length > 0 && (
+                      <Pressable onPress={() => setDiagSearch('')}>
+                        <X size={16} color={colors.textMuted} />
+                      </Pressable>
+                    )}
+                  </View>
+
+                  {/* Specialty Category Pills */}
+                  <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.categoryScroll}>
+                    {['All', 'Respiratory', 'Cardiovascular', 'Gastrointestinal', 'Endocrine', 'Musculoskeletal', 'Infectious'].map((cat) => (
+                      <Pressable
+                        key={cat}
+                        onPress={() => setSelectedDiagCategory(cat)}
+                        style={[
+                          styles.catPill,
+                          selectedDiagCategory === cat && { backgroundColor: StitchColors.primaryContainer },
+                        ]}
+                      >
+                        <Text
+                          style={[
+                            styles.catPillText,
+                            { color: selectedDiagCategory === cat ? '#FFFFFF' : colors.textSecondary },
+                          ]}
+                        >
+                          {cat}
+                        </Text>
+                      </Pressable>
+                    ))}
+                  </ScrollView>
+
+                  {/* Recommendations / Search Results */}
+                  <View style={styles.diagSuggestionsBox}>
+                    <Text style={[styles.suggestionHeader, { color: colors.textSecondary }]}>
+                      {diagSearch ? 'Matching Diagnoses' : 'Recommended OPD Diagnoses'}
+                    </Text>
+                    <View style={styles.diagChipsWrap}>
+                      {filteredDiagnoses.slice(0, 8).map((d) => (
+                        <Pressable
+                          key={d.code}
+                          onPress={() => handleAddCustomDiagnosis(d.name, d.code)}
+                          style={[styles.diagAddChip, { backgroundColor: colors.backgroundElement, borderColor: colors.border }]}
+                        >
+                          <Plus size={12} color={StitchColors.primaryContainer} />
+                          <Text style={[styles.diagAddChipText, { color: colors.text }]}>
+                            {d.name} <Text style={{ color: colors.textMuted }}>({d.code})</Text>
+                          </Text>
+                        </Pressable>
+                      ))}
+                    </View>
+                  </View>
+
+                  {/* Selected Diagnoses with Primary / Secondary priority */}
+                  <Text style={[styles.selectedHeader, { color: colors.textSecondary }]}>SELECTED DIAGNOSES</Text>
+                  <View style={styles.diagList}>
+                    {diagnoses.map((d) => (
+                      <View key={d.code} style={[styles.diagItemRow, { backgroundColor: colors.backgroundElement }]}>
+                        <View style={{ flex: 1, flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+                          <Pressable
+                            onPress={() => handleToggleDiagPriority(d.code)}
+                            style={[
+                              styles.priorityPill,
+                              { backgroundColor: d.priority === 'Primary' ? StitchColors.primaryContainer : colors.border },
+                            ]}
+                          >
+                            <Text style={styles.priorityPillText}>{d.priority}</Text>
+                          </Pressable>
+                          <Text style={[styles.diagNameText, { color: colors.text }]}>
+                            {d.name} <Text style={{ color: colors.textMuted }}>({d.code})</Text>
+                          </Text>
+                        </View>
+                        <Pressable onPress={() => handleRemoveDiag(d.code)} hitSlop={{ top: 6, bottom: 6, left: 6, right: 6 }}>
+                          <Trash2 size={16} color={StitchColors.error} />
+                        </Pressable>
+                      </View>
+                    ))}
+                  </View>
+
+                  {/* Clinical Impression Note with Smart Autocompletion */}
+                  <SmartMedicalTextInput
+                    label="Doctor's Clinical Impression / Notes"
+                    value={chiefComplaint}
+                    onChangeText={setChiefComplaint}
+                    placeholder="Type clinical summary..."
+                    multiline
+                    numberOfLines={3}
+                  />
+                </View>
+              </Animated.View>
+            )}
+
+            {/* STEP 2: Prescribed Medications with Full Catalog & Form Editor */}
+            {rxStep === 2 && (
+              <Animated.View entering={FadeIn.duration(200)} style={styles.rxCardBody}>
+                <View style={[styles.sectionCard, { backgroundColor: colors.card, borderColor: colors.border }]}>
+                  <View style={styles.rxCardHeader}>
+                    <Text style={[styles.cardHeaderTitle, { color: colors.text }]}>Prescribed Medications (Rx)</Text>
+                    <Text style={[styles.cardHeaderSub, { color: colors.textSecondary }]}>
+                      {medications.length} items
+                    </Text>
+                  </View>
+
+                  {/* Medication Search Input */}
+                  <View style={[styles.rxSearchBox, { backgroundColor: colors.backgroundElement, borderColor: colors.border }]}>
+                    <TextInput
+                      placeholder="Search medicine (e.g. Augmentin, Dolo, Pantocid, Azithromycin)..."
+                      placeholderTextColor={colors.textMuted}
+                      value={medSearch}
+                      onChangeText={setMedSearch}
+                      style={[styles.rxSearchInput, { color: colors.text }]}
+                    />
+                  </View>
+
+                  {/* Search Results from MEDICATIONS_CATALOG */}
+                  {filteredMeds.length > 0 && (
+                    <View style={[styles.medsDropdown, { backgroundColor: colors.card, borderColor: colors.border }]}>
+                      {filteredMeds.slice(0, 5).map((med) => (
+                        <Pressable
+                          key={med.name}
+                          onPress={() => handleAddMedicationFromCatalog(med)}
+                          style={[styles.medDropdownItem, { borderBottomColor: colors.border }]}
+                        >
+                          <View style={{ flex: 1 }}>
+                            <Text style={[styles.medDropdownName, { color: colors.text }]}>{med.name}</Text>
+                            <Text style={[styles.medDropdownGeneric, { color: colors.textSecondary }]}>
+                              {med.generic} • {med.defaultDosage}
+                            </Text>
+                          </View>
+                          <Plus size={16} color={StitchColors.primaryContainer} />
+                        </Pressable>
+                      ))}
+                    </View>
+                  )}
+
+                  {/* Prescribed Medications List */}
+                  <View style={styles.medsList}>
+                    {medications.map((m) => (
+                      <View key={m.id} style={[styles.medCard, { backgroundColor: colors.backgroundElement, borderColor: colors.border }]}>
+                        <View style={styles.medCardTop}>
+                          <View style={{ flex: 1 }}>
+                            <Text style={[styles.medName, { color: colors.text }]}>{m.name}</Text>
+                            <Text style={[styles.medGeneric, { color: colors.textSecondary }]}>{m.generic}</Text>
+                          </View>
+                          <View style={{ flexDirection: 'row', gap: 10 }}>
+                            <Pressable
+                              onPress={() => {
+                                setEditingMed(m);
+                                setShowMedModal(true);
+                              }}
+                              hitSlop={{ top: 6, bottom: 6, left: 6, right: 6 }}
+                            >
+                              <Edit3 size={16} color={StitchColors.primaryContainer} />
+                            </Pressable>
+                            <Pressable
+                              onPress={() => setMedications(medications.filter((x) => x.id !== m.id))}
+                              hitSlop={{ top: 6, bottom: 6, left: 6, right: 6 }}
+                            >
+                              <Trash2 size={16} color={StitchColors.error} />
+                            </Pressable>
+                          </View>
+                        </View>
+
+                        <View style={styles.medPillStrip}>
+                          <View style={[styles.medPill, { backgroundColor: colors.card }]}>
+                            <Text style={[styles.medPillText, { color: StitchColors.primaryContainer }]}>{m.dosage}</Text>
+                          </View>
+                          <View style={[styles.medPill, { backgroundColor: colors.card }]}>
+                            <Text style={[styles.medPillText, { color: colors.text }]}>{m.timing}</Text>
+                          </View>
+                          <View style={[styles.medPill, { backgroundColor: colors.card }]}>
+                            <Text style={[styles.medPillText, { color: colors.textSecondary }]}>{m.duration}</Text>
+                          </View>
+                        </View>
+                        <Text style={[styles.medInstructions, { color: StitchColors.secondaryContainer }]}>
+                          ✓ {m.instructions}
+                        </Text>
+                      </View>
+                    ))}
+                  </View>
+
+                  {/* Quick Combos */}
+                  <View style={styles.combosRow}>
+                    <Text style={[styles.combosLabel, { color: colors.textSecondary }]}>Quick Combos:</Text>
+                    <Pressable
+                      onPress={() => {
+                        handleAddMedicationFromCatalog(MEDICATIONS_CATALOG[0]); // Augmentin
+                        handleAddMedicationFromCatalog(MEDICATIONS_CATALOG[5]); // Dolo
+                      }}
+                      style={[styles.comboChip, { backgroundColor: colors.backgroundElement }]}
+                    >
+                      <Text style={[styles.comboChipText, { color: StitchColors.primaryContainer }]}>+ Antibiotic Pack</Text>
+                    </Pressable>
+                    <Pressable
+                      onPress={() => handleAddMedicationFromCatalog(MEDICATIONS_CATALOG[9])} // Pantocid
+                      style={[styles.comboChip, { backgroundColor: colors.backgroundElement }]}
+                    >
+                      <Text style={[styles.comboChipText, { color: StitchColors.primaryContainer }]}>+ Antacid Coverage</Text>
+                    </Pressable>
+                  </View>
+
+                  {/* Add Custom Medicine Button */}
+                  <Pressable
+                    onPress={() => {
+                      setEditingMed({
+                        id: `med_${Date.now()}`,
+                        name: '',
+                        generic: '',
+                        dosage: '1 - 0 - 1',
+                        frequency: 'Twice daily',
+                        duration: '5 Days',
+                        timing: 'After meals',
+                        instructions: 'Complete course',
+                      });
+                      setShowMedModal(true);
+                    }}
+                    style={[styles.addMedBtn, { borderColor: StitchColors.primaryContainer }]}
+                  >
+                    <Plus size={16} color={StitchColors.primaryContainer} />
+                    <Text style={styles.addMedBtnText}>Add Custom Medication</Text>
+                  </Pressable>
+                </View>
+              </Animated.View>
+            )}
+
+            {/* STEP 3: Tests & Labs with Catalog */}
+            {rxStep === 3 && (
+              <Animated.View entering={FadeIn.duration(200)} style={styles.rxCardBody}>
+                <View style={[styles.sectionCard, { backgroundColor: colors.card, borderColor: colors.border }]}>
+                  <View style={styles.rxCardHeader}>
+                    <Text style={[styles.cardHeaderTitle, { color: colors.text }]}>Labs & Imaging</Text>
+                    <Text style={[styles.cardHeaderSub, { color: colors.textSecondary }]}>
+                      {labTests.length} tests ordered
+                    </Text>
+                  </View>
+
+                  {/* Test Search */}
+                  <View style={[styles.rxSearchBox, { backgroundColor: colors.backgroundElement, borderColor: colors.border }]}>
+                    <TextInput
+                      placeholder="Search lab tests (e.g. CBC, HbA1c, LFT, Chest X-Ray, ECG)..."
+                      placeholderTextColor={colors.textMuted}
+                      value={testSearch}
+                      onChangeText={setTestSearch}
+                      style={[styles.rxSearchInput, { color: colors.text }]}
+                    />
+                  </View>
+
+                  {/* Selected Tests Pills */}
+                  <View style={styles.labPillsWrap}>
+                    {labTests.map((t) => (
+                      <View key={t} style={[styles.testBadge, { backgroundColor: '#CCFBF1' }]}>
+                        <Text style={styles.testBadgeText}>{t}</Text>
+                        <Pressable onPress={() => setLabTests(labTests.filter((x) => x !== t))}>
+                          <X size={14} color={StitchColors.secondary} />
+                        </Pressable>
+                      </View>
+                    ))}
+                  </View>
+
+                  {/* Common Test Recommendations */}
+                  <Text style={[styles.suggestionHeader, { color: colors.textSecondary, marginTop: 12 }]}>
+                    Diagnostic Recommendations (Tap to add)
+                  </Text>
+                  <View style={styles.testRecommendationsGrid}>
+                    {filteredTests.slice(0, 10).map((test) => (
+                      <Pressable
+                        key={test.name}
+                        onPress={() => {
+                          if (!labTests.includes(test.name)) {
+                            setLabTests([...labTests, test.name]);
+                            if (Platform.OS !== 'web') Haptics.selectionAsync();
+                          }
+                        }}
+                        style={[
+                          styles.testRecChip,
+                          {
+                            backgroundColor: labTests.includes(test.name) ? '#CCFBF1' : colors.backgroundElement,
+                            borderColor: labTests.includes(test.name) ? StitchColors.secondary : colors.border,
+                          },
+                        ]}
+                      >
+                        <Plus size={12} color={labTests.includes(test.name) ? StitchColors.secondary : StitchColors.primaryContainer} />
+                        <Text style={[styles.testRecChipText, { color: colors.text }]}>{test.name}</Text>
+                      </Pressable>
+                    ))}
+                  </View>
+
+                  {/* Add Custom Test */}
+                  <View style={styles.customTestRow}>
+                    <TextInput
+                      value={customTestInput}
+                      onChangeText={setCustomTestInput}
+                      placeholder="Type custom test or imaging..."
+                      placeholderTextColor={colors.textMuted}
+                      style={[styles.customTestInput, { color: colors.text, borderColor: colors.border }]}
+                    />
+                    <Pressable
+                      onPress={() => {
+                        if (customTestInput.trim()) {
+                          setLabTests([...labTests, customTestInput.trim()]);
+                          setCustomTestInput('');
+                        }
+                      }}
+                      style={[styles.customTestAddBtn, { backgroundColor: StitchColors.secondaryContainer }]}
+                    >
+                      <Plus size={16} color="#FFFFFF" />
+                    </Pressable>
+                  </View>
+                </View>
+              </Animated.View>
+            )}
+
+            {/* STEP 4: Advice, Lifestyle & Review Date */}
+            {rxStep === 4 && (
+              <Animated.View entering={FadeIn.duration(200)} style={styles.rxCardBody}>
+                <View style={[styles.sectionCard, { backgroundColor: colors.card, borderColor: colors.border }]}>
+                  <Text style={[styles.cardHeaderTitle, { color: colors.text, marginBottom: 12 }]}>
+                    Advice & Review Date
+                  </Text>
+
+                  {/* Lifestyle instructions */}
+                  <Text style={[styles.selectedHeader, { color: colors.textSecondary }]}>LIFESTYLE INSTRUCTIONS</Text>
+                  <View style={styles.adviceChecklist}>
+                    {lifestyleInstructions.map((item) => (
+                      <Pressable
+                        key={item.id}
+                        onPress={() => {
+                          setLifestyleInstructions(
+                            lifestyleInstructions.map((x) =>
+                              x.id === item.id ? { ...x, checked: !x.checked } : x
+                            )
+                          );
+                        }}
+                        style={[styles.adviceItem, { backgroundColor: colors.backgroundElement }]}
+                      >
+                        <View
+                          style={[
+                            styles.checkbox,
+                            {
+                              borderColor: item.checked ? StitchColors.secondaryContainer : colors.border,
+                              backgroundColor: item.checked ? StitchColors.secondaryContainer : 'transparent',
+                            },
+                          ]}
+                        >
+                          {item.checked && <Check size={12} color="#FFFFFF" />}
+                        </View>
+                        <Text style={[styles.adviceText, { color: colors.text }]}>{item.text}</Text>
+                      </Pressable>
+                    ))}
+                  </View>
+
+                  {/* Follow-up Selector */}
+                  <Text style={[styles.selectedHeader, { color: colors.textSecondary, marginTop: 14 }]}>
+                    FOLLOW-UP CONSULTATION
+                  </Text>
+                  <View style={styles.followUpGrid}>
+                    {['3 Days', '5 Days (18 March)', '1 Week', '2 Weeks', '1 Month'].map((period) => (
+                      <Pressable
+                        key={period}
+                        onPress={() => setFollowUpDays(period)}
+                        style={[
+                          styles.followUpPill,
+                          {
+                            backgroundColor: followUpDays === period ? StitchColors.primaryContainer : colors.backgroundElement,
+                            borderColor: followUpDays === period ? StitchColors.primaryContainer : colors.border,
+                          },
+                        ]}
+                      >
+                        <Text
+                          style={[
+                            styles.followUpPillText,
+                            { color: followUpDays === period ? '#FFFFFF' : colors.text },
+                          ]}
+                        >
+                          {period}
+                        </Text>
+                      </Pressable>
+                    ))}
+                  </View>
+
+                  {/* Emergency Warning with Medical Autocompletion */}
+                  <SmartMedicalTextInput
+                    label="Emergency Red-Flag Warnings"
+                    value={emergencyWarning}
+                    onChangeText={setEmergencyWarning}
+                    placeholder="Type emergency instructions..."
+                    multiline
+                    numberOfLines={3}
+                    quickSuggestions={[
+                      'Return immediately if difficulty breathing develops',
+                      'Seek emergency care if fever >102°F persists',
+                      'Visit ER if chest pressure or severe dizziness occurs',
+                    ]}
+                  />
+                </View>
+              </Animated.View>
+            )}
+
+            {/* STEP 5: Prescription Summary & Digital Sign-off */}
+            {rxStep === 5 && (
+              <Animated.View entering={FadeIn.duration(200)} style={styles.rxCardBody}>
+                {/* Letterhead Preview Card */}
+                <View style={[styles.summaryLetterheadCard, { backgroundColor: colors.card, borderColor: colors.border }]}>
+                  {/* Doctor Info */}
+                  <View style={styles.letterheadTop}>
+                    <View style={{ flex: 1 }}>
+                      <Text style={[styles.letterheadDocName, { color: colors.text }]}>Dr. Rajesh Sharma</Text>
+                      <Text style={[styles.letterheadDocQual, { color: colors.textSecondary }]}>MD (Cardiology), MBBS</Text>
+                      <Text style={[styles.letterheadReg, { color: colors.textMuted }]}>Reg: MMC/2014/08/3821</Text>
+                    </View>
+                    <View style={styles.letterheadHospitalBox}>
+                      <Text style={[styles.hospitalName, { color: StitchColors.primaryContainer }]}>Fortis Hospital OPD</Text>
+                      <Text style={[styles.hospitalDate, { color: colors.textSecondary }]}>
+                        {new Date().toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' })}
+                      </Text>
+                    </View>
+                  </View>
+
+                  {/* Patient Info Strip */}
+                  <View style={[styles.letterheadPatientStrip, { backgroundColor: colors.backgroundElement }]}>
+                    <Text style={[styles.lhPatientName, { color: colors.text }]}>
+                      Patient: {currentApt?.patientName || 'Aarav Mehta'} (38M)
+                    </Text>
+                    <Text style={[styles.lhVitalsText, { color: colors.textSecondary }]}>
+                      BP: {vitals.bpSystolic}/{vitals.bpDiastolic} • Pulse: {vitals.pulse} bpm • Temp: {vitals.temp}°F
+                    </Text>
+                  </View>
+
+                  {/* Diagnoses Summary */}
+                  <View style={styles.summarySection}>
+                    <Text style={[styles.summarySectionHeading, { color: StitchColors.primaryContainer }]}>DIAGNOSIS</Text>
+                    <Text style={[styles.summarySectionBody, { color: colors.text }]}>
+                      {diagnoses.map((d) => `${d.name} (${d.code}) [${d.priority}]`).join(', ')}
+                    </Text>
+                  </View>
+
+                  {/* Medicines Table */}
+                  <View style={styles.summarySection}>
+                    <Text style={[styles.summarySectionHeading, { color: StitchColors.primaryContainer }]}>MEDICATIONS</Text>
+                    {medications.map((m, idx) => (
+                      <View key={m.id} style={styles.summaryMedRow}>
+                        <Text style={[styles.summaryMedNum, { color: colors.textSecondary }]}>{idx + 1}.</Text>
+                        <View style={{ flex: 1 }}>
+                          <Text style={[styles.summaryMedTitle, { color: colors.text }]}>{m.name}</Text>
+                          <Text style={[styles.summaryMedDosage, { color: colors.textSecondary }]}>
+                            {m.dosage} • {m.timing} • {m.duration} ({m.instructions})
+                          </Text>
+                        </View>
+                      </View>
+                    ))}
+                  </View>
+
+                  {/* Lab Tests */}
+                  {labTests.length > 0 && (
+                    <View style={styles.summarySection}>
+                      <Text style={[styles.summarySectionHeading, { color: StitchColors.primaryContainer }]}>INVESTIGATIONS</Text>
+                      <Text style={[styles.summarySectionBody, { color: colors.text }]}>
+                        {labTests.join(', ')}
+                      </Text>
+                    </View>
+                  )}
+
+                  {/* Advice */}
+                  <View style={styles.summarySection}>
+                    <Text style={[styles.summarySectionHeading, { color: StitchColors.primaryContainer }]}>ADVICE & FOLLOW-UP</Text>
+                    <Text style={[styles.summarySectionBody, { color: colors.text }]}>
+                      Follow-up in {followUpDays}. {emergencyWarning}
+                    </Text>
+                  </View>
+
+                  {/* Digital Signature & Seal */}
+                  <View style={styles.signatureRow}>
+                    <View>
+                      <Text style={styles.signedBadge}>✓ EHR Digitally Signed</Text>
+                      <Text style={[styles.signTime, { color: colors.textMuted }]}>
+                        Timestamp: {new Date().toLocaleTimeString()}
+                      </Text>
+                    </View>
+                    <View style={styles.svgSignatureBox}>
+                      <Svg height="36" width="120" viewBox="0 0 140 40">
+                        <Path
+                          d="M8 24C20 18 32 8 38 12C44 16 38 32 48 28C58 24 68 12 82 15C96 18 102 28 122 18C130 14 136 12 138 14"
+                          stroke={StitchColors.primaryContainer}
+                          strokeWidth="2"
+                          fill="none"
+                        />
+                      </Svg>
+                      <Text style={[styles.signerName, { color: colors.text }]}>Dr. Rajesh Sharma</Text>
+                    </View>
+                  </View>
+                </View>
+
+                {/* Delivery Channels */}
+                <View style={[styles.sectionCard, { backgroundColor: colors.card, borderColor: colors.border, marginTop: 12 }]}>
+                  <Text style={[styles.cardHeaderTitle, { color: colors.text, marginBottom: 10 }]}>
+                    Delivery Channels
+                  </Text>
+                  <View style={styles.deliveryList}>
+                    <Pressable
+                      onPress={() => setDeliveryApp(!deliveryApp)}
+                      style={[styles.deliveryItem, { backgroundColor: colors.backgroundElement }]}
+                    >
+                      <View style={{ flex: 1 }}>
+                        <Text style={[styles.deliveryTitle, { color: colors.text }]}>FiYDOC Patient App</Text>
+                        <Text style={[styles.deliverySub, { color: colors.textSecondary }]}>Instant sync to Medical Records</Text>
+                      </View>
+                      <View style={[styles.toggleCheckbox, { backgroundColor: deliveryApp ? StitchColors.secondaryContainer : colors.border }]}>
+                        {deliveryApp && <Check size={14} color="#FFFFFF" />}
+                      </View>
+                    </Pressable>
+
+                    <Pressable
+                      onPress={() => setDeliveryWhatsapp(!deliveryWhatsapp)}
+                      style={[styles.deliveryItem, { backgroundColor: colors.backgroundElement }]}
+                    >
+                      <View style={{ flex: 1 }}>
+                        <Text style={[styles.deliveryTitle, { color: colors.text }]}>WhatsApp PDF Dispatch</Text>
+                        <Text style={[styles.deliverySub, { color: colors.textSecondary }]}>+91 98201 44821</Text>
+                      </View>
+                      <View style={[styles.toggleCheckbox, { backgroundColor: deliveryWhatsapp ? StitchColors.secondaryContainer : colors.border }]}>
+                        {deliveryWhatsapp && <Check size={14} color="#FFFFFF" />}
+                      </View>
+                    </Pressable>
+
+                    <Pressable
+                      onPress={() => setDeliverySms(!deliverySms)}
+                      style={[styles.deliveryItem, { backgroundColor: colors.backgroundElement }]}
+                    >
+                      <View style={{ flex: 1 }}>
+                        <Text style={[styles.deliveryTitle, { color: colors.text }]}>SMS Link Notification</Text>
+                        <Text style={[styles.deliverySub, { color: colors.textSecondary }]}>Standard telecom notification</Text>
+                      </View>
+                      <View style={[styles.toggleCheckbox, { backgroundColor: deliverySms ? StitchColors.secondaryContainer : colors.border }]}>
+                        {deliverySms && <Check size={14} color="#FFFFFF" />}
+                      </View>
+                    </Pressable>
+                  </View>
+                </View>
+
+                {/* Sign and Send Primary Button */}
+                <Pressable
+                  onPress={handleSignAndSend}
+                  disabled={isSigning || signSuccess}
+                  style={[
+                    styles.signSendBtn,
+                    { backgroundColor: signSuccess ? '#059669' : StitchColors.primaryContainer },
+                  ]}
+                >
+                  {isSigning ? (
+                    <Text style={styles.signSendBtnText}>Signing with Digital Seal...</Text>
+                  ) : signSuccess ? (
+                    <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+                      <CheckCircle2 size={18} color="#FFFFFF" />
+                      <Text style={styles.signSendBtnText}>Prescription Dispatched Successfully!</Text>
+                    </View>
+                  ) : (
+                    <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+                      <FileCheck size={18} color="#FFFFFF" />
+                      <Text style={styles.signSendBtnText}>Sign & Send Prescription</Text>
+                    </View>
+                  )}
+                </Pressable>
+              </Animated.View>
+            )}
+          </ScrollView>
+
+          {/* Rx Deck Bottom Navigation Strip (Next / Back) */}
+          {rxStep < 5 && (
+            <View style={[styles.rxDeckBottomNav, { borderTopColor: colors.border, backgroundColor: colors.card }]}>
+              <Pressable
+                onPress={() => setRxStep(5)}
+                style={styles.skipToSummaryBtn}
+              >
+                <Text style={[styles.skipToSummaryText, { color: StitchColors.primaryContainer }]}>Review Summary</Text>
+              </Pressable>
+
+              <Pressable
+                onPress={() => setRxStep((rxStep + 1) as any)}
+                style={[styles.nextStepBtn, { backgroundColor: StitchColors.primaryContainer }]}
+              >
+                <Text style={styles.nextStepBtnText}>
+                  {rxStep === 1 ? 'Continue to Medications' : rxStep === 2 ? 'Continue to Tests' : rxStep === 3 ? 'Continue to Advice' : 'Continue to Summary'}
+                </Text>
+                <ArrowRight size={16} color="#FFFFFF" />
+              </Pressable>
+            </View>
+          )}
+        </SafeAreaView>
+      </Modal>
+
+      {/* 8. MEDICATION EDIT / ADD MODAL */}
+      {editingMed && (
+        <Modal visible={showMedModal} transparent animationType="slide">
+          <View style={styles.modalBackdrop}>
+            <View style={[styles.modalCard, { backgroundColor: colors.card, borderColor: colors.border }]}>
+              <View style={styles.modalHeader}>
+                <Text style={[styles.modalTitle, { color: colors.text }]}>Medication Dosage & Instructions</Text>
+                <Pressable onPress={() => setShowMedModal(false)} style={styles.modalCloseBtn}>
+                  <X size={18} color={colors.text} />
+                </Pressable>
+              </View>
+
+              <ScrollView style={{ maxHeight: 380 }} showsVerticalScrollIndicator={false}>
+                <View style={styles.medFormGroup}>
+                  <Text style={[styles.medFormLabel, { color: colors.textSecondary }]}>Medicine Name</Text>
+                  <TextInput
+                    value={editingMed.name}
+                    onChangeText={(val) => setEditingMed({ ...editingMed, name: val })}
+                    placeholder="e.g. Augmentin 625mg"
+                    placeholderTextColor={colors.textMuted}
+                    style={[styles.medFormInput, { color: colors.text, borderColor: colors.border }]}
+                  />
+                </View>
+
+                <View style={styles.medFormGroup}>
+                  <Text style={[styles.medFormLabel, { color: colors.textSecondary }]}>Dosage Cadence</Text>
+                  <View style={styles.cadencePillsRow}>
+                    {['1 - 0 - 1', '1 - 0 - 0', '0 - 0 - 1', '1 - 1 - 1', '10 ml', 'SOS'].map((cad) => (
+                      <Pressable
+                        key={cad}
+                        onPress={() => setEditingMed({ ...editingMed, dosage: cad })}
+                        style={[
+                          styles.cadencePill,
+                          {
+                            backgroundColor: editingMed.dosage === cad ? StitchColors.primaryContainer : colors.backgroundElement,
+                          },
+                        ]}
+                      >
+                        <Text
+                          style={[
+                            styles.cadencePillText,
+                            { color: editingMed.dosage === cad ? '#FFFFFF' : colors.text },
+                          ]}
+                        >
+                          {cad}
+                        </Text>
+                      </Pressable>
+                    ))}
+                  </View>
+                </View>
+
+                <View style={styles.medFormGroup}>
+                  <Text style={[styles.medFormLabel, { color: colors.textSecondary }]}>Meal Timing</Text>
+                  <View style={styles.cadencePillsRow}>
+                    {['After meals', 'Before breakfast', 'With food', 'Bedtime'].map((tim) => (
+                      <Pressable
+                        key={tim}
+                        onPress={() => setEditingMed({ ...editingMed, timing: tim })}
+                        style={[
+                          styles.cadencePill,
+                          {
+                            backgroundColor: editingMed.timing === tim ? StitchColors.primaryContainer : colors.backgroundElement,
+                          },
+                        ]}
+                      >
+                        <Text
+                          style={[
+                            styles.cadencePillText,
+                            { color: editingMed.timing === tim ? '#FFFFFF' : colors.text },
+                          ]}
+                        >
+                          {tim}
+                        </Text>
+                      </Pressable>
+                    ))}
+                  </View>
+                </View>
+
+                <View style={styles.medFormGroup}>
+                  <Text style={[styles.medFormLabel, { color: colors.textSecondary }]}>Duration</Text>
+                  <View style={styles.cadencePillsRow}>
+                    {['3 Days', '5 Days', '7 Days', '10 Days', '14 Days', '30 Days'].map((dur) => (
+                      <Pressable
+                        key={dur}
+                        onPress={() => setEditingMed({ ...editingMed, duration: dur })}
+                        style={[
+                          styles.cadencePill,
+                          {
+                            backgroundColor: editingMed.duration === dur ? StitchColors.primaryContainer : colors.backgroundElement,
+                          },
+                        ]}
+                      >
+                        <Text
+                          style={[
+                            styles.cadencePillText,
+                            { color: editingMed.duration === dur ? '#FFFFFF' : colors.text },
+                          ]}
+                        >
+                          {dur}
+                        </Text>
+                      </Pressable>
+                    ))}
+                  </View>
+                </View>
+
+                <View style={styles.medFormGroup}>
+                  <Text style={[styles.medFormLabel, { color: colors.textSecondary }]}>Special Instructions</Text>
+                  <TextInput
+                    value={editingMed.instructions}
+                    onChangeText={(val) => setEditingMed({ ...editingMed, instructions: val })}
+                    placeholder="e.g. Complete full course, drink plenty of water"
+                    placeholderTextColor={colors.textMuted}
+                    style={[styles.medFormInput, { color: colors.text, borderColor: colors.border }]}
+                  />
+                </View>
+              </ScrollView>
+
+              <Pressable
+                onPress={handleSaveMedicationEdit}
+                style={[styles.saveModalBtn, { backgroundColor: StitchColors.primaryContainer }]}
+              >
+                <Check size={16} color="#FFFFFF" />
+                <Text style={styles.saveModalBtnText}>Save Medication</Text>
+              </Pressable>
+            </View>
+          </View>
+        </Modal>
+      )}
+
+      {/* 9. ADD CLINICAL EXAMINATION IMAGE MODAL */}
+      <Modal visible={showAddImageModal} transparent animationType="slide">
+        <View style={styles.modalBackdrop}>
+          <View style={[styles.modalCard, { backgroundColor: colors.card, borderColor: colors.border }]}>
+            <View style={styles.modalHeader}>
+              <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+                <Camera size={18} color={StitchColors.primaryContainer} />
+                <Text style={[styles.modalTitle, { color: colors.text }]}>Add Clinical Image</Text>
+              </View>
+              <Pressable
+                onPress={() => {
+                  setShowAddImageModal(false);
+                  setCustomImageTitle('');
+                  setCustomImageUri('');
+                }}
+                style={styles.modalCloseBtn}
+              >
+                <X size={18} color={colors.text} />
+              </Pressable>
+            </View>
+
+            <ScrollView style={{ maxHeight: 420 }} showsVerticalScrollIndicator={false}>
+              <Text style={[styles.modalSectionLabel, { color: colors.textSecondary }]}>
+                Select Clinical Preset
+              </Text>
+              <View style={styles.imagePresetsGrid}>
+                {[
+                  {
+                    title: 'Throat & Pharynx View',
+                    uri: 'https://images.unsplash.com/photo-1584515979956-d9f6e5d09982?w=600&auto=format&fit=crop&q=80',
+                  },
+                  {
+                    title: 'Dermatological Rash / Lesion',
+                    uri: 'https://images.unsplash.com/photo-1579684385127-1ef15d508118?w=600&auto=format&fit=crop&q=80',
+                  },
+                  {
+                    title: 'Chest Radiograph (X-Ray)',
+                    uri: 'https://images.unsplash.com/photo-1516549655169-df83a0774514?w=600&auto=format&fit=crop&q=80',
+                  },
+                  {
+                    title: '12-Lead ECG Rhythm Strip',
+                    uri: 'https://images.unsplash.com/photo-1559757175-5700dde675bc?w=600&auto=format&fit=crop&q=80',
+                  },
+                ].map((preset, idx) => (
+                  <Pressable
+                    key={idx}
+                    onPress={() => {
+                      const newImg = {
+                        id: `img_${Date.now()}_${idx}`,
+                        title: preset.title,
+                        uri: preset.uri,
+                        date: 'Today, ' + new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+                      };
+                      setClinicalImages([...clinicalImages, newImg]);
+                      setShowAddImageModal(false);
+                    }}
+                    style={[styles.presetImageBtn, { backgroundColor: colors.backgroundElement, borderColor: colors.border }]}
+                  >
+                    <Image source={{ uri: preset.uri }} style={styles.presetThumb} />
+                    <Text numberOfLines={2} style={[styles.presetImageTitle, { color: colors.text }]}>
+                      {preset.title}
+                    </Text>
+                  </Pressable>
+                ))}
+              </View>
+
+              <Text style={[styles.modalSectionLabel, { color: colors.textSecondary, marginTop: 14 }]}>
+                Or Add Custom Clinical Image
+              </Text>
+              <View style={styles.medFormGroup}>
+                <Text style={[styles.medFormLabel, { color: colors.textSecondary }]}>Image Description / Label</Text>
+                <TextInput
+                  value={customImageTitle}
+                  onChangeText={setCustomImageTitle}
+                  placeholder="e.g. Left forearm eczema flare"
+                  placeholderTextColor={colors.textMuted}
+                  style={[styles.medFormInput, { color: colors.text, borderColor: colors.border }]}
+                />
+              </View>
+              <View style={styles.medFormGroup}>
+                <Text style={[styles.medFormLabel, { color: colors.textSecondary }]}>Image URL / Source</Text>
+                <TextInput
+                  value={customImageUri}
+                  onChangeText={setCustomImageUri}
+                  placeholder="https://..."
+                  placeholderTextColor={colors.textMuted}
+                  style={[styles.medFormInput, { color: colors.text, borderColor: colors.border }]}
+                />
+              </View>
+            </ScrollView>
+
+            <Pressable
+              onPress={() => {
+                if (customImageTitle.trim() && customImageUri.trim()) {
+                  const newImg = {
+                    id: `img_${Date.now()}`,
+                    title: customImageTitle.trim(),
+                    uri: customImageUri.trim(),
+                    date: 'Today, ' + new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+                  };
+                  setClinicalImages([...clinicalImages, newImg]);
+                  setCustomImageTitle('');
+                  setCustomImageUri('');
+                  setShowAddImageModal(false);
+                }
+              }}
+              style={[
+                styles.saveModalBtn,
+                {
+                  backgroundColor:
+                    customImageTitle.trim() && customImageUri.trim()
+                      ? StitchColors.primaryContainer
+                      : colors.border,
+                },
+              ]}
+              disabled={!customImageTitle.trim() || !customImageUri.trim()}
+            >
+              <Check size={16} color="#FFFFFF" />
+              <Text style={styles.saveModalBtnText}>Attach Image to Exam</Text>
+            </Pressable>
+          </View>
+        </View>
+      </Modal>
+
+      {/* 10. PREVIEW CLINICAL IMAGE MODAL */}
+      {selectedPreviewImage && (
+        <Modal visible={!!selectedPreviewImage} transparent animationType="fade">
+          <View style={styles.modalBackdrop}>
+            <View style={[styles.previewModalCard, { backgroundColor: colors.card, borderColor: colors.border }]}>
+              <View style={styles.modalHeader}>
+                <Text numberOfLines={1} style={[styles.modalTitle, { color: colors.text, flex: 1 }]}>
+                  {selectedPreviewImage.title}
+                </Text>
+                <Pressable onPress={() => setSelectedPreviewImage(null)} style={styles.modalCloseBtn}>
+                  <X size={18} color={colors.text} />
+                </Pressable>
+              </View>
+              <Image
+                source={{ uri: selectedPreviewImage.uri }}
+                style={styles.previewImageFull}
+                resizeMode="cover"
+              />
+              <Pressable
+                onPress={() => setSelectedPreviewImage(null)}
+                style={[styles.saveModalBtn, { backgroundColor: StitchColors.primaryContainer, marginTop: 12 }]}
+              >
+                <Text style={styles.saveModalBtnText}>Close Preview</Text>
+              </Pressable>
+            </View>
+          </View>
+        </Modal>
+      )}
     </SafeAreaView>
   );
 }
+
+const styles = StyleSheet.create({
+  safeArea: {
+    flex: 1,
+  },
+  headerBar: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingHorizontal: 16,
+    paddingVertical: 10,
+    borderBottomWidth: StyleSheet.hairlineWidth,
+  },
+  backBtn: {
+    width: 36,
+    height: 36,
+    borderRadius: BorderRadius.full,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  headerCenterCol: {
+    alignItems: 'center',
+  },
+  headerTitle: {
+    fontSize: 16,
+    fontWeight: '700',
+  },
+  headerSub: {
+    fontSize: 11,
+    marginTop: 1,
+  },
+  timerBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 5,
+    marginTop: 2,
+    backgroundColor: '#EFF6FF',
+    paddingHorizontal: 8,
+    paddingVertical: 2,
+    borderRadius: BorderRadius.full,
+  },
+  pulseDot: {
+    width: 6,
+    height: 6,
+    borderRadius: BorderRadius.full,
+    backgroundColor: StitchColors.secondaryContainer,
+  },
+  activeText: {
+    fontSize: 10,
+    fontWeight: '800',
+    color: StitchColors.secondaryContainer,
+    letterSpacing: 0.5,
+  },
+  dotSeparator: {
+    fontSize: 10,
+    color: '#94A3B8',
+  },
+  timerDigit: {
+    fontSize: 11,
+    fontWeight: '700',
+    fontVariant: ['tabular-nums'],
+  },
+  resetTimerBtn: {
+    marginLeft: 2,
+    padding: 2,
+  },
+  headerDoctorImg: {
+    width: 34,
+    height: 34,
+    borderRadius: BorderRadius.full,
+  },
+  scrollContent: {
+    padding: 16,
+    paddingBottom: 90,
+  },
+  patientHeroCard: {
+    borderRadius: BorderRadius.xl,
+    padding: 16,
+    borderWidth: 1,
+    ...Shadows.subtle,
+  },
+  patientInfoRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
+  patientAvatar: {
+    width: 54,
+    height: 54,
+    borderRadius: BorderRadius.full,
+  },
+  heroPatientName: {
+    fontSize: 17,
+    fontWeight: '700',
+  },
+  demogBadge: {
+    paddingHorizontal: 8,
+    paddingVertical: 2,
+    borderRadius: BorderRadius.full,
+  },
+  demogText: {
+    fontSize: 11,
+    fontWeight: '600',
+  },
+  uhidText: {
+    fontSize: 12,
+    marginTop: 3,
+  },
+  vitalsHeaderRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    marginTop: 14,
+    marginBottom: 6,
+  },
+  vitalsSectionTitle: {
+    fontSize: 10,
+    fontWeight: '700',
+    letterSpacing: 0.5,
+  },
+  editVitalsBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+  },
+  editVitalsBtnText: {
+    fontSize: 11,
+    fontWeight: '600',
+    color: StitchColors.primaryContainer,
+  },
+  vitalsGrid: {
+    flexDirection: 'row',
+    borderRadius: BorderRadius.lg,
+    paddingVertical: 8,
+    paddingHorizontal: 4,
+  },
+  vitalCol: {
+    flex: 1,
+    alignItems: 'center',
+  },
+  vitalBorderLeft: {
+    borderLeftWidth: StyleSheet.hairlineWidth,
+  },
+  vitalLabel: {
+    fontSize: 10,
+    fontWeight: '700',
+    letterSpacing: 0.5,
+    marginBottom: 2,
+  },
+  vitalVal: {
+    fontSize: 14,
+    fontWeight: '800',
+  },
+  vitalUnit: {
+    fontSize: 10,
+    fontWeight: '400',
+  },
+  extraVitalsRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 8,
+    marginTop: 6,
+  },
+  extraVitalText: {
+    fontSize: 11,
+  },
+  complaintBox: {
+    marginTop: 14,
+    paddingTop: 12,
+    borderTopWidth: StyleSheet.hairlineWidth,
+  },
+  allergiesSection: {
+    marginTop: 10,
+  },
+  allergiesHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    marginBottom: 6,
+  },
+  allergiesLabel: {
+    fontSize: 10,
+    fontWeight: '700',
+    letterSpacing: 0.5,
+  },
+  addAllergyBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 2,
+  },
+  addAllergyBtnText: {
+    fontSize: 11,
+    fontWeight: '600',
+    color: StitchColors.primaryContainer,
+  },
+  allergiesRow: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 6,
+  },
+  allergyTag: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 5,
+    paddingHorizontal: 8,
+    paddingVertical: 3,
+    borderRadius: BorderRadius.full,
+  },
+  allergyTagText: {
+    fontSize: 11,
+    fontWeight: '600',
+  },
+  addAllergyInputRow: {
+    flexDirection: 'row',
+    gap: 6,
+    marginTop: 6,
+    alignItems: 'center',
+  },
+  smallInput: {
+    flex: 1,
+    borderWidth: 1,
+    borderRadius: BorderRadius.md,
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    fontSize: 12,
+  },
+  smallAddBtn: {
+    width: 28,
+    height: 28,
+    borderRadius: BorderRadius.md,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  tabsWrap: {
+    flexDirection: 'row',
+    borderRadius: BorderRadius.xl,
+    padding: 3,
+    marginVertical: 14,
+  },
+  segTab: {
+    flex: 1,
+    paddingVertical: 8,
+    alignItems: 'center',
+    borderRadius: BorderRadius.lg,
+  },
+  segTabActive: {
+    ...Shadows.subtle,
+  },
+  segTabText: {
+    fontSize: 13,
+    fontWeight: '500',
+    color: '#64748B',
+  },
+  tabContentBlock: {
+    gap: 12,
+  },
+  sectionCard: {
+    borderRadius: BorderRadius.xl,
+    padding: 16,
+    borderWidth: 1,
+    ...Shadows.subtle,
+  },
+  sectionCardHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    marginBottom: 10,
+  },
+  sectionCardTitle: {
+    fontSize: 15,
+    fontWeight: '700',
+  },
+  loggedBadge: {
+    paddingHorizontal: 8,
+    paddingVertical: 2,
+    borderRadius: BorderRadius.full,
+  },
+  loggedText: {
+    fontSize: 10,
+    fontWeight: '600',
+  },
+  conditionList: {
+    gap: 8,
+  },
+  conditionItem: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    padding: 10,
+    borderRadius: BorderRadius.lg,
+  },
+  condName: {
+    fontSize: 13,
+    fontWeight: '700',
+  },
+  condSub: {
+    fontSize: 11,
+    marginTop: 2,
+  },
+  condTag: {
+    paddingHorizontal: 8,
+    paddingVertical: 3,
+    borderRadius: BorderRadius.full,
+  },
+  condTagText: {
+    fontSize: 10,
+    fontWeight: '700',
+    color: StitchColors.primaryContainer,
+  },
+  viewAllLink: {
+    fontSize: 12,
+    fontWeight: '600',
+  },
+  recentVisitsList: {
+    gap: 8,
+  },
+  recentVisitItem: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    padding: 10,
+    borderRadius: BorderRadius.lg,
+  },
+  recentVisitLeft: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 10,
+  },
+  recentVisitIcon: {
+    width: 32,
+    height: 32,
+    borderRadius: BorderRadius.md,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  recentVisitName: {
+    fontSize: 13,
+    fontWeight: '600',
+  },
+  recentVisitDate: {
+    fontSize: 11,
+    marginTop: 1,
+  },
+  recentVisitBp: {
+    fontSize: 12,
+    fontWeight: '600',
+  },
+  resolvedBadge: {
+    paddingHorizontal: 8,
+    paddingVertical: 2,
+    borderRadius: BorderRadius.full,
+  },
+  resolvedBadgeText: {
+    fontSize: 10,
+    fontWeight: '700',
+    color: StitchColors.secondary,
+  },
+  historyList: {
+    gap: 10,
+  },
+  historyItem: {
+    padding: 12,
+    borderRadius: BorderRadius.lg,
+  },
+  historyLabel: {
+    fontSize: 13,
+    fontWeight: '700',
+    marginBottom: 2,
+  },
+  historyDesc: {
+    fontSize: 12,
+    lineHeight: 18,
+  },
+  labsList: {
+    gap: 8,
+  },
+  labReportCard: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    padding: 12,
+    borderRadius: BorderRadius.lg,
+  },
+  labReportTitle: {
+    fontSize: 13,
+    fontWeight: '700',
+  },
+  labReportMeta: {
+    fontSize: 11,
+    marginTop: 2,
+  },
+  labStatusBadge: {
+    paddingHorizontal: 8,
+    paddingVertical: 3,
+    borderRadius: BorderRadius.full,
+  },
+  labStatusBadgeText: {
+    fontSize: 10,
+    fontWeight: '700',
+    color: StitchColors.secondary,
+  },
+  bottomBar: {
+    position: 'absolute',
+    bottom: 0,
+    left: 0,
+    right: 0,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 10,
+    paddingHorizontal: 16,
+    paddingVertical: 12,
+    borderTopWidth: StyleSheet.hairlineWidth,
+  },
+  bottomToolBtn: {
+    width: 46,
+    height: 46,
+    borderRadius: BorderRadius.xl,
+    borderWidth: 1,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  proceedRxBtn: {
+    flex: 1,
+    height: 46,
+    borderRadius: BorderRadius.xl,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 8,
+    ...Shadows.subtle,
+  },
+  proceedRxBtnText: {
+    color: '#FFFFFF',
+    fontSize: 14,
+    fontWeight: '700',
+  },
+  modalBackdrop: {
+    flex: 1,
+    backgroundColor: 'rgba(0, 0, 0, 0.55)',
+    justifyContent: 'center',
+    alignItems: 'center',
+    padding: 16,
+  },
+  modalCard: {
+    width: '100%',
+    maxWidth: 440,
+    borderRadius: BorderRadius['2xl'],
+    padding: 20,
+    borderWidth: 1,
+    ...Shadows.modal,
+  },
+  modalHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    marginBottom: 16,
+  },
+  modalTitle: {
+    fontSize: 16,
+    fontWeight: '700',
+  },
+  modalCloseBtn: {
+    padding: 4,
+  },
+  vitalsEditGrid: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 10,
+  },
+  vitalsEditItem: {
+    width: '48%',
+    marginBottom: 6,
+  },
+  vitalsEditLabel: {
+    fontSize: 11,
+    fontWeight: '600',
+    marginBottom: 4,
+  },
+  vitalsEditInput: {
+    borderWidth: 1,
+    borderRadius: BorderRadius.lg,
+    paddingHorizontal: 10,
+    paddingVertical: 8,
+    fontSize: 14,
+    fontWeight: '600',
+  },
+  saveModalBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingVertical: 12,
+    borderRadius: BorderRadius.xl,
+    gap: 6,
+    marginTop: 14,
+    ...Shadows.subtle,
+  },
+  saveModalBtnText: {
+    color: '#FFFFFF',
+    fontSize: 14,
+    fontWeight: '700',
+  },
+  stepTabsStrip: {
+    flexDirection: 'row',
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    gap: 6,
+  },
+  stepTabItem: {
+    flex: 1,
+    paddingVertical: 6,
+    alignItems: 'center',
+    borderRadius: BorderRadius.md,
+  },
+  stepTabItemActive: {
+    ...Shadows.subtle,
+  },
+  stepTabItemText: {
+    fontSize: 11,
+    fontWeight: '700',
+  },
+  rxCardBody: {
+    gap: 12,
+  },
+  rxCardHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    marginBottom: 12,
+  },
+  cardHeaderTitle: {
+    fontSize: 16,
+    fontWeight: '700',
+  },
+  cardHeaderSub: {
+    fontSize: 11,
+  },
+  rxSearchBox: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    borderWidth: 1,
+    borderRadius: BorderRadius.lg,
+    paddingHorizontal: 10,
+    paddingVertical: 8,
+    marginBottom: 10,
+  },
+  rxSearchInput: {
+    flex: 1,
+    fontSize: 13,
+    padding: 0,
+  },
+  categoryScroll: {
+    flexDirection: 'row',
+    marginBottom: 10,
+  },
+  catPill: {
+    paddingHorizontal: 10,
+    paddingVertical: 5,
+    borderRadius: BorderRadius.full,
+    marginRight: 6,
+    backgroundColor: '#F1F5F9',
+  },
+  catPillText: {
+    fontSize: 11,
+    fontWeight: '600',
+  },
+  diagSuggestionsBox: {
+    marginBottom: 14,
+  },
+  suggestionHeader: {
+    fontSize: 11,
+    fontWeight: '700',
+    letterSpacing: 0.5,
+    textTransform: 'uppercase',
+    marginBottom: 6,
+  },
+  diagChipsWrap: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 6,
+  },
+  diagAddChip: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    paddingHorizontal: 8,
+    paddingVertical: 5,
+    borderRadius: BorderRadius.md,
+    borderWidth: 1,
+  },
+  diagAddChipText: {
+    fontSize: 11,
+    fontWeight: '600',
+  },
+  selectedHeader: {
+    fontSize: 11,
+    fontWeight: '700',
+    letterSpacing: 0.5,
+    marginBottom: 6,
+  },
+  diagList: {
+    gap: 6,
+    marginBottom: 14,
+  },
+  diagItemRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    padding: 10,
+    borderRadius: BorderRadius.lg,
+  },
+  priorityPill: {
+    paddingHorizontal: 6,
+    paddingVertical: 2,
+    borderRadius: BorderRadius.sm,
+  },
+  priorityPillText: {
+    fontSize: 9,
+    fontWeight: '800',
+    color: '#FFFFFF',
+    textTransform: 'uppercase',
+  },
+  diagNameText: {
+    fontSize: 13,
+    fontWeight: '600',
+  },
+  medsDropdown: {
+    borderWidth: 1,
+    borderRadius: BorderRadius.lg,
+    overflow: 'hidden',
+    marginBottom: 12,
+  },
+  medDropdownItem: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    padding: 10,
+    borderBottomWidth: StyleSheet.hairlineWidth,
+  },
+  medDropdownName: {
+    fontSize: 13,
+    fontWeight: '700',
+  },
+  medDropdownGeneric: {
+    fontSize: 11,
+    marginTop: 1,
+  },
+  medsList: {
+    gap: 8,
+  },
+  medCard: {
+    padding: 12,
+    borderRadius: BorderRadius.lg,
+    borderWidth: 1,
+  },
+  medCardTop: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    justifyContent: 'space-between',
+  },
+  medName: {
+    fontSize: 14,
+    fontWeight: '700',
+  },
+  medGeneric: {
+    fontSize: 11,
+    marginTop: 1,
+  },
+  medPillStrip: {
+    flexDirection: 'row',
+    gap: 6,
+    marginVertical: 6,
+  },
+  medPill: {
+    paddingHorizontal: 8,
+    paddingVertical: 2,
+    borderRadius: BorderRadius.sm,
+  },
+  medPillText: {
+    fontSize: 11,
+    fontWeight: '600',
+  },
+  medInstructions: {
+    fontSize: 11,
+    fontWeight: '600',
+    marginTop: 2,
+  },
+  combosRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    marginVertical: 12,
+    flexWrap: 'wrap',
+  },
+  combosLabel: {
+    fontSize: 11,
+    fontWeight: '700',
+  },
+  comboChip: {
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    borderRadius: BorderRadius.md,
+  },
+  comboChipText: {
+    fontSize: 11,
+    fontWeight: '600',
+  },
+  addMedBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingVertical: 10,
+    borderRadius: BorderRadius.lg,
+    borderWidth: 1,
+    borderStyle: 'dashed',
+    gap: 6,
+  },
+  addMedBtnText: {
+    fontSize: 13,
+    fontWeight: '700',
+    color: StitchColors.primaryContainer,
+  },
+  labPillsWrap: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 6,
+    marginBottom: 10,
+  },
+  testBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    paddingHorizontal: 10,
+    paddingVertical: 5,
+    borderRadius: BorderRadius.md,
+  },
+  testBadgeText: {
+    fontSize: 12,
+    fontWeight: '600',
+    color: StitchColors.secondary,
+  },
+  testRecommendationsGrid: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 6,
+    marginBottom: 14,
+  },
+  testRecChip: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    paddingHorizontal: 8,
+    paddingVertical: 5,
+    borderRadius: BorderRadius.md,
+    borderWidth: 1,
+  },
+  testRecChipText: {
+    fontSize: 11,
+    fontWeight: '500',
+  },
+  customTestRow: {
+    flexDirection: 'row',
+    gap: 8,
+    alignItems: 'center',
+  },
+  customTestInput: {
+    flex: 1,
+    borderWidth: 1,
+    borderRadius: BorderRadius.lg,
+    paddingHorizontal: 10,
+    paddingVertical: 8,
+    fontSize: 13,
+  },
+  customTestAddBtn: {
+    width: 38,
+    height: 38,
+    borderRadius: BorderRadius.lg,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  adviceChecklist: {
+    gap: 8,
+    marginBottom: 10,
+  },
+  adviceItem: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 10,
+    padding: 10,
+    borderRadius: BorderRadius.lg,
+  },
+  checkbox: {
+    width: 18,
+    height: 18,
+    borderRadius: 4,
+    borderWidth: 1.5,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  adviceText: {
+    fontSize: 13,
+    flex: 1,
+  },
+  followUpGrid: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 6,
+    marginBottom: 14,
+  },
+  followUpPill: {
+    paddingHorizontal: 10,
+    paddingVertical: 6,
+    borderRadius: BorderRadius.md,
+    borderWidth: 1,
+  },
+  followUpPillText: {
+    fontSize: 11,
+    fontWeight: '600',
+  },
+  summaryLetterheadCard: {
+    borderRadius: BorderRadius.xl,
+    padding: 16,
+    borderWidth: 1,
+    ...Shadows.subtle,
+  },
+  letterheadTop: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    paddingBottom: 10,
+    borderBottomWidth: StyleSheet.hairlineWidth,
+    borderBottomColor: '#E2E8F0',
+  },
+  letterheadDocName: {
+    fontSize: 16,
+    fontWeight: '700',
+  },
+  letterheadDocQual: {
+    fontSize: 11,
+    marginTop: 1,
+  },
+  letterheadReg: {
+    fontSize: 10,
+    fontFamily: Platform.OS === 'ios' ? 'Courier' : 'monospace',
+    marginTop: 1,
+  },
+  letterheadHospitalBox: {
+    alignItems: 'flex-end',
+  },
+  hospitalName: {
+    fontSize: 12,
+    fontWeight: '700',
+  },
+  hospitalDate: {
+    fontSize: 11,
+    marginTop: 1,
+  },
+  letterheadPatientStrip: {
+    padding: 8,
+    borderRadius: BorderRadius.md,
+    marginVertical: 10,
+  },
+  lhPatientName: {
+    fontSize: 13,
+    fontWeight: '700',
+  },
+  lhVitalsText: {
+    fontSize: 11,
+    marginTop: 2,
+  },
+  summarySection: {
+    marginVertical: 6,
+  },
+  summarySectionHeading: {
+    fontSize: 10,
+    fontWeight: '800',
+    letterSpacing: 0.5,
+    marginBottom: 3,
+  },
+  summarySectionBody: {
+    fontSize: 12,
+    lineHeight: 18,
+  },
+  summaryMedRow: {
+    flexDirection: 'row',
+    gap: 4,
+    marginVertical: 2,
+  },
+  summaryMedNum: {
+    fontSize: 12,
+    fontWeight: '700',
+    width: 16,
+  },
+  summaryMedTitle: {
+    fontSize: 12,
+    fontWeight: '700',
+  },
+  summaryMedDosage: {
+    fontSize: 11,
+  },
+  signatureRow: {
+    flexDirection: 'row',
+    alignItems: 'flex-end',
+    justifyContent: 'space-between',
+    paddingTop: 12,
+    borderTopWidth: StyleSheet.hairlineWidth,
+    borderTopColor: '#E2E8F0',
+    marginTop: 10,
+  },
+  signedBadge: {
+    fontSize: 11,
+    fontWeight: '700',
+    color: '#059669',
+  },
+  signTime: {
+    fontSize: 10,
+    marginTop: 2,
+  },
+  svgSignatureBox: {
+    alignItems: 'flex-end',
+  },
+  signerName: {
+    fontSize: 11,
+    fontWeight: '700',
+    marginTop: 2,
+  },
+  deliveryList: {
+    gap: 8,
+  },
+  deliveryItem: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    padding: 10,
+    borderRadius: BorderRadius.lg,
+  },
+  deliveryTitle: {
+    fontSize: 13,
+    fontWeight: '600',
+  },
+  deliverySub: {
+    fontSize: 11,
+    marginTop: 1,
+  },
+  toggleCheckbox: {
+    width: 20,
+    height: 20,
+    borderRadius: BorderRadius.sm,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  signSendBtn: {
+    paddingVertical: 14,
+    borderRadius: BorderRadius.xl,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginVertical: 14,
+    ...Shadows.subtle,
+  },
+  signSendBtnText: {
+    color: '#FFFFFF',
+    fontSize: 15,
+    fontWeight: '700',
+  },
+  rxDeckBottomNav: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingHorizontal: 16,
+    paddingVertical: 12,
+    borderTopWidth: StyleSheet.hairlineWidth,
+  },
+  skipToSummaryBtn: {
+    paddingVertical: 8,
+    paddingHorizontal: 12,
+  },
+  skipToSummaryText: {
+    fontSize: 12,
+    fontWeight: '600',
+  },
+  nextStepBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    paddingHorizontal: 16,
+    paddingVertical: 10,
+    borderRadius: BorderRadius.xl,
+    ...Shadows.subtle,
+  },
+  nextStepBtnText: {
+    color: '#FFFFFF',
+    fontSize: 13,
+    fontWeight: '700',
+  },
+  medFormGroup: {
+    marginBottom: 12,
+  },
+  medFormLabel: {
+    fontSize: 11,
+    fontWeight: '600',
+    marginBottom: 4,
+  },
+  medFormInput: {
+    borderWidth: 1,
+    borderRadius: BorderRadius.lg,
+    paddingHorizontal: 10,
+    paddingVertical: 8,
+    fontSize: 13,
+  },
+  cadencePillsRow: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 6,
+  },
+  cadencePill: {
+    paddingHorizontal: 10,
+    paddingVertical: 6,
+    borderRadius: BorderRadius.md,
+  },
+  cadencePillText: {
+    fontSize: 11,
+    fontWeight: '600',
+  },
+  addImageBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 5,
+    paddingHorizontal: 10,
+    paddingVertical: 5,
+    borderRadius: BorderRadius.full,
+  },
+  addImageBtnText: {
+    color: '#FFFFFF',
+    fontSize: 11,
+    fontWeight: '700',
+  },
+  clinicalImagesContainer: {
+    marginTop: 14,
+    gap: 8,
+  },
+  clinicalImagesSubhead: {
+    fontSize: 12,
+    fontWeight: '600',
+  },
+  clinicalImagesScroll: {
+    gap: 10,
+    paddingVertical: 4,
+  },
+  clinicalImageCard: {
+    width: 130,
+    borderRadius: BorderRadius.lg,
+    overflow: 'hidden',
+    borderWidth: 1,
+    position: 'relative',
+  },
+  clinicalImageThumb: {
+    width: '100%',
+    height: 75,
+    backgroundColor: '#E2E8F0',
+  },
+  clinicalImageMeta: {
+    padding: 6,
+  },
+  clinicalImageTitle: {
+    fontSize: 11,
+    fontWeight: '600',
+  },
+  clinicalImageDate: {
+    fontSize: 9,
+    marginTop: 2,
+  },
+  removeImageBtn: {
+    position: 'absolute',
+    top: 4,
+    right: 4,
+    backgroundColor: 'rgba(15, 23, 42, 0.75)',
+    borderRadius: BorderRadius.full,
+    padding: 3,
+  },
+  sectionCardDesc: {
+    fontSize: 12,
+    lineHeight: 16,
+    marginBottom: 8,
+  },
+  stepTabsContainer: {
+    borderBottomWidth: StyleSheet.hairlineWidth,
+    paddingVertical: 8,
+  },
+  stepTabsScrollContent: {
+    paddingHorizontal: 12,
+    gap: 8,
+    alignItems: 'center',
+  },
+  stepTabChip: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    paddingHorizontal: 12,
+    paddingVertical: 7,
+    borderRadius: BorderRadius.full,
+    borderWidth: 1,
+  },
+  stepBadgeCircle: {
+    width: 18,
+    height: 18,
+    borderRadius: 9999,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  stepBadgeNum: {
+    fontSize: 10,
+    fontWeight: '700',
+  },
+  stepTabChipText: {
+    fontSize: 12,
+  },
+  modalSectionLabel: {
+    fontSize: 12,
+    fontWeight: '700',
+    marginBottom: 8,
+    textTransform: 'uppercase',
+    letterSpacing: 0.5,
+  },
+  imagePresetsGrid: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 8,
+    marginBottom: 10,
+  },
+  presetImageBtn: {
+    width: '48%',
+    borderRadius: BorderRadius.md,
+    overflow: 'hidden',
+    borderWidth: 1,
+    padding: 4,
+    gap: 4,
+  },
+  presetThumb: {
+    width: '100%',
+    height: 60,
+    borderRadius: BorderRadius.sm,
+    backgroundColor: '#E2E8F0',
+  },
+  presetImageTitle: {
+    fontSize: 10,
+    fontWeight: '600',
+    textAlign: 'center',
+  },
+  previewModalCard: {
+    width: '90%',
+    maxWidth: 420,
+    borderRadius: BorderRadius.xl,
+    padding: 16,
+    borderWidth: 1,
+    ...Shadows.modal,
+  },
+  previewImageFull: {
+    width: '100%',
+    height: 260,
+    borderRadius: BorderRadius.lg,
+    backgroundColor: '#E2E8F0',
+    marginTop: 8,
+  },
+});
