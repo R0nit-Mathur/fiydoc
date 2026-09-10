@@ -1,8 +1,9 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { Stack } from 'expo-router';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
 import { StatusBar } from 'expo-status-bar';
+import * as Updates from 'expo-updates';
 import { ErrorBoundary } from '@/components/ui/ErrorBoundary';
 import { Colors } from '@/constants/theme';
 import '../global.css';
@@ -19,6 +20,22 @@ export default function RootLayout() {
         },
       })
   );
+
+  useEffect(() => {
+    async function checkAutoUpdate() {
+      if (!Updates.isEnabled) return;
+      try {
+        const update = await Updates.checkForUpdateAsync();
+        if (update.isAvailable) {
+          await Updates.fetchUpdateAsync();
+          console.log('[OTA] Downloaded latest update bundle.');
+        }
+      } catch (e: any) {
+        console.warn('[OTA] Background update check error:', e?.message);
+      }
+    }
+    checkAutoUpdate();
+  }, []);
 
   return (
     <ErrorBoundary>

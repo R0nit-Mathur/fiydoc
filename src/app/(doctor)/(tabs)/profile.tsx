@@ -48,11 +48,13 @@ import {
   Check,
   X,
   Sparkles,
+  RefreshCw,
 } from 'lucide-react-native';
 
 import { useAuthStore } from '@/store/useAuthStore';
 import { useAppTheme } from '@/hooks/useAppTheme';
 import { BorderRadius, Shadows, StitchColors, DEFAULT_DOCTOR_AVATAR } from '@/constants/theme';
+import { AppUpdateModal } from '@/components/ui/AppUpdateModal';
 
 const DOCTOR_AVATAR = DEFAULT_DOCTOR_AVATAR;
 
@@ -75,6 +77,7 @@ export default function DoctorProfileScreen() {
 
   // Modals
   const [showFeeModal, setShowFeeModal] = useState(false);
+  const [showUpdateModal, setShowUpdateModal] = useState(false);
   const [tempFee, setTempFee] = useState(opdFee);
 
   const [showPayoutModal, setShowPayoutModal] = useState(false);
@@ -415,6 +418,18 @@ export default function DoctorProfileScreen() {
                 thumbColor="#FFFFFF"
               />
             </View>
+
+            <Pressable
+              onPress={() => setShowUpdateModal(true)}
+              style={[styles.groupItem, { borderTopColor: colors.border, borderTopWidth: StyleSheet.hairlineWidth }]}
+            >
+              <RefreshCw size={18} color={StitchColors.primaryContainer} />
+              <View style={{ flex: 1, marginLeft: 12 }}>
+                <Text style={[styles.groupItemMain, { color: colors.text }]}>App Updates (OTA)</Text>
+                <Text style={[styles.groupItemSub, { color: colors.textMuted }]}>Check for and install live updates</Text>
+              </View>
+              <ChevronRight size={18} color={colors.textMuted} />
+            </Pressable>
           </View>
         </Animated.View>
 
@@ -549,6 +564,11 @@ export default function DoctorProfileScreen() {
           </View>
         </View>
       </Modal>
+
+      <AppUpdateModal
+        visible={showUpdateModal}
+        onClose={() => setShowUpdateModal(false)}
+      />
     </SafeAreaView>
   );
 }

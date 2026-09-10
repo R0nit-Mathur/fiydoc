@@ -7,7 +7,7 @@ import {
   ScrollView,
   StyleSheet,
   Animated,
-  Dimensions,
+  useWindowDimensions,
   Platform,
   BackHandler,
   Pressable,
@@ -35,9 +35,6 @@ import {
   User,
 } from 'lucide-react-native';
 
-const SCREEN_WIDTH = Dimensions.get('window').width;
-const DRAWER_WIDTH = Math.min(SCREEN_WIDTH * 0.82, 340);
-
 interface SidebarDrawerProps {
   visible: boolean;
   onClose: () => void;
@@ -47,12 +44,14 @@ interface SidebarDrawerProps {
 export function SidebarDrawer({ visible, onClose, onOpenLocationPicker }: SidebarDrawerProps) {
   const router = useRouter();
   const insets = useSafeAreaInsets();
+  const { width: screenWidth } = useWindowDimensions();
+  const drawerWidth = Math.min(screenWidth * 0.82, 340);
   const { user, logout } = useAuthStore();
   const { city, formattedAddress } = useLocationStore();
   const [logoutConfirmVisible, setLogoutConfirmVisible] = useState(false);
 
-  // Animation values: slide from right (DRAWER_WIDTH -> 0) & backdrop opacity (0 -> 1)
-  const slideAnim = useRef(new Animated.Value(DRAWER_WIDTH)).current;
+  // Animation values: slide from right (drawerWidth -> 0) & backdrop opacity (0 -> 1)
+  const slideAnim = useRef(new Animated.Value(drawerWidth)).current;
   const fadeAnim = useRef(new Animated.Value(0)).current;
 
   useEffect(() => {
@@ -78,13 +77,13 @@ export function SidebarDrawer({ visible, onClose, onOpenLocationPicker }: Sideba
           useNativeDriver: true,
         }),
         Animated.timing(slideAnim, {
-          toValue: DRAWER_WIDTH,
+          toValue: drawerWidth,
           duration: 200,
           useNativeDriver: true,
         }),
       ]).start();
     }
-  }, [visible]);
+  }, [visible, drawerWidth]);
 
   // Handle hardware back button on Android
   useEffect(() => {
@@ -105,7 +104,7 @@ export function SidebarDrawer({ visible, onClose, onOpenLocationPicker }: Sideba
         useNativeDriver: true,
       }),
       Animated.timing(slideAnim, {
-        toValue: DRAWER_WIDTH,
+        toValue: drawerWidth,
         duration: 200,
         useNativeDriver: true,
       }),
@@ -153,7 +152,7 @@ export function SidebarDrawer({ visible, onClose, onOpenLocationPicker }: Sideba
           style={[
             styles.drawer,
             {
-              width: DRAWER_WIDTH,
+              width: drawerWidth,
               paddingTop: Math.max(insets.top, 20),
               paddingBottom: Math.max(insets.bottom, 20),
               transform: [{ translateX: slideAnim }],

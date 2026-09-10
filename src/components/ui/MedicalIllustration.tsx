@@ -6,7 +6,7 @@
  */
 
 import React, { useEffect } from 'react';
-import { View, StyleSheet, Dimensions, Platform } from 'react-native';
+import { View, StyleSheet, useWindowDimensions, Platform } from 'react-native';
 import { Image } from 'expo-image';
 import Animated, {
   useSharedValue,
@@ -31,12 +31,11 @@ export interface MedicalIllustrationProps {
   showGlassCard?: boolean;
 }
 
-const SIZE_MAP: Record<IllustrationSize, number> = {
+const STATIC_SIZE_MAP: Record<Exclude<IllustrationSize, 'full'>, number> = {
   sm: 120,
   md: 200,
   lg: 280,
   xl: 360,
-  full: Dimensions.get('window').width - 64,
 };
 
 const PARALLAX_FACTOR = 0.3;
@@ -49,11 +48,12 @@ export function MedicalIllustration({
   style,
   showGlassCard = true,
 }: MedicalIllustrationProps) {
+  const { width: windowWidth } = useWindowDimensions();
   const { isDark } = useAppTheme();
   const animatedY = useSharedValue(0);
   const scale = useSharedValue(0.9);
 
-  const illustrationSize = SIZE_MAP[size];
+  const illustrationSize = size === 'full' ? Math.max(windowWidth - 64, 260) : STATIC_SIZE_MAP[size];
 
   // Get the correct image source based on variant
   // For now, we use welcome_illustration as the primary asset

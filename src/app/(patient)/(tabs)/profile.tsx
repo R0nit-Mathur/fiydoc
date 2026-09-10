@@ -49,7 +49,9 @@ import {
   Droplet,
   Calendar,
   MapPin,
+  RefreshCw,
 } from 'lucide-react-native';
+import { AppUpdateModal } from '@/components/ui/AppUpdateModal';
 import { calculateAgeFromDOB, formatHumanDate } from '@/utils/formatters';
 import { StitchColors, BorderRadius, Shadows, Spacing, Palette, DEFAULT_PATIENT_AVATAR } from '@/constants/theme';
 
@@ -87,6 +89,7 @@ export default function PatientProfileScreen() {
   const [editConditions, setEditConditions] = useState(patientProfile?.conditions?.join(', ') || '');
   const [editEmergency, setEditEmergency] = useState(patientProfile?.emergencyContact?.phone || '');
   const [saveToast, setSaveToast] = useState(false);
+  const [updateModalVisible, setUpdateModalVisible] = useState(false);
 
   const editCalculatedAge = useMemo(() => calculateAgeFromDOB(editDOB), [editDOB]);
 
@@ -193,6 +196,14 @@ export default function PatientProfileScreen() {
       color: '#8b5cf6',
       bg: '#f3e8ff',
       onPress: () => {},
+    },
+    {
+      icon: RefreshCw,
+      label: 'App Updates (OTA)',
+      sub: 'Check for Over-The-Air releases',
+      color: StitchColors.primaryContainer,
+      bg: Palette.primaryBlueLight,
+      onPress: () => setUpdateModalVisible(true),
     },
     {
       icon: HelpCircle,
@@ -588,6 +599,11 @@ export default function PatientProfileScreen() {
         iconVariant="warning"
         onConfirm={handleConfirmLogout}
         onCancel={() => setLogoutDialogVisible(false)}
+      />
+
+      <AppUpdateModal
+        visible={updateModalVisible}
+        onClose={() => setUpdateModalVisible(false)}
       />
     </SafeAreaView>
   );

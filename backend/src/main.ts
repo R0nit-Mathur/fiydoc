@@ -27,7 +27,13 @@ async function bootstrap() {
   app.enableCors({
     origin: (origin, callback) => {
       // Allow mobile apps, native requests, and local development
-      if (!origin || origin.startsWith('http://localhost:') || origin.startsWith('exp://')) {
+      if (
+        !origin ||
+        origin.startsWith('http://localhost:') ||
+        origin.startsWith('http://127.0.0.1:') ||
+        origin.startsWith('exp://') ||
+        /^https?:\/\/(192\.168|10\.|172\.(1[6-9]|2[0-9]|3[0-1]))\./.test(origin)
+      ) {
         return callback(null, true);
       }
       const isAllowed = allowedOrigins.includes(origin);

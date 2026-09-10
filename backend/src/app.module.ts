@@ -12,6 +12,7 @@ import { RecordsModule } from './records/records.module';
 import { VerificationModule } from './verification/verification.module';
 import { AdminModule } from './admin/admin.module';
 import { PatientsModule } from './patients/patients.module';
+import { NotificationsModule } from './notifications/notifications.module';
 
 @Module({
   imports: [
@@ -30,6 +31,7 @@ import { PatientsModule } from './patients/patients.module';
     RecordsModule,
     VerificationModule,
     AdminModule,
+    NotificationsModule,
   ],
   controllers: [AppController],
 })

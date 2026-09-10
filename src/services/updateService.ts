@@ -1,13 +1,20 @@
 import * as Updates from 'expo-updates';
+import { Platform } from 'react-native';
 
-export interface UpdateStatus {
+export interface UpdateMetadata {
+  isEnabled: boolean;
+  channel: string;
+  runtimeVersion: string;
+  updateId: string;
+  createdAt: string;
+  isEmbeddedLaunch: boolean;
+  platform: string;
+}
+
+export interface CheckUpdateResult {
   isAvailable: boolean;
-  isChecking: boolean;
-  isDownloading: boolean;
+  message: string;
   manifest?: any;
-  error?: string;
-  channel?: string;
-  runtimeVersion?: string;
 }
 
 export const updateService = {
@@ -15,21 +22,25 @@ export const updateService = {
     return Updates.isEnabled;
   },
 
-  getMetadata() {
+  getMetadata(): UpdateMetadata {
     return {
       isEnabled: Updates.isEnabled,
-      channel: Updates.channel || 'development',
+      channel: Updates.channel || (Updates.isEnabled ? 'production' : 'local-dev'),
       runtimeVersion: Updates.runtimeVersion || '1.0.0',
-      updateId: Updates.updateId || 'local-bundle',
-      createdAt: Updates.createdAt ? new Date(Updates.createdAt).toLocaleString() : 'Just now',
+      updateId: Updates.updateId || 'embedded-bundle',
+      createdAt: Updates.createdAt ? new Date(Updates.createdAt).toLocaleString() : 'Embedded',
+      isEmbeddedLaunch: Updates.isEmbeddedLaunch ?? true,
+      platform: Platform.OS,
     };
   },
 
-  async checkForUpdate(): Promise<{ isAvailable: boolean; message: string }> {
+  async checkForUpdate(): Promise<CheckUpdateResult> {
     if (!Updates.isEnabled) {
       return {
         isAvailable: false,
-        message: 'OTA updates are active in standalone production builds.',
+        message: Platform.OS === 'web'
+          ? 'OTA dynamic updates are active on iOS & Android standalone binaries.'
+          : 'App is running in development mode. OTA updates activate on installed builds.',
       };
     }
 
@@ -38,36 +49,50 @@ export const updateService = {
       if (check.isAvailable) {
         return {
           isAvailable: true,
-          message: 'A new update is available for download.',
+          message: 'A new FiYDoc OTA update is available for immediate installation.',
+          manifest: check.manifest,
         };
       }
       return {
         isAvailable: false,
-        message: 'Your FiYDoc app is up to date!',
+        message: 'Your FiYDoc build is fully up to date with the latest release.',
       };
     } catch (err: any) {
       console.warn('[updateService] Check failed:', err?.message);
       return {
         isAvailable: false,
-        message: err?.message || 'Could not check for updates.',
+        message: err?.message || 'Unable to reach Expo update servers. Check your internet connection.',
       };
     }
   },
 
-  async fetchAndApplyUpdate(): Promise<boolean> {
-    if (!Updates.isEnabled) return false;
+  async fetchAndApplyUpdate(): Promise<{ success: boolean; message: string }> {
+    if (!Updates.isEnabled) {
+      return {
+        success: false,
+        message: 'OTA updates are only applicable to standalone native iOS/Android builds.',
+      };
+    }
 
     try {
-      const check = await Updates.checkForUpdateAsync();
-      if (check.isAvailable) {
-        await Updates.fetchUpdateAsync();
+      const fetchResult = await Updates.fetchUpdateAsync();
+      if (fetchResult.isNew) {
         await Updates.reloadAsync();
-        return true;
+        return {
+          success: true,
+          message: 'Update applied! Reloading application...',
+        };
       }
-      return false;
-    } catch (err) {
-      console.warn('[updateService] Download or apply failed:', err);
-      return false;
+      return {
+        success: false,
+        message: 'No newer update found than current installed bundle.',
+      };
+    } catch (err: any) {
+      console.warn('[updateService] Download/apply failed:', err);
+      return {
+        success: false,
+        message: err?.message || 'Failed to download update bundle.',
+      };
     }
   },
 };
