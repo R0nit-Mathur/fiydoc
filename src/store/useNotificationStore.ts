@@ -19,6 +19,7 @@ interface NotificationState {
   markAsRead: (id: string) => void;
   markAllAsRead: (userId?: string, role?: 'patient' | 'doctor') => void;
   clearNotifications: () => void;
+  reset: () => void;
   getNotificationsForUser: (userId?: string, role?: 'patient' | 'doctor') => NotificationItem[];
   getUnreadCount: (userId?: string, role?: 'patient' | 'doctor') => number;
 }
@@ -64,6 +65,7 @@ export const useNotificationStore = create<NotificationState>()(
         })),
 
       clearNotifications: () => set({ notifications: [] }),
+      reset: () => set({ notifications: [] }),
 
       getNotificationsForUser: (userId, role) => {
         const state = get();

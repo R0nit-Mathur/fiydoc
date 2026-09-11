@@ -49,6 +49,7 @@ import {
 
 import { useAuthStore } from '@/store/useAuthStore';
 import { useAppointmentStore } from '@/store/useAppointmentStore';
+import { signOutAll } from '@/services/authService';
 import { useAppTheme } from '@/hooks/useAppTheme';
 import { BorderRadius, Shadows, Spacing, StitchColors, Palette, DEFAULT_DOCTOR_AVATAR } from '@/constants/theme';
 
@@ -428,8 +429,12 @@ export default function DoctorHomeScreen() {
             {/* Log Out */}
             <View style={styles.drawerFooter}>
               <Pressable
-                onPress={() => {
+                onPress={async () => {
                   setDrawerOpen(false);
+                  if (Platform.OS !== 'web') {
+                    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+                  }
+                  await signOutAll();
                   router.replace('/(auth)/welcome');
                 }}
                 style={styles.logoutRow}

@@ -1,4 +1,5 @@
-import { IsEmail, IsNotEmpty, IsString } from 'class-validator';
+import { IsEmail, IsNotEmpty, IsString, IsOptional, IsEnum } from 'class-validator';
+import { Role } from '@prisma/client';
 
 export class GoogleAuthDto {
   @IsNotEmpty({ message: 'Google ID is required.' })
@@ -12,4 +13,8 @@ export class GoogleAuthDto {
   @IsNotEmpty({ message: 'Name is required.' })
   @IsString()
   name: string;
+
+  @IsOptional()
+  @IsEnum(Role, { message: 'Role must be PATIENT, DOCTOR, or ADMIN.' })
+  role?: Role;
 }

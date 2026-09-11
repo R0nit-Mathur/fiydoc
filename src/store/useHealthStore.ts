@@ -17,6 +17,7 @@ interface HealthState {
   getPrescriptionsForDoctor: (doctorId: string, doctorName?: string) => Prescription[];
   getPrescriptionsForPatient: (patientId: string, patientName?: string) => Prescription[];
   getLabReportsForPatient: (patientId?: string, patientName?: string) => LabReport[];
+  reset: () => void;
 }
 
 export const useHealthStore = create<HealthState>()(
@@ -26,6 +27,14 @@ export const useHealthStore = create<HealthState>()(
       prescriptions: [],
       labReports: [],
       activeFilter: 'All',
+
+      reset: () =>
+        set({
+          records: [],
+          prescriptions: [],
+          labReports: [],
+          activeFilter: 'All',
+        }),
 
       addRecord: (record) =>
         set((state) => ({

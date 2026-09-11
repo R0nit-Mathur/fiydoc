@@ -50,4 +50,4 @@ example
 /android
 
 # Backend secrets / local IDE
-.idea/git
+.idea/git.agents/

@@ -46,6 +46,7 @@ import {
   Check,
 } from 'lucide-react-native';
 import { StitchColors, DEFAULT_DOCTOR_AVATAR } from '@/constants/theme';
+import { useAppointmentStore } from '@/store/useAppointmentStore';
 
 const DEFAULT_DOC_IMG = DEFAULT_DOCTOR_AVATAR;
 
@@ -125,6 +126,20 @@ export default function MedicalIntakeScreen() {
   const proceedToConfirm = () => {
     if (Platform.OS !== 'web') {
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+    }
+    const cleanFee = parseInt(fee.replace(/[^0-9]/g, ''), 10) || 800;
+    useAppointmentStore.getState().setBookingDoctor({
+      id: params.doctorId || 'doc-1',
+      fullName: doctorName,
+      specialization: params.doctorSpecialty || 'Cardiologist',
+      consultationFee: cleanFee,
+      clinicAddress: 'Fortis OPD • Sector 44, Gurugram',
+      rating: 4.9,
+      experienceYears: 12,
+    } as any);
+    useAppointmentStore.getState().setBookingSlot(slotTime, dateLabel);
+    if (selectedReason) {
+      useAppointmentStore.getState().setBookingSymptoms([selectedReason]);
     }
     router.push({
       pathname: '/(patient)/booking/confirm',

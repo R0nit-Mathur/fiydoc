@@ -64,12 +64,12 @@
         "expo-build-properties",
         {
           "android": {
-            "compileSdkVersion": 35,
-            "targetSdkVersion": 35,
+            "compileSdkVersion": 36,
+            "targetSdkVersion": 36,
             "minSdkVersion": 24,
-            "buildToolsVersion": "35.0.0",
+            "buildToolsVersion": "36.0.0",
             "extraGradleProperties": {
-              "android.suppressUnsupportedCompileSdk": "35",
+              "android.suppressUnsupportedCompileSdk": "36",
               "org.gradle.jvmargs": "-Xmx4096m -XX:MaxMetaspaceSize=1024m -XX:+UseParallelGC",
               "org.gradle.parallel": "true",
               "org.gradle.caching": "true"

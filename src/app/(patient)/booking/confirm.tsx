@@ -73,13 +73,35 @@ const NET_BANKS = [
 
 export default function BookingConfirmScreen() {
   const router = useRouter();
-  const params = useLocalSearchParams<{ date?: string; slot?: string; token?: string }>();
+  const params = useLocalSearchParams<{
+    date?: string;
+    slot?: string;
+    token?: string;
+    doctorId?: string;
+    doctorName?: string;
+    doctorSpecialty?: string;
+    slotTime?: string;
+    tokenNumber?: string;
+    dateLabel?: string;
+    fee?: string;
+    reason?: string;
+    patientName?: string;
+  }>();
   const { colors, isDark } = useAppTheme();
   const { user } = useAuthStore();
   const { bookingDraft, resetBookingDraft, addAppointment } = useAppointmentStore();
   const bookMutation = useBookAppointmentMutation();
 
-  const doctor = bookingDraft.doctor;
+  const doctor = bookingDraft.doctor || (params.doctorName ? {
+    id: params.doctorId || 'doc-1',
+    fullName: params.doctorName,
+    name: params.doctorName,
+    specialization: params.doctorSpecialty || 'Cardiologist',
+    consultationFee: parseInt((params.fee || '800').replace(/[^0-9]/g, ''), 10) || 800,
+    clinicAddress: 'Fortis OPD • Sector 44, Gurugram',
+    rating: 4.9,
+    experienceYears: 12,
+  } as any : null);
 
   // Guard — no doctor in draft means navigation error; show empty state
   if (!doctor) {
@@ -97,16 +119,17 @@ export default function BookingConfirmScreen() {
     );
   }
 
-  const date = params.date || bookingDraft.date || '2026-10-18';
-  const slot = params.slot || bookingDraft.timeSlot || '04:15 PM';
-  const tokenNumber = params.token || 'Token #12';
+  const date = params.date || params.dateLabel || bookingDraft.date || 'Today, 18 Oct';
+  const slot = params.slot || params.slotTime || bookingDraft.timeSlot || '04:15 PM';
+  const tokenNumber = params.token || (params.tokenNumber ? (params.tokenNumber.startsWith('Token') ? params.tokenNumber : `Token #${params.tokenNumber}`) : 'Token #12');
+  const activeSymptoms = params.reason ? [params.reason] : (bookingDraft.symptoms.length > 0 ? bookingDraft.symptoms : []);
 
   // Coupon state
   const [couponCode, setCouponCode] = useState('HEALTH150');
   const [couponApplied, setCouponApplied] = useState(true);
 
   // Patient info state
-  const [patientName, setPatientName] = useState(user?.name || 'Rahul Sharma');
+  const [patientName, setPatientName] = useState(params.patientName || user?.name || 'Rahul Sharma');
   const [patientPhone, setPatientPhone] = useState(user?.phone || '+91 98765 43210');
   const [patientAge, setPatientAge] = useState('28');
   const [patientGender, setPatientGender] = useState('Male');
@@ -357,11 +380,11 @@ export default function BookingConfirmScreen() {
           </View>
 
           {/* Selected Symptoms Badge Strip */}
-          {bookingDraft.symptoms.length > 0 && (
+          {activeSymptoms.length > 0 && (
             <View style={styles.symptomsPreviewStrip}>
               <Text style={[styles.symptomsLabel, { color: colors.textMuted }]}>REASON FOR VISIT:</Text>
               <View style={styles.symptomPillsRow}>
-                {bookingDraft.symptoms.map((s) => (
+                {activeSymptoms.map((s) => (
                   <View key={s} style={[styles.symptomPill, { backgroundColor: colors.backgroundElement, borderColor: colors.border }]}>
                     <Text style={[styles.symptomPillText, { color: colors.text }]}>{s}</Text>
                   </View>

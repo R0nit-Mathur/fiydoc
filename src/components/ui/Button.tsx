@@ -83,8 +83,8 @@ export function Button({
       borderColor: StitchColors.primaryContainer,
     },
     teal: {
-      backgroundColor: StitchColors.secondaryContainer,
-      borderColor: StitchColors.secondaryContainer,
+      backgroundColor: StitchColors.secondary,
+      borderColor: StitchColors.secondary,
     },
     secondary: {
       backgroundColor: StitchColors.surfaceContainerLow,

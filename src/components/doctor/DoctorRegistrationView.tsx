@@ -23,12 +23,14 @@ import {
   MapPin,
   Clock,
   Shield,
+  Lock,
 } from 'lucide-react-native';
 import { StepProgressTracker } from '@/components/ui/StepProgressTracker';
 import { CardCarouselTabs, CarouselDots } from '@/components/ui/CardCarouselTabs';
 import { FileUploadCard } from '@/components/ui/FileUploadCard';
 import { SegmentedRoleSelector } from '@/components/ui/SegmentedRoleSelector';
 import { useAuthStore } from '@/store/useAuthStore';
+import { authService } from '@/services/authService';
 import { StitchColors } from '@/constants/theme';
 
 export interface DoctorRegistrationViewProps {
@@ -54,6 +56,7 @@ export function DoctorRegistrationView({
   const [dob, setDob] = useState('14/08/1984');
   const [contactPhone, setContactPhone] = useState('+91 98201 45872');
   const [contactEmail, setContactEmail] = useState(user?.email || 'dr.rajesh@mumbaicardiocare.in');
+  const [password, setPassword] = useState('');
   const [step1Loading, setStep1Loading] = useState(false);
   const [step1Success, setStep1Success] = useState(false);
 
@@ -124,6 +127,10 @@ export function DoctorRegistrationView({
       setError('Mobile number is required for verification.');
       return;
     }
+    if (password && password.length < 6) {
+      setError('Password must be at least 6 characters.');
+      return;
+    }
 
     if (Platform.OS !== 'web') {
       Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
@@ -162,32 +169,57 @@ export function DoctorRegistrationView({
     }
   };
 
-  const handleFinalSubmit = () => {
+  const handleFinalSubmit = async () => {
     setFinalSubmitting(true);
+    setError('');
     if (Platform.OS !== 'web') {
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
     }
 
-    const updatedUser = {
-      ...(user || {}),
-      id: user?.id || 'doc-default',
-      name: doctorName.trim(),
-      email: contactEmail.trim(),
-      role: 'doctor' as const,
-      onboardingCompleted: true,
-      verificationStatus: 'verified' as const,
-      specialty: specialization,
-      qualification: hasPg ? `${ugDegree}, ${pgCategory.split(' ')[0]}` : ugDegree,
-      licenseNumber: councilRegNumber,
-      hospital: hospitalName || clinicName,
-      consultationFee: consultationFee,
-    };
+    try {
+      const cleanEmail = contactEmail.trim();
+      const cleanName = doctorName.trim();
+      const cleanPhone = contactPhone.trim();
+      const cleanPassword = password.trim() || 'FiYDoc@Doctor' + Math.random().toString(36).slice(-4) + '!';
 
-    setTimeout(() => {
-      setSession(updatedUser as any);
+      const qualificationList: string[] = [ugDegree];
+      if (hasPg && pgCategory) {
+        qualificationList.push(pgCategory.split(' ')[0]);
+      }
+
+      const fullClinicAddress = clinicAddress.trim()
+        ? `${clinicAddress.trim()}, ${clinicCity.trim()} ${clinicPin.trim()}`
+        : 'Clinical Practice Address Pending';
+
+      const session = await authService.registerWithEmail(
+        cleanEmail,
+        cleanPassword,
+        'doctor',
+        cleanName,
+        cleanPhone,
+        {
+          licenseNumber: councilRegNumber.trim() || `NMC-${Date.now()}`,
+          registrationAuthority: primaryCouncil.trim() || 'National Medical Commission / State Council',
+          specialization: specialization.trim() || 'General Medicine',
+          qualifications: qualificationList,
+          clinicName: clinicName.trim() || hospitalName.trim() || `${cleanName}'s Clinic`,
+          clinicAddress: fullClinicAddress,
+          consultationFee: Number(consultationFee) || 800,
+        }
+      );
+
+      setSession(session);
       setFinalSubmitting(false);
       router.replace('/(doctor)/(tabs)/home');
-    }, 1500);
+    } catch (err: any) {
+      console.warn('[DoctorRegistrationView] Backend registration error:', err.message);
+      if (err.message?.includes('already registered')) {
+        setError('[Email/Password Auth] This email is already registered. Please sign in or use a different email.');
+      } else {
+        setError(err.message || 'Doctor registration failed. Please check your credentials and try again.');
+      }
+      setFinalSubmitting(false);
+    }
   };
 
   return (
@@ -323,6 +355,22 @@ export function DoctorRegistrationView({
                   style={styles.textInput}
                   keyboardType="email-address"
                   autoCapitalize="none"
+                />
+              </View>
+            </View>
+
+            {/* Portal Password */}
+            <View style={styles.inputGroup}>
+              <Text style={styles.inputLabel}>Clinician Portal Password</Text>
+              <View style={styles.inputWrapper}>
+                <Lock size={18} color="#737783" style={styles.inputIcon} />
+                <TextInput
+                  value={password}
+                  onChangeText={setPassword}
+                  placeholder="Enter portal password (min. 6 characters)"
+                  placeholderTextColor="#737783"
+                  style={styles.textInput}
+                  secureTextEntry
                 />
               </View>
             </View>

@@ -2,6 +2,9 @@ import { create } from 'zustand';
 import { createJSONStorage, persist } from 'zustand/middleware';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { UserSession } from '@/services/authService';
+import { useAppointmentStore } from './useAppointmentStore';
+import { useHealthStore } from './useHealthStore';
+import { useNotificationStore } from './useNotificationStore';
 
 interface AuthState {
   user: UserSession | null;
@@ -19,6 +22,7 @@ interface AuthState {
   setHasHydrated: (hydrated: boolean) => void;
   updateUser: (fields: Partial<UserSession>) => void;
   logout: () => void;
+  signOutAll: (reason?: 'USER_ACTION' | 'SESSION_EXPIRED') => Promise<void>;
 }
 
 export const useAuthStore = create<AuthState>()(
@@ -65,14 +69,47 @@ export const useAuthStore = create<AuthState>()(
 
       setHasHydrated: (hasHydrated) => set({ hasHydrated }),
 
-      logout: () =>
+      logout: () => {
         set({
           user: null,
           role: 'patient',
           isAuthenticated: false,
           onboardingCompleted: false,
           verificationStatus: 'registered',
-        }),
+        });
+        useAppointmentStore.getState().reset();
+        useHealthStore.getState().reset();
+        useNotificationStore.getState().reset();
+        AsyncStorage.multiRemove([
+          'fiydoc-auth-storage',
+          'fiydoc-appointment-storage-v2',
+          'fiydoc-health-storage-v5',
+          'fiydoc-notifications-storage-v2',
+        ]).catch((err) => console.warn('[useAuthStore] multiRemove error:', err));
+      },
+
+      signOutAll: async (reason?: 'USER_ACTION' | 'SESSION_EXPIRED') => {
+        set({
+          user: null,
+          role: 'patient',
+          isAuthenticated: false,
+          onboardingCompleted: false,
+          verificationStatus: 'registered',
+        });
+        useAppointmentStore.getState().reset();
+        useHealthStore.getState().reset();
+        useNotificationStore.getState().reset();
+        try {
+          await AsyncStorage.multiRemove([
+            'fiydoc-auth-storage',
+            'fiydoc-appointment-storage-v2',
+            'fiydoc-health-storage-v5',
+            'fiydoc-notifications-storage-v2',
+          ]);
+        } catch (err) {
+          console.warn('[useAuthStore] signOutAll multiRemove error:', err);
+        }
+      },
     }),
     {
       name: 'fiydoc-auth-storage',

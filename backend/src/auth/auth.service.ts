@@ -159,7 +159,7 @@ export class AuthService {
     return this.generateTokenResponse(user);
   }
 
-  async googleOAuthLogin(googleUser: { googleId: string; email: string; name: string }) {
+  async googleOAuthLogin(googleUser: { googleId: string; email: string; name: string; role?: Role }) {
     const includeRelations = {
       patient: true,
       doctor: {
@@ -178,16 +178,38 @@ export class AuthService {
     });
 
     if (!user) {
+      const userRole = googleUser.role || Role.PATIENT;
       user = await this.prisma.user.create({
         data: {
           email: googleUser.email,
           googleId: googleUser.googleId,
-          role: Role.PATIENT,
-          patient: {
+          role: userRole,
+          patient: userRole === Role.PATIENT ? {
             create: {
               fullName: googleUser.name,
             },
-          },
+          } : undefined,
+          doctor: userRole === Role.DOCTOR ? {
+            create: {
+              fullName: googleUser.name,
+              specialization: 'General Practitioner',
+              consultationFee: 800,
+              clinic: {
+                create: {
+                  name: `${googleUser.name}'s Practice`,
+                  address: 'Clinical Practice Address Pending',
+                  timings: '09:00 AM - 05:00 PM',
+                },
+              },
+              verification: {
+                create: {
+                  registrationNumber: `GOOGLE-${Date.now()}`,
+                  registrationAuthority: 'National Medical Commission / State Council',
+                  status: VerificationStatus.PENDING,
+                },
+              },
+            },
+          } : undefined,
         },
         include: includeRelations,
       });

@@ -37,6 +37,7 @@ import { useDoctorsQuery } from '@/hooks/queries/useDoctorsQuery';
 import { useLocationStore } from '@/store/useLocationStore';
 import { LocationPermissionModal } from '@/components/location/LocationPermissionModal';
 import { DoctorCard } from '@/components/ui/DoctorCard';
+import { signOutAll } from '@/services/authService';
 import { BorderRadius, Spacing, StitchColors, Shadows, Palette } from '@/constants/theme';
 import {
   Menu,
@@ -538,8 +539,12 @@ export default function PatientHomeScreen() {
             {/* Drawer Footer with Log Out */}
             <View style={styles.drawerFooter}>
               <Pressable
-                onPress={() => {
+                onPress={async () => {
                   setDrawerOpen(false);
+                  if (Platform.OS !== 'web') {
+                    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+                  }
+                  await signOutAll();
                   router.replace('/(auth)/welcome');
                 }}
                 style={({ pressed }) => [

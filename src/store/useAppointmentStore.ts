@@ -34,6 +34,7 @@ interface AppointmentState {
   bookSlot: (doctorId: string, date: string, timeSlot: string) => void;
   markSlotBooked: (doctorId: string, date: string, timeSlot: string) => void;
   releaseSlot: (doctorId: string, date: string, timeSlot: string) => void;
+  reset: () => void;
 }
 
 const initialDraft: BookingDraft = {
@@ -85,6 +86,7 @@ export const useAppointmentStore = create<AppointmentState>()(
         })),
 
       resetBookingDraft: () => set({ bookingDraft: initialDraft }),
+      reset: () => set({ appointments: [], bookingDraft: initialDraft, bookedSlots: {} }),
 
       addAppointment: (appointment) => {
         // Automatically reserve and block the time slot

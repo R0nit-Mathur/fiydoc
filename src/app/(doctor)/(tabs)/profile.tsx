@@ -52,6 +52,7 @@ import {
 } from 'lucide-react-native';
 
 import { useAuthStore } from '@/store/useAuthStore';
+import { signOutAll } from '@/services/authService';
 import { useAppTheme } from '@/hooks/useAppTheme';
 import { BorderRadius, Shadows, StitchColors, DEFAULT_DOCTOR_AVATAR } from '@/constants/theme';
 import { AppUpdateModal } from '@/components/ui/AppUpdateModal';
@@ -435,7 +436,13 @@ export default function DoctorProfileScreen() {
 
         {/* 8. Sign Out */}
         <Pressable
-          onPress={() => router.replace('/(auth)/welcome')}
+          onPress={async () => {
+            if (Platform.OS !== 'web') {
+              Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+            }
+            await signOutAll();
+            router.replace('/(auth)/welcome');
+          }}
           style={[styles.logoutBtn, { borderColor: '#FCA5A5', backgroundColor: colors.card }]}
         >
           <LogOut size={16} color={StitchColors.error} />

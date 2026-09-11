@@ -43,6 +43,12 @@ export async function apiClient<T>(endpoint: string, options: RequestInit = {}):
     });
 
     if (!response.ok) {
+      if (response.status === 401 && !endpoint.includes('/auth/login') && !endpoint.includes('/auth/register')) {
+        console.warn(`[apiClient] 401 Unauthorized on authenticated endpoint "${endpoint}". Triggering session expiration.`);
+        useAuthStore.getState().signOutAll?.('SESSION_EXPIRED');
+        throw new Error('[Session Expired] Your session has expired for security. Please sign in again.');
+      }
+
       const errorData = await response.json().catch(() => ({ message: 'API request failed' }));
       throw new Error(errorData.message || `HTTP error ${response.status}`);
     }
