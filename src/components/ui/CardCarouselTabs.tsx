@@ -200,7 +200,7 @@ const styles = StyleSheet.create({
   },
   bottomBar: {
     height: 3,
-    borderRadius: 9999,
+    borderRadius: 2,
     width: '100%',
   },
   bottomBarActive: {

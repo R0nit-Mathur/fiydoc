@@ -40,7 +40,12 @@ export function SegmentedRoleSelector({
   };
 
   const pillAnimatedStyle = useAnimatedStyle(() => {
-    if (containerWidth.value === 0) return {};
+    if (containerWidth.value === 0) {
+      return {
+        width: '49%',
+        transform: [{ translateX: selectedRole === 'doctor' ? 140 : 0 }],
+      };
+    }
     const halfWidth = (containerWidth.value - 8) / 2;
     return {
       width: halfWidth,
@@ -113,7 +118,7 @@ const styles = StyleSheet.create({
     width: '100%',
     height: 44,
     backgroundColor: StitchColors.surfaceContainer,
-    borderRadius: 9999,
+    borderRadius: 22,
     flexDirection: 'row',
     alignItems: 'center',
     padding: 4,
@@ -125,7 +130,7 @@ const styles = StyleSheet.create({
     bottom: 4,
     left: 4,
     backgroundColor: StitchColors.surfaceContainerLowest,
-    borderRadius: 9999,
+    borderRadius: 18,
     ...Platform.select({
       ios: {
         shadowColor: '#00397e',
@@ -147,7 +152,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
     zIndex: 10,
-    borderRadius: 9999,
+    borderRadius: 18,
   },
   tabContent: {
     flexDirection: 'row',

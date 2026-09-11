@@ -32,28 +32,19 @@ import { useAppTheme } from '@/hooks/useAppTheme';
 import { BorderRadius, Spacing, StitchColors } from '@/constants/theme';
 import { ChevronRight } from 'lucide-react-native';
 import { LinearGradient } from 'expo-linear-gradient';
+import { FiYLogo } from '@/components/ui/FiYLogo';
 
-const LOGO_SOURCE =
-  'https://lh3.googleusercontent.com/aida-public/AB6AXuD5y4hxrqMIyv35mNr7U3flxK5wyvDXkUKgDWQFZB8HC2su2ztOJxAclRjQY2sjw6Fqf32ORvXfR7j8LsKWj4D7FemJ0J-zYHiNxyfRmGb5NM-JecLcFAeWpgu6afoNBzWwvEOyH7Bc4XYXSg2nFbO6MADEufPdrN6JiFNf8_1u-mN_PihzoL4iWJVY8NUK7OO4B4sAmB6tKN8-bXhn8fCpfsLRSYsNxZR-uPHJopjzKSXb8L6bGo7YqpSdqaRC8WjZPA';
 const WALLPAPER_IMAGE = require('../../../assets/images/ultra_minimalist_apple_style_3d_medical_illustration_on_a_clean_soft_porcelain.png');
 
 export default function WelcomeScreen() {
   const router = useRouter();
   const { colors, isDark } = useAppTheme();
-  const [isLoading, setIsLoading] = useState(false);
 
-  const handleGetStarted = async () => {
-    if (isLoading) return;
-    setIsLoading(true);
-
+  const handleGetStarted = () => {
     if (Platform.OS !== 'web') {
-      Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+      Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
     }
-
-    setTimeout(() => {
-      setIsLoading(false);
-      router.push('/(auth)/signup');
-    }, 2200);
+    router.push('/(auth)/signup');
   };
 
   const handleSignIn = () => {
@@ -98,12 +89,7 @@ export default function WelcomeScreen() {
           >
           {/* Apple Minimal Squircle App Icon */}
           <View style={styles.logoWrapper}>
-            <Image
-              source={{ uri: LOGO_SOURCE }}
-              style={styles.logo}
-              resizeMode="contain"
-              accessibilityLabel="FiYDOC Logo"
-            />
+            <FiYLogo size="xl" />
           </View>
 
           {/* Typography Stack */}
@@ -132,69 +118,33 @@ export default function WelcomeScreen() {
           {/* Primary Apple Pill CTA */}
           <Pressable
             onPress={handleGetStarted}
-            disabled={isLoading}
             style={({ pressed }) => [
               styles.primaryCta,
-              pressed && { transform: [{ scale: 0.97 }] },
+              pressed && styles.ctaPressed,
             ]}
             accessibilityRole="button"
             accessibilityLabel="Get Started"
             hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
           >
-            {/* Default state content */}
-            <View
-              style={[
-                styles.ctaContent,
-                isLoading && styles.ctaContentHidden,
-              ]}
-            >
+            <View style={styles.ctaContent}>
               <Text style={styles.primaryCtaText}>Get Started</Text>
-              <ChevronRight size={20} color={StitchColors.onPrimary} strokeWidth={2.5} />
+              <ChevronRight size={20} color="#ffffff" strokeWidth={2.5} />
             </View>
-
-            {/* Apple Activity Spinner State */}
-            {isLoading && (
-              <View style={styles.ctaSpinner}>
-                <ActivityIndicator size="small" color={StitchColors.onPrimary} />
-                <Text style={styles.ctaSpinnerText}>Connecting to Care Portal...</Text>
-              </View>
-            )}
           </Pressable>
 
           {/* Secondary Clean Pill Action */}
-          {Platform.OS === 'ios' ? (
-            <Pressable
-              onPress={handleSignIn}
-              hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
-              style={({ pressed }) => [
-                styles.secondaryCta,
-                pressed && { transform: [{ scale: 0.98 }] },
-              ]}
-              accessibilityRole="button"
-              accessibilityLabel="I already have an account"
-            >
-              <BlurView
-                tint="light"
-                intensity={90}
-                style={StyleSheet.absoluteFill}
-              />
-              <View style={styles.secondaryCtaOverlay} />
-              <Text style={styles.secondaryCtaText}>I already have an account</Text>
-            </Pressable>
-          ) : (
-            <Pressable
-              onPress={handleSignIn}
-              hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
-              style={({ pressed }) => [
-                styles.secondaryCtaAndroid,
-                pressed && { transform: [{ scale: 0.98 }] },
-              ]}
-              accessibilityRole="button"
-              accessibilityLabel="I already have an account"
-            >
-              <Text style={styles.secondaryCtaText}>I already have an account</Text>
-            </Pressable>
-          )}
+          <Pressable
+            onPress={handleSignIn}
+            hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+            style={({ pressed }) => [
+              styles.secondaryCta,
+              pressed && styles.ctaPressed,
+            ]}
+            accessibilityRole="button"
+            accessibilityLabel="I already have an account"
+          >
+            <Text style={styles.secondaryCtaText}>I already have an account</Text>
+          </Pressable>
 
           {/* Discreet Legal Disclaimer */}
           <Text style={[styles.legalText, { color: StitchColors.outline }]}>
@@ -303,78 +253,70 @@ const styles = StyleSheet.create({
   primaryCta: {
     width: '100%',
     height: 54,
-    borderRadius: 9999,
-    backgroundColor: StitchColors.primaryContainer,
-    shadowColor: StitchColors.primaryContainer,
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.2,
-    shadowRadius: 8,
-    elevation: 4,
+    borderRadius: 27,
+    backgroundColor: '#1450a3',
     alignItems: 'center',
     justifyContent: 'center',
-    overflow: 'hidden',
+    ...Platform.select({
+      ios: {
+        shadowColor: '#1450a3',
+        shadowOffset: { width: 0, height: 4 },
+        shadowOpacity: 0.28,
+        shadowRadius: 10,
+      },
+      android: {
+        elevation: 4,
+      },
+      web: {
+        boxShadow: '0 4px 16px rgba(20, 80, 163, 0.32)',
+      },
+    }),
+  },
+  ctaPressed: {
+    transform: [{ scale: 0.98 }],
+    opacity: 0.9,
   },
   ctaContent: {
     flexDirection: 'row',
     alignItems: 'center',
+    justifyContent: 'center',
     gap: 8,
   },
-  ctaContentHidden: {
-    opacity: 0,
-  },
-  ctaSpinner: {
-    position: 'absolute',
-    top: 0,
-    left: 0,
-    right: 0,
-    bottom: 0,
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    gap: 10,
-  },
   primaryCtaText: {
-    color: StitchColors.onPrimary,
+    color: '#ffffff',
     fontSize: 17,
-    fontWeight: '600',
-    letterSpacing: -0.43,
-  },
-  ctaSpinnerText: {
-    color: StitchColors.onPrimary,
-    fontSize: 15,
-    fontWeight: '500',
-    letterSpacing: -0.3,
+    fontWeight: '700',
+    letterSpacing: -0.4,
   },
   secondaryCta: {
     width: '100%',
     height: 50,
-    borderRadius: 9999,
-    overflow: 'hidden',
+    borderRadius: 25,
     alignItems: 'center',
     justifyContent: 'center',
-    borderWidth: 1,
-    borderColor: 'rgba(195, 198, 211, 0.4)',
-    backgroundColor: 'rgba(255, 255, 255, 0.8)',
-  },
-  secondaryCtaAndroid: {
-    width: '100%',
-    height: 50,
-    borderRadius: 9999,
-    backgroundColor: 'rgba(255, 255, 255, 0.8)',
-    alignItems: 'center',
-    justifyContent: 'center',
-    borderWidth: 1,
-    borderColor: 'rgba(195, 198, 211, 0.4)',
-  },
-  secondaryCtaOverlay: {
-    ...StyleSheet.absoluteFill,
-    backgroundColor: 'rgba(255, 255, 255, 0.2)',
+    borderWidth: 1.5,
+    borderColor: '#c3c6d3',
+    backgroundColor: '#ffffff',
+    ...Platform.select({
+      ios: {
+        shadowColor: '#000000',
+        shadowOffset: { width: 0, height: 2 },
+        shadowOpacity: 0.05,
+        shadowRadius: 4,
+      },
+      android: {
+        elevation: 2,
+      },
+      web: {
+        boxShadow: '0 2px 6px rgba(0, 0, 0, 0.05)',
+      },
+    }),
   },
   secondaryCtaText: {
-    color: StitchColors.primaryContainer,
+    color: '#1450a3',
     fontSize: 15,
-    fontWeight: '500',
-    letterSpacing: -0.075,
+    fontWeight: '600',
+    letterSpacing: -0.1,
   },
   legalText: {
     fontSize: 12,
@@ -397,7 +339,7 @@ const styles = StyleSheet.create({
   homeIndicator: {
     width: 128,
     height: 5,
-    borderRadius: 9999,
+    borderRadius: 3,
     backgroundColor: 'rgba(19, 27, 46, 0.2)',
   },
 });

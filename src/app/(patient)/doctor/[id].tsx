@@ -49,7 +49,7 @@ import { useDoctorsQuery } from '@/hooks/queries/useDoctorsQuery';
 const DEFAULT_DOCTOR_IMAGE = DEFAULT_DOCTOR_AVATAR;
 
 const CLINIC_BANNER_IMAGE =
-  'https://lh3.googleusercontent.com/aida-public/AB6AXuC8pw4lXGfP89tyZluudTlj31JAQ7G4P7XWQO9rYvj5qR7K-VEpBui2fMyL79houg-86oya2kF05-fOXBlm_hrovtqgY9jhfFC17brCpq8-d6VexuBDPbB1cKg_OnhUWafJlSzBA26MlgIAbjmWMAcckUbys-QU2s7aIQTJ1ASUeaZcuSX-jG9dR1YRpHo0T2pQGM9jlnP5Ze4kbshF6orwFa3kgqg-jRX-h3qeITt43QVWKwI0BkgO';
+  'https://images.unsplash.com/photo-1519494026892-80bbd2d6fd0d?w=1200&auto=format&fit=crop&q=80';
 
 const DATES = [
   { id: 'today', day: 'Today', date: '18', month: 'Oct, Fri', slots: '7 slots left' },
@@ -554,7 +554,7 @@ const styles = StyleSheet.create({
   iconButton: {
     width: 38,
     height: 38,
-    borderRadius: 9999,
+    borderRadius: 19,
     backgroundColor: StitchColors.surfaceContainerLow,
     alignItems: 'center',
     justifyContent: 'center',
@@ -634,7 +634,7 @@ const styles = StyleSheet.create({
   specialtyPill: {
     paddingHorizontal: 8,
     paddingVertical: 2,
-    borderRadius: 9999,
+    borderRadius: 10,
     backgroundColor: StitchColors.primaryFixed,
   },
   specialtyPillText: {
@@ -749,7 +749,7 @@ const styles = StyleSheet.create({
     gap: 4,
     paddingHorizontal: 9,
     paddingVertical: 4,
-    borderRadius: 9999,
+    borderRadius: 12,
     backgroundColor: StitchColors.surfaceContainer,
   },
   distanceBadgeText: {
@@ -787,7 +787,7 @@ const styles = StyleSheet.create({
     gap: 5,
     paddingHorizontal: 10,
     paddingVertical: 4.5,
-    borderRadius: 9999,
+    borderRadius: 14,
     backgroundColor: 'rgba(255, 255, 255, 0.92)',
   },
   timingPillText: {
@@ -801,7 +801,7 @@ const styles = StyleSheet.create({
     gap: 4,
     paddingHorizontal: 10,
     paddingVertical: 4.5,
-    borderRadius: 9999,
+    borderRadius: 14,
     backgroundColor: 'rgba(0, 0, 0, 0.5)',
   },
   viewRouteText: {
@@ -845,7 +845,7 @@ const styles = StyleSheet.create({
     gap: 4,
     paddingHorizontal: 8,
     paddingVertical: 3,
-    borderRadius: 9999,
+    borderRadius: 10,
     backgroundColor: 'rgba(118, 244, 224, 0.25)',
   },
   slotsLeftDot: {
@@ -1134,7 +1134,7 @@ const styles = StyleSheet.create({
   bookCtaButton: {
     flex: 1,
     height: 48,
-    borderRadius: 9999,
+    borderRadius: 24,
     backgroundColor: StitchColors.primary,
     flexDirection: 'row',
     alignItems: 'center',

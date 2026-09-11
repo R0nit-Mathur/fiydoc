@@ -59,6 +59,26 @@
         {
           "locationWhenInUsePermission": "FiYDoc needs your location to find nearby verified clinics and doctors and estimate travel distance."
         }
+      ],
+      [
+        "expo-build-properties",
+        {
+          "android": {
+            "compileSdkVersion": 35,
+            "targetSdkVersion": 35,
+            "minSdkVersion": 24,
+            "buildToolsVersion": "35.0.0",
+            "extraGradleProperties": {
+              "android.suppressUnsupportedCompileSdk": "35",
+              "org.gradle.jvmargs": "-Xmx4096m -XX:MaxMetaspaceSize=1024m -XX:+UseParallelGC",
+              "org.gradle.parallel": "true",
+              "org.gradle.caching": "true"
+            }
+          },
+          "ios": {
+            "deploymentTarget": "16.4"
+          }
+        }
       ]
     ],
     "experiments": {

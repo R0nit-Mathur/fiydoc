@@ -199,7 +199,7 @@ const styles = StyleSheet.create({
     gap: 4,
     paddingHorizontal: 8,
     paddingVertical: 2.5,
-    borderRadius: 9999,
+    borderRadius: 10,
     backgroundColor: '#eff6ff',
   },
   verifiedText: {

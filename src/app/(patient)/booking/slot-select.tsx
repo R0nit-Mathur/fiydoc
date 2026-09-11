@@ -783,7 +783,7 @@ const styles = StyleSheet.create({
   iconButton: {
     width: 38,
     height: 38,
-    borderRadius: 9999,
+    borderRadius: 19,
     backgroundColor: StitchColors.surfaceContainerLowest,
     alignItems: 'center',
     justifyContent: 'center',
@@ -802,9 +802,10 @@ const styles = StyleSheet.create({
     width: '100%',
     alignSelf: 'center',
     paddingHorizontal: 16,
-    paddingTop: 10,
+    paddingTop: 12,
     gap: 12,
   },
+
   miniBanner: {
     backgroundColor: StitchColors.surfaceContainerLowest,
     borderRadius: 18,
@@ -878,7 +879,7 @@ const styles = StyleSheet.create({
     gap: 4,
     paddingHorizontal: 8,
     paddingVertical: 3,
-    borderRadius: 9999,
+    borderRadius: 10,
     backgroundColor: 'rgba(0, 107, 95, 0.1)',
   },
   opdTriageDot: {
@@ -907,7 +908,7 @@ const styles = StyleSheet.create({
   stepperBar: {
     height: 6,
     width: '100%',
-    borderRadius: 9999,
+    borderRadius: 3,
   },
   stepperBarCurrent: {
     backgroundColor: StitchColors.primary,
@@ -966,7 +967,7 @@ const styles = StyleSheet.create({
   patientBadge: {
     paddingHorizontal: 9,
     paddingVertical: 3,
-    borderRadius: 9999,
+    borderRadius: 10,
     backgroundColor: 'rgba(0, 107, 95, 0.1)',
   },
   patientBadgeText: {
@@ -1092,7 +1093,7 @@ const styles = StyleSheet.create({
     gap: 5,
     paddingHorizontal: 12,
     paddingVertical: 7,
-    borderRadius: 9999,
+    borderRadius: 16,
   },
   reasonChipActive: {
     backgroundColor: StitchColors.primaryContainer,
@@ -1116,7 +1117,7 @@ const styles = StyleSheet.create({
     gap: 4,
     paddingHorizontal: 12,
     paddingVertical: 7,
-    borderRadius: 9999,
+    borderRadius: 16,
     backgroundColor: StitchColors.surfaceContainerHigh,
   },
   addOtherText: {
@@ -1208,7 +1209,7 @@ const styles = StyleSheet.create({
     gap: 6,
     paddingHorizontal: 10,
     paddingVertical: 6,
-    borderRadius: 9999,
+    borderRadius: 14,
     backgroundColor: '#ffdad6',
   },
   severeAllergyText: {
@@ -1219,7 +1220,7 @@ const styles = StyleSheet.create({
   bgInactiveChip: {
     paddingHorizontal: 12,
     paddingVertical: 6,
-    borderRadius: 9999,
+    borderRadius: 14,
     backgroundColor: StitchColors.surfaceContainerLow,
   },
   bgInactiveChipText: {
@@ -1232,7 +1233,7 @@ const styles = StyleSheet.create({
     gap: 4,
     paddingHorizontal: 10,
     paddingVertical: 6,
-    borderRadius: 9999,
+    borderRadius: 14,
     backgroundColor: StitchColors.surfaceContainerHigh,
   },
   bgAddChipText: {
@@ -1250,7 +1251,7 @@ const styles = StyleSheet.create({
     gap: 5,
     paddingHorizontal: 12,
     paddingVertical: 6,
-    borderRadius: 9999,
+    borderRadius: 14,
     backgroundColor: StitchColors.primaryContainer,
   },
   activeConditionText: {
@@ -1380,7 +1381,7 @@ const styles = StyleSheet.create({
     backgroundColor: StitchColors.surfaceContainerLowest,
     paddingHorizontal: 10,
     paddingVertical: 4,
-    borderRadius: 9999,
+    borderRadius: 12,
     marginTop: 8,
     borderWidth: 1,
     borderColor: 'rgba(195, 198, 211, 0.3)',
@@ -1466,7 +1467,7 @@ const styles = StyleSheet.create({
   backStepBtn: {
     height: 48,
     paddingHorizontal: 14,
-    borderRadius: 9999,
+    borderRadius: 24,
     backgroundColor: StitchColors.surfaceContainerLow,
     flexDirection: 'row',
     alignItems: 'center',
@@ -1481,7 +1482,7 @@ const styles = StyleSheet.create({
   primaryActionBtn: {
     flex: 1,
     height: 48,
-    borderRadius: 9999,
+    borderRadius: 24,
     backgroundColor: StitchColors.primaryContainer,
     flexDirection: 'row',
     alignItems: 'center',
@@ -1511,7 +1512,7 @@ const styles = StyleSheet.create({
     backgroundColor: 'rgba(255, 255, 255, 0.2)',
     paddingHorizontal: 8,
     paddingVertical: 3,
-    borderRadius: 9999,
+    borderRadius: 10,
   },
   actionBadgeText: {
     fontSize: 10,

@@ -3163,7 +3163,7 @@ const styles = StyleSheet.create({
   stepBadgeCircle: {
     width: 18,
     height: 18,
-    borderRadius: 9999,
+    borderRadius: 9,
     alignItems: 'center',
     justifyContent: 'center',
   },

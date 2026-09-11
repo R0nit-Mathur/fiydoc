@@ -148,7 +148,7 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     padding: 4,
-    borderRadius: 9999, // Stitch full pill
+    borderRadius: 24, // Stitch full pill
     position: 'relative',
     borderWidth: 1,
     height: 48,
@@ -158,7 +158,7 @@ const styles = StyleSheet.create({
     top: 4,
     bottom: 4,
     left: 4,
-    borderRadius: 9999, // Pill indicator
+    borderRadius: 20, // Pill indicator
     zIndex: 1,
   },
   tab: {

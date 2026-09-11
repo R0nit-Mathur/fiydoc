@@ -121,12 +121,12 @@ export function Button({
   };
 
   const textColors = {
-    primary: StitchColors.onPrimaryContainer,
-    teal: StitchColors.onSecondaryContainer,
+    primary: '#ffffff',
+    teal: '#ffffff',
     secondary: StitchColors.onSurface,
     outline: StitchColors.primaryContainer,
     ghost: StitchColors.onSurfaceVariant,
-    danger: StitchColors.onError,
+    danger: '#ffffff',
     glass: StitchColors.onSurface,
   };
 
@@ -198,19 +198,19 @@ const sizeStyles = StyleSheet.create({
     paddingVertical: 8,
     paddingHorizontal: 16,
     minHeight: 38,
-    borderRadius: BorderRadius.full,
+    borderRadius: 19,
   },
   md: {
     paddingVertical: 14,
     paddingHorizontal: 22,
     minHeight: 52,
-    borderRadius: BorderRadius.full,
+    borderRadius: 26,
   },
   lg: {
     paddingVertical: 16,
     paddingHorizontal: 26,
     minHeight: 56,
-    borderRadius: BorderRadius.full,
+    borderRadius: 28,
   },
 });
 

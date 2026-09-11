@@ -66,9 +66,8 @@ import {
 
 import { SPECIALTIES, ALL_SPECIALTIES } from '@/constants/specialties';
 import { AllSpecialtiesModal } from '@/components/patient/AllSpecialtiesModal';
+import { FiYLogo } from '@/components/ui/FiYLogo';
 
-const LOGO_SOURCE =
-  'https://lh3.googleusercontent.com/aida-public/AB6AXuAD0qFDgPC3RIApqhIv1_QwyKLTd6PUmeRCEZWI9V8aFhl3CEpTbcCQONztwhgqKRU4tmkzBiNiStmc7GDO1uirL5WoQJ714ybXGm7m8AEmwfV0BOcbjGa97HnEg3E5fTq0_cDXRQyOzllo0QxPg-jw69cDSSke3gKtmb5m-nVYj83qEwcZELFVyM5wL3ocwgZ6VG5VWrkYT6Q5GxmgWpK42Jnt6WxCWmggYVN9ptO4VotMCENeozs5g46OwMFGzZVe-A';
 const DOCTOR_AVATAR =
   'https://images.unsplash.com/photo-1594824813682-14c1e405a76e?w=600&auto=format&fit=crop&q=80';
 
@@ -128,12 +127,7 @@ export default function PatientHomeScreen() {
             onPress={() => router.push('/(patient)/(tabs)/profile')}
             hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
           >
-            <Image
-              source={{ uri: LOGO_SOURCE }}
-              style={styles.brandLogo}
-              resizeMode="contain"
-              accessibilityLabel="FiYDOC"
-            />
+            <FiYLogo size="md" />
           </Pressable>
           <Pressable
             onPress={() => router.push('/(patient)/notifications')}
@@ -421,11 +415,7 @@ export default function PatientHomeScreen() {
             style={styles.drawerPanel}
           >
             <View style={styles.drawerHeader}>
-              <Image
-                source={{ uri: LOGO_SOURCE }}
-                style={styles.drawerLogo}
-                resizeMode="contain"
-              />
+              <FiYLogo size="md" />
               <Pressable
                 onPress={() => setDrawerOpen(false)}
                 hitSlop={{ top: 6, bottom: 6, left: 6, right: 6 }}
@@ -639,7 +629,7 @@ const styles = StyleSheet.create({
     right: 10,
     width: 8,
     height: 8,
-    borderRadius: 9999,
+    borderRadius: 4,
     backgroundColor: '#f43f5e',
     borderWidth: 2,
     borderColor: '#ffffff',
@@ -760,7 +750,7 @@ const styles = StyleSheet.create({
   upcomingPulse: {
     width: 8,
     height: 8,
-    borderRadius: 9999,
+    borderRadius: 4,
     backgroundColor: '#5eead4',
   },
   upcomingLabel: {
@@ -776,12 +766,12 @@ const styles = StyleSheet.create({
     backgroundColor: 'rgba(94, 234, 212, 0.15)',
     paddingHorizontal: 8,
     paddingVertical: 3,
-    borderRadius: BorderRadius.full,
+    borderRadius: 12,
   },
   confirmedDot: {
     width: 5,
     height: 5,
-    borderRadius: 9999,
+    borderRadius: 3,
     backgroundColor: '#5eead4',
   },
   confirmedText: {

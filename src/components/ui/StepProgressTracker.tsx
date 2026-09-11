@@ -154,7 +154,7 @@ const styles = StyleSheet.create({
     flex: 1,
     height: 2.5,
     backgroundColor: StitchColors.surfaceContainerHighest,
-    borderRadius: 9999,
+    borderRadius: 2,
     marginHorizontal: 4,
     marginBottom: 20,
     overflow: 'hidden',
@@ -162,6 +162,6 @@ const styles = StyleSheet.create({
   connectingBarFill: {
     height: '100%',
     backgroundColor: StitchColors.primary,
-    borderRadius: 9999,
+    borderRadius: 2,
   },
 });

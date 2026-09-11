@@ -35,8 +35,8 @@ export function Badge({ label, variant = 'teal', size = 'md', icon }: BadgeProps
   const current = (isDark ? darkStyles : lightStyles)[variant] || (isDark ? darkStyles.teal : lightStyles.teal);
 
   const sizeStyle = size === 'sm'
-    ? { paddingHorizontal: 9, paddingVertical: 3, borderRadius: 9999, fontSize: 11 }
-    : { paddingHorizontal: 12, paddingVertical: 5, borderRadius: 9999, fontSize: 12 };
+    ? { paddingHorizontal: 9, paddingVertical: 3, borderRadius: 10, fontSize: 11 }
+    : { paddingHorizontal: 12, paddingVertical: 5, borderRadius: 14, fontSize: 12 };
 
   return (
     <View

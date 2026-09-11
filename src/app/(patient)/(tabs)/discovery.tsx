@@ -344,7 +344,7 @@ const styles = StyleSheet.create({
   iconButton: {
     width: 38,
     height: 38,
-    borderRadius: 9999,
+    borderRadius: 19,
     backgroundColor: StitchColors.surfaceContainerLow,
     alignItems: 'center',
     justifyContent: 'center',
@@ -391,7 +391,7 @@ const styles = StyleSheet.create({
     gap: 5,
     paddingHorizontal: 10,
     paddingVertical: 4.5,
-    borderRadius: 9999,
+    borderRadius: 12,
     backgroundColor: '#f1f5f9',
   },
   locationText: {
@@ -449,7 +449,7 @@ const styles = StyleSheet.create({
     gap: 5,
     paddingHorizontal: 14,
     paddingVertical: 7,
-    borderRadius: 9999,
+    borderRadius: 16,
   },
   filterChipActive: {
     backgroundColor: StitchColors.primaryContainer,

@@ -306,7 +306,8 @@ export const BorderRadius = {
   lg: 16,     // 1rem
   xl: 24,     // 1.5rem
   '2xl': 32,  // 2rem
-  full: 9999, // Pills
+  full: 28,   // Safe pill radius (prevents Android ViewOutline clipping bugs)
+  pill: 28,
 } as const;
 
 // ============================================

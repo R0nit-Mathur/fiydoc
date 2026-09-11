@@ -449,7 +449,7 @@ const styles = StyleSheet.create({
     marginTop: 8,
     width: '100%',
     height: 54,
-    borderRadius: 9999,
+    borderRadius: 27,
     backgroundColor: StitchColors.primary,
     alignItems: 'center',
     justifyContent: 'center',
@@ -524,7 +524,7 @@ const styles = StyleSheet.create({
   googleButton: {
     width: '100%',
     height: 54,
-    borderRadius: 9999,
+    borderRadius: 27,
     backgroundColor: StitchColors.surfaceContainerLowest,
     borderWidth: 1,
     borderColor: '#e2e8f0',

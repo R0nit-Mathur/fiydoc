@@ -218,7 +218,7 @@ const styles = StyleSheet.create({
     width: '100%',
     maxWidth: 330,
     height: 60,
-    borderRadius: 9999,
+    borderRadius: 30,
     borderWidth: 1,
     borderColor: 'rgba(255, 255, 255, 0.6)',
     overflow: 'hidden',
@@ -243,7 +243,7 @@ const styles = StyleSheet.create({
     top: 5,
     bottom: 5,
     backgroundColor: StitchColors.primary,
-    borderRadius: 9999,
+    borderRadius: 25,
     ...Platform.select({
       ios: {
         shadowColor: StitchColors.primary,
@@ -265,7 +265,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
     zIndex: 10,
-    borderRadius: 9999,
+    borderRadius: 25,
     gap: 1.5,
   },
   iconContainer: {

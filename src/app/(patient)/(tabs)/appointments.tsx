@@ -420,7 +420,7 @@ const styles = StyleSheet.create({
   iconButton: {
     width: 38,
     height: 38,
-    borderRadius: 9999,
+    borderRadius: 19,
     backgroundColor: StitchColors.surfaceContainerLowest,
     borderWidth: 1,
     borderColor: 'rgba(195, 198, 211, 0.4)',
@@ -458,7 +458,7 @@ const styles = StyleSheet.create({
   segmentedFilter: {
     padding: 4,
     backgroundColor: 'rgba(218, 226, 253, 0.6)',
-    borderRadius: 9999,
+    borderRadius: 22,
     flexDirection: 'row',
     alignItems: 'center',
     borderWidth: 1,
@@ -469,7 +469,7 @@ const styles = StyleSheet.create({
     flex: 1,
     paddingVertical: 7,
     paddingHorizontal: 8,
-    borderRadius: 9999,
+    borderRadius: 18,
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
@@ -504,7 +504,7 @@ const styles = StyleSheet.create({
   segmentBadge: {
     paddingHorizontal: 6,
     paddingVertical: 1,
-    borderRadius: 9999,
+    borderRadius: 8,
   },
   segmentBadgeActive: {
     backgroundColor: 'rgba(20, 80, 163, 0.1)',
@@ -569,7 +569,7 @@ const styles = StyleSheet.create({
     gap: 5,
     paddingHorizontal: 10,
     paddingVertical: 3,
-    borderRadius: 9999,
+    borderRadius: 12,
     backgroundColor: '#ccfbf1',
   },
   tokenDot: {
@@ -742,7 +742,7 @@ const styles = StyleSheet.create({
   completedBadge: {
     paddingHorizontal: 6,
     paddingVertical: 1,
-    borderRadius: 9999,
+    borderRadius: 8,
     backgroundColor: StitchColors.surfaceContainer,
   },
   completedBadgeText: {
@@ -761,7 +761,7 @@ const styles = StyleSheet.create({
     gap: 4,
     paddingHorizontal: 10,
     paddingVertical: 5,
-    borderRadius: 9999,
+    borderRadius: 12,
     backgroundColor: 'rgba(20, 80, 163, 0.1)',
   },
   rxButtonText: {
