@@ -44,6 +44,7 @@
     "zustand": "^5.0.15"
   },
   "devDependencies": {
+    "@babel/plugin-transform-react-jsx": "^8.0.1",
     "@types/react": "~19.2.2",
     "babel-preset-expo": "^57.0.10",
     "nativewind": "^4.2.6",
