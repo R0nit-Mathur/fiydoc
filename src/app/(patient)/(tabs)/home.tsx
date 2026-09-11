@@ -15,7 +15,7 @@
  * - Top Rated In-Clinic Doctors list with live DoctorCard token telemetry
  */
 
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import {
   View,
   Text,
@@ -35,6 +35,8 @@ import * as Haptics from 'expo-haptics';
 import { useAppTheme } from '@/hooks/useAppTheme';
 import { useDoctorsQuery } from '@/hooks/queries/useDoctorsQuery';
 import { useLocationStore } from '@/store/useLocationStore';
+import { useAuthStore } from '@/store/useAuthStore';
+import { useAppointmentStore } from '@/store/useAppointmentStore';
 import { LocationPermissionModal } from '@/components/location/LocationPermissionModal';
 import { DoctorCard } from '@/components/ui/DoctorCard';
 import { signOutAll } from '@/services/authService';
@@ -82,6 +84,23 @@ export default function PatientHomeScreen() {
 
   const { formattedAddress, city, area, permissionStatus } = useLocationStore();
   const { data: doctors = [] } = useDoctorsQuery();
+  const user = useAuthStore((s) => s.user);
+  const appointments = useAppointmentStore((s) => s.appointments);
+
+  // Find nearest upcoming confirmed/valid appointment from store
+  const upcomingAppointment = useMemo(() => {
+    return appointments.find(
+      (a) => ['confirmed', 'upcoming', 'checked_in', 'in_progress', 'pending'].includes(a.status)
+    ) || null;
+  }, [appointments]);
+
+  const greetingName = user?.name
+    ? user.name.split(' ')[0]
+    : 'there';
+
+  const userInitials = user?.name
+    ? user.name.split(' ').map((n: string) => n[0]).join('').toUpperCase().slice(0, 2)
+    : 'PT';
 
   // Prompt for location on first visit if permission is undetermined
   useEffect(() => {
@@ -179,7 +198,7 @@ export default function PatientHomeScreen() {
 
           <View style={styles.greetingBlock}>
             <Text style={styles.greetingSmall}>Good morning,</Text>
-            <Text style={styles.greetingBig}>Rahul</Text>
+            <Text style={styles.greetingBig}>{greetingName}</Text>
           </View>
 
           {/* Dedicated Search Trigger Bar (Only opens /(patient)/search) */}
@@ -213,70 +232,141 @@ export default function PatientHomeScreen() {
           </Pressable>
         </View>
 
-        {/* 2. Upcoming Clinic Visit Card */}
-        <View style={styles.sectionSpacer}>
-          <Pressable
-            onPress={() => router.push('/(patient)/(tabs)/appointments')}
-            style={({ pressed }) => pressed && { transform: [{ scale: 0.99 }] }}
-          >
-            <Animated.View entering={FadeInDown.delay(60).duration(380)} style={styles.upcomingCard}>
-              <View style={styles.upcomingHeader}>
-                <View style={styles.upcomingHeaderLeft}>
-                  <View style={styles.upcomingPulse} />
-                  <Text style={styles.upcomingLabel}>UPCOMING APPOINTMENT</Text>
-                </View>
-                <View style={styles.confirmedBadge}>
-                  <View style={styles.confirmedDot} />
-                  <Text style={styles.confirmedText}>Confirmed</Text>
-                </View>
-              </View>
-
-              <View style={styles.doctorRow}>
-                <Image
-                  source={{ uri: DOCTOR_AVATAR }}
-                  style={styles.doctorAvatar}
-                />
-                <View style={styles.flex1}>
-                  <View style={styles.doctorNameRow}>
-                    <Text style={styles.doctorName}>Dr. Ananya Sen, MD</Text>
-                    <Verified size={15} color="#5eead4" fill="#5eead4" />
+        {/* 2. Upcoming Clinic Visit Card (Dynamic from Appointments Store) */}
+        {upcomingAppointment ? (
+          <View style={styles.sectionSpacer}>
+            <Pressable
+              onPress={() => router.push('/(patient)/(tabs)/appointments')}
+              style={({ pressed }) => pressed && { transform: [{ scale: 0.99 }] }}
+            >
+              <Animated.View entering={FadeInDown.delay(60).duration(380)} style={styles.upcomingCard}>
+                <View style={styles.upcomingHeader}>
+                  <View style={styles.upcomingHeaderLeft}>
+                    <View style={styles.upcomingPulse} />
+                    <Text style={styles.upcomingLabel}>UPCOMING APPOINTMENT</Text>
                   </View>
-                  <Text style={styles.doctorSpecialty}>
-                    Cardiologist • Fortis Hospital OPD
-                  </Text>
-                  <View style={styles.tokenRow}>
-                    <View style={styles.tokenPill}>
-                      <Text style={styles.tokenText}>Token #A-14</Text>
+                  <View style={styles.confirmedBadge}>
+                    <View style={styles.confirmedDot} />
+                    <Text style={styles.confirmedText}>Confirmed</Text>
+                  </View>
+                </View>
+
+                <View style={styles.doctorRow}>
+                  <Image
+                    source={{ uri: upcomingAppointment.doctorAvatar || DOCTOR_AVATAR }}
+                    style={styles.doctorAvatar}
+                  />
+                  <View style={styles.flex1}>
+                    <View style={styles.doctorNameRow}>
+                      <Text style={styles.doctorName}>{upcomingAppointment.doctorName}</Text>
+                      <Verified size={15} color="#5eead4" fill="#5eead4" />
                     </View>
-                    <Text style={styles.tokenLocation}>Floor 2 • OPD Wing</Text>
+                    <Text style={styles.doctorSpecialty}>
+                      {upcomingAppointment.doctorSpecialty} • {upcomingAppointment.hospital || 'OPD Clinic'}
+                    </Text>
+                    <View style={styles.tokenRow}>
+                      <View style={styles.tokenPill}>
+                        <Text style={styles.tokenText}>
+                          Token #{upcomingAppointment.tokenNumber || 'A-1'}
+                        </Text>
+                      </View>
+                      <Text style={styles.tokenLocation}>In-Clinic OPD Check-In</Text>
+                    </View>
                   </View>
                 </View>
-              </View>
 
-              <View style={styles.upcomingFooter}>
-                <View style={styles.upcomingTimeRow}>
-                  <Calendar size={18} color="#5eead4" />
-                  <Text style={styles.upcomingTime}>Tomorrow, 10:30 AM</Text>
-                  <Text style={styles.upcomingType}>(In-Clinic)</Text>
+                <View style={styles.upcomingFooter}>
+                  <View style={styles.upcomingTimeRow}>
+                    <Calendar size={18} color="#5eead4" />
+                    <Text style={styles.upcomingTime}>
+                      {upcomingAppointment.date}, {upcomingAppointment.time}
+                    </Text>
+                    <Text style={styles.upcomingType}>({upcomingAppointment.mode === 'video' ? 'Video' : 'In-Clinic'})</Text>
+                  </View>
+                  <Pressable
+                    onPress={(e) => {
+                      e.stopPropagation();
+                      router.push('/(patient)/(tabs)/appointments');
+                    }}
+                    hitSlop={{ top: 6, bottom: 6, left: 6, right: 6 }}
+                    style={({ pressed }) => [
+                      styles.directionsButton,
+                      pressed && { transform: [{ scale: 0.95 }] },
+                    ]}
+                  >
+                    <Navigation size={14} color="#0c1e4a" />
+                    <Text style={styles.directionsText}>View Pass</Text>
+                  </Pressable>
                 </View>
-                <Pressable
-                  onPress={(e) => {
-                    e.stopPropagation();
-                    router.push('/(patient)/(tabs)/appointments');
-                  }}
-                  hitSlop={{ top: 6, bottom: 6, left: 6, right: 6 }}
-                  style={({ pressed }) => [
-                    styles.directionsButton,
-                    pressed && { transform: [{ scale: 0.95 }] },
-                  ]}
-                >
-                  <Navigation size={14} color="#0c1e4a" />
-                  <Text style={styles.directionsText}>Directions</Text>
-                </Pressable>
-              </View>
-            </Animated.View>
-          </Pressable>
-        </View>
+              </Animated.View>
+            </Pressable>
+          </View>
+        ) : doctors.length > 0 ? (
+          <View style={styles.sectionSpacer}>
+            <Pressable
+              onPress={() => router.push(`/(patient)/doctor/${doctors[0].id}`)}
+              style={({ pressed }) => pressed && { transform: [{ scale: 0.99 }] }}
+            >
+              <Animated.View entering={FadeInDown.delay(60).duration(380)} style={styles.upcomingCard}>
+                <View style={styles.upcomingHeader}>
+                  <View style={styles.upcomingHeaderLeft}>
+                    <View style={styles.upcomingPulse} />
+                    <Text style={styles.upcomingLabel}>FEATURED SPECIALIST TODAY</Text>
+                  </View>
+                  <View style={styles.confirmedBadge}>
+                    <View style={styles.confirmedDot} />
+                    <Text style={styles.confirmedText}>Slots Open</Text>
+                  </View>
+                </View>
+
+                <View style={styles.doctorRow}>
+                  <Image
+                    source={{ uri: doctors[0].avatar || DOCTOR_AVATAR }}
+                    style={styles.doctorAvatar}
+                  />
+                  <View style={styles.flex1}>
+                    <View style={styles.doctorNameRow}>
+                      <Text style={styles.doctorName}>{doctors[0].name}</Text>
+                      <Verified size={15} color="#5eead4" fill="#5eead4" />
+                    </View>
+                    <Text style={styles.doctorSpecialty}>
+                      {doctors[0].specialty} • {doctors[0].hospital || 'OPD Practice'}
+                    </Text>
+                    <View style={styles.tokenRow}>
+                      <View style={styles.tokenPill}>
+                        <Text style={styles.tokenText}>
+                          Fee: ₹{doctors[0].consultationFee || 800}
+                        </Text>
+                      </View>
+                      <Text style={styles.tokenLocation}>Instant OPD Booking</Text>
+                    </View>
+                  </View>
+                </View>
+
+                <View style={styles.upcomingFooter}>
+                  <View style={styles.upcomingTimeRow}>
+                    <Calendar size={18} color="#5eead4" />
+                    <Text style={styles.upcomingTime}>Next Available Slot Today</Text>
+                  </View>
+                  <Pressable
+                    onPress={(e) => {
+                      e.stopPropagation();
+                      router.push(`/(patient)/doctor/${doctors[0].id}`);
+                    }}
+                    hitSlop={{ top: 6, bottom: 6, left: 6, right: 6 }}
+                    style={({ pressed }) => [
+                      styles.directionsButton,
+                      pressed && { transform: [{ scale: 0.95 }] },
+                    ]}
+                  >
+                    <Navigation size={14} color="#0c1e4a" />
+                    <Text style={styles.directionsText}>Book Now</Text>
+                  </Pressable>
+                </View>
+              </Animated.View>
+            </Pressable>
+          </View>
+        ) : null}
 
         {/* 3. Find by Specialty Section */}
         <Animated.View entering={FadeInUp.delay(100).duration(380)} style={styles.sectionSpacer}>
@@ -436,14 +526,14 @@ export default function PatientHomeScreen() {
               ]}
             >
               <View style={styles.drawerAvatar}>
-                <Text style={styles.drawerAvatarText}>RK</Text>
+                <Text style={styles.drawerAvatarText}>{userInitials}</Text>
               </View>
               <View style={styles.flex1}>
                 <View style={styles.drawerNameRow}>
-                  <Text style={styles.drawerName}>Rahul Kapoor</Text>
+                  <Text style={styles.drawerName}>{user?.name || 'Patient Profile'}</Text>
                   <Verified size={16} color="#2563eb" fill="#2563eb" />
                 </View>
-                <Text style={styles.drawerPhone}>+91 98201 42819 • View Profile</Text>
+                <Text style={styles.drawerPhone}>{user?.phone || user?.email || 'View & Edit Profile'}</Text>
               </View>
               <ChevronRight size={18} color="#94a3b8" />
             </Pressable>
@@ -693,14 +783,27 @@ const styles = StyleSheet.create({
   searchBox: {
     flexDirection: 'row',
     alignItems: 'center',
+    height: 52,
     backgroundColor: '#ffffff',
     borderWidth: 1,
     borderColor: 'rgba(226, 232, 240, 0.9)',
-    borderRadius: BorderRadius.xl,
+    borderRadius: 16,
     paddingHorizontal: 14,
-    paddingVertical: 12,
-    gap: 10,
-    ...Shadows.subtle,
+    gap: 12,
+    ...Platform.select({
+      ios: {
+        shadowColor: '#131b2e',
+        shadowOffset: { width: 0, height: 2 },
+        shadowOpacity: 0.05,
+        shadowRadius: 6,
+      },
+      android: {
+        elevation: 2,
+      },
+      web: {
+        boxShadow: '0 2px 8px rgba(19, 27, 46, 0.04)',
+      },
+    }),
   },
   searchBoxPressed: {
     backgroundColor: '#F8FAFC',
@@ -713,9 +816,9 @@ const styles = StyleSheet.create({
     fontWeight: '500',
   },
   filterButton: {
-    width: 32,
-    height: 32,
-    borderRadius: 14,
+    width: 36,
+    height: 36,
+    borderRadius: 18,
     backgroundColor: '#f1f5f9',
     alignItems: 'center',
     justifyContent: 'center',

@@ -56,7 +56,7 @@ export default function DoctorDiscoveryScreen() {
   const params = useLocalSearchParams<{ specialty?: string; query?: string; filter?: string }>();
   
   const [searchQuery, setSearchQuery] = useState(params.query || '');
-  const [selectedSpecialty, setSelectedSpecialty] = useState(params.specialty || 'Cardiologists');
+  const [selectedSpecialty, setSelectedSpecialty] = useState(params.specialty || 'All');
   const [activeFilters, setActiveFilters] = useState<string[]>(['available_today']);
   const [refreshing, setRefreshing] = useState(false);
 
@@ -67,7 +67,7 @@ export default function DoctorDiscoveryScreen() {
 
   const { data: doctors, isLoading, refetch } = useDoctorsQuery({
     query: searchQuery,
-    specialty: selectedSpecialty === 'All' || selectedSpecialty === 'Cardiologists' ? undefined : selectedSpecialty,
+    specialty: selectedSpecialty === 'All' ? undefined : selectedSpecialty,
   });
 
   const handleRefresh = async () => {
@@ -124,9 +124,12 @@ export default function DoctorDiscoveryScreen() {
     return list.sort((a, b) => getDistanceNum(a) - getDistanceNum(b));
   }, [doctors, searchQuery, activeFilters]);
 
-  const displaySpecialtyTitle = selectedSpecialty.endsWith('s')
-    ? selectedSpecialty
-    : `${selectedSpecialty}s`;
+  const displaySpecialtyTitle =
+    selectedSpecialty === 'All'
+      ? 'All Doctors'
+      : selectedSpecialty.endsWith('s')
+      ? selectedSpecialty
+      : `${selectedSpecialty}s`;
 
   return (
     <SafeAreaView style={styles.safeArea} edges={['top']}>
@@ -185,7 +188,7 @@ export default function DoctorDiscoveryScreen() {
               <View>
                 <Text style={styles.specialtyHeading}>{displaySpecialtyTitle}</Text>
                 <Text style={styles.specialistsCount}>
-                  {filteredDoctors.length || 28} specialists in your area
+                  {filteredDoctors.length} {filteredDoctors.length === 1 ? 'specialist' : 'specialists'} available
                 </Text>
               </View>
 

@@ -68,11 +68,7 @@ export class DoctorsService {
   }
 
   async searchDoctors(query?: string, specialty?: string, lat?: number, lng?: number) {
-    const whereClause: any = {
-      verification: {
-        status: VerificationStatus.VERIFIED,
-      },
-    };
+    const whereClause: any = {};
 
     if (specialty && specialty !== 'All') {
       whereClause.specialization = specialty;
