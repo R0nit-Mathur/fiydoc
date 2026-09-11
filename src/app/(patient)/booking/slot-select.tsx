@@ -23,7 +23,7 @@ import {
   Alert,
 } from 'react-native';
 import { useRouter, useLocalSearchParams } from 'expo-router';
-import { SafeAreaView } from 'react-native-safe-area-context';
+import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Image } from 'expo-image';
 import * as Haptics from 'expo-haptics';
 import {
@@ -47,6 +47,7 @@ import {
 } from 'lucide-react-native';
 import { StitchColors, DEFAULT_DOCTOR_AVATAR } from '@/constants/theme';
 import { useAppointmentStore } from '@/store/useAppointmentStore';
+import { useAuthStore } from '@/store/useAuthStore';
 
 const DEFAULT_DOC_IMG = DEFAULT_DOCTOR_AVATAR;
 
@@ -63,6 +64,9 @@ const INITIAL_CONDITIONS = ['Diabetes Type 2', 'Thyroid (Hypo)', 'Asthma'];
 
 export default function MedicalIntakeScreen() {
   const router = useRouter();
+  const insets = useSafeAreaInsets();
+  const user = useAuthStore((state) => state.user);
+
   const params = useLocalSearchParams<{
     doctorId?: string;
     doctorName?: string;
@@ -79,8 +83,18 @@ export default function MedicalIntakeScreen() {
   const dateLabel = params.dateLabel || 'Today, 18 Oct';
   const fee = params.fee || '800';
 
+  const userFirstName = user?.name ? user.name.split(' ')[0] : 'Me';
+  const userInitials = (user?.name
+    ? user.name.split(' ').map((n) => n[0]).slice(0, 2).join('')
+    : 'PT'
+  ).toUpperCase();
+
   const [currentStep, setCurrentStep] = useState<0 | 1 | 2>(0);
   const [patientType, setPatientType] = useState<'self' | 'family'>('self');
+  const [familyMemberName, setFamilyMemberName] = useState('');
+  const [familyMemberRelation, setFamilyMemberRelation] = useState('Parent');
+  const [familyMemberPhone, setFamilyMemberPhone] = useState('');
+
   const [selectedReason, setSelectedReason] = useState('Chest Discomfort');
   const [customReasons, setCustomReasons] = useState<string[]>([]);
   const [symptomNotes, setSymptomNotes] = useState('');
@@ -124,6 +138,31 @@ export default function MedicalIntakeScreen() {
   };
 
   const proceedToConfirm = () => {
+    let finalPatientName = '';
+    if (patientType === 'self') {
+      finalPatientName = user?.name?.trim() || '';
+      if (!finalPatientName) {
+        Alert.alert(
+          'Patient Name Required',
+          'Please complete your patient profile name before booking an OPD slot.',
+          [
+            { text: 'Go to Profile', onPress: () => router.push('/(patient)/(tabs)/profile') },
+            { text: 'Cancel', style: 'cancel' },
+          ]
+        );
+        return;
+      }
+    } else {
+      finalPatientName = familyMemberName.trim();
+      if (!finalPatientName) {
+        Alert.alert(
+          'Family Member Name Required',
+          'Please enter the patient\'s name before continuing.'
+        );
+        return;
+      }
+    }
+
     if (Platform.OS !== 'web') {
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
     }
@@ -152,7 +191,7 @@ export default function MedicalIntakeScreen() {
         dateLabel,
         fee,
         reason: selectedReason,
-        patientName: patientType === 'self' ? 'Rahul Sharma' : 'Family Member',
+        patientName: finalPatientName,
       },
     });
   };
@@ -240,7 +279,10 @@ export default function MedicalIntakeScreen() {
       </View>
 
       <ScrollView
-        contentContainerStyle={styles.scrollContainer}
+        contentContainerStyle={[
+          styles.scrollContainer,
+          { paddingBottom: Math.max(insets.bottom, Platform.OS === 'android' ? 24 : 16) + 90 },
+        ]}
         showsVerticalScrollIndicator={false}
       >
         <View style={styles.contentWrap}>
@@ -352,7 +394,7 @@ export default function MedicalIntakeScreen() {
                       patientType === 'self' && styles.patientTypeTextActive,
                     ]}
                   >
-                    Myself (Rahul)
+                    Myself ({userFirstName})
                   </Text>
                 </Pressable>
 
@@ -378,27 +420,76 @@ export default function MedicalIntakeScreen() {
                 </Pressable>
               </View>
 
-              {/* Rahul Sharma Profile Snapshot Card */}
-              <View style={styles.profileCard}>
-                <View style={styles.profileCardLeft}>
-                  <View style={styles.profileAvatar}>
-                    <Text style={styles.profileAvatarText}>RS</Text>
-                  </View>
-                  <View>
-                    <View style={styles.profileNameRow}>
-                      <Text style={styles.profileName}>Rahul Sharma</Text>
-                      <View style={styles.bloodBadge}>
-                        <Text style={styles.bloodText}>B+</Text>
-                      </View>
+              {patientType === 'self' ? (
+                /* Dynamic Self Profile Snapshot Card */
+                <View style={styles.profileCard}>
+                  <View style={styles.profileCardLeft}>
+                    <View style={styles.profileAvatar}>
+                      <Text style={styles.profileAvatarText}>{userInitials}</Text>
                     </View>
-                    <Text style={styles.profileMeta}>28 Yrs • Male • +91 98201 44829</Text>
+                    <View style={{ flex: 1, minWidth: 0 }}>
+                      <View style={styles.profileNameRow}>
+                        <Text style={styles.profileName} numberOfLines={1}>
+                          {user?.name || 'Patient (Name not set)'}
+                        </Text>
+                        {user?.bloodGroup ? (
+                          <View style={styles.bloodBadge}>
+                            <Text style={styles.bloodText}>{user.bloodGroup}</Text>
+                          </View>
+                        ) : null}
+                      </View>
+                      <Text style={styles.profileMeta} numberOfLines={1}>
+                        {user?.age ? `${user.age} Yrs` : 'Age —'} • {user?.gender || 'Patient'} • {user?.phone ? `+91 ${user.phone}` : (user?.email || 'No contact set')}
+                      </Text>
+                    </View>
+                  </View>
+
+                  <Pressable
+                    style={styles.profileEditBtn}
+                    onPress={() => router.push('/(patient)/(tabs)/profile')}
+                    hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+                  >
+                    <Edit2 size={16} color={StitchColors.onSurfaceVariant} />
+                  </Pressable>
+                </View>
+              ) : (
+                /* Family Member Input Card */
+                <View style={styles.familyCard}>
+                  <View style={styles.familyInputRow}>
+                    <Text style={styles.familyInputLabel}>Family Member's Full Name *</Text>
+                    <TextInput
+                      value={familyMemberName}
+                      onChangeText={setFamilyMemberName}
+                      placeholder="e.g. Meera Sharma"
+                      placeholderTextColor={StitchColors.outline}
+                      style={styles.familyTextInput}
+                    />
+                  </View>
+                  <View style={{ flexDirection: 'row', gap: 10 }}>
+                    <View style={{ flex: 1 }}>
+                      <Text style={styles.familyInputLabel}>Relation</Text>
+                      <TextInput
+                        value={familyMemberRelation}
+                        onChangeText={setFamilyMemberRelation}
+                        placeholder="Parent / Spouse"
+                        placeholderTextColor={StitchColors.outline}
+                        style={styles.familyTextInput}
+                      />
+                    </View>
+                    <View style={{ flex: 1.2 }}>
+                      <Text style={styles.familyInputLabel}>Contact Number</Text>
+                      <TextInput
+                        value={familyMemberPhone}
+                        onChangeText={setFamilyMemberPhone}
+                        placeholder="+91 98765..."
+                        placeholderTextColor={StitchColors.outline}
+                        style={styles.familyTextInput}
+                        keyboardType="phone-pad"
+                      />
+                    </View>
                   </View>
                 </View>
-
-                <Pressable style={styles.profileEditBtn}>
-                  <Edit2 size={16} color={StitchColors.onSurfaceVariant} />
-                </Pressable>
-              </View>
+              )}
 
               {/* Primary Reason for Visit Chips */}
               <View style={styles.reasonSection}>
@@ -717,7 +808,12 @@ export default function MedicalIntakeScreen() {
       </ScrollView>
 
       {/* Sticky Bottom Navigation Bar */}
-      <View style={styles.bottomBar}>
+      <View
+        style={[
+          styles.bottomBar,
+          { paddingBottom: Math.max(insets.bottom, Platform.OS === 'android' ? 24 : 16) },
+        ]}
+      >
         <View style={styles.bottomBarInner}>
           <View style={styles.bottomActionsRow}>
             {currentStep > 0 && (
@@ -1079,6 +1175,33 @@ const styles = StyleSheet.create({
     backgroundColor: StitchColors.surfaceContainerLowest,
     alignItems: 'center',
     justifyContent: 'center',
+  },
+  familyCard: {
+    backgroundColor: StitchColors.surfaceContainerLow,
+    borderRadius: 16,
+    padding: 14,
+    gap: 12,
+    borderWidth: 1,
+    borderColor: 'rgba(195, 198, 211, 0.25)',
+  },
+  familyInputRow: {
+    gap: 4,
+  },
+  familyInputLabel: {
+    fontSize: 11,
+    fontWeight: '700',
+    color: StitchColors.onSurfaceVariant,
+    marginBottom: 4,
+  },
+  familyTextInput: {
+    backgroundColor: StitchColors.surfaceContainerLowest,
+    borderRadius: 10,
+    borderWidth: 1,
+    borderColor: 'rgba(195, 198, 211, 0.4)',
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    fontSize: 13,
+    color: StitchColors.onSurface,
   },
   reasonSection: {
     gap: 8,

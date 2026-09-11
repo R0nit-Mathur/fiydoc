@@ -360,11 +360,10 @@ const styles = StyleSheet.create({
     paddingBottom: 110,
   },
   contentWrap: {
-    maxWidth: 440,
     width: '100%',
-    alignSelf: 'center',
     paddingHorizontal: 16,
     paddingTop: 10,
+    ...(Platform.OS === 'web' ? { maxWidth: 440, alignSelf: 'center' as const } : {}),
   },
   subHeader: {
     marginBottom: 12,
@@ -443,7 +442,6 @@ const styles = StyleSheet.create({
   },
   filterPillsRow: {
     paddingVertical: 4,
-    gap: 8,
     alignItems: 'center',
   },
   filterChip: {
@@ -453,6 +451,7 @@ const styles = StyleSheet.create({
     paddingHorizontal: 14,
     paddingVertical: 7,
     borderRadius: 16,
+    marginRight: 8,
   },
   filterChipActive: {
     backgroundColor: StitchColors.primaryContainer,

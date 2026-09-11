@@ -1,6 +1,6 @@
 {
   "expo": {
-    "name": "FiYDoc",
+    "name": "FIYDOC",
     "slug": "fiydoc",
     "version": "1.0.0",
     "orientation": "portrait",
@@ -17,6 +17,7 @@
     },
     "android": {
       "package": "com.fiydoc.app",
+      "softwareKeyboardLayoutMode": "resize",
       "adaptiveIcon": {
         "backgroundColor": "#FAF8FF",
         "foregroundImage": "./assets/images/android-icon-foreground.png",
@@ -32,7 +33,9 @@
       ]
     },
     "updates": {
-      "url": "https://u.expo.dev/24aa4a10-9492-4cf0-842b-efdd9d32804d"
+      "url": "https://u.expo.dev/24aa4a10-9492-4cf0-842b-efdd9d32804d",
+      "checkAutomatically": "ON_LOAD",
+      "fallbackToCacheTimeout": 0
     },
     "runtimeVersion": {
       "policy": "appVersion"
@@ -79,7 +82,8 @@
             "deploymentTarget": "16.4"
           }
         }
-      ]
+      ],
+      "expo-web-browser"
     ],
     "experiments": {
       "typedRoutes": true,

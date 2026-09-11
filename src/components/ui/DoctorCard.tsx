@@ -163,13 +163,13 @@ export function DoctorCard({
 
 const styles = StyleSheet.create({
   card: {
-    backgroundColor: StitchColors.surfaceContainerLowest,
+    backgroundColor: '#ffffff',
     borderRadius: 20,
     padding: 16,
     borderWidth: 1,
     borderColor: 'rgba(226, 232, 240, 0.8)',
     marginBottom: 14,
-    gap: 12,
+    width: '100%',
     ...Platform.select({
       ios: {
         shadowColor: '#131b2e',
@@ -192,11 +192,11 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
+    marginBottom: 12,
   },
   verifiedBadge: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 4,
     paddingHorizontal: 8,
     paddingVertical: 2.5,
     borderRadius: 10,
@@ -206,27 +206,29 @@ const styles = StyleSheet.create({
     fontSize: 11.5,
     fontWeight: '700',
     color: '#1d4ed8',
+    marginLeft: 4,
   },
   distanceRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 4,
   },
   distanceText: {
     fontSize: 12,
     color: StitchColors.onSurfaceVariant,
     fontWeight: '500',
+    marginLeft: 4,
   },
   infoRow: {
     flexDirection: 'row',
     alignItems: 'flex-start',
-    gap: 12,
+    marginBottom: 12,
   },
   avatar: {
     width: 68,
     height: 68,
     borderRadius: 16,
     backgroundColor: StitchColors.surfaceContainerHigh,
+    marginRight: 12,
   },
   textContainer: {
     flex: 1,
@@ -236,19 +238,18 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    gap: 4,
   },
   doctorName: {
     fontSize: 15.5,
     fontWeight: '700',
     color: StitchColors.onSurface,
     flex: 1,
+    marginRight: 6,
   },
   specialtyRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 5,
-    marginTop: 2,
+    marginTop: 3,
   },
   specialtyIconBadge: {
     width: 18,
@@ -257,36 +258,38 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
     flexShrink: 0,
+    marginRight: 6,
   },
   specialtyText: {
     fontSize: 12.5,
     color: StitchColors.onSurfaceVariant,
     fontWeight: '500',
+    flex: 1,
   },
   hospitalText: {
     fontSize: 11.5,
     color: StitchColors.outline,
-    marginTop: 2,
+    marginTop: 3,
   },
   ratingRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 6,
     marginTop: 6,
   },
   ratingPill: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 3,
     paddingHorizontal: 6,
     paddingVertical: 1.5,
     borderRadius: 6,
     backgroundColor: '#fffbeb',
+    marginRight: 6,
   },
   ratingText: {
     fontSize: 11,
     fontWeight: '700',
     color: '#92400e',
+    marginLeft: 3,
   },
   reviewCountText: {
     fontSize: 11,
@@ -302,17 +305,18 @@ const styles = StyleSheet.create({
     backgroundColor: '#f8fafc',
     borderWidth: 1,
     borderColor: '#f1f5f9',
+    marginBottom: 12,
   },
   slotDetails: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 8,
   },
   tokenPill: {
     paddingHorizontal: 8,
     paddingVertical: 2,
     borderRadius: 6,
     backgroundColor: '#ccfbf1',
+    marginRight: 8,
   },
   tokenText: {
     fontSize: 11,
@@ -330,13 +334,13 @@ const styles = StyleSheet.create({
     color: StitchColors.onSurface,
   },
   bookBtn: {
-    height: 42,
-    borderRadius: 12,
+    height: 48,
+    borderRadius: 14,
     backgroundColor: StitchColors.primary,
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
-    gap: 6,
+    width: '100%',
     ...Platform.select({
       ios: {
         shadowColor: StitchColors.primary,
@@ -357,8 +361,9 @@ const styles = StyleSheet.create({
     transform: [{ scale: 0.98 }],
   },
   bookBtnText: {
-    fontSize: 13,
+    fontSize: 14,
     fontWeight: '700',
     color: '#ffffff',
+    marginRight: 6,
   },
 });

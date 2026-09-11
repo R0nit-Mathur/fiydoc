@@ -57,7 +57,8 @@ const TABS: TabConfig[] = [
 
 function PillTabBar({ state, navigation }: any) {
   const insets = useSafeAreaInsets();
-  const bottomInset = Math.max(insets.bottom, Platform.OS === 'ios' ? 14 : 10);
+  const bottomInset = Math.max(insets.bottom, Platform.OS === 'ios' ? 14 : 20);
+  const [barWidth, setBarWidth] = React.useState(320);
 
   // Map route name to primary tab index (or fallback to -1 if on auxiliary screen)
   const currentRouteName = state.routes[state.index]?.name;
@@ -68,21 +69,19 @@ function PillTabBar({ state, navigation }: any) {
   const opacity = useSharedValue(0);
 
   useEffect(() => {
-    pillX.value = withSpring(pillIndex, { damping: 20, stiffness: 240 });
-    opacity.value = withTiming(1, { duration: 320 });
+    pillX.value = withSpring(pillIndex, { damping: 22, stiffness: 260 });
+    opacity.value = withTiming(1, { duration: 300 });
   }, [pillIndex, pillX, opacity]);
 
-  const pillWidth: `${number}%` = `${100 / TABS.length}%`;
+  const singleTabWidth = barWidth / TABS.length;
+  const pillPadding = 4;
+  const pillWidth = Math.max(0, singleTabWidth - pillPadding * 2);
 
   const animatedPillStyle = useAnimatedStyle(() => ({
+    width: pillWidth,
     transform: [
       {
-        translateX: `${interpolate(
-          pillX.value,
-          [0, TABS.length - 1],
-          [0, (TABS.length - 1) * 100],
-          Extrapolation.CLAMP
-        )}%` as `${number}%`,
+        translateX: pillX.value * singleTabWidth + pillPadding,
       },
     ],
   }));
@@ -100,25 +99,22 @@ function PillTabBar({ state, navigation }: any) {
       ]}
     >
       <Animated.View
+        onLayout={(e) => {
+          const w = e.nativeEvent.layout.width;
+          if (w > 0 && Math.abs(w - barWidth) > 1) {
+            setBarWidth(w);
+          }
+        }}
         style={[
           styles.tabBarInner,
           containerAnimated,
         ]}
       >
-        {Platform.OS === 'ios' ? (
+        {Platform.OS === 'ios' && (
           <BlurView
             tint="light"
             intensity={95}
             style={StyleSheet.absoluteFill}
-          />
-        ) : (
-          <View
-            style={[
-              StyleSheet.absoluteFill,
-              {
-                backgroundColor: 'rgba(255, 255, 255, 0.95)',
-              },
-            ]}
           />
         )}
 
@@ -127,8 +123,7 @@ function PillTabBar({ state, navigation }: any) {
           pointerEvents="none"
           style={[
             styles.activePill,
-            { width: pillWidth, left: 0 },
-            animatedPillStyle as any,
+            animatedPillStyle,
           ]}
         />
 
@@ -216,30 +211,31 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'space-around',
     width: '100%',
-    maxWidth: 330,
+    maxWidth: Platform.OS === 'web' ? 360 : 340,
     height: 60,
     borderRadius: 30,
+    backgroundColor: '#ffffff',
     borderWidth: 1,
-    borderColor: 'rgba(255, 255, 255, 0.6)',
-    overflow: 'hidden',
+    borderColor: 'rgba(226, 232, 240, 0.9)',
     paddingHorizontal: 4,
     ...Platform.select({
       ios: {
         shadowColor: '#002350',
-        shadowOffset: { width: 0, height: 10 },
-        shadowOpacity: 0.18,
-        shadowRadius: 24,
+        shadowOffset: { width: 0, height: 8 },
+        shadowOpacity: 0.12,
+        shadowRadius: 18,
       },
       android: {
-        elevation: 8,
+        elevation: 6,
       },
       web: {
-        boxShadow: '0 12px 36px -6px rgba(0, 35, 80, 0.18)',
+        boxShadow: '0 10px 30px -6px rgba(0, 35, 80, 0.15)',
       },
     }),
   },
   activePill: {
     position: 'absolute',
+    left: 0,
     top: 5,
     bottom: 5,
     backgroundColor: StitchColors.primary,
@@ -252,7 +248,7 @@ const styles = StyleSheet.create({
         shadowRadius: 6,
       },
       android: {
-        elevation: 4,
+        elevation: 3,
       },
       web: {
         boxShadow: '0 4px 14px rgba(0, 57, 126, 0.32)',
@@ -266,7 +262,6 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     zIndex: 10,
     borderRadius: 25,
-    gap: 1.5,
   },
   iconContainer: {
     position: 'relative',

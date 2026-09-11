@@ -50,12 +50,12 @@ export function DoctorRegistrationView({
 
   // Step 1: Basic Info Form State
   const [doctorName, setDoctorName] = useState(
-    user?.name ? (user.name.startsWith('Dr.') ? user.name : `Dr. ${user.name}`) : 'Dr. Rajesh Sharma'
+    user?.name ? (user.name.startsWith('Dr.') ? user.name : `Dr. ${user.name}`) : ''
   );
   const [gender, setGender] = useState<'Male' | 'Female' | 'Other'>('Male');
-  const [dob, setDob] = useState('14/08/1984');
-  const [contactPhone, setContactPhone] = useState('+91 98201 45872');
-  const [contactEmail, setContactEmail] = useState(user?.email || 'dr.rajesh@mumbaicardiocare.in');
+  const [dob, setDob] = useState('');
+  const [contactPhone, setContactPhone] = useState(user?.phone || '');
+  const [contactEmail, setContactEmail] = useState(user?.email || '');
   const [password, setPassword] = useState('');
   const [step1Loading, setStep1Loading] = useState(false);
   const [step1Success, setStep1Success] = useState(false);
@@ -64,48 +64,48 @@ export function DoctorRegistrationView({
   const [cardIndex, setCardIndex] = useState(0); // 0 = UG, 1 = Council, 2 = PG, 3 = ID Proof
   // Card 1: UG
   const [ugDegree, setUgDegree] = useState<'MBBS' | 'BDS' | 'BAMS' | 'BHMS'>('MBBS');
-  const [ugCollege, setUgCollege] = useState('Seth GS Medical College & KEM Hospital, Mumbai');
-  const [ugState, setUgState] = useState('Maharashtra');
-  const [ugYear, setUgYear] = useState('2015');
-  const [ugFileUploaded, setUgFileUploaded] = useState(true);
+  const [ugCollege, setUgCollege] = useState('');
+  const [ugState, setUgState] = useState('');
+  const [ugYear, setUgYear] = useState('');
+  const [ugFileUploaded, setUgFileUploaded] = useState(false);
 
   // Card 2: Council
-  const [primaryCouncil, setPrimaryCouncil] = useState('Maharashtra Medical Council (MMC)');
-  const [councilRegNumber, setCouncilRegNumber] = useState('MMC-2015/08/3421');
-  const [councilRegYear, setCouncilRegYear] = useState('2015');
-  const [dualLicenseActive, setDualLicenseActive] = useState(true);
-  const [secondaryCouncil, setSecondaryCouncil] = useState('Karnataka Medical Council (KMC)');
-  const [secondaryRegNumber, setSecondaryRegNumber] = useState('KMC-108249');
-  const [secondaryRegYear, setSecondaryRegYear] = useState('2018');
+  const [primaryCouncil, setPrimaryCouncil] = useState('State Medical Council / MCI');
+  const [councilRegNumber, setCouncilRegNumber] = useState('');
+  const [councilRegYear, setCouncilRegYear] = useState('');
+  const [dualLicenseActive, setDualLicenseActive] = useState(false);
+  const [secondaryCouncil, setSecondaryCouncil] = useState('');
+  const [secondaryRegNumber, setSecondaryRegNumber] = useState('');
+  const [secondaryRegYear, setSecondaryRegYear] = useState('');
 
   // Card 3: PG & Specialization
-  const [hasPg, setHasPg] = useState(true);
+  const [hasPg, setHasPg] = useState(false);
   const [pgCategory, setPgCategory] = useState('MD / MS (Doctor of Medicine / Surgery)');
-  const [specialization, setSpecialization] = useState('Cardiology / General Medicine');
-  const [pgCollege, setPgCollege] = useState('Grant Government Medical College & Sir JJ Hospitals');
-  const [pgState, setPgState] = useState('Maharashtra');
-  const [pgYear, setPgYear] = useState('2019');
-  const [pgAqNumber, setPgAqNumber] = useState('AQ-MMC-9932');
-  const [pgFileUploaded, setPgFileUploaded] = useState(true);
+  const [specialization, setSpecialization] = useState('General Medicine');
+  const [pgCollege, setPgCollege] = useState('');
+  const [pgState, setPgState] = useState('');
+  const [pgYear, setPgYear] = useState('');
+  const [pgAqNumber, setPgAqNumber] = useState('');
+  const [pgFileUploaded, setPgFileUploaded] = useState(false);
 
   // Card 4: ID Proof
-  const [idVerified, setIdVerified] = useState(true);
+  const [idVerified, setIdVerified] = useState(false);
   const [idLoading, setIdLoading] = useState(false);
 
   // Step 3: 3-Slide Flow State
   const [slideIndex, setSlideIndex] = useState(0); // 0 = Clinic, 1 = Hospital, 2 = Schedule
   // Slide 1: Primary Clinic
   const [practiceType, setPracticeType] = useState<'Own Clinic' | 'Hospital OPD' | 'Polyclinic'>('Own Clinic');
-  const [clinicName, setClinicName] = useState('Sharma Heart & Vascular Clinic');
-  const [clinicAddress, setClinicAddress] = useState('Suite 302, Green Glen Medical Enclave, Bellandur');
-  const [clinicCity, setClinicCity] = useState('Bengaluru, Karnataka');
-  const [clinicPin, setClinicPin] = useState('560103');
-  const [clinicFileUploaded, setClinicFileUploaded] = useState(true);
+  const [clinicName, setClinicName] = useState('');
+  const [clinicAddress, setClinicAddress] = useState('');
+  const [clinicCity, setClinicCity] = useState('');
+  const [clinicPin, setClinicPin] = useState('');
+  const [clinicFileUploaded, setClinicFileUploaded] = useState(false);
 
   // Slide 2: Hospital Affiliations
-  const [hospitalName, setHospitalName] = useState('Apollo Hospitals, Bannerghatta Road');
-  const [hospitalDept, setHospitalDept] = useState('Cardiology / Cath Lab');
-  const [hospitalDesignation, setHospitalDesignation] = useState('Senior Consultant');
+  const [hospitalName, setHospitalName] = useState('');
+  const [hospitalDept, setHospitalDept] = useState('');
+  const [hospitalDesignation, setHospitalDesignation] = useState('');
   const [affiliationNature, setAffiliationNature] = useState<'Visiting' | 'Full-Time'>('Visiting');
   const [hospitalFileUploaded, setHospitalFileUploaded] = useState(false);
 
@@ -127,7 +127,11 @@ export function DoctorRegistrationView({
       setError('Mobile number is required for verification.');
       return;
     }
-    if (password && password.length < 6) {
+    if (!contactEmail.trim() || !contactEmail.includes('@')) {
+      setError('A valid email address is required for council verification.');
+      return;
+    }
+    if (!password.trim() || password.trim().length < 6) {
       setError('Password must be at least 6 characters.');
       return;
     }
@@ -146,6 +150,94 @@ export function DoctorRegistrationView({
         setStep1Success(false);
       }, 700);
     }, 1200);
+  };
+
+  const handleCard1Continue = () => {
+    setError('');
+    if (!ugCollege.trim()) {
+      setError('Medical College / Institution name is required.');
+      return;
+    }
+    if (!ugState.trim()) {
+      setError('State of College is required.');
+      return;
+    }
+    if (!ugYear.trim()) {
+      setError('Graduation Year is required.');
+      return;
+    }
+    setCardIndex(1);
+  };
+
+  const handleCard2Continue = () => {
+    setError('');
+    if (!primaryCouncil.trim()) {
+      setError('Primary State Medical Council is required.');
+      return;
+    }
+    if (!councilRegNumber.trim()) {
+      setError('Council Registration Number is required.');
+      return;
+    }
+    if (!councilRegYear.trim()) {
+      setError('Registration Year is required.');
+      return;
+    }
+    setCardIndex(2);
+  };
+
+  const handleCard3Continue = () => {
+    setError('');
+    if (hasPg) {
+      if (!pgCollege.trim() || !pgYear.trim()) {
+        setError('Please provide your PG College and Completion Year.');
+        return;
+      }
+    }
+    setCardIndex(3);
+  };
+
+  const handleSelectCardTab = (targetIndex: number) => {
+    if (targetIndex > cardIndex) {
+      if (cardIndex === 0 && (!ugCollege.trim() || !ugState.trim() || !ugYear.trim())) {
+        setError('Please fill required undergraduate medical details before moving forward.');
+        return;
+      }
+      if (cardIndex === 1 && (!councilRegNumber.trim() || !councilRegYear.trim())) {
+        setError('Please provide council registration details before moving forward.');
+        return;
+      }
+    }
+    setError('');
+    setCardIndex(targetIndex);
+  };
+
+  const handleSlide1Continue = () => {
+    setError('');
+    if (!clinicName.trim()) {
+      setError('Clinic or Chamber Name is required.');
+      return;
+    }
+    if (!clinicAddress.trim()) {
+      setError('Clinic Address is required.');
+      return;
+    }
+    if (!clinicCity.trim() || !clinicPin.trim()) {
+      setError('City and PIN Code are required for OPD location setup.');
+      return;
+    }
+    setSlideIndex(1);
+  };
+
+  const handleSelectSlideTab = (targetIndex: number) => {
+    if (targetIndex > slideIndex) {
+      if (slideIndex === 0 && (!clinicName.trim() || !clinicAddress.trim())) {
+        setError('Please provide required clinic information before moving forward.');
+        return;
+      }
+    }
+    setError('');
+    setSlideIndex(targetIndex);
   };
 
   const handleCard4Verification = () => {
@@ -170,8 +262,16 @@ export function DoctorRegistrationView({
   };
 
   const handleFinalSubmit = async () => {
-    setFinalSubmitting(true);
     setError('');
+    if (!consultationFee.trim() || Number(consultationFee) <= 0) {
+      setError('Please set a valid consultation fee greater than ₹0.');
+      return;
+    }
+    if (selectedDays.length === 0) {
+      setError('Please select at least one available practice day.');
+      return;
+    }
+    setFinalSubmitting(true);
     if (Platform.OS !== 'web') {
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
     }
@@ -448,7 +548,7 @@ export function DoctorRegistrationView({
           {/* Sub-step 4-Tab Bar */}
           <CardCarouselTabs
             activeIndex={cardIndex}
-            onSelectTab={setCardIndex}
+            onSelectTab={handleSelectCardTab}
             tabs={[
               { id: 1, label: 'UG Degree' },
               { id: 2, label: 'Council' },
@@ -548,7 +648,7 @@ export function DoctorRegistrationView({
 
               {/* Card 1 Action */}
               <Pressable
-                onPress={() => setCardIndex(1)}
+                onPress={handleCard1Continue}
                 style={({ pressed }) => [
                   styles.primaryPillButton,
                   { marginTop: 12 },
@@ -672,7 +772,7 @@ export function DoctorRegistrationView({
                   <Text style={styles.secondaryButtonText}>Back</Text>
                 </Pressable>
                 <Pressable
-                  onPress={() => setCardIndex(2)}
+                  onPress={handleCard2Continue}
                   style={styles.primaryFlexButton}
                 >
                   <Text style={styles.primaryFlexButtonText}>Next: PG & Spec.</Text>
@@ -820,7 +920,7 @@ export function DoctorRegistrationView({
                   <Text style={styles.secondaryButtonText}>Back</Text>
                 </Pressable>
                 <Pressable
-                  onPress={() => setCardIndex(3)}
+                  onPress={handleCard3Continue}
                   style={styles.primaryFlexButton}
                 >
                   <Text style={styles.primaryFlexButtonText}>Next: ID Proof</Text>
@@ -959,7 +1059,7 @@ export function DoctorRegistrationView({
           {/* Sub-step 3-Tab Bar */}
           <CardCarouselTabs
             activeIndex={slideIndex}
-            onSelectTab={setSlideIndex}
+            onSelectTab={handleSelectSlideTab}
             tabs={[
               { id: 1, label: '1. Clinic' },
               { id: 2, label: '2. Hospital' },
@@ -1077,7 +1177,7 @@ export function DoctorRegistrationView({
 
               {/* Slide 1 CTA */}
               <Pressable
-                onPress={() => setSlideIndex(1)}
+                onPress={handleSlide1Continue}
                 style={({ pressed }) => [
                   styles.primaryPillButton,
                   { marginTop: 12 },

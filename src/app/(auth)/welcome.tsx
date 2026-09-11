@@ -280,13 +280,14 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
-    gap: 8,
   },
   primaryCtaText: {
     color: '#ffffff',
     fontSize: 17,
+    lineHeight: 22,
     fontWeight: '700',
     letterSpacing: -0.4,
+    marginRight: 6,
   },
   secondaryCta: {
     width: '100%',

@@ -49,6 +49,7 @@ import {
 
 import { useAppTheme } from '@/hooks/useAppTheme';
 import { BorderRadius, Shadows, Spacing, StitchColors, Palette, DEFAULT_DOCTOR_AVATAR } from '@/constants/theme';
+import { useAppointmentStore } from '@/store/useAppointmentStore';
 
 const DOCTOR_AVATAR = DEFAULT_DOCTOR_AVATAR;
 
@@ -70,89 +71,6 @@ interface PatientRecord {
   actionSecondary: string;
 }
 
-const PATIENT_ROSTER: PatientRecord[] = [
-  {
-    id: 'apt_1',
-    initials: 'AM',
-    bloodGroup: 'B+',
-    name: 'Aarav Mehta',
-    age: 38,
-    gender: 'Male',
-    uhid: '#9042',
-    lastVisit: 'Today, 10:30 AM',
-    lastVisitReason: 'Hypertension follow-up',
-    category: 'recent',
-    tags: [
-      { label: 'Active Rx', variant: 'teal' },
-      { label: 'Hypertension (I10)', variant: 'gray' },
-    ],
-    statusLabel: 'Prescription Sent',
-    statusVariant: 'teal',
-    actionSecondary: 'View History',
-    actionPrimary: 'Quick Rx',
-  },
-  {
-    id: 'apt_2',
-    initials: 'PN',
-    bloodGroup: 'O+',
-    name: 'Priya Nair',
-    age: 29,
-    gender: 'Female',
-    uhid: '#8812',
-    lastVisit: 'Yesterday',
-    lastVisitReason: 'Routine Checkup',
-    category: 'recent',
-    tags: [
-      { label: 'Lab Pending (CBC)', variant: 'red' },
-      { label: 'Allergic to Sulfa', variant: 'gray' },
-    ],
-    statusLabel: 'Review Required',
-    statusVariant: 'red',
-    actionSecondary: 'Chart View',
-    actionPrimary: 'Open Labs',
-  },
-  {
-    id: 'apt_3',
-    initials: 'VM',
-    bloodGroup: 'A-',
-    name: 'Vikram Malhotra',
-    age: 54,
-    gender: 'Male',
-    uhid: '#7420',
-    lastVisit: '12 Oct 2024',
-    lastVisitReason: 'Cardiac Consult',
-    category: 'followup',
-    tags: [
-      { label: 'Post-Stent Care', variant: 'blue' },
-      { label: 'High Risk', variant: 'red' },
-    ],
-    statusLabel: 'Follow-up in 3 days',
-    statusVariant: 'blue',
-    actionSecondary: 'Call Patient',
-    actionPrimary: 'Consult',
-  },
-  {
-    id: 'apt_4',
-    initials: 'SR',
-    bloodGroup: 'B+',
-    name: 'Sunita Rao',
-    age: 45,
-    gender: 'Female',
-    uhid: '#6109',
-    lastVisit: '05 Oct 2024',
-    lastVisitReason: 'Diabetes T2',
-    category: 'chronic',
-    tags: [
-      { label: 'HbA1c: 7.2%', variant: 'teal' },
-      { label: 'Metformin 500mg', variant: 'gray' },
-    ],
-    statusLabel: 'Stable',
-    statusVariant: 'teal',
-    actionSecondary: 'Full Chart',
-    actionPrimary: 'Plan Care',
-  },
-];
-
 const FILTER_TABS = [
   { key: 'all', label: 'All Patients' },
   { key: 'recent', label: 'Recent OPD' },
@@ -163,12 +81,36 @@ const FILTER_TABS = [
 export default function DoctorPatientsScreen() {
   const router = useRouter();
   const { colors, isDark } = useAppTheme();
+  const appointments = useAppointmentStore((s) => s.appointments);
 
   const [activeFilter, setActiveFilter] = useState('all');
   const [searchQuery, setSearchQuery] = useState('');
 
+  const patientRoster = useMemo<PatientRecord[]>(() => {
+    return appointments.map((apt) => ({
+      id: apt.id,
+      initials: (apt.patientName || 'Patient').split(' ').map((n) => n[0]).join('').slice(0, 2).toUpperCase(),
+      bloodGroup: 'B+',
+      name: apt.patientName || 'Registered Patient',
+      age: 32,
+      gender: 'Male' as const,
+      uhid: `#${apt.tokenNumber || '101'}`,
+      lastVisit: `${apt.date} • ${apt.time}`,
+      lastVisitReason: (apt.symptoms && apt.symptoms.length > 0) ? apt.symptoms.join(', ') : 'OPD Consultation',
+      category: 'recent' as const,
+      tags: [
+        { label: apt.status === 'confirmed' ? 'Confirmed' : 'Active OPD', variant: 'teal' as const },
+        { label: apt.mode === 'video' ? 'Video Consult' : 'In-Clinic OPD', variant: 'blue' as const },
+      ],
+      statusLabel: apt.status.toUpperCase(),
+      statusVariant: 'teal' as const,
+      actionPrimary: 'Start Consultation',
+      actionSecondary: 'Chart View',
+    }));
+  }, [appointments]);
+
   const filteredPatients = useMemo(() => {
-    return PATIENT_ROSTER.filter((p) => {
+    return patientRoster.filter((p) => {
       const q = searchQuery.toLowerCase().trim();
       const matchSearch =
         !q ||
@@ -180,7 +122,7 @@ export default function DoctorPatientsScreen() {
 
       return matchSearch && matchFilter;
     });
-  }, [activeFilter, searchQuery]);
+  }, [patientRoster, activeFilter, searchQuery]);
 
   const handlePatientAction = (patientId: string) => {
     if (Platform.OS !== 'web') {
@@ -331,12 +273,22 @@ export default function DoctorPatientsScreen() {
 
         {/* 6. Patient Cards List */}
         <View style={styles.patientListContainer}>
-          {filteredPatients.map((patient, idx) => (
-            <Animated.View
-              key={patient.id}
-              entering={FadeInUp.delay(idx * 50).duration(300)}
-              style={[styles.patientCard, { backgroundColor: colors.card, borderColor: colors.border }]}
-            >
+          {filteredPatients.length === 0 ? (
+            <View style={{ padding: 40, alignItems: 'center', justifyContent: 'center' }}>
+              <Text style={{ fontSize: 16, fontWeight: '700', color: colors.text, marginBottom: 6 }}>
+                No Patients in Roster
+              </Text>
+              <Text style={{ fontSize: 13, color: colors.textSecondary, textAlign: 'center' }}>
+                Patients who book in-clinic or video OPD appointments will appear here automatically.
+              </Text>
+            </View>
+          ) : (
+            filteredPatients.map((patient, idx) => (
+              <Animated.View
+                key={patient.id}
+                entering={FadeInUp.delay(idx * 50).duration(300)}
+                style={[styles.patientCard, { backgroundColor: colors.card, borderColor: colors.border }]}
+              >
               {/* Card Header: Avatar, Name, UHID, Blood Group */}
               <View style={styles.patientCardHeader}>
                 <View style={styles.avatarWithBlood}>
@@ -454,7 +406,7 @@ export default function DoctorPatientsScreen() {
                 </View>
               </View>
             </Animated.View>
-          ))}
+          )))}
         </View>
       </ScrollView>
     </SafeAreaView>

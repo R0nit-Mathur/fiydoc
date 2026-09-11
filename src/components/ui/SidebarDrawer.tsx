@@ -154,7 +154,7 @@ export function SidebarDrawer({ visible, onClose, onOpenLocationPicker }: Sideba
             {
               width: drawerWidth,
               paddingTop: Math.max(insets.top, 20),
-              paddingBottom: Math.max(insets.bottom, 20),
+              paddingBottom: Math.max(insets.bottom, Platform.OS === 'android' ? 28 : 20),
               transform: [{ translateX: slideAnim }],
             },
           ]}
@@ -293,7 +293,7 @@ export function SidebarDrawer({ visible, onClose, onOpenLocationPicker }: Sideba
           </ScrollView>
 
           {/* Drawer Bottom Bar with Sign Out */}
-          <View style={styles.bottomBar}>
+          <View style={[styles.bottomBar, { paddingBottom: Math.max(insets.bottom, Platform.OS === 'android' ? 24 : 16) }]}>
             <TouchableOpacity
               onPress={() => setLogoutConfirmVisible(true)}
               style={styles.logoutBtn}

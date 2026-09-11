@@ -1,5 +1,5 @@
 import React from 'react';
-import { View, ScrollView, StyleSheet, Platform } from 'react-native';
+import { View, ScrollView, StyleSheet, Platform, KeyboardAvoidingView } from 'react-native';
 import { useRouter } from 'expo-router';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { UniversalTopBar } from '@/components/ui/UniversalTopBar';
@@ -29,20 +29,25 @@ export default function DoctorSetupScreen() {
         }}
       />
 
-      <ScrollView
-        contentContainerStyle={styles.scrollContainer}
-        showsVerticalScrollIndicator={false}
-        keyboardShouldPersistTaps="handled"
+      <KeyboardAvoidingView
+        style={{ flex: 1 }}
+        behavior={Platform.OS === 'ios' ? 'padding' : undefined}
       >
-        <View style={styles.innerContent}>
-          <DoctorRegistrationView
-            showRoleSelector
-            onSwitchToPatient={() => {
-              router.replace({ pathname: '/(auth)/signup', params: { role: 'patient' } });
-            }}
-          />
-        </View>
-      </ScrollView>
+        <ScrollView
+          contentContainerStyle={styles.scrollContainer}
+          showsVerticalScrollIndicator={false}
+          keyboardShouldPersistTaps="handled"
+        >
+          <View style={styles.innerContent}>
+            <DoctorRegistrationView
+              showRoleSelector
+              onSwitchToPatient={() => {
+                router.replace({ pathname: '/(auth)/signup', params: { role: 'patient' } });
+              }}
+            />
+          </View>
+        </ScrollView>
+      </KeyboardAvoidingView>
     </SafeAreaView>
   );
 }

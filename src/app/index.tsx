@@ -14,7 +14,8 @@ export default function Index() {
   useEffect(() => {
     if (!rootNavigationState?.key || !hasHydrated) return;
 
-    const timer = setTimeout(() => {
+    // Use requestAnimationFrame / microtask to ensure navigation tree is mounted
+    const frame = requestAnimationFrame(() => {
       if (!isAuthenticated) {
         router.replace('/(auth)/welcome');
       } else if (!onboardingCompleted) {
@@ -24,9 +25,9 @@ export default function Index() {
       } else {
         router.replace('/(patient)/(tabs)/home');
       }
-    }, 200);
+    });
 
-    return () => clearTimeout(timer);
+    return () => cancelAnimationFrame(frame);
   }, [isAuthenticated, role, onboardingCompleted, hasHydrated, rootNavigationState?.key]);
 
   return (

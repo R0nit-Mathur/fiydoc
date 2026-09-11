@@ -25,9 +25,10 @@ import {
   Image,
   Platform,
   StatusBar,
+  Modal,
 } from 'react-native';
 import { useRouter } from 'expo-router';
-import { SafeAreaView } from 'react-native-safe-area-context';
+import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { BlurView } from 'expo-blur';
 import Animated, { FadeInDown, FadeInUp } from 'react-native-reanimated';
 import * as Haptics from 'expo-haptics';
@@ -37,6 +38,7 @@ import { useDoctorsQuery } from '@/hooks/queries/useDoctorsQuery';
 import { useLocationStore } from '@/store/useLocationStore';
 import { useAuthStore } from '@/store/useAuthStore';
 import { useAppointmentStore } from '@/store/useAppointmentStore';
+import { WelcomeGuideModal } from '@/components/ui/WelcomeGuideModal';
 import { LocationPermissionModal } from '@/components/location/LocationPermissionModal';
 import { DoctorCard } from '@/components/ui/DoctorCard';
 import { signOutAll } from '@/services/authService';
@@ -77,15 +79,27 @@ const DOCTOR_AVATAR =
 
 export default function PatientHomeScreen() {
   const router = useRouter();
+  const insets = useSafeAreaInsets();
   const { colors, isDark } = useAppTheme();
   const [drawerOpen, setDrawerOpen] = useState(false);
   const [locationModalVisible, setLocationModalVisible] = useState(false);
   const [allSpecialtiesModalVisible, setAllSpecialtiesModalVisible] = useState(false);
+  const [guideModalVisible, setGuideModalVisible] = useState(false);
 
   const { formattedAddress, city, area, permissionStatus } = useLocationStore();
   const { data: doctors = [] } = useDoctorsQuery();
   const user = useAuthStore((s) => s.user);
   const appointments = useAppointmentStore((s) => s.appointments);
+
+  // Check if user profile is incomplete, prompt welcome guide
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      if (!user?.dob || !user?.bloodGroup || !user?.address) {
+        setGuideModalVisible(true);
+      }
+    }, 1500);
+    return () => clearTimeout(timer);
+  }, []);
 
   // Find nearest upcoming confirmed/valid appointment from store
   const upcomingAppointment = useMemo(() => {
@@ -202,24 +216,23 @@ export default function PatientHomeScreen() {
           </View>
 
           {/* Dedicated Search Trigger Bar (Only opens /(patient)/search) */}
-          <Pressable
-            onPress={handleOpenSearch}
-            style={({ pressed }) => [
-              styles.searchBox,
-              pressed && styles.searchBoxPressed,
-            ]}
-            accessibilityRole="button"
-            accessibilityLabel="Click search bar to open dedicated search page"
-          >
-            <Search size={20} color={StitchColors.primaryContainer} />
-            <Text style={styles.searchPlaceholderText}>
-              Search doctor, clinic, or specialty...
-            </Text>
+          <View style={styles.searchBox}>
             <Pressable
-              onPress={(e) => {
-                e.stopPropagation();
-                router.push('/(patient)/(tabs)/discovery');
-              }}
+              onPress={handleOpenSearch}
+              style={({ pressed }) => [
+                styles.searchBoxInputArea,
+                pressed && { opacity: 0.75 },
+              ]}
+              accessibilityRole="button"
+              accessibilityLabel="Click search bar to open dedicated search page"
+            >
+              <Search size={20} color={StitchColors.primaryContainer} />
+              <Text style={styles.searchPlaceholderText}>
+                Search doctor, clinic, or specialty...
+              </Text>
+            </Pressable>
+            <Pressable
+              onPress={() => router.push('/(patient)/(tabs)/discovery')}
               hitSlop={{ top: 6, bottom: 6, left: 6, right: 6 }}
               style={({ pressed }) => [
                 styles.filterButton,
@@ -229,7 +242,7 @@ export default function PatientHomeScreen() {
             >
               <SlidersHorizontal size={17} color="#475569" />
             </Pressable>
-          </Pressable>
+          </View>
         </View>
 
         {/* 2. Upcoming Clinic Visit Card (Dynamic from Appointments Store) */}
@@ -493,8 +506,14 @@ export default function PatientHomeScreen() {
         </View>
       </ScrollView>
 
-      {/* Slide-out Navigation Drawer */}
-      {drawerOpen && (
+      {/* Slide-out Navigation Drawer wrapped in root-level Modal to cover bottom tabs */}
+      <Modal
+        visible={drawerOpen}
+        transparent
+        animationType="fade"
+        statusBarTranslucent
+        onRequestClose={() => setDrawerOpen(false)}
+      >
         <View style={styles.drawerBackdrop}>
           <Pressable
             style={StyleSheet.absoluteFill}
@@ -627,7 +646,7 @@ export default function PatientHomeScreen() {
             </View>
 
             {/* Drawer Footer with Log Out */}
-            <View style={styles.drawerFooter}>
+            <View style={[styles.drawerFooter, { paddingBottom: Math.max(insets.bottom, 24) }]}>
               <Pressable
                 onPress={async () => {
                   setDrawerOpen(false);
@@ -645,11 +664,11 @@ export default function PatientHomeScreen() {
                 <X size={17} color="#e11d48" />
                 <Text style={styles.logoutText}>Log Out</Text>
               </Pressable>
-              <Text style={styles.versionText}>v2.4.0 iOS</Text>
+              <Text style={styles.versionText}>FIYDOC v1.0.1</Text>
             </View>
           </Animated.View>
         </View>
-      )}
+      </Modal>
 
       {/* Location Selector & Permission Modal */}
       <LocationPermissionModal
@@ -663,6 +682,12 @@ export default function PatientHomeScreen() {
         visible={allSpecialtiesModalVisible}
         onClose={() => setAllSpecialtiesModalVisible(false)}
       />
+
+      {/* Welcome & Profile Details Guidance Modal */}
+      <WelcomeGuideModal
+        visible={guideModalVisible}
+        onClose={() => setGuideModalVisible(false)}
+      />
     </SafeAreaView>
   );
 }
@@ -674,23 +699,22 @@ const styles = StyleSheet.create({
     paddingHorizontal: Spacing.md,
     paddingTop: 16,
     paddingBottom: 120,
-    maxWidth: 448,
-    alignSelf: 'center',
     width: '100%',
-    gap: 24, // Clear, comfortable gap between every component
+    ...(Platform.OS === 'web' ? { maxWidth: 448, alignSelf: 'center' as const } : {}),
   },
 
   /* Header */
   headerWrap: {
     position: 'relative',
     height: 56,
-    overflow: 'hidden',
+    backgroundColor: '#ffffff',
     borderBottomWidth: 1,
-    borderBottomColor: 'rgba(226, 232, 240, 0.5)',
+    borderBottomColor: 'rgba(226, 232, 240, 0.8)',
+    justifyContent: 'center',
   },
   headerBg: {
     ...StyleSheet.absoluteFill,
-    backgroundColor: 'rgba(255, 255, 255, 0.82)',
+    backgroundColor: '#ffffff',
   },
   header: {
     flex: 1,
@@ -733,21 +757,22 @@ const styles = StyleSheet.create({
   /* Spacing Wrapper */
   sectionSpacer: {
     width: '100%',
+    marginBottom: 20,
   },
 
   /* Greeting */
   greetingSection: {
-    gap: 16,
+    marginBottom: 20,
   },
   locationRow: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
+    marginBottom: 10,
   },
   locationPill: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 5,
     paddingHorizontal: 12,
     paddingVertical: 6,
     borderRadius: BorderRadius.full,
@@ -761,9 +786,11 @@ const styles = StyleSheet.create({
     fontSize: 12,
     fontWeight: '600',
     color: '#1e293b',
+    marginHorizontal: 5,
   },
   greetingBlock: {
     marginTop: 2,
+    marginBottom: 14,
   },
   greetingSmall: {
     fontSize: 17,
@@ -789,7 +816,6 @@ const styles = StyleSheet.create({
     borderColor: 'rgba(226, 232, 240, 0.9)',
     borderRadius: 16,
     paddingHorizontal: 14,
-    gap: 12,
     ...Platform.select({
       ios: {
         shadowColor: '#131b2e',
@@ -805,15 +831,18 @@ const styles = StyleSheet.create({
       },
     }),
   },
-  searchBoxPressed: {
-    backgroundColor: '#F8FAFC',
-    transform: [{ scale: 0.99 }],
+  searchBoxInputArea: {
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    height: '100%',
   },
   searchPlaceholderText: {
     flex: 1,
     fontSize: 14,
     color: StitchColors.outline,
     fontWeight: '500',
+    marginLeft: 10,
   },
   filterButton: {
     width: 36,
@@ -1013,12 +1042,14 @@ const styles = StyleSheet.create({
     color: '#2563eb',
   },
   specialtiesScroll: {
-    gap: 12,
     paddingRight: 16,
-    paddingVertical: 2,
+    paddingVertical: 4,
   },
   specialtyCard: {
-    width: 128,
+    width: 132,
+    minWidth: 132,
+    flexShrink: 0,
+    marginRight: 12,
     backgroundColor: '#ffffff',
     borderRadius: BorderRadius.xl,
     padding: 12,
@@ -1036,18 +1067,20 @@ const styles = StyleSheet.create({
   },
   specialtyName: {
     fontSize: 13,
+    lineHeight: 18,
     fontWeight: '700',
     color: '#0f172a',
   },
   specialtyDesc: {
     fontSize: 10,
+    lineHeight: 14,
     color: '#64748b',
     marginTop: 2,
   },
 
   /* Doctors List Container */
   doctorsListContainer: {
-    gap: 12,
+    paddingTop: 2,
   },
 
   /* Emergency Helpline */
@@ -1136,7 +1169,6 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: '#e2e8f0',
     marginBottom: 20,
-    gap: 10,
   },
   drawerAvatar: {
     width: 44,
@@ -1145,6 +1177,7 @@ const styles = StyleSheet.create({
     backgroundColor: '#2563eb',
     alignItems: 'center',
     justifyContent: 'center',
+    marginRight: 12,
   },
   drawerAvatarText: {
     fontSize: 15,
@@ -1154,20 +1187,21 @@ const styles = StyleSheet.create({
   drawerNameRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 4,
   },
   drawerName: {
     fontSize: 14,
+    lineHeight: 18,
     fontWeight: '700',
     color: '#0f172a',
+    marginRight: 6,
   },
   drawerPhone: {
     fontSize: 11,
+    lineHeight: 15,
     color: '#64748b',
     marginTop: 2,
   },
   drawerMenu: {
-    gap: 4,
   },
   drawerMenuItem: {
     flexDirection: 'row',
@@ -1175,7 +1209,7 @@ const styles = StyleSheet.create({
     paddingVertical: 10,
     paddingHorizontal: 10,
     borderRadius: BorderRadius.lg,
-    gap: 12,
+    marginBottom: 4,
   },
   drawerMenuIcon: {
     width: 34,
@@ -1183,10 +1217,12 @@ const styles = StyleSheet.create({
     borderRadius: 10,
     alignItems: 'center',
     justifyContent: 'center',
+    marginRight: 12,
   },
   drawerMenuText: {
     flex: 1,
     fontSize: 13.5,
+    lineHeight: 18,
     fontWeight: '600',
     color: '#334155',
   },
@@ -1195,9 +1231,11 @@ const styles = StyleSheet.create({
     paddingHorizontal: 7,
     paddingVertical: 2,
     borderRadius: BorderRadius.full,
+    alignSelf: 'center',
   },
   drawerMenuBadgeText: {
     fontSize: 10,
+    lineHeight: 14,
     fontWeight: '700',
     color: '#ffffff',
   },
@@ -1213,15 +1251,17 @@ const styles = StyleSheet.create({
   logoutButton: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 6,
   },
   logoutText: {
     fontSize: 13,
+    lineHeight: 18,
     fontWeight: '700',
     color: '#e11d48',
+    marginLeft: 6,
   },
   versionText: {
     fontSize: 11,
+    lineHeight: 15,
     color: '#94a3b8',
     fontWeight: '500',
   },

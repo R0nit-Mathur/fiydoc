@@ -177,13 +177,12 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
-    gap: 8,
     borderWidth: 1,
   },
   fullWidth: { width: '100%' },
   autoWidth: { alignSelf: 'flex-start' },
   disabled: { opacity: 0.45 },
-  iconWrap: { flexShrink: 0 },
+  iconWrap: { flexShrink: 0, marginRight: 8 },
   shadows: {
     shadowColor: '#1450a3',
     shadowOffset: { width: 0, height: 4 },
@@ -201,13 +200,13 @@ const sizeStyles = StyleSheet.create({
     borderRadius: 19,
   },
   md: {
-    paddingVertical: 14,
+    paddingVertical: 12,
     paddingHorizontal: 22,
     minHeight: 52,
     borderRadius: 26,
   },
   lg: {
-    paddingVertical: 16,
+    paddingVertical: 14,
     paddingHorizontal: 26,
     minHeight: 56,
     borderRadius: 28,
@@ -217,16 +216,22 @@ const sizeStyles = StyleSheet.create({
 const textSizeStyles = StyleSheet.create({
   sm: {
     fontSize: 14,
+    lineHeight: 18,
     fontWeight: '600',
+    textAlignVertical: 'center',
   },
   md: {
     fontSize: 16,
+    lineHeight: 22,
     fontWeight: '600',
     letterSpacing: -0.2,
+    textAlignVertical: 'center',
   },
   lg: {
     fontSize: 17,
+    lineHeight: 22,
     fontWeight: '600',
     letterSpacing: -0.3,
+    textAlignVertical: 'center',
   },
 });

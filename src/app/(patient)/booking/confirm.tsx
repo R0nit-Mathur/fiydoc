@@ -22,9 +22,10 @@ import {
   ActivityIndicator,
   Platform,
   Image,
+  Alert,
 } from 'react-native';
 import { useLocalSearchParams, useRouter } from 'expo-router';
-import { SafeAreaView } from 'react-native-safe-area-context';
+import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { BlurView } from 'expo-blur';
 import Animated, { FadeIn, FadeInUp, SlideInDown } from 'react-native-reanimated';
 import * as Haptics from 'expo-haptics';
@@ -88,6 +89,7 @@ export default function BookingConfirmScreen() {
     patientName?: string;
   }>();
   const { colors, isDark } = useAppTheme();
+  const insets = useSafeAreaInsets();
   const { user } = useAuthStore();
   const { bookingDraft, resetBookingDraft, addAppointment } = useAppointmentStore();
   const bookMutation = useBookAppointmentMutation();
@@ -129,10 +131,14 @@ export default function BookingConfirmScreen() {
   const [couponApplied, setCouponApplied] = useState(true);
 
   // Patient info state
-  const [patientName, setPatientName] = useState(params.patientName || user?.name || 'Rahul Sharma');
-  const [patientPhone, setPatientPhone] = useState(user?.phone || '+91 98765 43210');
-  const [patientAge, setPatientAge] = useState('28');
-  const [patientGender, setPatientGender] = useState('Male');
+  const [patientName, setPatientName] = useState(
+    params.patientName && params.patientName !== 'Rahul Sharma'
+      ? params.patientName
+      : (user?.name || '')
+  );
+  const [patientPhone, setPatientPhone] = useState(user?.phone || '');
+  const [patientAge, setPatientAge] = useState(user?.age ? String(user.age) : '28');
+  const [patientGender, setPatientGender] = useState(user?.gender || 'Male');
   const [isEditingPatient, setIsEditingPatient] = useState(false);
 
   // Payment Bottom Sheet
@@ -156,6 +162,17 @@ export default function BookingConfirmScreen() {
   };
 
   const handleStartPayment = () => {
+    if (!patientName.trim() || !patientPhone.trim()) {
+      Alert.alert(
+        'Missing Required Patient Details',
+        'Patient Name and Contact Phone Number are required to issue an OPD appointment token. Please enter them to continue.',
+        [
+          { text: 'Fill Details', onPress: () => setIsEditingPatient(true) },
+          { text: 'Cancel', style: 'cancel' },
+        ]
+      );
+      return;
+    }
     if (Platform.OS !== 'web') {
       Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
     }
@@ -163,6 +180,18 @@ export default function BookingConfirmScreen() {
   };
 
   const executeBooking = async (methodName: string) => {
+    if (!patientName.trim() || !patientPhone.trim()) {
+      setPaymentSheetVisible(false);
+      Alert.alert(
+        'Missing Required Patient Details',
+        'Patient Name and Contact Phone Number are required to issue an OPD appointment token. Please enter them to continue.',
+        [
+          { text: 'Fill Details', onPress: () => setIsEditingPatient(true) },
+          { text: 'Cancel', style: 'cancel' },
+        ]
+      );
+      return;
+    }
     setIsProcessingPayment(true);
     setProcessingStatus(`Authorizing ${methodName}...`);
 
@@ -272,7 +301,10 @@ export default function BookingConfirmScreen() {
       </View>
 
       <ScrollView
-        contentContainerStyle={styles.scrollContent}
+        contentContainerStyle={[
+          styles.scrollContent,
+          { paddingBottom: Math.max(insets.bottom, Platform.OS === 'android' ? 24 : 16) + 80 },
+        ]}
         showsVerticalScrollIndicator={false}
         keyboardShouldPersistTaps="handled"
       >
@@ -364,17 +396,19 @@ export default function BookingConfirmScreen() {
 
           <View style={styles.patientSnapshotRow}>
             <View style={[styles.patientIconWrap, { backgroundColor: isDark ? 'rgba(0,102,153,0.2)' : '#E0F2FE' }]}>
-              <Text style={styles.patientInitial}>{patientName.charAt(0)}</Text>
+              <Text style={styles.patientInitial}>{patientName ? patientName.charAt(0).toUpperCase() : 'P'}</Text>
             </View>
             <View style={{ flex: 1, marginLeft: 12 }}>
               <View style={styles.patientNameLine}>
-                <Text style={[styles.patientNameText, { color: colors.text }]}>{patientName}</Text>
+                <Text style={[styles.patientNameText, { color: patientName ? colors.text : StitchColors.error }]}>
+                  {patientName || 'Enter Patient Name *'}
+                </Text>
                 <View style={[styles.selfTag, { backgroundColor: Palette.healthcareTealLight }]}>
                   <Text style={styles.selfTagText}>Self</Text>
                 </View>
               </View>
               <Text style={[styles.patientMetaText, { color: colors.textSecondary }]}>
-                {patientAge} yrs • {patientGender} • {patientPhone}
+                {patientAge ? `${patientAge} yrs • ` : ''}{patientGender ? `${patientGender} • ` : ''}{patientPhone || 'No contact phone provided *'}
               </Text>
             </View>
           </View>
@@ -482,7 +516,16 @@ export default function BookingConfirmScreen() {
       </ScrollView>
 
       {/* Sticky Bottom Action Bar */}
-      <View style={[styles.bottomBar, { backgroundColor: colors.card, borderTopColor: colors.border }]}>
+      <View
+        style={[
+          styles.bottomBar,
+          {
+            backgroundColor: colors.card,
+            borderTopColor: colors.border,
+            paddingBottom: Math.max(insets.bottom, Platform.OS === 'android' ? 24 : 16),
+          },
+        ]}
+      >
         <View style={styles.bottomPriceCol}>
           <Text style={[styles.bottomPayableLabel, { color: colors.textSecondary }]}>Total Payable</Text>
           <Text style={[styles.bottomPriceValue, { color: colors.text }]}>{formatCurrency(totalPayable)}</Text>
@@ -512,7 +555,16 @@ export default function BookingConfirmScreen() {
             onPress={() => !isProcessingPayment && setPaymentSheetVisible(false)}
           />
 
-          <View style={[styles.paymentSheetContent, { backgroundColor: colors.card, borderColor: colors.border }]}>
+          <View
+            style={[
+              styles.paymentSheetContent,
+              {
+                backgroundColor: colors.card,
+                borderColor: colors.border,
+                paddingBottom: Math.max(insets.bottom, Platform.OS === 'android' ? 32 : 24),
+              },
+            ]}
+          >
             {/* Sheet Handle */}
             <View style={styles.sheetHandleWrap}>
               <View style={[styles.sheetHandle, { backgroundColor: colors.border }]} />

@@ -18,9 +18,10 @@ import {
   Platform,
   Alert,
   Share,
+  ActivityIndicator,
 } from 'react-native';
 import { useRouter, useLocalSearchParams } from 'expo-router';
-import { SafeAreaView } from 'react-native-safe-area-context';
+import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Image } from 'expo-image';
 import { BlurView } from 'expo-blur';
 import * as Haptics from 'expo-haptics';
@@ -73,22 +74,11 @@ const EVENING_SLOTS = [
 
 export default function DoctorProfileScreen() {
   const router = useRouter();
+  const insets = useSafeAreaInsets();
   const { id } = useLocalSearchParams<{ id?: string }>();
-  const { data: doctors } = useDoctorsQuery();
+  const { data: doctors, isLoading } = useDoctorsQuery();
 
-  const doctor = doctors?.find((d) => d.id === id) || {
-    id: id || 'doc-1',
-    name: 'Dr. Rajesh Sharma',
-    specialty: 'Cardiologist',
-    qualification: 'MD, DM (Cardiology)',
-    hospital: 'Fortis Hospital, Bandra West',
-    experienceYears: 18,
-    rating: 4.9,
-    reviewCount: 420,
-    patientCount: '2.4k+',
-    consultationFee: 800,
-    avatar: DEFAULT_DOCTOR_IMAGE,
-  };
+  const doctor = doctors?.find((d) => d.id === id) || (doctors && doctors.length > 0 ? doctors[0] : null);
 
   const [isFavorite, setIsFavorite] = useState(false);
   const [selectedDateIndex, setSelectedDateIndex] = useState(0);
@@ -107,6 +97,7 @@ export default function DoctorProfileScreen() {
   };
 
   const handleShare = async () => {
+    if (!doctor) return;
     try {
       await Share.share({
         message: `Book an in-clinic OPD consultation with ${doctor.name} on FiYDOC: https://fiydoc.app/doctor/${doctor.id}`,
@@ -117,6 +108,7 @@ export default function DoctorProfileScreen() {
   };
 
   const handleBookContinue = () => {
+    if (!doctor) return;
     if (Platform.OS !== 'web') {
       Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
     }
@@ -133,6 +125,15 @@ export default function DoctorProfileScreen() {
       },
     });
   };
+
+  if (isLoading || !doctor) {
+    return (
+      <SafeAreaView style={[styles.safeArea, { alignItems: 'center', justifyContent: 'center' }]} edges={['top']}>
+        <Text style={{ fontSize: 16, fontWeight: '600', color: StitchColors.onSurface, marginBottom: 16 }}>Loading Doctor Profile...</Text>
+        <ActivityIndicator size="large" color={StitchColors.primary} />
+      </SafeAreaView>
+    );
+  }
 
   return (
     <SafeAreaView style={styles.safeArea} edges={['top']}>
@@ -188,7 +189,10 @@ export default function DoctorProfileScreen() {
       </View>
 
       <ScrollView
-        contentContainerStyle={styles.scrollContainer}
+        contentContainerStyle={[
+          styles.scrollContainer,
+          { paddingBottom: Math.max(insets.bottom, Platform.OS === 'android' ? 24 : 14) + 80 },
+        ]}
         showsVerticalScrollIndicator={false}
       >
         <View style={styles.contentWrap}>
@@ -497,7 +501,12 @@ export default function DoctorProfileScreen() {
       </ScrollView>
 
       {/* Sticky Bottom Checkout Action Card */}
-      <View style={styles.bottomCheckoutBar}>
+      <View
+        style={[
+          styles.bottomCheckoutBar,
+          { paddingBottom: Math.max(insets.bottom, Platform.OS === 'android' ? 24 : 14) },
+        ]}
+      >
         <View style={styles.bottomCheckoutInner}>
           <View style={styles.feeBlock}>
             <Text style={styles.feeLabel}>TOTAL FEE</Text>
@@ -567,12 +576,11 @@ const styles = StyleSheet.create({
     paddingBottom: 110,
   },
   contentWrap: {
-    maxWidth: 440,
     width: '100%',
-    alignSelf: 'center',
     paddingHorizontal: 16,
     paddingTop: 12,
     gap: 12,
+    ...(Platform.OS === 'web' ? { maxWidth: 440, alignSelf: 'center' as const } : {}),
   },
   headerCard: {
     backgroundColor: StitchColors.surfaceContainerLowest,
@@ -1076,9 +1084,9 @@ const styles = StyleSheet.create({
     bottom: 0,
     left: 0,
     right: 0,
-    backgroundColor: 'rgba(255, 255, 255, 0.96)',
+    backgroundColor: '#ffffff',
     borderTopWidth: 1,
-    borderTopColor: 'rgba(195, 198, 211, 0.3)',
+    borderTopColor: 'rgba(195, 198, 211, 0.4)',
     paddingHorizontal: 16,
     paddingTop: 10,
     paddingBottom: Platform.OS === 'ios' ? 24 : 14,
@@ -1090,7 +1098,7 @@ const styles = StyleSheet.create({
         shadowRadius: 16,
       },
       android: {
-        elevation: 8,
+        elevation: 6,
       },
       web: {
         boxShadow: '0 -6px 24px rgba(15, 23, 42, 0.08)',
@@ -1098,13 +1106,12 @@ const styles = StyleSheet.create({
     }),
   },
   bottomCheckoutInner: {
-    maxWidth: 440,
     width: '100%',
-    alignSelf: 'center',
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
     gap: 12,
+    ...(Platform.OS === 'web' ? { maxWidth: 440, alignSelf: 'center' as const } : {}),
   },
   feeBlock: {
     minWidth: 84,

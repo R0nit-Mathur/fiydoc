@@ -42,8 +42,11 @@
     "production": {
       "channel": "production",
       "autoIncrement": true,
+      "android": {
+        "buildType": "app-bundle"
+      },
       "ios": {
-        "simulator": true
+        "simulator": false
       }
     }
   },

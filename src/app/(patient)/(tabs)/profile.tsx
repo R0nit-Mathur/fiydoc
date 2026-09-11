@@ -71,14 +71,14 @@ export default function PatientProfileScreen() {
 
   const { data: patientProfile, isLoading: profileLoading } = usePatientProfileQuery(user?.id);
 
-  const currentDOB = patientProfile?.dob || user?.dob || '1996-05-14';
-  const currentAddress = patientProfile?.address || user?.address || 'Flat 402, Sector 62, Noida';
-  const calculatedAge = useMemo(() => calculateAgeFromDOB(currentDOB), [currentDOB]);
+  const currentDOB = patientProfile?.dob || user?.dob || '';
+  const currentAddress = patientProfile?.address || user?.address || '';
+  const calculatedAge = useMemo(() => currentDOB ? calculateAgeFromDOB(currentDOB) : null, [currentDOB]);
 
   const [refreshing, setRefreshing] = useState(false);
   const [logoutDialogVisible, setLogoutDialogVisible] = useState(false);
   const [editModalVisible, setEditModalVisible] = useState(false);
-  const [editAvatar, setEditAvatar] = useState(user?.avatar || AVATAR_PRESETS[0]);
+  const [editAvatar, setEditAvatar] = useState<string | null>(user?.avatar || null);
   const [editName, setEditName] = useState(user?.name || '');
   const [editEmail, setEditEmail] = useState(user?.email || '');
   const [editPhone, setEditPhone] = useState(user?.phone || '');
@@ -91,15 +91,15 @@ export default function PatientProfileScreen() {
   const [saveToast, setSaveToast] = useState(false);
   const [updateModalVisible, setUpdateModalVisible] = useState(false);
 
-  const editCalculatedAge = useMemo(() => calculateAgeFromDOB(editDOB), [editDOB]);
+  const editCalculatedAge = useMemo(() => editDOB ? calculateAgeFromDOB(editDOB) : null, [editDOB]);
 
   const handleOpenEdit = () => {
     setEditName(user?.name || '');
     setEditEmail(user?.email || '');
     setEditPhone(user?.phone || '');
-    setEditAvatar(user?.avatar || AVATAR_PRESETS[0]);
-    setEditDOB(patientProfile?.dob || user?.dob || '1996-05-14');
-    setEditAddress(patientProfile?.address || user?.address || 'Flat 402, Sector 62, Noida');
+    setEditAvatar(user?.avatar || null);
+    setEditDOB(patientProfile?.dob || user?.dob || '');
+    setEditAddress(patientProfile?.address || user?.address || '');
     setEditBloodGroup(patientProfile?.bloodGroup || '');
     setEditAllergies(patientProfile?.allergies?.join(', ') || '');
     setEditConditions(patientProfile?.conditions?.join(', ') || '');
@@ -117,7 +117,7 @@ export default function PatientProfileScreen() {
     const emergencyPhone = editEmergency.trim() || undefined;
     const age = calculateAgeFromDOB(dob) ?? undefined;
 
-    updateUser({ name, avatar: editAvatar, dob, address, age });
+    updateUser({ name, avatar: editAvatar || undefined, dob, address, age });
     if (user?.id) {
       try {
         await patientService.updateProfile(user.id, {
@@ -125,7 +125,7 @@ export default function PatientProfileScreen() {
           dob,
           address,
           bloodGroup,
-          profilePhoto: editAvatar,
+          profilePhoto: editAvatar || undefined,
           allergies,
           conditions,
           emergencyContact: emergencyPhone ? { phone: emergencyPhone, name: '', relation: '' } : undefined,
@@ -239,7 +239,7 @@ export default function PatientProfileScreen() {
         <Animated.View entering={FadeIn.duration(380)}>
           <View style={[styles.userCard, { backgroundColor: colors.card, borderColor: colors.border }]}>
             <View style={styles.avatarWrapper}>
-              <Avatar uri={user?.avatar || AVATAR_PRESETS[0]} name={user?.name || 'Patient'} size="xl" />
+              <Avatar uri={user?.avatar || null} name={user?.name || 'Patient'} size="xl" />
               <Pressable
                 onPress={handleOpenEdit}
                 style={[styles.avatarCameraBadge, { backgroundColor: StitchColors.primaryContainer, borderColor: colors.card }]}
@@ -262,7 +262,7 @@ export default function PatientProfileScreen() {
               <View style={styles.demographicMiniRow}>
                 <Calendar size={11} color={StitchColors.primaryContainer} />
                 <Text style={[styles.demographicMiniText, { color: colors.textSecondary }]}>
-                  {calculatedAge !== null ? `${calculatedAge} yrs` : 'Age —'} • DOB: {formatHumanDate(currentDOB)}
+                  {calculatedAge !== null ? `${calculatedAge} yrs` : 'Age —'} • DOB: {currentDOB ? formatHumanDate(currentDOB) : 'Not set'}
                 </Text>
               </View>
 
@@ -349,7 +349,9 @@ export default function PatientProfileScreen() {
               <View style={{ flex: 1 }}>
                 <Text style={[styles.detailLabel, { color: colors.textMuted }]}>Date of Birth (DOB) & Age</Text>
                 <Text style={[styles.detailValue, { color: colors.text }]}>
-                  {formatHumanDate(currentDOB)} {calculatedAge !== null ? `• ${calculatedAge} years old (Calculated)` : ''}
+                  {currentDOB
+                    ? `${formatHumanDate(currentDOB)}${calculatedAge !== null ? ` • ${calculatedAge} years old (Calculated)` : ''}`
+                    : 'No date of birth added yet'}
                 </Text>
               </View>
             </View>
@@ -433,6 +435,24 @@ export default function PatientProfileScreen() {
           <View style={styles.modalForm}>
             <Text style={[styles.modalFieldLabel, { color: colors.textSecondary }]}>Profile Photo</Text>
             <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.avatarPickerRow}>
+              {/* Initials Option (Default) */}
+              <TouchableOpacity
+                onPress={() => setEditAvatar(null)}
+                hitSlop={{ top: 6, bottom: 6, left: 6, right: 6 }}
+                style={[styles.avatarPickItem, { borderColor: !editAvatar ? StitchColors.secondaryContainer : 'transparent' }]}
+              >
+                <View style={[styles.avatarPickImage, { backgroundColor: Palette.healthcareTeal, alignItems: 'center', justifyContent: 'center' }]}>
+                  <Text style={{ color: '#fff', fontWeight: '800', fontSize: 16 }}>
+                    {editName ? editName.slice(0, 2).toUpperCase() : 'FD'}
+                  </Text>
+                </View>
+                {!editAvatar && (
+                  <View style={[styles.checkPill, { backgroundColor: StitchColors.secondaryContainer }]}>
+                    <CheckCircle2 size={12} color="#fff" />
+                  </View>
+                )}
+              </TouchableOpacity>
+
               {AVATAR_PRESETS.map((preset, idx) => {
                 const isSelected = editAvatar === preset;
                 return (

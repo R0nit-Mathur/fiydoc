@@ -449,11 +449,10 @@ const styles = StyleSheet.create({
     paddingBottom: 110,
   },
   contentWrap: {
-    maxWidth: 440,
     width: '100%',
-    alignSelf: 'center',
     paddingHorizontal: 16,
     paddingTop: 8,
+    ...(Platform.OS === 'web' ? { maxWidth: 440, alignSelf: 'center' as const } : {}),
   },
   segmentedFilter: {
     padding: 4,
