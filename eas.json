@@ -31,6 +31,14 @@
         "simulator": false
       }
     },
+    "production-apk": {
+      "channel": "production",
+      "autoIncrement": true,
+      "distribution": "internal",
+      "android": {
+        "buildType": "apk"
+      }
+    },
     "production": {
       "channel": "production",
       "autoIncrement": true,
