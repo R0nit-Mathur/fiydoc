@@ -58,6 +58,7 @@ import { signOutAll } from '@/services/authService';
 import { useAppTheme } from '@/hooks/useAppTheme';
 import { BorderRadius, Shadows, StitchColors, Palette, DEFAULT_DOCTOR_AVATAR } from '@/constants/theme';
 import { AppUpdateModal } from '@/components/ui/AppUpdateModal';
+import { pickImageFromGallery } from '@/utils/mediaPicker';
 import { Avatar } from '@/components/ui/Avatar';
 
 const DOCTOR_AVATAR = DEFAULT_DOCTOR_AVATAR;
@@ -76,7 +77,7 @@ export default function DoctorProfileScreen() {
   const { user, updateUser } = useAuthStore();
 
   // Profile data state bound to user
-  const initialName = user?.name || 'Dr. Rajesh Sharma';
+  const initialName = user?.name || '';
   const initialSpec = user?.specialization || user?.specialty || 'Senior Interventional Cardiologist • AIIMS';
   const initialFee = user?.consultationFee ? String(user.consultationFee) : '800';
   const initialReg = user?.licenseNumber || user?.registrationNumber || 'MCI-48291 • Karnataka Medical Council';
@@ -85,7 +86,7 @@ export default function DoctorProfileScreen() {
   const [docSpec, setDocSpec] = useState(initialSpec);
   const [docAvatar, setDocAvatar] = useState(user?.avatar || DOCTOR_AVATAR);
   const [opdFee, setOpdFee] = useState(initialFee);
-  const [upiId, setUpiId] = useState('rajesh.doc@okhdfcbank');
+  const [upiId, setUpiId] = useState((user as any)?.upiId || '');
 
   // Toggles
   const [activeForOpd, setActiveForOpd] = useState(true);
@@ -571,6 +572,41 @@ export default function DoctorProfileScreen() {
               <View>
                 <Text style={[styles.inputLabel, { color: colors.textSecondary }]}>Profile Photo</Text>
                 <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap: 10, paddingVertical: 4 }}>
+                  {/* Custom Upload from Device Button */}
+                  <Pressable
+                    onPress={async () => {
+                      const uri = await pickImageFromGallery();
+                      if (uri) setTempAvatar(uri);
+                    }}
+                    style={{
+                      width: 52,
+                      height: 52,
+                      borderRadius: 26,
+                      borderWidth: 2,
+                      borderColor: tempAvatar && !AVATAR_PRESETS.includes(tempAvatar) ? StitchColors.primaryContainer : colors.border,
+                      borderStyle: 'dashed',
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                      backgroundColor: colors.backgroundElement,
+                      overflow: 'hidden',
+                      position: 'relative',
+                    }}
+                  >
+                    {tempAvatar && !AVATAR_PRESETS.includes(tempAvatar) ? (
+                      <Image source={{ uri: tempAvatar }} style={{ width: '100%', height: '100%' }} />
+                    ) : (
+                      <View style={{ alignItems: 'center', justifyContent: 'center' }}>
+                        <Camera size={18} color={StitchColors.primaryContainer} />
+                        <Text style={{ fontSize: 9, fontWeight: '700', color: StitchColors.primaryContainer, marginTop: 1 }}>Upload</Text>
+                      </View>
+                    )}
+                    {tempAvatar && !AVATAR_PRESETS.includes(tempAvatar) && (
+                      <View style={{ position: 'absolute', top: 2, right: 2, backgroundColor: StitchColors.primaryContainer, borderRadius: 10 }}>
+                        <CheckCircle2 size={14} color="#FFFFFF" />
+                      </View>
+                    )}
+                  </Pressable>
+
                   {/* Initials Option (Default Name Initials) */}
                   <Pressable
                     onPress={() => setTempAvatar(null as any)}

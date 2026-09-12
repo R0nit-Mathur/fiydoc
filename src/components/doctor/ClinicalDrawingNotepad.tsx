@@ -98,11 +98,16 @@ export default function ClinicalDrawingNotepad({
     if (activeTool === 'pencil') {
       setCurrentPath((prev) => `${prev} L ${locationX.toFixed(1)} ${locationY.toFixed(1)}`);
     } else {
-      // Eraser removes nearest paths
+      // Eraser: remove any saved path that has a coordinate within 20px of touch
+      const ERASE_RADIUS = 20;
       setPaths((prevPaths) =>
         prevPaths.filter((p) => {
-          // Keep paths unless close to current location
-          return true;
+          // Parse all coordinate pairs from the SVG path string
+          const coords = p.d.match(/[\d.]+\s[\d.]+/g) || [];
+          return !coords.some((pair) => {
+            const [px, py] = pair.split(' ').map(Number);
+            return Math.abs(px - locationX) < ERASE_RADIUS && Math.abs(py - locationY) < ERASE_RADIUS;
+          });
         })
       );
     }
@@ -149,7 +154,8 @@ export default function ClinicalDrawingNotepad({
     <Modal
       visible={visible}
       animationType="slide"
-      presentationStyle="pageSheet"
+      presentationStyle={Platform.OS === 'ios' ? 'overFullScreen' : 'pageSheet'}
+      statusBarTranslucent
       onRequestClose={onClose}
     >
       <View style={[styles.container, { backgroundColor: colors.background }]}>
@@ -307,6 +313,8 @@ export default function ClinicalDrawingNotepad({
               style={[styles.drawingSurface, { backgroundColor: isDark ? '#1E293B' : '#FFFFFF' }]}
               onStartShouldSetResponder={() => true}
               onMoveShouldSetResponder={() => true}
+              onStartShouldSetResponderCapture={() => true}
+              onMoveShouldSetResponderCapture={() => true}
               onResponderGrant={handleTouchStart}
               onResponderMove={handleTouchMove}
               onResponderRelease={handleTouchEnd}

@@ -93,24 +93,29 @@ function shiftTime(timeStr: string, meridiem: string, shiftMins: number): { time
   return { time: formattedTime, meridiem: newMeridiem };
 }
 
-// Generate dynamic 7 days starting from today using live system clock
-function generateDynamicWeek() {
+// Generate dynamic 7 days starting from a given base date using live system clock
+function generateDynamicWeek(baseDate?: Date) {
   const days: { day: string; date: string; dot: string; fullDate: string; isToday: boolean }[] = [];
   const dayNames = ['S', 'M', 'T', 'W', 'T', 'F', 'S'];
   const now = new Date();
+  const base = baseDate || now;
 
   for (let i = 0; i < 7; i++) {
-    const d = new Date(now);
-    d.setDate(now.getDate() + i);
+    const d = new Date(base);
+    d.setDate(base.getDate() + i);
     const dayLetter = dayNames[d.getDay()];
     const dateNum = d.getDate().toString();
     const fullDate = d.toLocaleDateString('en-IN', { weekday: 'short', day: 'numeric', month: 'short' });
+    const isToday =
+      d.getDate() === now.getDate() &&
+      d.getMonth() === now.getMonth() &&
+      d.getFullYear() === now.getFullYear();
     days.push({
       day: dayLetter,
       date: dateNum,
-      dot: i === 0 ? 'active' : d.getDay() === 0 ? 'off' : 'teal',
+      dot: isToday ? 'active' : d.getDay() === 0 ? 'off' : 'teal',
       fullDate,
-      isToday: i === 0,
+      isToday,
     });
   }
   return days;
@@ -127,6 +132,33 @@ export default function DoctorScheduleScreen() {
   const [selectedDay, setSelectedDay] = useState(DYNAMIC_WEEK_DAYS[0]?.date || new Date().getDate().toString());
   const [selectedSession, setSelectedSession] = useState<'morning' | 'evening'>('morning');
   const [leaveDates, setLeaveDates] = useState<string[]>([]);
+  const [currentMonth, setCurrentMonth] = useState(() => {
+    const d = new Date();
+    d.setDate(1);
+    return d;
+  });
+
+  const handlePrevMonth = () => {
+    setCurrentMonth((prev) => {
+      const d = new Date(prev);
+      d.setMonth(d.getMonth() - 1);
+      const newWeek = generateDynamicWeek(d);
+      setWeekDays(newWeek);
+      setSelectedDay(newWeek[0]?.date || d.getDate().toString());
+      return d;
+    });
+  };
+
+  const handleNextMonth = () => {
+    setCurrentMonth((prev) => {
+      const d = new Date(prev);
+      d.setMonth(d.getMonth() + 1);
+      const newWeek = generateDynamicWeek(d);
+      setWeekDays(newWeek);
+      setSelectedDay(newWeek[0]?.date || d.getDate().toString());
+      return d;
+    });
+  };
 
   // Update dynamic week from live clock on mount
   useEffect(() => {
@@ -382,21 +414,28 @@ export default function DoctorScheduleScreen() {
 
         {/* 2. Top Controls & Month Navigator */}
         <View style={styles.monthControlRow}>
-          <View style={[styles.monthPill, { backgroundColor: colors.backgroundElement, borderColor: colors.border }]}>
-            <Pressable hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }} style={styles.navArrow}>
+        <View style={[styles.monthPill, { backgroundColor: colors.backgroundElement, borderColor: colors.border }]}>
+            <Pressable onPress={handlePrevMonth} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }} style={styles.navArrow}>
               <ChevronLeft size={16} color={colors.text} />
             </Pressable>
             <Text style={[styles.monthText, { color: colors.text }]}>
-              {new Date().toLocaleDateString('en-IN', { month: 'long', year: 'numeric' })}
+              {currentMonth.toLocaleDateString('en-IN', { month: 'long', year: 'numeric' })}
             </Text>
-            <Pressable hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }} style={styles.navArrow}>
+            <Pressable onPress={handleNextMonth} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }} style={styles.navArrow}>
               <ChevronRight size={16} color={colors.text} />
             </Pressable>
           </View>
 
           <View style={styles.monthActionsRow}>
             <Pressable
-              onPress={() => setSelectedDay(DYNAMIC_WEEK_DAYS[0]?.date || new Date().getDate().toString())}
+              onPress={() => {
+                const today = new Date();
+                const firstOfMonth = new Date(today.getFullYear(), today.getMonth(), 1);
+                setCurrentMonth(firstOfMonth);
+                const todayWeek = generateDynamicWeek();
+                setWeekDays(todayWeek);
+                setSelectedDay(todayWeek[0]?.date || today.getDate().toString());
+              }}
               style={[styles.todayBtn, { backgroundColor: colors.backgroundElement }]}
             >
               <Text style={[styles.todayBtnText, { color: StitchColors.primaryContainer }]}>Today</Text>

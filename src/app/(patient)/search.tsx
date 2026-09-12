@@ -54,11 +54,11 @@ import { BorderRadius, Shadows, Spacing, StitchColors, Palette } from '@/constan
 import { Doctor } from '@/types/index';
 
 const RECENT_SEARCHES = [
-  'Dr. Rajesh Sharma',
   'Cardiologist',
   'Chest Pain',
   'General Physician',
   'Dentist',
+  'Skin Specialist',
 ];
 
 const SYMPTOM_TAGS = [

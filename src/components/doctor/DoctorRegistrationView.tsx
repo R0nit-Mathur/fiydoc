@@ -32,6 +32,7 @@ import { SegmentedRoleSelector } from '@/components/ui/SegmentedRoleSelector';
 import { useAuthStore } from '@/store/useAuthStore';
 import { authService } from '@/services/authService';
 import { StitchColors } from '@/constants/theme';
+import { pickClinicalDocument } from '@/utils/mediaPicker';
 
 export interface DoctorRegistrationViewProps {
   onSwitchToPatient?: () => void;
@@ -58,32 +59,10 @@ export function DoctorRegistrationView({
 
   // Safe file picker for degree and clinic proof documents
   const handlePickDocument = async (onSuccess: (fileName: string, fileSize: string) => void) => {
-    try {
-      let DocumentPickerModule: any = null;
-      try {
-        DocumentPickerModule = require('expo-document-picker');
-      } catch {
-        DocumentPickerModule = null;
-      }
-
-      if (DocumentPickerModule && DocumentPickerModule.getDocumentAsync) {
-        const res = await DocumentPickerModule.getDocumentAsync({
-          type: ['application/pdf', 'image/*'],
-          copyToCacheDirectory: true,
-        });
-        if (!res.canceled && res.assets && res.assets[0]) {
-          const file = res.assets[0];
-          const sizeKb = file.size ? Math.round(file.size / 1024) : 1024;
-          const sizeStr = sizeKb > 1024 ? `${(sizeKb / 1024).toFixed(1)} MB` : `${sizeKb} KB`;
-          onSuccess(file.name || 'Medical_Credential.pdf', sizeStr);
-          return;
-        }
-      }
-    } catch (err) {
-      console.warn('[DoctorRegistration] DocumentPicker warning:', err);
+    const file = await pickClinicalDocument();
+    if (file) {
+      onSuccess(file.name, file.size || '1.5 MB');
     }
-    // Fallback if dismissed or on web/emulator
-    onSuccess('Verified_Medical_Certificate.pdf', '1.8 MB');
   };
 
   // Step 1: Basic Info Form State

@@ -488,20 +488,28 @@ export default function DoctorConsultationScreen() {
             <View style={{ flex: 1, marginLeft: 12 }}>
               <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }}>
                 <Text style={[styles.heroPatientName, { color: colors.text }]}>
-                  {currentApt?.patientName || 'Aarav Mehta'}
+                  {currentApt?.patientName || 'Patient'}
                 </Text>
                 <View style={{ flexDirection: 'row', gap: 4 }}>
-                  <View style={[styles.demogBadge, { backgroundColor: colors.backgroundElement }]}>
-                    <Text style={[styles.demogText, { color: colors.textSecondary }]}>38 M</Text>
-                  </View>
-                  <View style={[styles.demogBadge, { backgroundColor: '#DBEAFE' }]}>
-                    <Text style={[styles.demogText, { color: StitchColors.primaryContainer, fontWeight: '800' }]}>B+</Text>
-                  </View>
+                  {(currentApt as any)?.age ? (
+                    <View style={[styles.demogBadge, { backgroundColor: colors.backgroundElement }]}>
+                      <Text style={[styles.demogText, { color: colors.textSecondary }]}>{(currentApt as any).age}</Text>
+                    </View>
+                  ) : null}
+                  {(currentApt as any)?.bloodGroup ? (
+                    <View style={[styles.demogBadge, { backgroundColor: '#DBEAFE' }]}>
+                      <Text style={[styles.demogText, { color: StitchColors.primaryContainer, fontWeight: '800' }]}>{(currentApt as any).bloodGroup}</Text>
+                    </View>
+                  ) : null}
                 </View>
               </View>
 
               <Text style={[styles.uhidText, { color: colors.textSecondary }]}>
-                UHID: 8021-9811 • MRN: #FD-99420
+                {(currentApt as any)?.uhid
+                  ? `UHID: ${(currentApt as any).uhid}${(currentApt as any)?.mrn ? ` • MRN: ${(currentApt as any).mrn}` : ''}`
+                  : currentApt?.id
+                    ? `Ref: ${currentApt.id}`
+                    : 'No ID on file'}
               </Text>
             </View>
           </View>
@@ -826,7 +834,7 @@ export default function DoctorConsultationScreen() {
                     </View>
                     <View>
                       <Text style={[styles.recentVisitName, { color: colors.text }]}>Routine Checkup</Text>
-                      <Text style={[styles.recentVisitDate, { color: colors.textSecondary }]}>12 Jan 2026 • Dr. Rajesh Sharma</Text>
+                      <Text style={[styles.recentVisitDate, { color: colors.textSecondary }]}>12 Jan 2026 • {user?.name || 'Doctor'}</Text>
                     </View>
                   </View>
                   <Text style={[styles.recentVisitBp, { color: colors.textSecondary }]}>BP 124/82</Text>
@@ -962,7 +970,7 @@ export default function DoctorConsultationScreen() {
       {/* 5. Freehand MS Paint Style Drawing Canvas Modal */}
       <ClinicalDrawingNotepad
         visible={showDrawingModal}
-        patientName={currentApt?.patientName || 'Aarav Mehta'}
+        patientName={currentApt?.patientName || 'Patient'}
         initialNotes={physicalObservation}
         onClose={() => setShowDrawingModal(false)}
         onSaveNotes={(notes, hasDrawing) => {
@@ -1076,7 +1084,7 @@ export default function DoctorConsultationScreen() {
             <View style={{ alignItems: 'center' }}>
               <Text style={[styles.headerTitle, { color: colors.text }]}>Write Prescription</Text>
               <Text style={[styles.headerSub, { color: colors.textSecondary }]}>
-                {currentApt?.patientName || 'Aarav Mehta'} (38M, UHID-9042)
+                {currentApt?.patientName || 'Patient'}{(currentApt as any)?.age ? ` · ${(currentApt as any).age}` : ''}
               </Text>
             </View>
 
@@ -1593,12 +1601,18 @@ export default function DoctorConsultationScreen() {
                   {/* Doctor Info */}
                   <View style={styles.letterheadTop}>
                     <View style={{ flex: 1 }}>
-                      <Text style={[styles.letterheadDocName, { color: colors.text }]}>Dr. Rajesh Sharma</Text>
-                      <Text style={[styles.letterheadDocQual, { color: colors.textSecondary }]}>MD (Cardiology), MBBS</Text>
-                      <Text style={[styles.letterheadReg, { color: colors.textMuted }]}>Reg: MMC/2014/08/3821</Text>
+                      <Text style={[styles.letterheadDocName, { color: colors.text }]}>{user?.name || 'Doctor'}</Text>
+                      <Text style={[styles.letterheadDocQual, { color: colors.textSecondary }]}>
+                        {user?.qualification || user?.specialization || ''}
+                      </Text>
+                      <Text style={[styles.letterheadReg, { color: colors.textMuted }]}>
+                        {user?.licenseNumber ? `Reg: ${user.licenseNumber}` : ''}
+                      </Text>
                     </View>
                     <View style={styles.letterheadHospitalBox}>
-                      <Text style={[styles.hospitalName, { color: StitchColors.primaryContainer }]}>Fortis Hospital OPD</Text>
+                      <Text style={[styles.hospitalName, { color: StitchColors.primaryContainer }]}>
+                        {user?.clinicName || 'OPD'}
+                      </Text>
                       <Text style={[styles.hospitalDate, { color: colors.textSecondary }]}>
                         {new Date().toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' })}
                       </Text>
@@ -1608,7 +1622,7 @@ export default function DoctorConsultationScreen() {
                   {/* Patient Info Strip */}
                   <View style={[styles.letterheadPatientStrip, { backgroundColor: colors.backgroundElement }]}>
                     <Text style={[styles.lhPatientName, { color: colors.text }]}>
-                      Patient: {currentApt?.patientName || 'Aarav Mehta'} (38M)
+                      Patient: {currentApt?.patientName || 'Patient'}{(currentApt as any)?.age ? ` (${(currentApt as any).age})` : ''}
                     </Text>
                     <Text style={[styles.lhVitalsText, { color: colors.textSecondary }]}>
                       BP: {vitals.bpSystolic}/{vitals.bpDiastolic} • Pulse: {vitals.pulse} bpm • Temp: {vitals.temp}°F
@@ -1674,7 +1688,7 @@ export default function DoctorConsultationScreen() {
                           fill="none"
                         />
                       </Svg>
-                      <Text style={[styles.signerName, { color: colors.text }]}>Dr. Rajesh Sharma</Text>
+                      <Text style={[styles.signerName, { color: colors.text }]}>{user?.name || 'Doctor'}</Text>
                     </View>
                   </View>
                 </View>

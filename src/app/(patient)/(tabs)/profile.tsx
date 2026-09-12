@@ -34,6 +34,7 @@ import { Modal } from '@/components/ui/Modal';
 import { ConfirmationDialog } from '@/components/ui/ConfirmationDialog';
 import { useAppTheme } from '@/hooks/useAppTheme';
 import { patientService } from '@/services/patientService';
+import { pickImageFromGallery } from '@/utils/mediaPicker';
 import {
   LogOut,
   ChevronRight,
@@ -109,53 +110,11 @@ export default function PatientProfileScreen() {
     return formatted;
   };
 
-  // Local device profile picture upload with safe fallback for standalone APKs
+  // Local device profile picture upload using universal mediaPicker
   const handlePickLocalImage = async () => {
-    try {
-      let ImagePickerModule: any = null;
-      try {
-        ImagePickerModule = require('expo-image-picker');
-      } catch {
-        ImagePickerModule = null;
-      }
-
-      if (!ImagePickerModule || !ImagePickerModule.launchImageLibraryAsync) {
-        Alert.alert(
-          'Choose Profile Photo',
-          'Device gallery is available in full native builds. Please select one of the verified avatar presets or default initials below.',
-          [{ text: 'OK' }]
-        );
-        return;
-      }
-
-      const permission = await ImagePickerModule.requestMediaLibraryPermissionsAsync();
-      if (!permission.granted) {
-        Alert.alert(
-          'Photo Permission Required',
-          'Please grant access to your photo library to select a custom profile picture.',
-          [{ text: 'OK' }]
-        );
-        return;
-      }
-
-      const res = await ImagePickerModule.launchImageLibraryAsync({
-        mediaTypes: ImagePickerModule.MediaTypeOptions?.Images || 'Images',
-        allowsEditing: true,
-        aspect: [1, 1],
-        quality: 0.8,
-      });
-
-      if (!res.canceled && res.assets && res.assets[0]?.uri) {
-        const sourceUri = res.assets[0].uri;
-        setEditAvatar(sourceUri);
-      }
-    } catch (err: any) {
-      console.warn('[Profile] Image pick error:', err?.message);
-      Alert.alert(
-        'Photo Selection',
-        'Unable to access gallery in current session. You can choose any of the avatar presets or your initials.',
-        [{ text: 'OK' }]
-      );
+    const uri = await pickImageFromGallery();
+    if (uri) {
+      setEditAvatar(uri);
     }
   };
 

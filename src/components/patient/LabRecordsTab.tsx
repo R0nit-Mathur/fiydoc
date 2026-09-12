@@ -15,6 +15,7 @@ import { useHealthStore } from '@/store/useHealthStore';
 import { useAppTheme } from '@/hooks/useAppTheme';
 import { StitchColors, BorderRadius, Shadows, Spacing } from '@/constants/theme';
 import { LabReport, LabParameter } from '@/types/index';
+import { pickClinicalDocument, PickedMedia } from '@/utils/mediaPicker';
 import {
   FileText,
   Search,
@@ -28,8 +29,8 @@ import {
   Calendar,
   Activity,
   ChevronRight,
+  UploadCloud,
   ShieldCheck,
-  Filter,
 } from 'lucide-react-native';
 
 interface LabRecordsTabProps {
@@ -52,8 +53,9 @@ export function LabRecordsTab({ patientId, patientName }: LabRecordsTabProps) {
   const [newTestName, setNewTestName] = useState('');
   const [newLabName, setNewLabName] = useState('SRL Diagnostics');
   const [newCategory, setNewCategory] = useState<LabReport['category']>('Hematology');
-  const [newDoctor, setNewDoctor] = useState('Dr. Rajesh Sharma');
+  const [newDoctor, setNewDoctor] = useState('');
   const [newSummary, setNewSummary] = useState('');
+  const [pickedFile, setPickedFile] = useState<PickedMedia | null>(null);
 
   const filteredReports = useMemo(() => {
     return labReports.filter((rep) => {
@@ -84,7 +86,7 @@ export function LabRecordsTab({ patientId, patientName }: LabRecordsTabProps) {
     const created: LabReport = {
       id: `lab_${Date.now()}`,
       patientId: patientId || 'patient_default',
-      patientName: patientName || 'Rahul Verma',
+      patientName: patientName || 'Patient',
       testName: newTestName.trim(),
       category: newCategory,
       labName: newLabName.trim() || 'Verified Diagnostic Lab',
@@ -93,8 +95,8 @@ export function LabRecordsTab({ patientId, patientName }: LabRecordsTabProps) {
       status: 'Normal',
       doctorReferred: newDoctor.trim() || undefined,
       summary: newSummary.trim() || 'Patient uploaded lab results verified by lab technician.',
-      fileName: `${newTestName.replace(/\s+/g, '_')}_Report.pdf`,
-      fileSize: '1.1 MB',
+      fileName: pickedFile?.name || `${newTestName.replace(/\s+/g, '_')}_Report.pdf`,
+      fileSize: pickedFile?.size || '1.1 MB',
       parameters: [
         { name: `${newTestName} Primary Marker`, value: 'Normal', unit: 'Index', referenceRange: 'Negative / Within Limits' },
       ],
@@ -103,6 +105,7 @@ export function LabRecordsTab({ patientId, patientName }: LabRecordsTabProps) {
     addLabReport(created);
     setNewTestName('');
     setNewSummary('');
+    setPickedFile(null);
     setUploadModalVisible(false);
   };
 
@@ -428,14 +431,66 @@ export function LabRecordsTab({ patientId, patientName }: LabRecordsTabProps) {
               </View>
 
               <View style={styles.inputGroup}>
-                <Text style={[styles.inputLabel, { color: colors.text }]}>Referring Doctor</Text>
+                <Text style={[styles.inputLabel, { color: colors.text }]}>Referring Doctor (Optional)</Text>
                 <TextInput
                   value={newDoctor}
                   onChangeText={setNewDoctor}
-                  placeholder="e.g. Dr. Rajesh Sharma"
+                  placeholder="e.g. Dr. Consulting Physician"
                   placeholderTextColor={colors.textSecondary}
                   style={[styles.modalInput, { color: colors.text, borderColor: colors.border, backgroundColor: colors.backgroundElement }]}
                 />
+              </View>
+
+              {/* Document File Attachment Picker */}
+              <View style={styles.inputGroup}>
+                <Text style={[styles.inputLabel, { color: colors.text }]}>Attach Diagnostic PDF / Image</Text>
+                <Pressable
+                  onPress={async () => {
+                    const file = await pickClinicalDocument();
+                    if (file) {
+                      setPickedFile(file);
+                      if (!newTestName) {
+                        setNewTestName(file.name.replace(/\.[^/.]+$/, '').replace(/_/g, ' '));
+                      }
+                    }
+                  }}
+                  style={{
+                    borderWidth: 1.5,
+                    borderColor: pickedFile ? StitchColors.primaryContainer : colors.border,
+                    borderStyle: pickedFile ? 'solid' : 'dashed',
+                    borderRadius: BorderRadius.xl,
+                    padding: 14,
+                    backgroundColor: colors.backgroundElement,
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    gap: 6,
+                  }}
+                >
+                  {pickedFile ? (
+                    <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8, width: '100%' }}>
+                      <FileText size={20} color={StitchColors.primaryContainer} />
+                      <View style={{ flex: 1 }}>
+                        <Text numberOfLines={1} style={{ fontSize: 13, fontWeight: '700', color: colors.text }}>
+                          {pickedFile.name}
+                        </Text>
+                        <Text style={{ fontSize: 11, color: colors.textSecondary }}>
+                          {pickedFile.size} • Attached & Ready to Save
+                        </Text>
+                      </View>
+                      <CheckCircle2 size={18} color={StitchColors.secondaryContainer} />
+                    </View>
+                  ) : (
+                    <>
+                      <UploadCloud size={22} color={StitchColors.primaryContainer} />
+                      <Text style={{ fontSize: 13, fontWeight: '600', color: StitchColors.primaryContainer }}>
+                        Tap to select PDF or Image report
+                      </Text>
+                      <Text style={{ fontSize: 11, color: colors.textSecondary }}>
+                        Select from device documents or camera photos
+                      </Text>
+                    </>
+                  )}
+                </Pressable>
               </View>
 
               <View style={styles.inputGroup}>
@@ -443,7 +498,7 @@ export function LabRecordsTab({ patientId, patientName }: LabRecordsTabProps) {
                 <TextInput
                   value={newSummary}
                   onChangeText={setNewSummary}
-                  placeholder="Brief diagnostic notes (e.g. Normal TSH levels confirmed)"
+                  placeholder="Brief diagnostic notes (e.g. Normal laboratory values verified)"
                   placeholderTextColor={colors.textSecondary}
                   multiline
                   numberOfLines={2}
