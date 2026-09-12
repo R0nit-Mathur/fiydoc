@@ -41,10 +41,8 @@ import {
   FileText,
   CalendarX,
   X,
-  Repeat,
   LogOut,
   ShieldCheck,
-  Stethoscope,
   RefreshCw,
 } from 'lucide-react-native';
 
@@ -54,6 +52,7 @@ import { signOutAll } from '@/services/authService';
 import { useAppTheme } from '@/hooks/useAppTheme';
 import { BorderRadius, Shadows, Spacing, StitchColors, Palette, DEFAULT_DOCTOR_AVATAR } from '@/constants/theme';
 import { AppUpdateModal } from '@/components/ui/AppUpdateModal';
+import { FiYLogo } from '@/components/ui/FiYLogo';
 
 const DOCTOR_AVATAR = DEFAULT_DOCTOR_AVATAR;
 
@@ -62,7 +61,7 @@ const DOCTOR_AVATAR = DEFAULT_DOCTOR_AVATAR;
 export default function DoctorHomeScreen() {
   const router = useRouter();
   const { colors, isDark } = useAppTheme();
-  const { user, setRole } = useAuthStore();
+  const { user } = useAuthStore();
   const { appointments } = useAppointmentStore();
   const [drawerOpen, setDrawerOpen] = useState(false);
   const [updateModalVisible, setUpdateModalVisible] = useState(false);
@@ -90,12 +89,6 @@ export default function DoctorHomeScreen() {
       Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
     }
     router.push(`/(doctor)/consultation/${appointmentId}` as any);
-  };
-
-  const handleSwitchToPatient = () => {
-    setDrawerOpen(false);
-    setRole('patient');
-    router.replace('/(patient)/(tabs)/home');
   };
 
   return (
@@ -129,7 +122,7 @@ export default function DoctorHomeScreen() {
             style={styles.avatarButton}
             accessibilityLabel="Profile"
           >
-            <Image source={{ uri: DOCTOR_AVATAR }} style={styles.doctorAvatarImg} />
+            <Image source={{ uri: user?.avatar || DOCTOR_AVATAR }} style={styles.doctorAvatarImg} />
           </Pressable>
         </View>
       </View>
@@ -358,9 +351,8 @@ export default function DoctorHomeScreen() {
           <View style={[styles.drawerPanel, { backgroundColor: colors.card, borderColor: colors.border }]}>
             {/* Drawer Header */}
             <View style={styles.drawerHeader}>
-              <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
-                <Stethoscope size={22} color={StitchColors.primaryContainer} />
-                <Text style={[styles.drawerBrandText, { color: colors.text }]}>FiYDOC Doctor OS</Text>
+              <View style={{ flex: 1, alignItems: 'center', justifyContent: 'center' }}>
+                <FiYLogo size="sm" />
               </View>
               <Pressable
                 onPress={() => setDrawerOpen(false)}
@@ -379,19 +371,6 @@ export default function DoctorHomeScreen() {
                 <Text style={[styles.drawerDoctorSpec, { color: StitchColors.primaryContainer }]}>FiYDoc Doctor Account</Text>
               </View>
             </View>
-
-            {/* Quick Mode Switcher Pill */}
-            <Pressable
-              onPress={handleSwitchToPatient}
-              style={[styles.switchModeBtn, { backgroundColor: '#E0F2FE', borderColor: '#BAE6FD' }]}
-            >
-              <Repeat size={16} color={StitchColors.primaryContainer} />
-              <View style={{ flex: 1, marginLeft: 10 }}>
-                <Text style={styles.switchModeTitle}>Switch to Patient Mode</Text>
-                <Text style={styles.switchModeSub}>Book OPD appointments & consults</Text>
-              </View>
-              <ChevronRight size={16} color={StitchColors.primaryContainer} />
-            </Pressable>
 
             {/* Menu Links */}
             <View style={styles.drawerMenuList}>
@@ -456,7 +435,7 @@ export default function DoctorHomeScreen() {
                 <LogOut size={16} color={StitchColors.error} />
                 <Text style={styles.logoutText}>Log Out</Text>
               </Pressable>
-              <Text style={[styles.buildVersionText, { color: colors.textMuted }]}>v4.12.0</Text>
+              <Text style={[styles.buildVersionText, { color: colors.textMuted }]}>v2.1.0</Text>
             </View>
           </View>
         </View>

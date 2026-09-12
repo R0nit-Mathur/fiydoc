@@ -52,13 +52,33 @@ const DEFAULT_DOCTOR_IMAGE = DEFAULT_DOCTOR_AVATAR;
 const CLINIC_BANNER_IMAGE =
   'https://images.unsplash.com/photo-1519494026892-80bbd2d6fd0d?w=1200&auto=format&fit=crop&q=80';
 
-const DATES = [
-  { id: 'today', day: 'Today', date: '18', month: 'Oct, Fri', slots: '7 slots left' },
-  { id: 'tomorrow', day: 'Tomorrow', date: '19', month: 'Oct, Sat', slots: '5 slots left' },
-  { id: 'mon', day: 'Mon', date: '21', month: 'Oct', slots: '8 slots left' },
-  { id: 'tue', day: 'Tue', date: '22', month: 'Oct', slots: '4 slots left' },
-  { id: 'wed', day: 'Wed', date: '23', month: 'Oct', slots: '6 slots left' },
-];
+const generateDynamicDates = () => {
+  const days = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
+  const months = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+  const result = [];
+  const today = new Date();
+
+  for (let i = 0; i < 7; i++) {
+    const d = new Date(today);
+    d.setDate(today.getDate() + i);
+    const dayName = i === 0 ? 'Today' : i === 1 ? 'Tomorrow' : days[d.getDay()];
+    const dateNum = String(d.getDate()).padStart(2, '0');
+    const monthName = months[d.getMonth()];
+    const isSunday = d.getDay() === 0;
+
+    result.push({
+      id: `date_${i}`,
+      day: dayName,
+      date: dateNum,
+      month: `${monthName}, ${days[d.getDay()]}`,
+      slots: isSunday ? 'On Leave' : `${5 + (i % 4)} slots left`,
+      isLeave: isSunday,
+    });
+  }
+  return result;
+};
+
+const DATES = generateDynamicDates();
 
 const MORNING_SLOTS = [
   { time: '10:30 AM', token: '04' },
@@ -349,12 +369,14 @@ export default function DoctorProfileScreen() {
                     style={[
                       styles.dateBtn,
                       isSelected ? styles.dateBtnActive : styles.dateBtnInactive,
+                      item.isLeave && { borderColor: '#FCA5A5', backgroundColor: '#FEF2F2' },
                     ]}
                   >
                     <Text
                       style={[
                         styles.dateBtnDay,
                         isSelected ? styles.dateBtnDayActive : styles.dateBtnDayInactive,
+                        item.isLeave && { color: '#DC2626' },
                       ]}
                     >
                       {item.day}
@@ -363,6 +385,7 @@ export default function DoctorProfileScreen() {
                       style={[
                         styles.dateBtnDate,
                         isSelected ? styles.dateBtnDateActive : styles.dateBtnDateInactive,
+                        item.isLeave && { color: '#DC2626' },
                       ]}
                     >
                       {item.date}
@@ -371,9 +394,10 @@ export default function DoctorProfileScreen() {
                       style={[
                         styles.dateBtnMonth,
                         isSelected ? styles.dateBtnMonthActive : styles.dateBtnMonthInactive,
+                        item.isLeave && { color: '#EF4444' },
                       ]}
                     >
-                      {item.month}
+                      {item.isLeave ? 'Leave' : item.month}
                     </Text>
                   </Pressable>
                 );

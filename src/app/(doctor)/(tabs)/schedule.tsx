@@ -50,6 +50,7 @@ import {
 } from 'lucide-react-native';
 
 import { useAppTheme } from '@/hooks/useAppTheme';
+import { useAuthStore } from '@/store/useAuthStore';
 import { useNotificationStore } from '@/store/useNotificationStore';
 import { BorderRadius, Shadows, StitchColors, DEFAULT_DOCTOR_AVATAR } from '@/constants/theme';
 
@@ -92,23 +93,40 @@ function shiftTime(timeStr: string, meridiem: string, shiftMins: number): { time
   return { time: formattedTime, meridiem: newMeridiem };
 }
 
-const WEEK_DAYS = [
-  { day: 'M', date: '16', dot: 'gray', fullDate: 'Mon, 16 Oct' },
-  { day: 'T', date: '17', dot: 'teal', fullDate: 'Tue, 17 Oct' },
-  { day: 'W', date: '18', dot: 'active', fullDate: 'Wed, 18 Oct' },
-  { day: 'T', date: '19', dot: 'teal', fullDate: 'Thu, 19 Oct' },
-  { day: 'F', date: '20', dot: 'gray', fullDate: 'Fri, 20 Oct' },
-  { day: 'S', date: '21', dot: 'teal', fullDate: 'Sat, 21 Oct' },
-  { day: 'S', date: '22', dot: 'off', fullDate: 'Sun, 22 Oct' },
-];
+// Generate dynamic 7 days starting from today using live system clock
+function generateDynamicWeek() {
+  const days: { day: string; date: string; dot: string; fullDate: string; isToday: boolean }[] = [];
+  const dayNames = ['S', 'M', 'T', 'W', 'T', 'F', 'S'];
+  const now = new Date();
+
+  for (let i = 0; i < 7; i++) {
+    const d = new Date(now);
+    d.setDate(now.getDate() + i);
+    const dayLetter = dayNames[d.getDay()];
+    const dateNum = d.getDate().toString();
+    const fullDate = d.toLocaleDateString('en-IN', { weekday: 'short', day: 'numeric', month: 'short' });
+    days.push({
+      day: dayLetter,
+      date: dateNum,
+      dot: i === 0 ? 'active' : d.getDay() === 0 ? 'off' : 'teal',
+      fullDate,
+      isToday: i === 0,
+    });
+  }
+  return days;
+}
+
+const DYNAMIC_WEEK_DAYS = generateDynamicWeek();
 
 export default function DoctorScheduleScreen() {
   const router = useRouter();
   const { colors, isDark } = useAppTheme();
+  const { user } = useAuthStore();
 
-  const [selectedDay, setSelectedDay] = useState('18');
+  const [weekDays, setWeekDays] = useState(DYNAMIC_WEEK_DAYS);
+  const [selectedDay, setSelectedDay] = useState(DYNAMIC_WEEK_DAYS[0]?.date || new Date().getDate().toString());
   const [selectedSession, setSelectedSession] = useState<'morning' | 'evening'>('morning');
-  const [leaveDates, setLeaveDates] = useState<string[]>(['22']);
+  const [leaveDates, setLeaveDates] = useState<string[]>([]);
 
   // Dynamic Session Slots
   const [morningSlots, setMorningSlots] = useState<ScheduleSlot[]>([
@@ -197,20 +215,30 @@ export default function DoctorScheduleScreen() {
     },
   ]);
 
+  // Shift Timings State (Editable)
+  const [morningStart, setMorningStart] = useState('10:30 AM');
+  const [morningEnd, setMorningEnd] = useState('01:30 PM');
+  const [eveningStart, setEveningStart] = useState('05:00 PM');
+  const [eveningEnd, setEveningEnd] = useState('08:00 PM');
+
   // Modals & Notifications
   const [capacityModalVisible, setCapacityModalVisible] = useState(false);
   const [leaveModalVisible, setLeaveModalVisible] = useState(false);
-  const [bookModalVisible, setBookModalVisible] = useState(false);
-  const [walkinName, setWalkinName] = useState('');
+  const [customDelayModalVisible, setCustomDelayModalVisible] = useState(false);
+  const [customDelayMins, setCustomDelayMins] = useState('20');
   const [rescheduleSlot, setRescheduleSlot] = useState<ScheduleSlot | null>(null);
 
   const [slotDuration, setSlotDuration] = useState('15');
+  const [slotDurationHours, setSlotDurationHours] = useState('0');
+  const [slotDurationMins, setSlotDurationMins] = useState('15');
   const [maxPatients, setMaxPatients] = useState(12);
   const [delayNotice, setDelayNotice] = useState<string | null>(null);
 
   // Leave Form
-  const [leaveReason, setLeaveReason] = useState('Diwali Break (31 Oct - 02 Nov)');
-  const [leaveDays, setLeaveDays] = useState('3 Days');
+  const [leaveReason, setLeaveReason] = useState('Personal / Medical Leave');
+  const [leaveDays, setLeaveDays] = useState('1 Day');
+
+  const doctorName = user?.name ? (user.name.startsWith('Dr.') ? user.name : `Dr. ${user.name}`) : 'Doctor';
 
   const handleSelectDay = (date: string) => {
     if (Platform.OS !== 'web') {
@@ -219,7 +247,7 @@ export default function DoctorScheduleScreen() {
     setSelectedDay(date);
   };
 
-  // 1. EMERGENCY DELAY: Shifts all slot times & alerts scheduled patients
+  // 1. EMERGENCY DELAY: Shifts all slot times for the selected date only & alerts scheduled patients
   const handleEmergencyDelay = (mins: number) => {
     if (Platform.OS !== 'web') {
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Warning);
@@ -244,12 +272,12 @@ export default function DoctorScheduleScreen() {
 
     useNotificationStore.getState().addNotification({
       title: `OPD Emergency Delay (+${mins}m)`,
-      message: `Dr. Rajesh Sharma is running ~${mins} minutes behind schedule due to an in-clinic medical emergency. Your slot time has been adjusted.`,
+      message: `${doctorName} is running ~${mins} minutes behind schedule for today's clinic due to a medical emergency. Your slot time has been adjusted.`,
       type: 'schedule_delay',
       recipientRole: 'patient',
     });
 
-    setDelayNotice(`+${mins}m emergency delay applied. Slots shifted & patients notified.`);
+    setDelayNotice(`+${mins}m emergency delay applied for today only. Slots shifted & patients notified.`);
     setTimeout(() => setDelayNotice(null), 3500);
   };
 
@@ -260,15 +288,18 @@ export default function DoctorScheduleScreen() {
       setLeaveDates([...leaveDates, selectedDay]);
     }
 
+    const selectedDayObj = weekDays.find((w) => w.date === selectedDay);
+    const dayLabel = selectedDayObj ? selectedDayObj.fullDate : `Day ${selectedDay}`;
+
     useNotificationStore.getState().addNotification({
       title: 'OPD Schedule Update — Doctor On Leave',
-      message: `Dr. Rajesh Sharma will be on leave on ${selectedDay} Oct for ${leaveReason}. Your booked appointment is being rescheduled.`,
+      message: `${doctorName} will be on leave on ${dayLabel} for ${leaveReason}. Your booked appointment is being rescheduled.`,
       type: 'schedule_alert',
       recipientRole: 'patient',
     });
 
     if (Platform.OS !== 'web') Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
-    setDelayNotice(`Leave marked for ${selectedDay} Oct (${leaveReason}). Patients notified.`);
+    setDelayNotice(`Leave marked for ${dayLabel} (${leaveReason}). Patients notified.`);
     setTimeout(() => setDelayNotice(null), 4000);
   };
 
@@ -297,7 +328,7 @@ export default function DoctorScheduleScreen() {
     if (rescheduleSlot.patientName) {
       useNotificationStore.getState().addNotification({
         title: `Appointment ${isPostpone ? 'Postponed' : 'Preponed'}`,
-        message: `Your appointment with Dr. Rajesh Sharma has been ${isPostpone ? 'postponed' : 'preponed'} by ${Math.abs(mins)} mins. New estimated time: ${shifted.time} ${shifted.meridiem}.`,
+        message: `Your appointment with ${doctorName} has been ${isPostpone ? 'postponed' : 'preponed'} by ${Math.abs(mins)} mins. New estimated time: ${shifted.time} ${shifted.meridiem}.`,
         type: 'appointment_update',
         recipientRole: 'patient',
       });
@@ -312,29 +343,6 @@ export default function DoctorScheduleScreen() {
     );
     setTimeout(() => setDelayNotice(null), 3500);
     setRescheduleSlot(null);
-  };
-
-  const handleBookWalkin = () => {
-    if (walkinName.trim()) {
-      const newSlot: ScheduleSlot = {
-        id: `walkin_${Date.now()}`,
-        patientName: walkinName.trim(),
-        token: `#0${morningSlots.filter((s) => s.status === 'booked').length + 1}`,
-        time: '11:15',
-        meridiem: 'AM',
-        reason: 'Walk-in Consultation Assigned',
-        status: 'booked',
-      };
-
-      setMorningSlots((prev) =>
-        prev.map((s) => (s.id === 's4' ? newSlot : s))
-      );
-      setWalkinName('');
-      setBookModalVisible(false);
-      if (Platform.OS !== 'web') Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
-      setDelayNotice(`Walk-in booked for ${walkinName.trim()} at 11:15 AM`);
-      setTimeout(() => setDelayNotice(null), 3200);
-    }
   };
 
   return (
@@ -379,7 +387,9 @@ export default function DoctorScheduleScreen() {
             <Pressable hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }} style={styles.navArrow}>
               <ChevronLeft size={16} color={colors.text} />
             </Pressable>
-            <Text style={[styles.monthText, { color: colors.text }]}>October 2026</Text>
+            <Text style={[styles.monthText, { color: colors.text }]}>
+              {new Date().toLocaleDateString('en-IN', { month: 'long', year: 'numeric' })}
+            </Text>
             <Pressable hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }} style={styles.navArrow}>
               <ChevronRight size={16} color={colors.text} />
             </Pressable>
@@ -387,7 +397,7 @@ export default function DoctorScheduleScreen() {
 
           <View style={styles.monthActionsRow}>
             <Pressable
-              onPress={() => setSelectedDay('18')}
+              onPress={() => setSelectedDay(DYNAMIC_WEEK_DAYS[0]?.date || new Date().getDate().toString())}
               style={[styles.todayBtn, { backgroundColor: colors.backgroundElement }]}
             >
               <Text style={[styles.todayBtnText, { color: StitchColors.primaryContainer }]}>Today</Text>
@@ -406,17 +416,17 @@ export default function DoctorScheduleScreen() {
         {/* 3. Horizontal Weekly Calendar Strip */}
         <View style={styles.weekSection}>
           <View style={styles.weekHeaderRow}>
-            <Text style={[styles.weekLabel, { color: colors.textSecondary }]}>SCHEDULE WEEK 42</Text>
+            <Text style={[styles.weekLabel, { color: colors.textSecondary }]}>SCHEDULE 7-DAY OUTLOOK</Text>
             <View style={{ flexDirection: 'row', alignItems: 'center', gap: 5 }}>
               <View style={styles.pingDot} />
               <Text style={[styles.activeApptText, { color: StitchColors.secondaryContainer }]}>
-                14 Appointments Today
+                Live In-Clinic Sessions
               </Text>
             </View>
           </View>
 
           <View style={[styles.weekGrid, { backgroundColor: colors.card, borderColor: colors.border }]}>
-            {WEEK_DAYS.map((w) => {
+            {weekDays.map((w) => {
               const isSelected = selectedDay === w.date;
               const isLeave = leaveDates.includes(w.date);
               const isOff = w.dot === 'off' && !isLeave;
@@ -520,7 +530,7 @@ export default function DoctorScheduleScreen() {
                 </View>
                 <View style={[styles.statusDot, { backgroundColor: StitchColors.secondaryContainer }]} />
               </View>
-              <Text style={[styles.sessionTiming, { color: colors.textSecondary }]}>10:30 AM - 01:30 PM</Text>
+              <Text style={[styles.sessionTiming, { color: colors.textSecondary }]}>{morningStart} - {morningEnd}</Text>
               <Text style={[styles.sessionStats, { color: StitchColors.secondaryContainer }]}>9 of 12 Filled</Text>
             </Pressable>
 
@@ -546,7 +556,7 @@ export default function DoctorScheduleScreen() {
                 </View>
                 <View style={[styles.statusDot, { backgroundColor: colors.border }]} />
               </View>
-              <Text style={[styles.sessionTiming, { color: colors.textSecondary }]}>05:00 PM - 08:00 PM</Text>
+              <Text style={[styles.sessionTiming, { color: colors.textSecondary }]}>{eveningStart} - {eveningEnd}</Text>
               <Text style={[styles.sessionStats, { color: colors.textSecondary }]}>4 of 12 Filled</Text>
             </Pressable>
           </View>
@@ -572,7 +582,7 @@ export default function DoctorScheduleScreen() {
               {selectedSession === 'morning' ? 'MORNING SLOTS TIMELINE' : 'EVENING SLOTS TIMELINE'}
             </Text>
             <Text style={[styles.timelineDateText, { color: colors.textSecondary }]}>
-              {WEEK_DAYS.find((w) => w.date === selectedDay)?.fullDate || `${selectedDay} Oct`}
+              {weekDays.find((w) => w.date === selectedDay)?.fullDate || `Day ${selectedDay}`}
             </Text>
           </View>
 
@@ -718,13 +728,6 @@ export default function DoctorScheduleScreen() {
                       ) : isAvailable ? (
                         <>
                           <Pressable
-                            onPress={() => setBookModalVisible(true)}
-                            style={[styles.bookPillBtn, { backgroundColor: '#CCFBF1' }]}
-                          >
-                            <Text style={styles.bookPillBtnText}>+ Book</Text>
-                          </Pressable>
-
-                          <Pressable
                             onPress={() => {
                               const toggler = (prev: ScheduleSlot[]) =>
                                 prev.map((s) => (s.id === slot.id ? { ...s, status: 'blocked' as const } : s));
@@ -733,6 +736,7 @@ export default function DoctorScheduleScreen() {
                               if (Platform.OS !== 'web') Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
                             }}
                             style={[styles.blockIconBtn, { backgroundColor: colors.backgroundElement }]}
+                            accessibilityLabel="Block slot"
                           >
                             <Ban size={14} color={colors.textSecondary} />
                           </Pressable>
@@ -796,6 +800,14 @@ export default function DoctorScheduleScreen() {
               >
                 <Text style={[styles.delayBtnText, { color: StitchColors.primaryContainer }]}>+30m</Text>
               </Pressable>
+              <Pressable
+                onPress={() => setCustomDelayModalVisible(true)}
+                style={[styles.delayBtn, { backgroundColor: colors.backgroundElement, minWidth: 54 }]}
+                accessibilityRole="button"
+                accessibilityLabel="Set custom emergency delay in minutes"
+              >
+                <Text style={[styles.delayBtnText, { color: StitchColors.primaryContainer }]}>Custom</Text>
+              </Pressable>
             </View>
           </View>
 
@@ -835,40 +847,90 @@ export default function DoctorScheduleScreen() {
         </View>
       </ScrollView>
 
-      {/* MODAL: Modify Capacity */}
+      {/* MODAL: Modify Capacity & Timings */}
       <Modal visible={capacityModalVisible} transparent animationType="slide">
         <View style={styles.modalBackdrop}>
           <View style={[styles.modalCard, { backgroundColor: colors.card, borderColor: colors.border }]}>
             <View style={styles.modalHeader}>
-              <Text style={[styles.modalTitle, { color: colors.text }]}>Modify Slot Settings</Text>
+              <Text style={[styles.modalTitle, { color: colors.text }]}>Modify Shift Timings & Slots</Text>
               <Pressable onPress={() => setCapacityModalVisible(false)}>
                 <X size={18} color={colors.text} />
               </Pressable>
             </View>
 
-            <Text style={[styles.fieldLabel, { color: colors.textSecondary }]}>SLOT DURATION</Text>
-            <View style={styles.durationRow}>
-              {['10', '15', '20'].map((mins) => (
-                <Pressable
-                  key={mins}
-                  onPress={() => setSlotDuration(mins)}
-                  style={[
-                    styles.durationBtn,
-                    slotDuration === mins
-                      ? [styles.durationBtnActive, { backgroundColor: StitchColors.primaryContainer }]
-                      : { backgroundColor: colors.backgroundElement },
-                  ]}
-                >
-                  <Text
-                    style={[
-                      styles.durationBtnText,
-                      { color: slotDuration === mins ? '#FFFFFF' : colors.text },
-                    ]}
-                  >
-                    {mins} mins
-                  </Text>
-                </Pressable>
-              ))}
+            {/* Shift Timings */}
+            <Text style={[styles.fieldLabel, { color: colors.textSecondary }]}>MORNING SHIFT TIMINGS</Text>
+            <View style={{ flexDirection: 'row', gap: 10, marginBottom: 12 }}>
+              <View style={{ flex: 1 }}>
+                <TextInput
+                  value={morningStart}
+                  onChangeText={setMorningStart}
+                  placeholder="10:30 AM"
+                  placeholderTextColor={colors.textMuted}
+                  style={[styles.miniTextInput, { borderColor: colors.border, color: colors.text }]}
+                />
+              </View>
+              <View style={{ flex: 1 }}>
+                <TextInput
+                  value={morningEnd}
+                  onChangeText={setMorningEnd}
+                  placeholder="01:30 PM"
+                  placeholderTextColor={colors.textMuted}
+                  style={[styles.miniTextInput, { borderColor: colors.border, color: colors.text }]}
+                />
+              </View>
+            </View>
+
+            <Text style={[styles.fieldLabel, { color: colors.textSecondary }]}>EVENING SHIFT TIMINGS</Text>
+            <View style={{ flexDirection: 'row', gap: 10, marginBottom: 12 }}>
+              <View style={{ flex: 1 }}>
+                <TextInput
+                  value={eveningStart}
+                  onChangeText={setEveningStart}
+                  placeholder="05:00 PM"
+                  placeholderTextColor={colors.textMuted}
+                  style={[styles.miniTextInput, { borderColor: colors.border, color: colors.text }]}
+                />
+              </View>
+              <View style={{ flex: 1 }}>
+                <TextInput
+                  value={eveningEnd}
+                  onChangeText={setEveningEnd}
+                  placeholder="08:00 PM"
+                  placeholderTextColor={colors.textMuted}
+                  style={[styles.miniTextInput, { borderColor: colors.border, color: colors.text }]}
+                />
+              </View>
+            </View>
+
+            {/* Dynamic Slot Duration Hours and Minutes */}
+            <Text style={[styles.fieldLabel, { color: colors.textSecondary }]}>SLOT DURATION (HOURS & MINS)</Text>
+            <View style={{ flexDirection: 'row', gap: 10, marginBottom: 12 }}>
+              <View style={{ flex: 1 }}>
+                <Text style={{ fontSize: 11, color: colors.textSecondary, marginBottom: 4 }}>Hours</Text>
+                <TextInput
+                  value={slotDurationHours}
+                  onChangeText={setSlotDurationHours}
+                  placeholder="0"
+                  placeholderTextColor={colors.textMuted}
+                  keyboardType="number-pad"
+                  style={[styles.miniTextInput, { textAlign: 'center', borderColor: colors.border, color: colors.text }]}
+                />
+              </View>
+              <View style={{ flex: 1 }}>
+                <Text style={{ fontSize: 11, color: colors.textSecondary, marginBottom: 4 }}>Minutes</Text>
+                <TextInput
+                  value={slotDurationMins}
+                  onChangeText={(val) => {
+                    setSlotDurationMins(val);
+                    setSlotDuration(val || '15');
+                  }}
+                  placeholder="15"
+                  placeholderTextColor={colors.textMuted}
+                  keyboardType="number-pad"
+                  style={[styles.miniTextInput, { textAlign: 'center', borderColor: colors.border, color: colors.text }]}
+                />
+              </View>
             </View>
 
             <View style={styles.counterRow}>
@@ -892,14 +954,52 @@ export default function DoctorScheduleScreen() {
 
             <Pressable
               onPress={() => {
+                const totalMins = (parseInt(slotDurationHours, 10) || 0) * 60 + (parseInt(slotDurationMins, 10) || 15);
+                setSlotDuration(totalMins.toString());
                 setCapacityModalVisible(false);
                 if (Platform.OS !== 'web') Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
-                setDelayNotice(`Capacity updated: ${slotDuration}m intervals, max ${maxPatients} patients/session.`);
-                setTimeout(() => setDelayNotice(null), 3200);
+                setDelayNotice(`Shifts updated: Morning (${morningStart}-${morningEnd}), Evening (${eveningStart}-${eveningEnd}), ${totalMins}m slot duration.`);
+                setTimeout(() => setDelayNotice(null), 3500);
               }}
               style={[styles.applySettingsBtn, { backgroundColor: StitchColors.primaryContainer }]}
             >
-              <Text style={styles.applySettingsBtnText}>Apply to Wednesday OPD</Text>
+              <Text style={styles.applySettingsBtnText}>Apply to OPD Schedule</Text>
+            </Pressable>
+          </View>
+        </View>
+      </Modal>
+
+      {/* MODAL: Custom Emergency Delay */}
+      <Modal visible={customDelayModalVisible} transparent animationType="slide">
+        <View style={styles.modalBackdrop}>
+          <View style={[styles.modalCard, { backgroundColor: colors.card, borderColor: colors.border }]}>
+            <View style={styles.modalHeader}>
+              <Text style={[styles.modalTitle, { color: colors.text }]}>Custom Emergency Delay</Text>
+              <Pressable onPress={() => setCustomDelayModalVisible(false)}>
+                <X size={18} color={colors.text} />
+              </Pressable>
+            </View>
+
+            <Text style={[styles.fieldLabel, { color: colors.textSecondary }]}>DELAY IN MINUTES (FOR TODAY ONLY)</Text>
+            <TextInput
+              value={customDelayMins}
+              onChangeText={setCustomDelayMins}
+              placeholder="e.g. 25"
+              placeholderTextColor={colors.textMuted}
+              keyboardType="number-pad"
+              style={[styles.textInputFull, { color: colors.text, borderColor: colors.border }]}
+            />
+
+            <Pressable
+              onPress={() => {
+                const mins = parseInt(customDelayMins, 10) || 15;
+                setCustomDelayModalVisible(false);
+                handleEmergencyDelay(mins);
+              }}
+              style={[styles.applySettingsBtn, { backgroundColor: StitchColors.primaryContainer, marginTop: 14 }]}
+            >
+              <Check size={16} color="#FFFFFF" />
+              <Text style={styles.applySettingsBtnText}>Apply Delay & Notify Patients</Text>
             </Pressable>
           </View>
         </View>
@@ -960,37 +1060,6 @@ export default function DoctorScheduleScreen() {
             >
               <Check size={16} color="#FFFFFF" />
               <Text style={styles.applySettingsBtnText}>Confirm Leave & Notify Patients</Text>
-            </Pressable>
-          </View>
-        </View>
-      </Modal>
-
-      {/* MODAL: Book Walk-in Slot */}
-      <Modal visible={bookModalVisible} transparent animationType="slide">
-        <View style={styles.modalBackdrop}>
-          <View style={[styles.modalCard, { backgroundColor: colors.card, borderColor: colors.border }]}>
-            <View style={styles.modalHeader}>
-              <Text style={[styles.modalTitle, { color: colors.text }]}>Book Slot for Walk-in Patient</Text>
-              <Pressable onPress={() => setBookModalVisible(false)}>
-                <X size={18} color={colors.text} />
-              </Pressable>
-            </View>
-
-            <Text style={[styles.fieldLabel, { color: colors.textSecondary }]}>SLOT TIME: 11:15 AM (15 MINS)</Text>
-            <TextInput
-              value={walkinName}
-              onChangeText={setWalkinName}
-              placeholder="Enter patient full name (e.g. Sunita Rao)..."
-              placeholderTextColor={colors.textMuted}
-              style={[styles.textInputFull, { color: colors.text, borderColor: colors.border }]}
-            />
-
-            <Pressable
-              onPress={handleBookWalkin}
-              style={[styles.applySettingsBtn, { backgroundColor: StitchColors.primaryContainer, marginTop: 14 }]}
-            >
-              <Check size={16} color="#FFFFFF" />
-              <Text style={styles.applySettingsBtnText}>Confirm Appointment Token</Text>
             </Pressable>
           </View>
         </View>
@@ -1745,5 +1814,13 @@ const styles = StyleSheet.create({
     fontSize: 11,
     lineHeight: 15,
     marginTop: 8,
+  },
+  miniTextInput: {
+    height: 44,
+    borderRadius: BorderRadius.md,
+    borderWidth: 1,
+    paddingHorizontal: 12,
+    fontSize: 14,
+    fontWeight: '600',
   },
 });

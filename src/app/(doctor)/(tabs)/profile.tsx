@@ -44,37 +44,53 @@ import {
   Edit2,
   Wallet,
   Zap,
-  Repeat,
   Check,
   X,
   Sparkles,
   RefreshCw,
+  Camera,
+  CheckCircle2,
 } from 'lucide-react-native';
+import { TouchableOpacity } from 'react-native';
 
 import { useAuthStore } from '@/store/useAuthStore';
 import { signOutAll } from '@/services/authService';
 import { useAppTheme } from '@/hooks/useAppTheme';
-import { BorderRadius, Shadows, StitchColors, DEFAULT_DOCTOR_AVATAR } from '@/constants/theme';
+import { BorderRadius, Shadows, StitchColors, Palette, DEFAULT_DOCTOR_AVATAR } from '@/constants/theme';
 import { AppUpdateModal } from '@/components/ui/AppUpdateModal';
 
 const DOCTOR_AVATAR = DEFAULT_DOCTOR_AVATAR;
 
+const AVATAR_PRESETS = [
+  DEFAULT_DOCTOR_AVATAR,
+  'https://images.unsplash.com/photo-1622253692010-333f2da6031d?w=600&auto=format&fit=crop&q=80',
+  'https://images.unsplash.com/photo-1594824813682-14c1e405a76e?w=600&auto=format&fit=crop&q=80',
+  'https://images.unsplash.com/photo-1559839734-2b71ea197ec2?w=600&auto=format&fit=crop&q=80',
+  'https://images.unsplash.com/photo-1537368910025-700350fe46c7?w=600&auto=format&fit=crop&q=80',
+];
+
 export default function DoctorProfileScreen() {
   const router = useRouter();
   const { colors, isDark } = useAppTheme();
-  const { setRole } = useAuthStore();
+  const { user, updateUser } = useAuthStore();
 
-  // Profile data state
-  const [docName, setDocName] = useState('Dr. Rajesh Sharma');
-  const [docSpec, setDocSpec] = useState('Senior Interventional Cardiologist • AIIMS');
-  const [opdFee, setOpdFee] = useState('800');
+  // Profile data state bound to user
+  const initialName = user?.name || 'Dr. Rajesh Sharma';
+  const initialSpec = user?.specialization || user?.specialty || 'Senior Interventional Cardiologist • AIIMS';
+  const initialFee = user?.consultationFee ? String(user.consultationFee) : '800';
+  const initialReg = user?.licenseNumber || user?.registrationNumber || 'MCI-48291 • Karnataka Medical Council';
+
+  const [docName, setDocName] = useState(initialName);
+  const [docSpec, setDocSpec] = useState(initialSpec);
+  const [docAvatar, setDocAvatar] = useState(user?.avatar || DOCTOR_AVATAR);
+  const [opdFee, setOpdFee] = useState(initialFee);
   const [upiId, setUpiId] = useState('rajesh.doc@okhdfcbank');
 
   // Toggles
   const [activeForOpd, setActiveForOpd] = useState(true);
   const [whatsappAlerts, setWhatsappAlerts] = useState(true);
   const [biometricAuth, setBiometricAuth] = useState(true);
-  const [settlementCycle, setSettlementCycle] = useState<'daily' | 'weekly'>('daily');
+  const [settlementCycle, setSettlementCycle] = useState<'weekly' | 'monthly'>('weekly');
 
   // Modals
   const [showFeeModal, setShowFeeModal] = useState(false);
@@ -88,15 +104,11 @@ export default function DoctorProfileScreen() {
   const [showEditProfileModal, setShowEditProfileModal] = useState(false);
   const [tempName, setTempName] = useState(docName);
   const [tempSpec, setTempSpec] = useState(docSpec);
-
-  const handleSwitchToPatient = () => {
-    if (Platform.OS !== 'web') Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
-    setRole('patient');
-    router.replace('/(patient)/(tabs)/home');
-  };
+  const [tempAvatar, setTempAvatar] = useState(docAvatar);
 
   const handleSaveFee = () => {
     setOpdFee(tempFee);
+    updateUser({ consultationFee: tempFee });
     setShowFeeModal(false);
     if (Platform.OS !== 'web') Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
   };
@@ -110,6 +122,13 @@ export default function DoctorProfileScreen() {
   const handleSaveProfile = () => {
     setDocName(tempName);
     setDocSpec(tempSpec);
+    setDocAvatar(tempAvatar);
+    updateUser({
+      name: tempName,
+      specialization: tempSpec,
+      specialty: tempSpec,
+      avatar: tempAvatar,
+    });
     setShowEditProfileModal(false);
     if (Platform.OS !== 'web') Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
   };
@@ -143,7 +162,7 @@ export default function DoctorProfileScreen() {
         >
           <View style={styles.identityTopRow}>
             <View style={styles.avatarWrap}>
-              <Image source={{ uri: DOCTOR_AVATAR }} style={styles.avatarImg} />
+              <Image source={{ uri: docAvatar }} style={styles.avatarImg} />
               <View style={styles.verifiedMiniBadge}>
                 <ShieldCheck size={12} color="#FFFFFF" />
               </View>
@@ -158,7 +177,7 @@ export default function DoctorProfileScreen() {
               </View>
               <Text style={[styles.docSpec, { color: colors.textSecondary }]}>{docSpec}</Text>
               <Text style={[styles.docLicense, { color: colors.textMuted }]}>
-                MCI-48291 • Karnataka Medical Council
+                {user?.licenseNumber ? `${user.licenseNumber} • Verified Council` : 'MCI-48291 • Karnataka Medical Council'}
               </Text>
 
               <View style={styles.verifiedTagRow}>
@@ -278,26 +297,10 @@ export default function DoctorProfileScreen() {
               </View>
             </View>
 
-            {/* Settlement Cycle Selector */}
+            {/* Settlement Cycle Selector (Weekly / Monthly only) */}
             <View style={[styles.cycleRow, { borderTopColor: colors.border }]}>
               <Text style={[styles.cycleLabel, { color: colors.textSecondary }]}>Settlement Cycle</Text>
               <View style={[styles.cycleSegment, { backgroundColor: colors.backgroundElement, borderColor: colors.border }]}>
-                <Pressable
-                  onPress={() => setSettlementCycle('daily')}
-                  style={[
-                    styles.cycleTab,
-                    settlementCycle === 'daily' && [styles.cycleTabActive, { backgroundColor: colors.card }],
-                  ]}
-                >
-                  <Text
-                    style={[
-                      styles.cycleTabText,
-                      settlementCycle === 'daily' && { color: StitchColors.primaryContainer, fontWeight: '700' },
-                    ]}
-                  >
-                    Daily Auto
-                  </Text>
-                </Pressable>
                 <Pressable
                   onPress={() => setSettlementCycle('weekly')}
                   style={[
@@ -314,6 +317,22 @@ export default function DoctorProfileScreen() {
                     Weekly
                   </Text>
                 </Pressable>
+                <Pressable
+                  onPress={() => setSettlementCycle('monthly')}
+                  style={[
+                    styles.cycleTab,
+                    settlementCycle === 'monthly' && [styles.cycleTabActive, { backgroundColor: colors.card }],
+                  ]}
+                >
+                  <Text
+                    style={[
+                      styles.cycleTabText,
+                      settlementCycle === 'monthly' && { color: StitchColors.primaryContainer, fontWeight: '700' },
+                    ]}
+                  >
+                    Monthly
+                  </Text>
+                </Pressable>
               </View>
             </View>
           </View>
@@ -323,15 +342,17 @@ export default function DoctorProfileScreen() {
         <Animated.View entering={FadeInUp.delay(180).duration(300)} style={styles.sectionBlock}>
           <View style={styles.sectionTitleRow}>
             <Text style={[styles.sectionTitle, { color: colors.text }]}>Practice & Clinic Settings</Text>
-            <Text style={[styles.clusterTag, { color: StitchColors.primaryContainer }]}>Bengaluru Cluster</Text>
+            <Text style={[styles.clusterTag, { color: StitchColors.primaryContainer }]}>Verified Practice</Text>
           </View>
 
           <View style={[styles.groupedListCard, { backgroundColor: colors.card, borderColor: colors.border }]}>
             <View style={styles.groupItem}>
               <Building2 size={18} color={StitchColors.primaryContainer} />
               <View style={{ flex: 1, marginLeft: 12 }}>
-                <Text style={[styles.groupItemSub, { color: colors.textSecondary }]}>Primary Hospital</Text>
-                <Text style={[styles.groupItemMain, { color: colors.text }]}>Apollo Hospitals, Bannerghatta Rd</Text>
+                <Text style={[styles.groupItemSub, { color: colors.textSecondary }]}>Primary Hospital / Clinic</Text>
+                <Text style={[styles.groupItemMain, { color: colors.text }]}>
+                  {user?.clinicName ? `${user.clinicName}${user.clinicAddress ? `, ${user.clinicAddress}` : ''}` : 'Apollo Hospitals, Bannerghatta Rd'}
+                </Text>
               </View>
               <ChevronRight size={16} color={colors.textMuted} />
             </View>
@@ -373,19 +394,6 @@ export default function DoctorProfileScreen() {
             </View>
           </View>
         </Animated.View>
-
-        {/* 6. Quick Role Switcher Pill */}
-        <Pressable
-          onPress={handleSwitchToPatient}
-          style={[styles.switchRoleCard, { backgroundColor: '#EFF6FF', borderColor: '#BFDBFE' }]}
-        >
-          <Repeat size={18} color={StitchColors.primaryContainer} />
-          <View style={{ flex: 1, marginLeft: 12 }}>
-            <Text style={styles.switchRoleTitle}>Switch to Patient Mode</Text>
-            <Text style={styles.switchRoleSub}>Browse doctors, book visits & access medical vault</Text>
-          </View>
-          <ChevronRight size={18} color={StitchColors.primaryContainer} />
-        </Pressable>
 
         {/* 7. App & Security Preferences */}
         <Animated.View entering={FadeInUp.delay(220).duration(300)} style={styles.sectionBlock}>
@@ -450,7 +458,7 @@ export default function DoctorProfileScreen() {
         </Pressable>
 
         <Text style={[styles.buildVersionNotice, { color: colors.textMuted }]}>
-          FiYDOC Clinical OS v4.12.0 (Build 8901) • Encrypted Session
+          FiYDOC Clinical OS v2.1.0 (Build 8901) • Encrypted Session
         </Text>
       </ScrollView>
 
@@ -524,10 +532,14 @@ export default function DoctorProfileScreen() {
             </View>
             <View style={[styles.sealBox, { backgroundColor: colors.backgroundElement, borderColor: colors.border }]}>
               <ShieldCheck size={36} color={StitchColors.secondary} />
-              <Text style={[styles.sealDocName, { color: colors.text }]}>Dr. Rajesh Sharma</Text>
-              <Text style={[styles.sealDegree, { color: StitchColors.primaryContainer }]}>MD (Cardiology), MBBS</Text>
-              <Text style={[styles.sealReg, { color: colors.textMuted }]}>Registration: MMC/2014/08/3821</Text>
-              <Text style={styles.sealValid}>Verified Active • Valid till 2029</Text>
+              <Text style={[styles.sealDocName, { color: colors.text }]}>{docName}</Text>
+              <Text style={[styles.sealDegree, { color: StitchColors.primaryContainer }]}>
+                {user?.qualification || 'MD (Medicine), MBBS'}
+              </Text>
+              <Text style={[styles.sealReg, { color: colors.textMuted }]}>
+                Registration: {user?.licenseNumber || 'MMC/2014/08/3821'}
+              </Text>
+              <Text style={styles.sealValid}>Verified Active • National Medical Commission</Text>
             </View>
             <Pressable onPress={() => setShowSealModal(false)} style={[styles.modalSaveBtn, { backgroundColor: StitchColors.primaryContainer }]}>
               <Text style={styles.modalSaveBtnText}>Close Certificate</Text>
@@ -539,14 +551,46 @@ export default function DoctorProfileScreen() {
       {/* MODAL 4: Edit Profile */}
       <Modal visible={showEditProfileModal} transparent animationType="slide">
         <View style={styles.modalBackdrop}>
-          <View style={[styles.modalCard, { backgroundColor: colors.card, borderColor: colors.border }]}>
+          <View style={[styles.modalCard, { backgroundColor: colors.card, borderColor: colors.border, maxHeight: '85%' }]}>
             <View style={styles.modalHeader}>
               <Text style={[styles.modalTitle, { color: colors.text }]}>Edit Clinician Profile</Text>
               <Pressable onPress={() => setShowEditProfileModal(false)}>
                 <X size={18} color={colors.text} />
               </Pressable>
             </View>
-            <View style={{ gap: 10 }}>
+            <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={{ gap: 12, paddingBottom: 10 }}>
+              {/* Avatar Preset Picker */}
+              <View>
+                <Text style={[styles.inputLabel, { color: colors.textSecondary }]}>Profile Photo</Text>
+                <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap: 10, paddingVertical: 4 }}>
+                  {AVATAR_PRESETS.map((preset, idx) => {
+                    const isSelected = tempAvatar === preset;
+                    return (
+                      <Pressable
+                        key={idx}
+                        onPress={() => setTempAvatar(preset)}
+                        style={{
+                          width: 52,
+                          height: 52,
+                          borderRadius: 26,
+                          borderWidth: 2,
+                          borderColor: isSelected ? StitchColors.primaryContainer : colors.border,
+                          overflow: 'hidden',
+                          position: 'relative',
+                        }}
+                      >
+                        <Image source={{ uri: preset }} style={{ width: '100%', height: '100%' }} />
+                        {isSelected && (
+                          <View style={{ position: 'absolute', top: 2, right: 2, backgroundColor: StitchColors.primaryContainer, borderRadius: 10 }}>
+                            <CheckCircle2 size={14} color="#FFFFFF" />
+                          </View>
+                        )}
+                      </Pressable>
+                    );
+                  })}
+                </ScrollView>
+              </View>
+
               <View>
                 <Text style={[styles.inputLabel, { color: colors.textSecondary }]}>Full Name</Text>
                 <TextInput
@@ -555,6 +599,7 @@ export default function DoctorProfileScreen() {
                   style={[styles.upiTextInput, { color: colors.text, borderColor: colors.border }]}
                 />
               </View>
+
               <View>
                 <Text style={[styles.inputLabel, { color: colors.textSecondary }]}>Specialty & Hospital</Text>
                 <TextInput
@@ -563,8 +608,22 @@ export default function DoctorProfileScreen() {
                   style={[styles.upiTextInput, { color: colors.text, borderColor: colors.border }]}
                 />
               </View>
-            </View>
-            <Pressable onPress={handleSaveProfile} style={[styles.modalSaveBtn, { backgroundColor: StitchColors.primaryContainer, marginTop: 14 }]}>
+
+              {/* Locked Council Credentials Notice */}
+              <View style={{ backgroundColor: colors.backgroundElement, borderRadius: BorderRadius.md, padding: 10, borderWidth: 1, borderColor: colors.border }}>
+                <Text style={{ fontSize: 11, fontWeight: '700', color: colors.textSecondary, marginBottom: 2 }}>
+                  VERIFIED COUNCIL REGISTRATION (LOCKED)
+                </Text>
+                <Text style={{ fontSize: 13, color: colors.text, fontWeight: '600' }}>
+                  {user?.licenseNumber || 'MCI-48291 • Karnataka Medical Council'}
+                </Text>
+                <Text style={{ fontSize: 11, color: colors.textMuted, marginTop: 2 }}>
+                  Medical Council license numbers cannot be edited after initial onboarding.
+                </Text>
+              </View>
+            </ScrollView>
+
+            <Pressable onPress={handleSaveProfile} style={[styles.modalSaveBtn, { backgroundColor: StitchColors.primaryContainer, marginTop: 8 }]}>
               <Check size={16} color="#FFFFFF" />
               <Text style={styles.modalSaveBtnText}>Save Changes</Text>
             </Pressable>

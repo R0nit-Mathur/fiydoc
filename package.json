@@ -1,7 +1,7 @@
 {
   "name": "fiydoc",
   "main": "expo-router/entry",
-  "version": "1.0.1",
+  "version": "2.1.0",
   "dependencies": {
     "@expo/metro-runtime": "~57.0.15",
     "@expo/ui": "~57.0.18",

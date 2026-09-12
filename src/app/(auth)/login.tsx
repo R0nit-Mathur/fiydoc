@@ -19,12 +19,9 @@ import {
   Eye,
   EyeOff,
   ArrowRight,
-  ShieldCheck,
-  Award,
   Check,
 } from 'lucide-react-native';
 import { UniversalTopBar } from '@/components/ui/UniversalTopBar';
-import { SegmentedRoleSelector } from '@/components/ui/SegmentedRoleSelector';
 import { GoogleLogo } from '@/components/ui/GoogleLogo';
 import { authService } from '@/services/authService';
 import { googleAuthService } from '@/services/googleAuth';
@@ -35,9 +32,7 @@ export default function LoginScreen() {
   const router = useRouter();
   const setSession = useAuthStore((s) => s.setSession);
 
-  const [role, setRole] = useState<'patient' | 'doctor'>('patient');
   const [isSignUpMode, setIsSignUpMode] = useState(false);
-  const [doctorLicense, setDoctorLicense] = useState('');
   const [identity, setIdentity] = useState('');
   const [password, setPassword] = useState('');
   const [showPassword, setShowPassword] = useState(false);
@@ -46,25 +41,11 @@ export default function LoginScreen() {
   const [googleLoading, setGoogleLoading] = useState(false);
   const [error, setError] = useState('');
 
-  const handleRoleChange = (newRole: 'patient' | 'doctor') => {
-    if (Platform.OS !== 'web') {
-      Haptics.selectionAsync();
-    }
-    setRole(newRole);
-    setError('');
-  };
-
   const toggleAuthMode = () => {
     if (Platform.OS !== 'web') {
       Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
     }
-    if (!isSignUpMode && role === 'doctor') {
-      router.push('/(onboarding)/doctor-setup');
-    } else if (!isSignUpMode && role === 'patient') {
-      router.push('/(auth)/signup');
-    } else {
-      setIsSignUpMode(!isSignUpMode);
-    }
+    router.push('/(auth)/signup');
   };
 
   const handleAuth = async () => {
@@ -147,37 +128,9 @@ export default function LoginScreen() {
               {isSignUpMode ? 'Join FiYDOC' : 'Welcome Back'}
             </Text>
             <Text style={styles.subheading}>
-              {isSignUpMode
-                ? 'Connect with top-rated medical specialists in your network today.'
-                : 'Sign in to access your consultations, digital prescriptions, and health vault.'}
+              Sign in to access your consultations, digital prescriptions, and health portal.
             </Text>
           </View>
-
-          {/* Apple Native Segmented Control */}
-          <View style={styles.segmentedControlWrap}>
-            <SegmentedRoleSelector
-              selectedRole={role}
-              onSelectRole={handleRoleChange}
-              patientLabel="Patient"
-              doctorLabel="Doctor"
-              showIcons
-            />
-          </View>
-
-          {/* Practitioner Notice Banner (Doctor mode dynamic reveal) */}
-          {role === 'doctor' && (
-            <View style={styles.doctorBanner}>
-              <View style={styles.doctorBannerIconBox}>
-                <ShieldCheck size={20} color="#ffffff" strokeWidth={2.2} />
-              </View>
-              <View style={styles.doctorBannerTextBox}>
-                <Text style={styles.doctorBannerTitle}>Verified Medical Portal</Text>
-                <Text style={styles.doctorBannerDesc}>
-                  Please provide your authorized license identifier or registered provider credentials.
-                </Text>
-              </View>
-            </View>
-          )}
 
           {/* Primary Interactive Card */}
           <View style={styles.interactiveCard}>
@@ -218,29 +171,9 @@ export default function LoginScreen() {
 
             {/* Auth Form */}
             <View style={styles.formContainer}>
-              {/* Doctor License Registration Field (Shown for Doctor) */}
-              {role === 'doctor' && (
-                <View style={styles.inputGroup}>
-                  <Text style={styles.inputLabel}>Medical License / NPI Number</Text>
-                  <View style={styles.inputWrapper}>
-                    <Award size={19} color="#737783" style={styles.inputIcon} />
-                    <TextInput
-                      value={doctorLicense}
-                      onChangeText={setDoctorLicense}
-                      placeholder="e.g. MED-849201-US"
-                      placeholderTextColor="#737783"
-                      style={styles.textInput}
-                      autoCapitalize="characters"
-                    />
-                  </View>
-                </View>
-              )}
-
               {/* Identity Field (Email or Mobile) */}
               <View style={styles.inputGroup}>
-                <Text style={styles.inputLabel}>
-                  {role === 'doctor' ? 'Medical Provider Email' : 'Email or Mobile Number'}
-                </Text>
+                <Text style={styles.inputLabel}>Email or Mobile Number</Text>
                 <View style={styles.inputWrapper}>
                   <Mail size={19} color="#737783" style={styles.inputIcon} />
                   <TextInput
