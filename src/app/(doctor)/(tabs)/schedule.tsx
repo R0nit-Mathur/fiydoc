@@ -69,6 +69,10 @@ export interface ScheduleSlot {
   consultationId?: string;
 }
 
+type ScheduleUndo =
+  | { kind: 'slots'; day: string; session: 'morning' | 'evening'; slots: ScheduleSlot[]; label: string }
+  | { kind: 'leave'; day: string; label: string };
+
 function shiftTime(timeStr: string, meridiem: string, shiftMins: number): { time: string; meridiem: string } {
   const parts = timeStr.split(':');
   let h = parseInt(parts[0], 10);
@@ -95,7 +99,7 @@ function shiftTime(timeStr: string, meridiem: string, shiftMins: number): { time
 
 // Generate dynamic 7 days starting from a given base date using live system clock
 function generateDynamicWeek(baseDate?: Date) {
-  const days: { day: string; date: string; dot: string; fullDate: string; isToday: boolean }[] = [];
+  const days: { day: string; date: string; key: string; dot: string; fullDate: string; isToday: boolean }[] = [];
   const dayNames = ['S', 'M', 'T', 'W', 'T', 'F', 'S'];
   const now = new Date();
   const base = baseDate || now;
@@ -113,6 +117,7 @@ function generateDynamicWeek(baseDate?: Date) {
     days.push({
       day: dayLetter,
       date: dateNum,
+      key: `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`,
       dot: isToday ? 'active' : d.getDay() === 0 ? 'off' : 'teal',
       fullDate,
       isToday,
@@ -129,7 +134,7 @@ export default function DoctorScheduleScreen() {
   const { user } = useAuthStore();
 
   const [weekDays, setWeekDays] = useState(DYNAMIC_WEEK_DAYS);
-  const [selectedDay, setSelectedDay] = useState(DYNAMIC_WEEK_DAYS[0]?.date || new Date().getDate().toString());
+  const [selectedDay, setSelectedDay] = useState(DYNAMIC_WEEK_DAYS[0]?.key || new Date().toISOString().slice(0, 10));
   const [selectedSession, setSelectedSession] = useState<'morning' | 'evening'>('morning');
   const [leaveDates, setLeaveDates] = useState<string[]>([]);
   const [currentMonth, setCurrentMonth] = useState(() => {
@@ -144,7 +149,7 @@ export default function DoctorScheduleScreen() {
       d.setMonth(d.getMonth() - 1);
       const newWeek = generateDynamicWeek(d);
       setWeekDays(newWeek);
-      setSelectedDay(newWeek[0]?.date || d.getDate().toString());
+      setSelectedDay(newWeek[0]?.key || d.toISOString().slice(0, 10));
       return d;
     });
   };
@@ -155,7 +160,7 @@ export default function DoctorScheduleScreen() {
       d.setMonth(d.getMonth() + 1);
       const newWeek = generateDynamicWeek(d);
       setWeekDays(newWeek);
-      setSelectedDay(newWeek[0]?.date || d.getDate().toString());
+      setSelectedDay(newWeek[0]?.key || d.toISOString().slice(0, 10));
       return d;
     });
   };
@@ -165,12 +170,12 @@ export default function DoctorScheduleScreen() {
     const updated = generateDynamicWeek();
     setWeekDays(updated);
     if (updated[0]?.date) {
-      setSelectedDay(updated[0].date);
+      setSelectedDay(updated[0].key);
     }
   }, []);
 
   // Dynamic Session Slots
-  const [morningSlots, setMorningSlots] = useState<ScheduleSlot[]>([
+  const [morningSlots] = useState<ScheduleSlot[]>([
     {
       id: 's1',
       patientId: '',
@@ -213,7 +218,7 @@ export default function DoctorScheduleScreen() {
     },
   ]);
 
-  const [eveningSlots, setEveningSlots] = useState<ScheduleSlot[]>([
+  const [eveningSlots] = useState<ScheduleSlot[]>([
     {
       id: 'e1',
       patientId: '',
@@ -245,6 +250,26 @@ export default function DoctorScheduleScreen() {
       status: 'available',
     },
   ]);
+  // Operations belong to a calendar date, never to the reusable session template.
+  // A delay, block, or reschedule on Tuesday must not alter Wednesday's OPD.
+  const [slotsByDate, setSlotsByDate] = useState<Record<string, { morning: ScheduleSlot[]; evening: ScheduleSlot[] }>>({});
+  const selectedMorningSlots = slotsByDate[selectedDay]?.morning || morningSlots;
+  const selectedEveningSlots = slotsByDate[selectedDay]?.evening || eveningSlots;
+  const updateSelectedSessionSlots = (session: 'morning' | 'evening', updater: (slots: ScheduleSlot[]) => ScheduleSlot[]) => {
+    setSlotsByDate((previous) => {
+      const current = previous[selectedDay] || {
+        morning: morningSlots.map((slot) => ({ ...slot })),
+        evening: eveningSlots.map((slot) => ({ ...slot })),
+      };
+      return {
+        ...previous,
+        [selectedDay]: {
+          ...current,
+          [session]: updater(current[session]),
+        },
+      };
+    });
+  };
 
   // Shift Timings State (Editable)
   const [morningStart, setMorningStart] = useState('10:30 AM');
@@ -264,6 +289,7 @@ export default function DoctorScheduleScreen() {
   const [slotDurationMins, setSlotDurationMins] = useState('15');
   const [maxPatients, setMaxPatients] = useState(12);
   const [delayNotice, setDelayNotice] = useState<string | null>(null);
+  const [lastUndo, setLastUndo] = useState<ScheduleUndo | null>(null);
 
   // Leave Form
   const [leaveReason, setLeaveReason] = useState('Personal / Medical Leave');
@@ -284,6 +310,8 @@ export default function DoctorScheduleScreen() {
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Warning);
     }
 
+    const originalSlots = (selectedSession === 'morning' ? selectedMorningSlots : selectedEveningSlots).map((slot) => ({ ...slot }));
+    setLastUndo({ kind: 'slots', day: selectedDay, session: selectedSession, slots: originalSlots, label: `Undo +${mins}m delay` });
     const updater = (prev: ScheduleSlot[]) =>
       prev.map((s) => {
         const shifted = shiftTime(s.time, s.meridiem, mins);
@@ -296,14 +324,15 @@ export default function DoctorScheduleScreen() {
       });
 
     if (selectedSession === 'morning') {
-      setMorningSlots(updater);
+      updateSelectedSessionSlots('morning', updater);
     } else {
-      setEveningSlots(updater);
+      updateSelectedSessionSlots('evening', updater);
     }
 
+    const selectedDayLabel = weekDays.find((day) => day.key === selectedDay)?.fullDate || selectedDay;
     useNotificationStore.getState().addNotification({
       title: `OPD Emergency Delay (+${mins}m)`,
-      message: `${doctorName} is running ~${mins} minutes behind schedule for today's clinic due to a medical emergency. Your slot time has been adjusted.`,
+      message: `${doctorName} is running ~${mins} minutes behind schedule on ${selectedDayLabel} due to a medical emergency. Your slot time has been adjusted.`,
       type: 'schedule_delay',
       recipientRole: 'patient',
     });
@@ -317,10 +346,11 @@ export default function DoctorScheduleScreen() {
     setLeaveModalVisible(false);
     if (!leaveDates.includes(selectedDay)) {
       setLeaveDates([...leaveDates, selectedDay]);
+      setLastUndo({ kind: 'leave', day: selectedDay, label: 'Undo leave' });
     }
 
-    const selectedDayObj = weekDays.find((w) => w.date === selectedDay);
-    const dayLabel = selectedDayObj ? selectedDayObj.fullDate : `Day ${selectedDay}`;
+    const selectedDayObj = weekDays.find((w) => w.key === selectedDay);
+    const dayLabel = selectedDayObj ? selectedDayObj.fullDate : selectedDay;
 
     useNotificationStore.getState().addNotification({
       title: 'OPD Schedule Update — Doctor On Leave',
@@ -350,10 +380,12 @@ export default function DoctorScheduleScreen() {
       };
     };
 
+    const originalSlots = (selectedSession === 'morning' ? selectedMorningSlots : selectedEveningSlots).map((slot) => ({ ...slot }));
+    setLastUndo({ kind: 'slots', day: selectedDay, session: selectedSession, slots: originalSlots, label: 'Undo reschedule' });
     if (selectedSession === 'morning') {
-      setMorningSlots((prev) => prev.map(updateSlot));
+      updateSelectedSessionSlots('morning', (previous) => previous.map(updateSlot));
     } else {
-      setEveningSlots((prev) => prev.map(updateSlot));
+      updateSelectedSessionSlots('evening', (previous) => previous.map(updateSlot));
     }
 
     if (rescheduleSlot.patientName) {
@@ -374,6 +406,24 @@ export default function DoctorScheduleScreen() {
     );
     setTimeout(() => setDelayNotice(null), 3500);
     setRescheduleSlot(null);
+  };
+
+  const handleUndoScheduleChange = () => {
+    if (!lastUndo) return;
+    if (lastUndo.kind === 'leave') {
+      setLeaveDates((dates) => dates.filter((date) => date !== lastUndo.day));
+    } else {
+      setSlotsByDate((previous) => {
+        const current = previous[lastUndo.day] || {
+          morning: morningSlots.map((slot) => ({ ...slot })),
+          evening: eveningSlots.map((slot) => ({ ...slot })),
+        };
+        return { ...previous, [lastUndo.day]: { ...current, [lastUndo.session]: lastUndo.slots } };
+      });
+    }
+    setDelayNotice(`${lastUndo.label.replace('Undo ', '')} reverted.`);
+    setLastUndo(null);
+    if (Platform.OS !== 'web') Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
   };
 
   return (
@@ -409,6 +459,11 @@ export default function DoctorScheduleScreen() {
           <View style={[styles.delayBanner, { backgroundColor: '#FEF3C7', borderColor: '#FCD34D' }]}>
             <AlertTriangle size={16} color="#D97706" />
             <Text style={styles.delayBannerText}>{delayNotice}</Text>
+            {lastUndo ? (
+              <Pressable onPress={handleUndoScheduleChange} style={styles.undoBtn} accessibilityLabel={lastUndo.label}>
+                <Text style={styles.undoBtnText}>{lastUndo.label}</Text>
+              </Pressable>
+            ) : null}
           </View>
         )}
 
@@ -465,14 +520,14 @@ export default function DoctorScheduleScreen() {
 
           <View style={[styles.weekGrid, { backgroundColor: colors.card, borderColor: colors.border }]}>
             {weekDays.map((w) => {
-              const isSelected = selectedDay === w.date;
-              const isLeave = leaveDates.includes(w.date);
+              const isSelected = selectedDay === w.key;
+              const isLeave = leaveDates.includes(w.key);
               const isOff = w.dot === 'off' && !isLeave;
 
               return (
                 <Pressable
-                  key={w.date}
-                  onPress={() => handleSelectDay(w.date)}
+                  key={w.key}
+                  onPress={() => handleSelectDay(w.key)}
                   style={[
                     styles.dayCol,
                     isSelected && [styles.dayColActive, { backgroundColor: StitchColors.primaryContainer }],
@@ -500,7 +555,7 @@ export default function DoctorScheduleScreen() {
                     {w.date}
                   </Text>
                   {isLeave ? (
-                    <Umbrella size={11} color={isSelected ? '#FFFFFF' : StitchColors.error} />
+                    <View style={[styles.dotIndicator, { backgroundColor: isSelected ? '#FFFFFF' : StitchColors.error }]} />
                   ) : (
                     <View
                       style={[
@@ -570,7 +625,7 @@ export default function DoctorScheduleScreen() {
               </View>
               <Text style={[styles.sessionTiming, { color: colors.textSecondary }]}>{morningStart} - {morningEnd}</Text>
               <Text style={[styles.sessionStats, { color: StitchColors.secondaryContainer }]}>
-                {morningSlots.filter((s) => s.status === 'booked').length} of {morningSlots.length} Booked
+                {selectedMorningSlots.filter((s) => s.status === 'booked').length} of {selectedMorningSlots.length} Booked
               </Text>
             </Pressable>
 
@@ -598,7 +653,7 @@ export default function DoctorScheduleScreen() {
               </View>
               <Text style={[styles.sessionTiming, { color: colors.textSecondary }]}>{eveningStart} - {eveningEnd}</Text>
               <Text style={[styles.sessionStats, { color: colors.textSecondary }]}>
-                {eveningSlots.filter((s) => s.status === 'booked').length} of {eveningSlots.length} Booked
+                {selectedEveningSlots.filter((s) => s.status === 'booked').length} of {selectedEveningSlots.length} Booked
               </Text>
             </Pressable>
           </View>
@@ -624,7 +679,7 @@ export default function DoctorScheduleScreen() {
               {selectedSession === 'morning' ? 'MORNING SLOTS TIMELINE' : 'EVENING SLOTS TIMELINE'}
             </Text>
             <Text style={[styles.timelineDateText, { color: colors.textSecondary }]}>
-              {weekDays.find((w) => w.date === selectedDay)?.fullDate || `Day ${selectedDay}`}
+              {weekDays.find((w) => w.key === selectedDay)?.fullDate || selectedDay}
             </Text>
           </View>
 
@@ -645,8 +700,7 @@ export default function DoctorScheduleScreen() {
                 onPress={() => {
                   setLeaveDates(leaveDates.filter((d) => d !== selectedDay));
                   if (Platform.OS !== 'web') Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
-                  const currentMonthName = new Date().toLocaleDateString('en-IN', { month: 'short' });
-                  setDelayNotice(`Leave cancelled for ${selectedDay} ${currentMonthName}. OPD reopened.`);
+                  setDelayNotice(`Leave cancelled for ${selectedDay}. OPD reopened.`);
                   setTimeout(() => setDelayNotice(null), 3000);
                 }}
                 style={[styles.resumeOpdBtn, { backgroundColor: StitchColors.primaryContainer }]}
@@ -659,7 +713,7 @@ export default function DoctorScheduleScreen() {
             </View>
           ) : (
             <View style={styles.slotsList}>
-              {(selectedSession === 'morning' ? morningSlots : eveningSlots).map((slot) => {
+              {(selectedSession === 'morning' ? selectedMorningSlots : selectedEveningSlots).map((slot) => {
                 const isBooked = slot.status === 'booked';
                 const isAvailable = slot.status === 'available';
                 const isBlocked = slot.status === 'blocked';
@@ -774,8 +828,7 @@ export default function DoctorScheduleScreen() {
                             onPress={() => {
                               const toggler = (prev: ScheduleSlot[]) =>
                                 prev.map((s) => (s.id === slot.id ? { ...s, status: 'blocked' as const } : s));
-                              if (selectedSession === 'morning') setMorningSlots(toggler);
-                              else setEveningSlots(toggler);
+                              updateSelectedSessionSlots(selectedSession, toggler);
                               if (Platform.OS !== 'web') Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
                             }}
                             style={[styles.blockIconBtn, { backgroundColor: colors.backgroundElement }]}
@@ -789,8 +842,7 @@ export default function DoctorScheduleScreen() {
                           onPress={() => {
                             const toggler = (prev: ScheduleSlot[]) =>
                               prev.map((s) => (s.id === slot.id ? { ...s, status: 'available' as const } : s));
-                            if (selectedSession === 'morning') setMorningSlots(toggler);
-                            else setEveningSlots(toggler);
+                            updateSelectedSessionSlots(selectedSession, toggler);
                             if (Platform.OS !== 'web') Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
                           }}
                           style={[styles.unblockBtn, { backgroundColor: colors.card }]}
@@ -1241,6 +1293,17 @@ const styles = StyleSheet.create({
     fontWeight: '600',
     color: '#92400E',
     flex: 1,
+  },
+  undoBtn: {
+    backgroundColor: '#92400E',
+    paddingHorizontal: 10,
+    paddingVertical: 7,
+    borderRadius: BorderRadius.full,
+  },
+  undoBtnText: {
+    color: '#FFFFFF',
+    fontSize: 11,
+    fontWeight: '800',
   },
   monthControlRow: {
     flexDirection: 'row',

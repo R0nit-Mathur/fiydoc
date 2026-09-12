@@ -1,5 +1,6 @@
-import { Controller, Get, Query, Param } from '@nestjs/common';
+import { Controller, Get, Query, Param, Patch, Body, Request, UseGuards } from '@nestjs/common';
 import { DoctorsService } from './doctors.service';
+import { JwtAuthGuard } from '../auth/jwt-auth.guard';
 
 @Controller('doctors')
 export class DoctorsController {
@@ -15,6 +16,12 @@ export class DoctorsController {
     const parsedLat = lat ? parseFloat(lat) : undefined;
     const parsedLng = lng ? parseFloat(lng) : undefined;
     return this.doctorsService.searchDoctors(q, specialty, parsedLat, parsedLng);
+  }
+
+  @Patch('me')
+  @UseGuards(JwtAuthGuard)
+  async updateMyProfile(@Request() req: any, @Body() body: any) {
+    return this.doctorsService.updateDoctorProfile(req.user.id, body);
   }
 
   @Get(':id')

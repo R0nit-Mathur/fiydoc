@@ -9,6 +9,7 @@ import { MedicalRecord } from '@/types/index';
 import { Palette, Typography, Spacing, StitchColors } from '@/constants/theme';
 import { useAppTheme } from '@/hooks/useAppTheme';
 import { ScanText, CheckCircle2, AlertCircle, FileUp, FileCheck } from 'lucide-react-native';
+import { pickClinicalDocument } from '@/utils/mediaPicker';
 
 interface AddDocumentModalProps {
   visible: boolean;
@@ -23,45 +24,18 @@ export function AddDocumentModal({ visible, onClose }: AddDocumentModalProps) {
 
   const [docTitle, setDocTitle] = useState('');
   const [docType, setDocType] = useState<'Lab Result' | 'Prescription' | 'Scan/X-Ray'>('Lab Result');
-  const [selectedFile, setSelectedFile] = useState<{ name: string; size?: number; uri: string } | null>(null);
+  const [selectedFile, setSelectedFile] = useState<{ name: string; size?: string; uri: string } | null>(null);
   const [scanStep, setScanStep] = useState<'idle' | 'scanning' | 'complete'>('idle');
   const [extractedData, setExtractedData] = useState<Record<string, string> | null>(null);
   const [error, setError] = useState('');
 
   const handlePickFile = async () => {
-    try {
-      let DocumentPickerModule: any = null;
-      try {
-        DocumentPickerModule = require('expo-document-picker');
-      } catch {
-        DocumentPickerModule = null;
+    const file = await pickClinicalDocument();
+    if (file) {
+      setSelectedFile(file);
+      if (!docTitle.trim()) {
+        setDocTitle(file.name.replace(/\.[^/.]+$/, ''));
       }
-
-      if (!DocumentPickerModule || !DocumentPickerModule.getDocumentAsync) {
-        Alert.alert('File Selector', 'Direct document picking is supported on updated builds. You can manually enter test titles.');
-        return;
-      }
-
-      const res = await DocumentPickerModule.getDocumentAsync({
-        type: ['application/pdf', 'image/*'],
-        copyToCacheDirectory: true,
-      });
-
-      if (!res.canceled && res.assets && res.assets[0]) {
-        const file = res.assets[0];
-        setSelectedFile({
-          name: file.name,
-          size: file.size,
-          uri: file.uri,
-        });
-        if (!docTitle.trim()) {
-          // Auto fill title with file base name without extension
-          const cleanName = file.name.replace(/\.[^/.]+$/, '');
-          setDocTitle(cleanName);
-        }
-      }
-    } catch (err: any) {
-      console.warn('[AddDocumentModal] Document picker error:', err?.message);
     }
   };
 
@@ -75,34 +49,17 @@ export function AddDocumentModal({ visible, onClose }: AddDocumentModalProps) {
     setScanStep('scanning');
     await new Promise((resolve) => setTimeout(resolve, 800));
 
-    let extracted: Record<string, string> = {
+    const extracted: Record<string, string> = {
       'Document Title': docTitle.trim(),
       'Category': docType,
       'Added On': new Date().toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' }),
+      'Storage': selectedFile ? 'Stored securely on this device' : 'No file attached',
     };
 
-    let tags = ['RECORD', docType.toUpperCase().replace(/\s+/g, '_')];
-    let summary = `Added medical document for ${docTitle.trim()}.`;
-
-    const lower = docTitle.toLowerCase();
-    if (lower.includes('glucose') || lower.includes('sugar') || lower.includes('hba1c')) {
-      extracted['Fasting Plasma Glucose'] = '94 mg/dL (Normal: 70-99)';
-      extracted['HbA1c'] = '5.4% (Normal: <5.7%)';
-      tags.push('METABOLIC', 'GLUCOSE');
-      summary = 'Blood glucose panel: Fasting Glucose 94 mg/dL, HbA1c 5.4% (Optimal control).';
-    } else if (lower.includes('lipid') || lower.includes('cholesterol')) {
-      extracted['Total Cholesterol'] = '178 mg/dL (Optimal: <200)';
-      extracted['HDL Cholesterol'] = '52 mg/dL (Normal: >40)';
-      extracted['LDL Cholesterol'] = '98 mg/dL (Optimal: <100)';
-      tags.push('LIPID_PROFILE', 'CARDIOLOGY');
-      summary = 'Comprehensive lipid panel: Total Cholesterol 178 mg/dL, LDL 98 mg/dL, HDL 52 mg/dL.';
-    } else if (lower.includes('cbc') || lower.includes('blood')) {
-      extracted['Hemoglobin (Hb)'] = '14.2 g/dL (Normal: 13.0-17.0)';
-      extracted['Total WBC Count'] = '6,800 /uL (Normal: 4,000-11,000)';
-      extracted['Platelet Count'] = '240,000 /uL (Normal: 150,000-450,000)';
-      tags.push('HEMATOLOGY', 'CBC');
-      summary = 'Complete Blood Count (CBC): Hb 14.2 g/dL, WBC 6,800 /uL, Platelets 2.4 Lakhs.';
-    }
+    const tags = ['LOCAL_RECORD', docType.toUpperCase().replace(/\s+/g, '_')];
+    const summary = selectedFile
+      ? `Local copy of ${selectedFile.name}. Review the original document for clinical values.`
+      : `Local medical record for ${docTitle.trim()}.`;
 
     const newRecord: MedicalRecord = {
       id: `rec_${Date.now()}`,
@@ -112,7 +69,8 @@ export function AddDocumentModal({ visible, onClose }: AddDocumentModalProps) {
       createdAt: 'Today',
       doctorName: 'FiYDoc Health Records',
       facility: 'FiYDoc Healthcare Diagnostics',
-      ocrConfidence: 99.0,
+      ocrConfidence: undefined,
+      documentUrl: selectedFile?.uri,
       summary,
       extractedTags: tags,
       tags,
@@ -155,9 +113,7 @@ export function AddDocumentModal({ visible, onClose }: AddDocumentModalProps) {
           <View style={{ gap: Spacing.md }}>
             <View style={styles.ocrSuccessBox}>
               <CheckCircle2 size={20} color={Palette.success} />
-              <Text style={styles.ocrSuccessText}>
-                Document Added to Timeline
-              </Text>
+              <Text style={styles.ocrSuccessText}>Document Added to Timeline</Text>
             </View>
 
             <View style={styles.extractedBox}>
@@ -202,7 +158,7 @@ export function AddDocumentModal({ visible, onClose }: AddDocumentModalProps) {
                       {selectedFile.name}
                     </Text>
                     <Text style={styles.fileSubText}>
-                      {selectedFile.size ? `${(selectedFile.size / (1024 * 1024)).toFixed(1)} MB • Ready` : 'Ready to attach'}
+                      {selectedFile.size ? `${selectedFile.size} • Stored on this device` : 'Stored on this device'}
                     </Text>
                   </View>
                   <Text style={styles.changeFileText}>Change</Text>

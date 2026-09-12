@@ -1,9 +1,49 @@
-import { Injectable, NotFoundException } from '@nestjs/common';
+import { Injectable, NotFoundException, ServiceUnavailableException } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
+import { SupabaseService } from '../supabase/supabase.service';
+import PDFDocument from 'pdfkit';
 
 @Injectable()
 export class PrescriptionsService {
-  constructor(private prisma: PrismaService) {}
+  constructor(
+    private prisma: PrismaService,
+    private supabase: SupabaseService,
+  ) {}
+
+  private buildPrescriptionDocument(prescription: any): Promise<Buffer> {
+    return new Promise((resolve, reject) => {
+      const pdf = new PDFDocument({ margin: 48, size: 'A4' });
+      const chunks: Buffer[] = [];
+      pdf.on('data', (chunk: Buffer) => chunks.push(chunk));
+      pdf.on('end', () => resolve(Buffer.concat(chunks)));
+      pdf.on('error', reject);
+
+      pdf.fillColor('#3055A8').fontSize(22).text('FiYDoc Digital Prescription');
+      pdf.fillColor('#52606D').fontSize(10).text(`Verification code: ${prescription.verificationCode}`);
+      pdf.moveDown();
+      pdf.fillColor('#172033').fontSize(11)
+        .text(`Doctor: ${prescription.doctor.fullName}`)
+        .text(`Patient: ${prescription.patient.fullName}`)
+        .text(`Issued: ${new Date(prescription.createdAt).toLocaleString('en-IN')}`);
+      pdf.moveDown().fontSize(13).fillColor('#3055A8').text('Medicines');
+      pdf.moveDown(0.4).fontSize(10).fillColor('#172033');
+      if (prescription.medicines.length === 0) {
+        pdf.text('No medicines prescribed.');
+      } else {
+        prescription.medicines.forEach((medicine: any, index: number) => {
+          pdf.font('Helvetica-Bold').text(`${index + 1}. ${medicine.name}`);
+          pdf.font('Helvetica').text(`${medicine.dosage} • ${medicine.frequency} • ${medicine.durationDays} days`);
+          if (medicine.instructions) pdf.fillColor('#52606D').text(medicine.instructions).fillColor('#172033');
+          pdf.moveDown(0.5);
+        });
+      }
+      pdf.moveDown().fontSize(13).fillColor('#3055A8').text('Clinical notes');
+      pdf.moveDown(0.4).fontSize(10).fillColor('#172033').text(prescription.doctorNotes || '—');
+      pdf.moveDown().fontSize(13).fillColor('#3055A8').text('Follow-up');
+      pdf.moveDown(0.4).fontSize(10).fillColor('#172033').text(prescription.followUpInstructions || 'As advised by your clinician.');
+      pdf.end();
+    });
+  }
 
   async createPrescription(dto: {
     consultationId?: string;
@@ -23,6 +63,9 @@ export class PrescriptionsService {
       category?: string;
     }[];
   }) {
+    if (!this.supabase.isConfigured()) {
+      throw new ServiceUnavailableException('Digital prescriptions require Supabase Storage to be configured.');
+    }
     let consultation: any = null;
 
     // 1. Try finding consultation by ID
@@ -117,7 +160,6 @@ export class PrescriptionsService {
         followUpInstructions: dto.followUpInstructions,
         verificationCode,
         signedAt: new Date(),
-        pdfUrl: `https://api.fiydoc.app/prescriptions/pdf/${consultation.id}.pdf`,
         medicines: {
           create: (dto.medicines || []).map((m) => ({
             name: m.name,
@@ -131,14 +173,24 @@ export class PrescriptionsService {
       include: { medicines: true, doctor: true, patient: true },
     });
 
-    // Auto-create MedicalRecord entry in patient timeline
+    const bucket = process.env.SUPABASE_STORAGE_BUCKET || 'fiydoc-medical-docs';
+    const documentUrl = await this.supabase.uploadFile(
+      bucket,
+      `prescriptions/${consultation.patientId}/${prescription.id}.pdf`,
+      await this.buildPrescriptionDocument(prescription),
+      'application/pdf',
+    );
+
+    await this.prisma.prescription.update({ where: { id: prescription.id }, data: { pdfUrl: documentUrl } });
+
+    // Auto-create MedicalRecord entry in patient timeline with the durable Supabase URL.
     await this.prisma.medicalRecord.create({
       data: {
         patientId: consultation.patientId,
         title: `Prescription from ${consultation.doctor.fullName}`,
         type: 'PRESCRIPTION',
         sourceId: prescription.id,
-        documentUrl: prescription.pdfUrl,
+        documentUrl,
         summary: `Prescribed ${(dto.medicines || []).length} medicine(s)`,
       },
     });
@@ -155,7 +207,7 @@ export class PrescriptionsService {
       });
     }
 
-    return prescription;
+    return { ...prescription, pdfUrl: documentUrl };
   }
 
   async getPrescriptionById(id: string) {

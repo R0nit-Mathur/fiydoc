@@ -22,6 +22,7 @@ import {
   Platform,
   Modal,
   TextInput,
+  Alert,
 } from 'react-native';
 import { useRouter } from 'expo-router';
 import { SafeAreaView } from 'react-native-safe-area-context';
@@ -60,6 +61,8 @@ import { BorderRadius, Shadows, StitchColors, Palette, DEFAULT_DOCTOR_AVATAR } f
 import { AppUpdateModal } from '@/components/ui/AppUpdateModal';
 import { pickImageFromGallery } from '@/utils/mediaPicker';
 import { Avatar } from '@/components/ui/Avatar';
+import { useAppointmentStore } from '@/store/useAppointmentStore';
+import { doctorService } from '@/services/doctorService';
 
 const DOCTOR_AVATAR = DEFAULT_DOCTOR_AVATAR;
 
@@ -75,6 +78,7 @@ export default function DoctorProfileScreen() {
   const router = useRouter();
   const { colors, isDark } = useAppTheme();
   const { user, updateUser } = useAuthStore();
+  const appointments = useAppointmentStore((state) => state.appointments);
 
   // Profile data state bound to user
   const initialName = user?.name || '';
@@ -92,7 +96,9 @@ export default function DoctorProfileScreen() {
   const [activeForOpd, setActiveForOpd] = useState(true);
   const [whatsappAlerts, setWhatsappAlerts] = useState(true);
   const [biometricAuth, setBiometricAuth] = useState(true);
-  const [settlementCycle, setSettlementCycle] = useState<'weekly' | 'monthly'>('weekly');
+  const [settlementCycle, setSettlementCycle] = useState<'weekly' | 'monthly'>((user as any)?.settlementCycle || 'weekly');
+  const completedConsultations = appointments.filter((appointment) => appointment.status === 'completed').length;
+  const cyclePayout = completedConsultations * (Number(opdFee) || 0);
 
   // Modals
   const [showFeeModal, setShowFeeModal] = useState(false);
@@ -108,22 +114,49 @@ export default function DoctorProfileScreen() {
   const [tempSpec, setTempSpec] = useState(docSpec);
   const [tempAvatar, setTempAvatar] = useState(docAvatar);
   const [tempQual, setTempQual] = useState(user?.qualification || '');
-  const [tempClinic, setTempClinic] = useState(user?.clinicName || '');
+  const [tempClinicName, setTempClinicName] = useState(user?.clinicName || '');
+  const [tempClinicAddress, setTempClinicAddress] = useState(user?.clinicAddress || '');
+  const [tempClinicTimings, setTempClinicTimings] = useState(user?.clinicTimings || '10:30 AM – 1:30 PM • 5:00 PM – 8:00 PM');
 
-  const handleSaveFee = () => {
+  const handleSaveFee = async () => {
     setOpdFee(tempFee);
     updateUser({ consultationFee: tempFee });
+    try {
+      await doctorService.updateMyProfile({ consultationFee: Number(tempFee) });
+    } catch {
+      // Preserve the local draft for an offline doctor; it will remain visible on this device.
+    }
     setShowFeeModal(false);
     if (Platform.OS !== 'web') Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
   };
 
   const handleSavePayout = () => {
     setUpiId(tempUpi);
+    updateUser({ upiId: tempUpi });
     setShowPayoutModal(false);
     if (Platform.OS !== 'web') Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
   };
 
-  const handleSaveProfile = () => {
+  const handleSaveProfile = async () => {
+    if (!tempName.trim() || !tempSpec.trim() || !tempClinicName.trim() || !tempClinicAddress.trim() || !tempClinicTimings.trim()) {
+      Alert.alert('Complete practice details', 'Name, specialty, clinic name, clinic address, and OPD hours are all required.');
+      return;
+    }
+    try {
+      await doctorService.updateMyProfile({
+        fullName: tempName,
+        specialization: tempSpec,
+        // Device-selected photos intentionally stay local. Remote image URLs are
+        // still safe to retain in the shared doctor profile.
+        profilePhoto: tempAvatar?.startsWith('file:') ? undefined : tempAvatar || null,
+        clinicName: tempClinicName,
+        clinicAddress: tempClinicAddress,
+        clinicTimings: tempClinicTimings,
+      });
+    } catch {
+      Alert.alert('Could not save clinic settings', 'Your clinic settings were not changed. Check the connection and try again.');
+      return;
+    }
     setDocName(tempName);
     setDocSpec(tempSpec);
     setDocAvatar(tempAvatar);
@@ -133,7 +166,9 @@ export default function DoctorProfileScreen() {
       specialty: tempSpec,
       avatar: tempAvatar,
       qualification: tempQual,
-      clinicName: tempClinic,
+      clinicName: tempClinicName,
+      clinicAddress: tempClinicAddress,
+      clinicTimings: tempClinicTimings,
     });
     setShowEditProfileModal(false);
     if (Platform.OS !== 'web') Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
@@ -151,7 +186,9 @@ export default function DoctorProfileScreen() {
             setTempSpec(docSpec);
             setTempAvatar(docAvatar);
             setTempQual(user?.qualification || '');
-            setTempClinic(user?.clinicName || '');
+            setTempClinicName(user?.clinicName || '');
+            setTempClinicAddress(user?.clinicAddress || '');
+            setTempClinicTimings(user?.clinicTimings || '10:30 AM – 1:30 PM • 5:00 PM – 8:00 PM');
             setShowEditProfileModal(true);
           }}
           style={[styles.editIconBtn, { backgroundColor: colors.backgroundElement }]}
@@ -192,7 +229,9 @@ export default function DoctorProfileScreen() {
               <View style={styles.verifiedTagRow}>
                 <View style={[styles.verifiedTag, { backgroundColor: '#CCFBF1' }]}>
                   <ShieldCheck size={13} color={StitchColors.secondary} />
-                  <Text style={styles.verifiedTagText}>Profile 100% Verified</Text>
+              <Text style={styles.verifiedTagText}>
+                {user?.verificationStatus === 'verified' ? 'Verified clinician' : 'Profile details saved'}
+              </Text>
                 </View>
               </View>
             </View>
@@ -246,12 +285,12 @@ export default function DoctorProfileScreen() {
               <CreditCard size={16} color={StitchColors.secondaryContainer} />
             </View>
             <View>
-              <Text style={[styles.metricTileAmt, { color: colors.text }]}>₹1,42,800</Text>
+              <Text style={[styles.metricTileAmt, { color: colors.text }]}>₹{cyclePayout.toLocaleString('en-IN')}</Text>
               <Text style={[styles.metricTileSub, { color: StitchColors.secondaryContainer }]}>
-                Settles Fri, 1 Nov
+                {settlementCycle === 'weekly' ? 'Weekly settlement' : 'Monthly settlement'}
               </Text>
             </View>
-            <Text style={[styles.consultCountText, { color: colors.textSecondary }]}>28 consultations</Text>
+            <Text style={[styles.consultCountText, { color: colors.textSecondary }]}>{completedConsultations} completed consultations</Text>
           </View>
         </Animated.View>
 
@@ -311,7 +350,7 @@ export default function DoctorProfileScreen() {
               <Text style={[styles.cycleLabel, { color: colors.textSecondary }]}>Settlement Cycle</Text>
               <View style={[styles.cycleSegment, { backgroundColor: colors.backgroundElement, borderColor: colors.border }]}>
                 <Pressable
-                  onPress={() => setSettlementCycle('weekly')}
+                  onPress={() => { setSettlementCycle('weekly'); updateUser({ settlementCycle: 'weekly' }); }}
                   style={[
                     styles.cycleTab,
                     settlementCycle === 'weekly' && [styles.cycleTabActive, { backgroundColor: colors.card }],
@@ -327,7 +366,7 @@ export default function DoctorProfileScreen() {
                   </Text>
                 </Pressable>
                 <Pressable
-                  onPress={() => setSettlementCycle('monthly')}
+                  onPress={() => { setSettlementCycle('monthly'); updateUser({ settlementCycle: 'monthly' }); }}
                   style={[
                     styles.cycleTab,
                     settlementCycle === 'monthly' && [styles.cycleTabActive, { backgroundColor: colors.card }],
@@ -355,7 +394,19 @@ export default function DoctorProfileScreen() {
           </View>
 
           <View style={[styles.groupedListCard, { backgroundColor: colors.card, borderColor: colors.border }]}>
-            <View style={styles.groupItem}>
+            <Pressable
+              onPress={() => {
+                setTempName(docName);
+                setTempSpec(docSpec);
+                setTempAvatar(docAvatar);
+                setTempQual(user?.qualification || '');
+                setTempClinicName(user?.clinicName || '');
+                setTempClinicAddress(user?.clinicAddress || '');
+                setTempClinicTimings(user?.clinicTimings || '10:30 AM – 1:30 PM • 5:00 PM – 8:00 PM');
+                setShowEditProfileModal(true);
+              }}
+              style={styles.groupItem}
+            >
               <Building2 size={18} color={StitchColors.primaryContainer} />
               <View style={{ flex: 1, marginLeft: 12 }}>
                 <Text style={[styles.groupItemSub, { color: colors.textSecondary }]}>Primary Hospital / Clinic</Text>
@@ -364,14 +415,14 @@ export default function DoctorProfileScreen() {
                 </Text>
               </View>
               <ChevronRight size={16} color={colors.textMuted} />
-            </View>
+            </Pressable>
 
             <View style={[styles.groupItem, { borderTopColor: colors.border, borderTopWidth: StyleSheet.hairlineWidth }]}>
               <Clock size={18} color={StitchColors.primaryContainer} />
               <View style={{ flex: 1, marginLeft: 12 }}>
                 <Text style={[styles.groupItemSub, { color: colors.textSecondary }]}>OPD Working Shifts</Text>
                 <Text style={[styles.groupItemMain, { color: colors.text }]}>
-                  10:30 AM – 1:30 PM • 5:00 PM – 8:00 PM
+                  {user?.clinicTimings || '10:30 AM – 1:30 PM • 5:00 PM – 8:00 PM'}
                 </Text>
               </View>
               <ChevronRight size={16} color={colors.textMuted} />
@@ -691,11 +742,34 @@ export default function DoctorProfileScreen() {
               </View>
 
               <View>
-                <Text style={[styles.inputLabel, { color: colors.textSecondary }]}>Clinic / Chamber Name & Address</Text>
+                <Text style={[styles.inputLabel, { color: colors.textSecondary }]}>Clinic / Chamber Name</Text>
                 <TextInput
-                  value={tempClinic}
-                  onChangeText={setTempClinic}
-                  placeholder="e.g. Apollo Hospitals / City Care Clinic, Bangalore"
+                  value={tempClinicName}
+                  onChangeText={setTempClinicName}
+                  placeholder="e.g. Apollo Hospitals"
+                  placeholderTextColor={colors.textMuted}
+                  style={[styles.upiTextInput, { color: colors.text, borderColor: colors.border }]}
+                />
+              </View>
+
+              <View>
+                <Text style={[styles.inputLabel, { color: colors.textSecondary }]}>Clinic Address</Text>
+                <TextInput
+                  value={tempClinicAddress}
+                  onChangeText={setTempClinicAddress}
+                  placeholder="e.g. Bannerghatta Road, Bengaluru"
+                  placeholderTextColor={colors.textMuted}
+                  multiline
+                  style={[styles.upiTextInput, { color: colors.text, borderColor: colors.border, minHeight: 54, textAlignVertical: 'top' }]}
+                />
+              </View>
+
+              <View>
+                <Text style={[styles.inputLabel, { color: colors.textSecondary }]}>OPD Working Hours</Text>
+                <TextInput
+                  value={tempClinicTimings}
+                  onChangeText={setTempClinicTimings}
+                  placeholder="e.g. 10:30 AM – 1:30 PM • 5:00 PM – 8:00 PM"
                   placeholderTextColor={colors.textMuted}
                   style={[styles.upiTextInput, { color: colors.text, borderColor: colors.border }]}
                 />

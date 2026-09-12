@@ -49,7 +49,8 @@ import {
 
 import { useAppTheme } from '@/hooks/useAppTheme';
 import { BorderRadius, Shadows, Spacing, StitchColors, Palette, DEFAULT_DOCTOR_AVATAR } from '@/constants/theme';
-import { useAppointmentStore } from '@/store/useAppointmentStore';
+import { useAuthStore } from '@/store/useAuthStore';
+import { useAppointmentsQuery } from '@/hooks/queries/useAppointmentsQuery';
 
 const DOCTOR_AVATAR = DEFAULT_DOCTOR_AVATAR;
 
@@ -69,6 +70,8 @@ interface PatientRecord {
   statusVariant: 'teal' | 'red' | 'blue';
   actionPrimary: string;
   actionSecondary: string;
+  latestAppointmentId: string;
+  visits: { id: string; date: string; time: string; reason: string; status: string }[];
 }
 
 const FILTER_TABS = [
@@ -81,15 +84,27 @@ const FILTER_TABS = [
 export default function DoctorPatientsScreen() {
   const router = useRouter();
   const { colors, isDark } = useAppTheme();
-  const appointments = useAppointmentStore((s) => s.appointments);
+  const user = useAuthStore((state) => state.user);
+  const { data: appointments = [], isLoading: appointmentsLoading, error: appointmentsError, refetch } = useAppointmentsQuery(undefined, user?.id);
 
   const [activeFilter, setActiveFilter] = useState('all');
   const [searchQuery, setSearchQuery] = useState('');
+  const [historyPatient, setHistoryPatient] = useState<PatientRecord | null>(null);
+  const [historyDate, setHistoryDate] = useState<string | null>(null);
 
   const patientRoster = useMemo<PatientRecord[]>(() => {
-    return appointments.map((apt) => ({
-      id: apt.id,
-      initials: (apt.patientName || 'Patient').split(' ').map((n) => n[0]).join('').slice(0, 2).toUpperCase(),
+    const byPatient = new Map<string, typeof appointments>();
+    appointments.forEach((apt) => {
+      const key = apt.patientId || apt.patientName || apt.id;
+      byPatient.set(key, [...(byPatient.get(key) || []), apt]);
+    });
+    return [...byPatient.entries()].map(([patientKey, patientAppointments]) => {
+      const sortedVisits = [...patientAppointments].sort((a, b) => `${b.date} ${b.time}`.localeCompare(`${a.date} ${a.time}`));
+      const apt = sortedVisits[0];
+      return {
+      id: patientKey,
+      latestAppointmentId: apt.id,
+      initials: (apt.patientName || 'Patient').split(' ').map((n: string) => n[0]).join('').slice(0, 2).toUpperCase(),
       bloodGroup: 'B+',
       name: apt.patientName || 'Registered Patient',
       age: 32,
@@ -105,9 +120,21 @@ export default function DoctorPatientsScreen() {
       statusLabel: apt.status.toUpperCase(),
       statusVariant: 'teal' as const,
       actionPrimary: 'Start Consultation',
-      actionSecondary: 'Chart View',
-    }));
+      actionSecondary: 'Day-wise history',
+      visits: sortedVisits.map((visit) => ({
+        id: visit.id,
+        date: visit.date,
+        time: visit.time,
+        reason: visit.symptoms?.join(', ') || 'OPD Consultation',
+        status: visit.status,
+      })),
+    };
+    });
   }, [appointments]);
+
+  const today = new Date().toISOString().slice(0, 10);
+  const seenToday = appointments.filter((apt) => apt.date === today && ['completed', 'in_progress'].includes(apt.status)).length;
+  const pendingPatients = appointments.filter((apt) => apt.status === 'pending').length;
 
   const filteredPatients = useMemo(() => {
     return patientRoster.filter((p) => {
@@ -174,7 +201,7 @@ export default function DoctorPatientsScreen() {
 
           <View style={[styles.totalPill, { backgroundColor: colors.backgroundElement, borderColor: colors.border }]}>
             <View style={styles.tealDot} />
-            <Text style={styles.totalPillText}>1,280 Total</Text>
+            <Text style={styles.totalPillText}>{patientRoster.length} Total</Text>
           </View>
         </View>
 
@@ -248,35 +275,44 @@ export default function DoctorPatientsScreen() {
               </View>
             </View>
             <View style={styles.statBottom}>
-              <Text style={[styles.statNumber, { color: colors.text }]}>14</Text>
-              <Text style={[styles.statDelta, { color: StitchColors.secondaryContainer }]}>+3 vs yesterday</Text>
+              <Text style={[styles.statNumber, { color: colors.text }]}>{seenToday}</Text>
+              <Text style={[styles.statDelta, { color: StitchColors.secondaryContainer }]}>completed today</Text>
             </View>
           </View>
 
           <View style={[styles.statCard, { backgroundColor: colors.card, borderColor: colors.border }]}>
             <View style={styles.statTop}>
-              <Text style={[styles.statLabel, { color: colors.textSecondary }]}>Pending Reports</Text>
+              <Text style={[styles.statLabel, { color: colors.textSecondary }]}>Pending Patients</Text>
               <View style={[styles.statIconWrap, { backgroundColor: '#FEE2E2' }]}>
                 <AlertCircle size={16} color={StitchColors.error} />
               </View>
             </View>
             <View style={styles.statBottom}>
-              <Text style={[styles.statNumber, { color: colors.text }]}>3</Text>
-              <Text style={[styles.statDelta, { color: StitchColors.error }]}>Review needed</Text>
+              <Text style={[styles.statNumber, { color: colors.text }]}>{pendingPatients}</Text>
+              <Text style={[styles.statDelta, { color: StitchColors.error }]}>awaiting confirmation</Text>
             </View>
           </View>
         </View>
 
         {/* 6. Patient Cards List */}
         <View style={styles.patientListContainer}>
-          {filteredPatients.length === 0 ? (
+          {appointmentsLoading ? (
+            <View style={{ padding: 40, alignItems: 'center', justifyContent: 'center' }}>
+              <Text style={{ fontSize: 13, color: colors.textSecondary }}>Loading your patient roster…</Text>
+            </View>
+          ) : filteredPatients.length === 0 ? (
             <View style={{ padding: 40, alignItems: 'center', justifyContent: 'center' }}>
               <Text style={{ fontSize: 16, fontWeight: '700', color: colors.text, marginBottom: 6 }}>
                 No Patients in Roster
               </Text>
               <Text style={{ fontSize: 13, color: colors.textSecondary, textAlign: 'center' }}>
-                Patients who book in-clinic or video OPD appointments will appear here automatically.
+                {appointmentsError ? 'Could not load the roster. Pull down to retry.' : 'Patients who book in-clinic or video OPD appointments will appear here automatically.'}
               </Text>
+              {appointmentsError ? (
+                <Pressable onPress={() => refetch()} style={[styles.retryBtn, { backgroundColor: colors.backgroundElement }]}>
+                  <Text style={{ color: StitchColors.primaryContainer, fontWeight: '700' }}>Retry</Text>
+                </Pressable>
+              ) : null}
             </View>
           ) : (
             filteredPatients.map((patient, idx) => (
@@ -307,7 +343,7 @@ export default function DoctorPatientsScreen() {
                 </View>
 
                 <Pressable
-                  onPress={() => handlePatientAction(patient.id)}
+                    onPress={() => handlePatientAction(patient.latestAppointmentId)}
                   hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
                 >
                   <ChevronRight size={18} color={colors.textMuted} />
@@ -385,7 +421,10 @@ export default function DoctorPatientsScreen() {
 
                 <View style={styles.cardBtnRow}>
                   <Pressable
-                    onPress={() => handlePatientAction(patient.id)}
+                    onPress={() => {
+                      setHistoryPatient(patient);
+                      setHistoryDate(patient.visits[0]?.date || null);
+                    }}
                     style={[styles.secondaryActionBtn, { backgroundColor: colors.backgroundElement }]}
                   >
                     <Text style={[styles.secondaryActionText, { color: colors.text }]}>
@@ -394,7 +433,10 @@ export default function DoctorPatientsScreen() {
                   </Pressable>
 
                   <Pressable
-                    onPress={() => handlePatientAction(patient.id)}
+                    onPress={() => {
+                      setHistoryPatient(patient);
+                      setHistoryDate(patient.visits[0]?.date || null);
+                    }}
                     style={[styles.primaryActionBtn, { backgroundColor: StitchColors.primaryContainer }]}
                   >
                     <Text style={styles.primaryActionText}>{patient.actionPrimary}</Text>
@@ -405,6 +447,51 @@ export default function DoctorPatientsScreen() {
           )))}
         </View>
       </ScrollView>
+
+      <Modal visible={Boolean(historyPatient)} transparent animationType="slide" onRequestClose={() => setHistoryPatient(null)}>
+        <View style={styles.historyOverlay}>
+          <View style={[styles.historySheet, { backgroundColor: colors.card }]}>
+            <View style={styles.historyHeader}>
+              <View>
+                <Text style={[styles.historyTitle, { color: colors.text }]}>{historyPatient?.name}</Text>
+                <Text style={[styles.historySub, { color: colors.textSecondary }]}>Day-wise appointment history</Text>
+              </View>
+              <Pressable onPress={() => setHistoryPatient(null)} hitSlop={10}><X size={20} color={colors.text} /></Pressable>
+            </View>
+            {historyPatient ? (
+              <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.historyCalendar}>
+                {[...new Set(historyPatient.visits.map((visit) => visit.date))].map((date) => {
+                  const selected = historyDate === date;
+                  return (
+                    <Pressable
+                      key={date}
+                      onPress={() => setHistoryDate(date)}
+                      style={[styles.historyDateChip, { backgroundColor: selected ? StitchColors.primaryContainer : colors.backgroundElement, borderColor: selected ? StitchColors.primaryContainer : colors.border }]}
+                    >
+                      <Calendar size={14} color={selected ? '#FFFFFF' : StitchColors.primaryContainer} />
+                      <Text style={[styles.historyDateChipText, { color: selected ? '#FFFFFF' : colors.text }]}>
+                        {new Date(`${date}T00:00:00`).toLocaleDateString('en-IN', { day: '2-digit', month: 'short' })}
+                      </Text>
+                    </Pressable>
+                  );
+                })}
+              </ScrollView>
+            ) : null}
+            <ScrollView contentContainerStyle={{ gap: 10 }}>
+              {historyPatient?.visits.filter((visit) => !historyDate || visit.date === historyDate).map((visit) => (
+                <View key={visit.id} style={[styles.historyRow, { backgroundColor: colors.backgroundElement, borderColor: colors.border }]}>
+                  <Calendar size={16} color={StitchColors.primaryContainer} />
+                  <View style={{ flex: 1 }}>
+                    <Text style={[styles.historyDate, { color: colors.text }]}>{visit.date} · {visit.time}</Text>
+                    <Text style={[styles.historyReason, { color: colors.textSecondary }]}>{visit.reason}</Text>
+                  </View>
+                  <Text style={[styles.historyStatus, { color: StitchColors.primaryContainer }]}>{visit.status}</Text>
+                </View>
+              ))}
+            </ScrollView>
+          </View>
+        </View>
+      </Modal>
     </SafeAreaView>
   );
 }
@@ -594,6 +681,19 @@ const styles = StyleSheet.create({
   patientListContainer: {
     gap: 14,
   },
+  historyOverlay: { flex: 1, justifyContent: 'flex-end', backgroundColor: 'rgba(15, 23, 42, 0.42)' },
+  historySheet: { maxHeight: '70%', borderTopLeftRadius: 24, borderTopRightRadius: 24, padding: 20, gap: 16 },
+  historyHeader: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
+  historyCalendar: { gap: 8, paddingBottom: 2 },
+  historyDateChip: { alignItems: 'center', borderRadius: 10, borderWidth: 1, flexDirection: 'row', gap: 6, paddingHorizontal: 10, paddingVertical: 8 },
+  historyDateChipText: { fontSize: 12, fontWeight: '700' },
+  historyTitle: { fontSize: 18, fontWeight: '800' },
+  historySub: { fontSize: 13, marginTop: 2 },
+  historyRow: { flexDirection: 'row', alignItems: 'center', gap: 10, borderWidth: 1, borderRadius: 12, padding: 12 },
+  historyDate: { fontSize: 13, fontWeight: '700' },
+  historyReason: { fontSize: 12, marginTop: 2 },
+  historyStatus: { fontSize: 11, fontWeight: '700', textTransform: 'uppercase' },
+  retryBtn: { marginTop: 14, paddingHorizontal: 14, paddingVertical: 9, borderRadius: 10 },
   patientCard: {
     padding: 14,
     borderRadius: BorderRadius.xl,

@@ -12,7 +12,7 @@ export const googleAuthService = {
    * Performs authentic Google OAuth 2.0 sign in via system browser.
    * Connects either through Supabase Google Provider or Direct Google OAuth 2.0.
    */
-  async signInWithGoogle(): Promise<UserSession | null> {
+  async signInWithGoogle(requestedRole?: 'patient' | 'doctor'): Promise<UserSession | null> {
     const redirectUri = Linking.createURL('oauth/google');
 
     const clientId =
@@ -90,7 +90,8 @@ export const googleAuthService = {
               profile.email,
               profile.name || 'Google User',
               profile.sub,
-              profile.picture
+              profile.picture,
+              requestedRole
             );
           }
         }

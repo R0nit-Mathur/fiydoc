@@ -52,7 +52,6 @@ import {
 
 import { useAppointmentStore } from '@/store/useAppointmentStore';
 import { useAuthStore } from '@/store/useAuthStore';
-import { useNotificationStore } from '@/store/useNotificationStore';
 import { useBookAppointmentMutation } from '@/hooks/queries/useAppointmentsQuery';
 import { BorderRadius, Shadows, Spacing, StitchColors, Palette } from '@/constants/theme';
 import { useAppTheme } from '@/hooks/useAppTheme';
@@ -91,7 +90,7 @@ export default function BookingConfirmScreen() {
   const { colors, isDark } = useAppTheme();
   const insets = useSafeAreaInsets();
   const { user } = useAuthStore();
-  const { bookingDraft, resetBookingDraft, addAppointment } = useAppointmentStore();
+  const { bookingDraft, resetBookingDraft } = useAppointmentStore();
   const bookMutation = useBookAppointmentMutation();
 
   const doctor = bookingDraft.doctor || (params.doctorName ? {
@@ -121,7 +120,7 @@ export default function BookingConfirmScreen() {
     );
   }
 
-  const date = params.date || params.dateLabel || bookingDraft.date || 'Today, 18 Oct';
+  const date = params.date || bookingDraft.date || new Date().toISOString().slice(0, 10);
   const slot = params.slot || params.slotTime || bookingDraft.timeSlot || '04:15 PM';
   const tokenNumber = params.token || (params.tokenNumber ? (params.tokenNumber.startsWith('Token') ? params.tokenNumber : `Token #${params.tokenNumber}`) : 'Token #12');
   const activeSymptoms = params.reason ? [params.reason] : (bookingDraft.symptoms.length > 0 ? bookingDraft.symptoms : []);
@@ -204,54 +203,16 @@ export default function BookingConfirmScreen() {
       setProcessingStatus('Securing OPD slot...');
       await new Promise((resolve) => setTimeout(resolve, 600));
 
-      const newId = `apt_${Date.now()}`;
-      const newAppointment = {
-        id: newId,
-        patientId: user?.id || 'pat_current',
+      if (!user?.id) throw new Error('Please sign in to request an appointment.');
+      const bookedAppointment = await bookMutation.mutateAsync({
+        patientId: user.id,
         doctorId: doctor.id,
-        date: date,
+        date,
         time: slot,
-        mode: 'clinic' as const,
-        // Auto-confirm on slot availability — doctor can cancel/refund later
-        status: 'confirmed' as const,
+        mode: 'clinic',
         fee: totalPayable,
         symptoms: bookingDraft.symptoms.length > 0 ? bookingDraft.symptoms : ['Routine OPD Consultation'],
         notes: bookingDraft.patientNotes || undefined,
-        patientName: patientName,
-        patientAvatar: user?.avatar,
-        doctorName: doctor.name,
-        doctorSpecialty: doctor.specialty,
-        doctorAvatar: doctor.avatar,
-        hospital: doctor.hospital,
-        tokenNumber: tokenNumber,
-        paymentMethod: methodName,
-        paidAmount: totalPayable,
-        createdAt: new Date().toISOString(),
-      };
-
-      addAppointment(newAppointment as any);
-
-      // Mark slot as booked
-      useAppointmentStore.getState().markSlotBooked(doctor.id, date, slot);
-
-      // Notify PATIENT — booking confirmed
-      useNotificationStore.getState().addNotification({
-        recipientId: user?.id,
-        recipientRole: 'patient',
-        title: '✅ Booking Confirmed',
-        message: `Your appointment with ${doctor.name} on ${date} at ${slot} is confirmed. Token: ${tokenNumber}.`,
-        type: 'appointment',
-        link: '/(patient)/(tabs)/appointments',
-      });
-
-      // Notify DOCTOR — new patient booked a slot
-      useNotificationStore.getState().addNotification({
-        recipientId: doctor.id,
-        recipientRole: 'doctor',
-        title: '🗓️ New Appointment Booked',
-        message: `${patientName} has booked a confirmed slot on ${date} at ${slot}. Please review your schedule.`,
-        type: 'appointment',
-        link: '/(doctor)/(tabs)/appointments',
       });
 
       resetBookingDraft();
@@ -263,7 +224,7 @@ export default function BookingConfirmScreen() {
       router.replace({
         pathname: '/(patient)/booking/success',
         params: {
-          appointmentId: newId,
+          appointmentId: bookedAppointment.id,
           tokenNumber: tokenNumber,
         },
       });

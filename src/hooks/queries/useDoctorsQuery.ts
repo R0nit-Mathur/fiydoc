@@ -5,6 +5,8 @@ export function useDoctorsQuery(filters?: DoctorFilters) {
   return useQuery({
     queryKey: ['doctors', filters],
     queryFn: () => doctorService.getDoctors(filters),
+    staleTime: 0,
+    refetchOnMount: 'always',
   });
 }
 

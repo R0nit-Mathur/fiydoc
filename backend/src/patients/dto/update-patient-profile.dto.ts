@@ -1,7 +1,15 @@
-import { IsArray, IsEnum, IsOptional, IsString } from 'class-validator';
+import { IsArray, IsEmail, IsEnum, IsOptional, IsString } from 'class-validator';
 import { Gender } from '@prisma/client';
 
 export class UpdatePatientProfileDto {
+  @IsOptional()
+  @IsEmail()
+  email?: string;
+
+  @IsOptional()
+  @IsString()
+  phone?: string;
+
   @IsOptional()
   @IsString()
   fullName?: string;

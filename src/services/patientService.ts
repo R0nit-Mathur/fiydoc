@@ -1,6 +1,8 @@
 import { apiClient } from './apiClient';
 
 export interface UpdatePatientProfilePayload {
+  email?: string;
+  phone?: string;
   fullName?: string;
   dob?: string;
   gender?: 'MALE' | 'FEMALE' | 'OTHER';
@@ -20,7 +22,7 @@ export const patientService = {
     return apiClient.get<any>(`/patients/${idOrUserId}`);
   },
 
-  async updateProfile(idOrUserId: string, payload: UpdatePatientProfilePayload) {
-    return apiClient.patch<any>(`/patients/${idOrUserId}`, payload);
+  async updateProfile(_idOrUserId: string, payload: UpdatePatientProfilePayload) {
+    return apiClient.patch<any>('/patients/me/profile', payload);
   },
 };

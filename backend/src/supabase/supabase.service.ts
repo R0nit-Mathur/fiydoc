@@ -1,4 +1,4 @@
-import { Injectable, Logger } from '@nestjs/common';
+import { Injectable, Logger, ServiceUnavailableException } from '@nestjs/common';
 import { createClient, SupabaseClient } from '@supabase/supabase-js';
 
 @Injectable()
@@ -22,10 +22,13 @@ export class SupabaseService {
     return this.supabase;
   }
 
+  isConfigured(): boolean {
+    return this.supabase !== null;
+  }
+
   async uploadFile(bucket: string, path: string, fileBuffer: Buffer, contentType: string): Promise<string> {
     if (!this.supabase) {
-      this.logger.warn(`Fallback: File ${path} stored in local mock URL`);
-      return `http://localhost:3000/storage/${bucket}/${path}`;
+      throw new ServiceUnavailableException('Supabase Storage is not configured. File was not saved.');
     }
 
     const { data, error } = await this.supabase.storage.from(bucket).upload(path, fileBuffer, {

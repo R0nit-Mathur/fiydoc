@@ -92,7 +92,9 @@ export default function SignUpScreen() {
       if (Platform.OS !== 'web') {
         Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
       }
-      const session = await googleAuthService.signInWithGoogle();
+      // Google sign-up is available on the patient path. Doctor onboarding remains
+      // credential-first so a Google identity alone cannot be treated as a clinician credential.
+      const session = await googleAuthService.signInWithGoogle('patient');
       if (session) {
         setSession(session);
         router.replace('/(patient)/(tabs)/home');

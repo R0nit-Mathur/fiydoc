@@ -159,10 +159,12 @@ export default function PatientProfileScreen() {
     const emergencyPhone = editEmergency.trim() || undefined;
     const age = calculateAgeFromDOB(dob) ?? undefined;
 
-    updateUser({ name, avatar: editAvatar || undefined, dob, address, age });
+    updateUser({ name, email: editEmail.trim() || user?.email || '', phone: editPhone.trim(), avatar: editAvatar || undefined, dob, address, age, bloodGroup });
     if (user?.id) {
       try {
         await patientService.updateProfile(user.id, {
+          email: editEmail.trim() || undefined,
+          phone: editPhone.trim() || undefined,
           fullName: name,
           dob,
           address,

@@ -2,7 +2,7 @@
   "expo": {
     "name": "FIYDOC",
     "slug": "fiydoc",
-    "version": "2.1.0",
+    "version": "2.1.1",
     "orientation": "portrait",
     "icon": "./assets/images/icon.png",
     "scheme": "fiydoc",
@@ -12,7 +12,9 @@
       "bundleIdentifier": "com.fiydoc.app",
       "infoPlist": {
         "ITSAppUsesNonExemptEncryption": false,
-        "NSLocationWhenInUseUsageDescription": "FiYDoc needs your location to find nearby verified clinics and doctors and estimate travel distance."
+        "NSLocationWhenInUseUsageDescription": "FiYDoc needs your location to find nearby verified clinics and doctors and estimate travel distance.",
+        "NSPhotoLibraryUsageDescription": "FiYDoc needs access to your photos so you can attach clinical images and choose a profile picture.",
+        "NSCameraUsageDescription": "FiYDoc needs camera access so you can capture clinical documents and images."
       }
     },
     "android": {
@@ -29,7 +31,9 @@
         "ACCESS_COARSE_LOCATION",
         "ACCESS_FINE_LOCATION",
         "android.permission.ACCESS_COARSE_LOCATION",
-        "android.permission.ACCESS_FINE_LOCATION"
+        "android.permission.ACCESS_FINE_LOCATION",
+        "android.permission.READ_MEDIA_IMAGES",
+        "android.permission.CAMERA"
       ]
     },
     "updates": {
@@ -54,6 +58,13 @@
       ],
       "expo-font",
       "expo-image",
+      [
+        "expo-image-picker",
+        {
+          "photosPermission": "FiYDoc needs access to your photos so you can attach clinical images and choose a profile picture.",
+          "cameraPermission": "FiYDoc needs camera access so you can capture clinical documents and images."
+        }
+      ],
       "expo-updates",
       [
         "expo-location",

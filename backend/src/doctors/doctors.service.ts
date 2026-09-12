@@ -1,4 +1,4 @@
-import { Injectable, NotFoundException } from '@nestjs/common';
+import { ForbiddenException, Injectable, NotFoundException } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
 import { VerificationStatus } from '@prisma/client';
 
@@ -58,7 +58,7 @@ export class DoctorsService {
       rating: 4.9,
       reviewCount: 128,
       experienceYears: doc.experienceYears || 10,
-      verificationStatus: 'verified',
+      verificationStatus: (doc.verification?.status || VerificationStatus.REGISTERED).toLowerCase(),
       modes: ['clinic'],
       isInPersonAvailable: true,
       isOnlineAvailable: false,
@@ -71,13 +71,17 @@ export class DoctorsService {
     const whereClause: any = {};
 
     if (specialty && specialty !== 'All') {
-      whereClause.specialization = specialty;
+      // Search categories are human labels (e.g. "Cardiology") while database
+      // specializations may be "Interventional Cardiologist". Exact equality hid valid doctors.
+      whereClause.specialization = { contains: specialty, mode: 'insensitive' };
     }
 
     if (query) {
       whereClause.OR = [
         { fullName: { contains: query, mode: 'insensitive' } },
         { specialization: { contains: query, mode: 'insensitive' } },
+        { clinic: { is: { name: { contains: query, mode: 'insensitive' } } } },
+        { clinic: { is: { address: { contains: query, mode: 'insensitive' } } } },
       ];
     }
 
@@ -115,6 +119,49 @@ export class DoctorsService {
     });
     if (!doctor) throw new NotFoundException('Doctor not found');
     return this.formatDoctor(doctor);
+  }
+
+  async updateDoctorProfile(userId: string, dto: {
+    fullName?: string;
+    specialization?: string;
+    profilePhoto?: string | null;
+    consultationFee?: number;
+    clinicName?: string;
+    clinicAddress?: string;
+    clinicTimings?: string;
+  }) {
+    const doctor = await this.prisma.doctor.findUnique({ where: { userId } });
+    if (!doctor) throw new ForbiddenException('Only doctors can update a practice profile.');
+
+    const updated = await this.prisma.doctor.update({
+      where: { userId },
+      data: {
+        fullName: dto.fullName?.trim() || undefined,
+        specialization: dto.specialization?.trim() || undefined,
+        profilePhoto: dto.profilePhoto === null ? null : dto.profilePhoto?.trim() || undefined,
+        consultationFee: dto.consultationFee && dto.consultationFee > 0 ? dto.consultationFee : undefined,
+        ...(dto.clinicName?.trim() || dto.clinicAddress?.trim() || dto.clinicTimings?.trim()
+          ? {
+              clinic: {
+                upsert: {
+                  create: {
+                    name: dto.clinicName?.trim() || 'Private Practice',
+                    address: dto.clinicAddress?.trim() || 'Address pending',
+                    timings: dto.clinicTimings?.trim() || undefined,
+                  },
+                  update: {
+                    name: dto.clinicName?.trim() || undefined,
+                    address: dto.clinicAddress?.trim() || undefined,
+                    timings: dto.clinicTimings?.trim() || undefined,
+                  },
+                },
+              },
+            }
+          : {}),
+      },
+      include: { qualifications: true, clinic: true, verification: true, availabilities: true },
+    });
+    return this.formatDoctor(updated);
   }
 
   async generateAvailableSlots(doctorId: string, date: string) {

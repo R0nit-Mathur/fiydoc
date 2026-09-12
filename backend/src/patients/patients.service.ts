@@ -1,4 +1,4 @@
-import { Injectable, NotFoundException } from '@nestjs/common';
+import { BadRequestException, Injectable, NotFoundException } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
 import { UpdatePatientProfileDto } from './dto/update-patient-profile.dto';
 
@@ -41,7 +41,8 @@ export class PatientsService {
       throw new NotFoundException('Patient record not found.');
     }
 
-    return this.prisma.patient.update({
+    try {
+      return await this.prisma.patient.update({
       where: { id: existing.id },
       data: {
         fullName: dto.fullName !== undefined ? dto.fullName.trim() : undefined,
@@ -55,6 +56,12 @@ export class PatientsService {
         medications: dto.medications !== undefined ? dto.medications : undefined,
         emergencyContact: dto.emergencyContact !== undefined ? dto.emergencyContact : undefined,
         onboardingComplete: dto.onboardingComplete !== undefined ? dto.onboardingComplete : undefined,
+        user: dto.email !== undefined || dto.phone !== undefined ? {
+          update: {
+            email: dto.email?.trim().toLowerCase() || undefined,
+            phone: dto.phone?.trim() || undefined,
+          },
+        } : undefined,
       },
       include: {
         user: {
@@ -66,6 +73,12 @@ export class PatientsService {
           },
         },
       },
-    });
+      });
+    } catch (error: any) {
+      if (error?.code === 'P2002') {
+        throw new BadRequestException('That email address or phone number is already in use.');
+      }
+      throw error;
+    }
   }
 }

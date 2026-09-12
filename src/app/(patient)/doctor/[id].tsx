@@ -73,6 +73,7 @@ const generateDynamicDates = () => {
       month: `${monthName}, ${days[d.getDay()]}`,
       slots: isSunday ? 'On Leave' : `${5 + (i % 4)} slots left`,
       isLeave: isSunday,
+      isoDate: d.toISOString().slice(0, 10),
     });
   }
   return result;
@@ -140,6 +141,7 @@ export default function DoctorProfileScreen() {
         doctorSpecialty: doctor.specialty,
         slotTime: currentSlot.time,
         tokenNumber: currentSlot.token,
+        date: currentDate.isoDate,
         dateLabel: `${currentDate.day}, ${currentDate.date} ${currentDate.month}`,
         fee: doctor.consultationFee.toString(),
       },

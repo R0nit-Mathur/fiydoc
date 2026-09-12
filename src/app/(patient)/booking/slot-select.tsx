@@ -75,6 +75,7 @@ export default function MedicalIntakeScreen() {
     doctorSpecialty?: string;
     slotTime?: string;
     tokenNumber?: string;
+    date?: string;
     dateLabel?: string;
     fee?: string;
   }>();
@@ -212,7 +213,7 @@ export default function MedicalIntakeScreen() {
       rating: 4.9,
       experienceYears: 12,
     } as any);
-    useAppointmentStore.getState().setBookingSlot(slotTime, dateLabel);
+    useAppointmentStore.getState().setBookingSlot(params.date || new Date().toISOString().slice(0, 10), slotTime);
     if (selectedReason) {
       useAppointmentStore.getState().setBookingSymptoms([selectedReason]);
     }
@@ -224,6 +225,7 @@ export default function MedicalIntakeScreen() {
         doctorSpecialty: params.doctorSpecialty || 'Cardiologist',
         slotTime,
         tokenNumber,
+        date: params.date || new Date().toISOString().slice(0, 10),
         dateLabel,
         fee,
         reason: selectedReason,

@@ -22,6 +22,7 @@ export interface UserSession {
   city?: string;
   clinicName?: string;
   clinicAddress?: string;
+  clinicTimings?: string;
   registrationNumber?: string;
   licenseNumber?: string;
   specialty?: string;
@@ -36,6 +37,8 @@ export interface UserSession {
   chronicConditions?: string;
   emergencyContact?: string;
   consultationFee?: string | number;
+  upiId?: string;
+  settlementCycle?: 'weekly' | 'monthly';
 }
 
 export async function signOutAll(reason?: 'USER_ACTION' | 'SESSION_EXPIRED'): Promise<void> {
@@ -89,6 +92,7 @@ export const authService = {
         specialty: doc?.specialization || doc?.specialty,
         clinicName: doc?.clinic?.name,
         clinicAddress: doc?.clinic?.address,
+        clinicTimings: doc?.clinic?.timings,
         licenseNumber: doc?.verification?.registrationNumber,
         registrationNumber: doc?.verification?.registrationNumber,
         consultationFee: doc?.consultationFee,
@@ -160,6 +164,7 @@ export const authService = {
         specialty: doc?.specialization || extraDoctorFields?.specialization,
         clinicName: doc?.clinic?.name || extraDoctorFields?.clinicName,
         clinicAddress: doc?.clinic?.address || extraDoctorFields?.clinicAddress,
+        clinicTimings: doc?.clinic?.timings,
         licenseNumber: doc?.verification?.registrationNumber || extraDoctorFields?.licenseNumber,
         registrationNumber: doc?.verification?.registrationNumber || extraDoctorFields?.licenseNumber,
         consultationFee: doc?.consultationFee || extraDoctorFields?.consultationFee,

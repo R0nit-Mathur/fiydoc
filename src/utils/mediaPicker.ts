@@ -1,10 +1,26 @@
 import { Platform, Alert } from 'react-native';
+import * as FileSystem from 'expo-file-system/legacy';
 
 export interface PickedMedia {
   uri: string;
   name: string;
   size?: string;
   mimeType?: string;
+}
+
+async function persistPickedFile(uri: string, filename: string): Promise<string> {
+  if (Platform.OS === 'web' || !FileSystem.documentDirectory) return uri;
+
+  const sanitizedName = filename.replace(/[^a-zA-Z0-9._-]/g, '_');
+  const destination = `${FileSystem.documentDirectory}fiydoc-media/${Date.now()}-${sanitizedName}`;
+  try {
+    await FileSystem.makeDirectoryAsync(`${FileSystem.documentDirectory}fiydoc-media`, { intermediates: true });
+    await FileSystem.copyAsync({ from: uri, to: destination });
+    return destination;
+  } catch (error: any) {
+    console.warn('[mediaPicker] Could not persist picked file:', error?.message);
+    return uri;
+  }
 }
 
 /**
@@ -34,7 +50,7 @@ export async function pickImageFromGallery(): Promise<string | null> {
     });
 
     if (!result.canceled && result.assets && result.assets.length > 0) {
-      return result.assets[0].uri;
+      return persistPickedFile(result.assets[0].uri, `avatar.${result.assets[0].fileName?.split('.').pop() || 'jpg'}`);
     }
     return null;
   } catch (error: any) {
@@ -67,7 +83,7 @@ export async function pickClinicalDocument(): Promise<PickedMedia | null> {
       const sizeFormatted = sizeKb > 1024 ? `${(sizeKb / 1024).toFixed(1)} MB` : `${sizeKb} KB`;
 
       return {
-        uri: file.uri,
+        uri: await persistPickedFile(file.uri, file.name || 'Document.pdf'),
         name: file.name || 'Document.pdf',
         size: sizeFormatted,
         mimeType: file.mimeType || 'application/pdf',
