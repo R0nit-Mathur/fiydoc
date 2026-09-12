@@ -236,10 +236,6 @@ export default function DoctorPatientsScreen() {
               </Pressable>
             )}
           </View>
-
-          <Pressable style={[styles.tuneButton, { backgroundColor: colors.card, borderColor: colors.border }]}>
-            <SlidersHorizontal size={18} color={colors.text} />
-          </Pressable>
         </View>
 
         {/* 5. Quick Stats Row (2 minimalist cards) */}

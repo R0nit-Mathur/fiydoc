@@ -18,6 +18,7 @@ import {
   TextInput,
   Image,
   Pressable,
+  Alert,
 } from 'react-native';
 import { useRouter } from 'expo-router';
 import { SafeAreaView } from 'react-native-safe-area-context';
@@ -111,7 +112,6 @@ export default function PatientProfileScreen() {
   // Local device profile picture upload with safe fallback for standalone APKs
   const handlePickLocalImage = async () => {
     try {
-      // Dynamically attempt ImagePicker only if available in the installed runtime
       let ImagePickerModule: any = null;
       try {
         ImagePickerModule = require('expo-image-picker');
@@ -120,13 +120,21 @@ export default function PatientProfileScreen() {
       }
 
       if (!ImagePickerModule || !ImagePickerModule.launchImageLibraryAsync) {
-        alert('Photo upload requires native image picker permissions. Please pick an avatar preset or default initials.');
+        Alert.alert(
+          'Choose Profile Photo',
+          'Device gallery is available in full native builds. Please select one of the verified avatar presets or default initials below.',
+          [{ text: 'OK' }]
+        );
         return;
       }
 
       const permission = await ImagePickerModule.requestMediaLibraryPermissionsAsync();
       if (!permission.granted) {
-        alert('Permission to access photo library is required to upload profile photos.');
+        Alert.alert(
+          'Photo Permission Required',
+          'Please grant access to your photo library to select a custom profile picture.',
+          [{ text: 'OK' }]
+        );
         return;
       }
 
@@ -137,13 +145,17 @@ export default function PatientProfileScreen() {
         quality: 0.8,
       });
 
-      if (!res.canceled && res.assets && res.assets[0]) {
+      if (!res.canceled && res.assets && res.assets[0]?.uri) {
         const sourceUri = res.assets[0].uri;
         setEditAvatar(sourceUri);
       }
     } catch (err: any) {
       console.warn('[Profile] Image pick error:', err?.message);
-      alert('Unable to access device photos in current build. Please choose an avatar preset.');
+      Alert.alert(
+        'Photo Selection',
+        'Unable to access gallery in current session. You can choose any of the avatar presets or your initials.',
+        [{ text: 'OK' }]
+      );
     }
   };
 

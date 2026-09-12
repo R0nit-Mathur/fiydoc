@@ -238,17 +238,6 @@ export default function PatientHomeScreen() {
                 Search doctor, clinic, or specialty...
               </Text>
             </Pressable>
-            <Pressable
-              onPress={() => router.push('/(patient)/(tabs)/discovery')}
-              hitSlop={{ top: 6, bottom: 6, left: 6, right: 6 }}
-              style={({ pressed }) => [
-                styles.filterButton,
-                pressed && styles.filterButtonPressed,
-              ]}
-              accessibilityLabel="Filters"
-            >
-              <SlidersHorizontal size={17} color="#475569" />
-            </Pressable>
           </View>
         </View>
 

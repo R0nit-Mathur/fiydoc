@@ -58,6 +58,7 @@ import { signOutAll } from '@/services/authService';
 import { useAppTheme } from '@/hooks/useAppTheme';
 import { BorderRadius, Shadows, StitchColors, Palette, DEFAULT_DOCTOR_AVATAR } from '@/constants/theme';
 import { AppUpdateModal } from '@/components/ui/AppUpdateModal';
+import { Avatar } from '@/components/ui/Avatar';
 
 const DOCTOR_AVATAR = DEFAULT_DOCTOR_AVATAR;
 
@@ -105,6 +106,8 @@ export default function DoctorProfileScreen() {
   const [tempName, setTempName] = useState(docName);
   const [tempSpec, setTempSpec] = useState(docSpec);
   const [tempAvatar, setTempAvatar] = useState(docAvatar);
+  const [tempQual, setTempQual] = useState(user?.qualification || '');
+  const [tempClinic, setTempClinic] = useState(user?.clinicName || '');
 
   const handleSaveFee = () => {
     setOpdFee(tempFee);
@@ -128,6 +131,8 @@ export default function DoctorProfileScreen() {
       specialization: tempSpec,
       specialty: tempSpec,
       avatar: tempAvatar,
+      qualification: tempQual,
+      clinicName: tempClinic,
     });
     setShowEditProfileModal(false);
     if (Platform.OS !== 'web') Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
@@ -143,6 +148,9 @@ export default function DoctorProfileScreen() {
           onPress={() => {
             setTempName(docName);
             setTempSpec(docSpec);
+            setTempAvatar(docAvatar);
+            setTempQual(user?.qualification || '');
+            setTempClinic(user?.clinicName || '');
             setShowEditProfileModal(true);
           }}
           style={[styles.editIconBtn, { backgroundColor: colors.backgroundElement }]}
@@ -162,7 +170,7 @@ export default function DoctorProfileScreen() {
         >
           <View style={styles.identityTopRow}>
             <View style={styles.avatarWrap}>
-              <Image source={{ uri: docAvatar }} style={styles.avatarImg} />
+              <Avatar uri={docAvatar || null} name={docName || 'Doctor'} size="xl" />
               <View style={styles.verifiedMiniBadge}>
                 <ShieldCheck size={12} color="#FFFFFF" />
               </View>
@@ -563,6 +571,32 @@ export default function DoctorProfileScreen() {
               <View>
                 <Text style={[styles.inputLabel, { color: colors.textSecondary }]}>Profile Photo</Text>
                 <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap: 10, paddingVertical: 4 }}>
+                  {/* Initials Option (Default Name Initials) */}
+                  <Pressable
+                    onPress={() => setTempAvatar(null as any)}
+                    style={{
+                      width: 52,
+                      height: 52,
+                      borderRadius: 26,
+                      borderWidth: 2,
+                      borderColor: !tempAvatar ? StitchColors.primaryContainer : colors.border,
+                      overflow: 'hidden',
+                      backgroundColor: Palette.healthcareTeal,
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                      position: 'relative',
+                    }}
+                  >
+                    <Text style={{ color: '#fff', fontWeight: '800', fontSize: 16 }}>
+                      {tempName ? tempName.replace(/^(Dr\.)\s*/i, '').slice(0, 2).toUpperCase() : 'DR'}
+                    </Text>
+                    {!tempAvatar && (
+                      <View style={{ position: 'absolute', top: 2, right: 2, backgroundColor: StitchColors.primaryContainer, borderRadius: 10 }}>
+                        <CheckCircle2 size={14} color="#FFFFFF" />
+                      </View>
+                    )}
+                  </Pressable>
+
                   {AVATAR_PRESETS.map((preset, idx) => {
                     const isSelected = tempAvatar === preset;
                     return (
@@ -609,6 +643,28 @@ export default function DoctorProfileScreen() {
                 />
               </View>
 
+              <View>
+                <Text style={[styles.inputLabel, { color: colors.textSecondary }]}>Add New / Additional Qualification</Text>
+                <TextInput
+                  value={tempQual}
+                  onChangeText={setTempQual}
+                  placeholder="e.g. DNB (Cardiology), Fellowship in Electrophysiology"
+                  placeholderTextColor={colors.textMuted}
+                  style={[styles.upiTextInput, { color: colors.text, borderColor: colors.border }]}
+                />
+              </View>
+
+              <View>
+                <Text style={[styles.inputLabel, { color: colors.textSecondary }]}>Clinic / Chamber Name & Address</Text>
+                <TextInput
+                  value={tempClinic}
+                  onChangeText={setTempClinic}
+                  placeholder="e.g. Apollo Hospitals / City Care Clinic, Bangalore"
+                  placeholderTextColor={colors.textMuted}
+                  style={[styles.upiTextInput, { color: colors.text, borderColor: colors.border }]}
+                />
+              </View>
+
               {/* Locked Council Credentials Notice */}
               <View style={{ backgroundColor: colors.backgroundElement, borderRadius: BorderRadius.md, padding: 10, borderWidth: 1, borderColor: colors.border }}>
                 <Text style={{ fontSize: 11, fontWeight: '700', color: colors.textSecondary, marginBottom: 2 }}>
@@ -618,7 +674,7 @@ export default function DoctorProfileScreen() {
                   {user?.licenseNumber || 'MCI-48291 • Karnataka Medical Council'}
                 </Text>
                 <Text style={{ fontSize: 11, color: colors.textMuted, marginTop: 2 }}>
-                  Medical Council license numbers cannot be edited after initial onboarding.
+                  Medical Council license numbers cannot be edited after initial onboarding. You may add additional qualifications or update clinic details above.
                 </Text>
               </View>
             </ScrollView>

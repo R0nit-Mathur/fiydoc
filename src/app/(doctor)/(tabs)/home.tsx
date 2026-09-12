@@ -53,6 +53,7 @@ import { useAppTheme } from '@/hooks/useAppTheme';
 import { BorderRadius, Shadows, Spacing, StitchColors, Palette, DEFAULT_DOCTOR_AVATAR } from '@/constants/theme';
 import { AppUpdateModal } from '@/components/ui/AppUpdateModal';
 import { FiYLogo } from '@/components/ui/FiYLogo';
+import { Avatar } from '@/components/ui/Avatar';
 
 const DOCTOR_AVATAR = DEFAULT_DOCTOR_AVATAR;
 
@@ -122,7 +123,7 @@ export default function DoctorHomeScreen() {
             style={styles.avatarButton}
             accessibilityLabel="Profile"
           >
-            <Image source={{ uri: user?.avatar || DOCTOR_AVATAR }} style={styles.doctorAvatarImg} />
+            <Avatar uri={user?.avatar || null} name={user?.name || 'Doctor'} size="sm" />
           </Pressable>
         </View>
       </View>
@@ -365,7 +366,7 @@ export default function DoctorHomeScreen() {
 
             {/* Doctor Profile Banner */}
             <View style={[styles.drawerProfileBox, { backgroundColor: colors.backgroundElement, borderColor: colors.border }]}>
-              <Image source={{ uri: user?.avatar || DOCTOR_AVATAR }} style={styles.drawerAvatarImg} />
+              <Avatar uri={user?.avatar || null} name={user?.name || 'Doctor'} size="md" />
               <View style={{ flex: 1, marginLeft: 12 }}>
                 <Text style={[styles.drawerDoctorName, { color: colors.text }]}>{user?.name || 'Doctor'}</Text>
                 <Text style={[styles.drawerDoctorSpec, { color: StitchColors.primaryContainer }]}>FiYDoc Doctor Account</Text>

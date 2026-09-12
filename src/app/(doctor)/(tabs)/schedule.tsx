@@ -10,7 +10,7 @@
  * - Session Operations: Emergency Delay (+15m / +30m), Modify Capacity modal, Interactive Leave manager
  */
 
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import {
   View,
   Text,
@@ -128,6 +128,15 @@ export default function DoctorScheduleScreen() {
   const [selectedSession, setSelectedSession] = useState<'morning' | 'evening'>('morning');
   const [leaveDates, setLeaveDates] = useState<string[]>([]);
 
+  // Update dynamic week from live clock on mount
+  useEffect(() => {
+    const updated = generateDynamicWeek();
+    setWeekDays(updated);
+    if (updated[0]?.date) {
+      setSelectedDay(updated[0].date);
+    }
+  }, []);
+
   // Dynamic Session Slots
   const [morningSlots, setMorningSlots] = useState<ScheduleSlot[]>([
     {
@@ -202,16 +211,6 @@ export default function DoctorScheduleScreen() {
       meridiem: 'PM',
       reason: 'Open Evening Slot',
       status: 'available',
-    },
-    {
-      id: 'e4',
-      patientId: '',
-      patientName: 'Clinical Admin & Review',
-      token: '',
-      time: '06:00',
-      meridiem: 'PM',
-      reason: 'Reports review and chart sign-offs',
-      status: 'blocked',
     },
   ]);
 
@@ -531,7 +530,9 @@ export default function DoctorScheduleScreen() {
                 <View style={[styles.statusDot, { backgroundColor: StitchColors.secondaryContainer }]} />
               </View>
               <Text style={[styles.sessionTiming, { color: colors.textSecondary }]}>{morningStart} - {morningEnd}</Text>
-              <Text style={[styles.sessionStats, { color: StitchColors.secondaryContainer }]}>9 of 12 Filled</Text>
+              <Text style={[styles.sessionStats, { color: StitchColors.secondaryContainer }]}>
+                {morningSlots.filter((s) => s.status === 'booked').length} of {morningSlots.length} Booked
+              </Text>
             </Pressable>
 
             {/* Evening Session */}
@@ -557,7 +558,9 @@ export default function DoctorScheduleScreen() {
                 <View style={[styles.statusDot, { backgroundColor: colors.border }]} />
               </View>
               <Text style={[styles.sessionTiming, { color: colors.textSecondary }]}>{eveningStart} - {eveningEnd}</Text>
-              <Text style={[styles.sessionStats, { color: colors.textSecondary }]}>4 of 12 Filled</Text>
+              <Text style={[styles.sessionStats, { color: colors.textSecondary }]}>
+                {eveningSlots.filter((s) => s.status === 'booked').length} of {eveningSlots.length} Booked
+              </Text>
             </Pressable>
           </View>
 
@@ -603,7 +606,8 @@ export default function DoctorScheduleScreen() {
                 onPress={() => {
                   setLeaveDates(leaveDates.filter((d) => d !== selectedDay));
                   if (Platform.OS !== 'web') Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
-                  setDelayNotice(`Leave cancelled for ${selectedDay} Oct. OPD reopened.`);
+                  const currentMonthName = new Date().toLocaleDateString('en-IN', { month: 'short' });
+                  setDelayNotice(`Leave cancelled for ${selectedDay} ${currentMonthName}. OPD reopened.`);
                   setTimeout(() => setDelayNotice(null), 3000);
                 }}
                 style={[styles.resumeOpdBtn, { backgroundColor: StitchColors.primaryContainer }]}

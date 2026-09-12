@@ -1445,6 +1445,8 @@ export function DoctorRegistrationView({
                     <TextInput
                       value={consultationFee}
                       onChangeText={setConsultationFee}
+                      placeholder="800"
+                      placeholderTextColor="#737783"
                       style={[styles.textInput, { fontWeight: '700' }]}
                       keyboardType="number-pad"
                     />
@@ -1457,6 +1459,8 @@ export function DoctorRegistrationView({
                     <TextInput
                       value={slotDuration}
                       onChangeText={setSlotDuration}
+                      placeholder="15 Mins / Patient"
+                      placeholderTextColor="#737783"
                       style={styles.textInput}
                     />
                   </View>
