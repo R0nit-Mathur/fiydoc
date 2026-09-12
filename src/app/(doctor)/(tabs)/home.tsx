@@ -45,6 +45,7 @@ import {
   LogOut,
   ShieldCheck,
   Stethoscope,
+  RefreshCw,
 } from 'lucide-react-native';
 
 import { useAuthStore } from '@/store/useAuthStore';
@@ -52,6 +53,7 @@ import { useAppointmentStore } from '@/store/useAppointmentStore';
 import { signOutAll } from '@/services/authService';
 import { useAppTheme } from '@/hooks/useAppTheme';
 import { BorderRadius, Shadows, Spacing, StitchColors, Palette, DEFAULT_DOCTOR_AVATAR } from '@/constants/theme';
+import { AppUpdateModal } from '@/components/ui/AppUpdateModal';
 
 const DOCTOR_AVATAR = DEFAULT_DOCTOR_AVATAR;
 
@@ -63,6 +65,7 @@ export default function DoctorHomeScreen() {
   const { user, setRole } = useAuthStore();
   const { appointments } = useAppointmentStore();
   const [drawerOpen, setDrawerOpen] = useState(false);
+  const [updateModalVisible, setUpdateModalVisible] = useState(false);
 
   // Derive today's queue dynamically
   const today = new Date().toISOString().slice(0, 10);
@@ -424,6 +427,17 @@ export default function DoctorHomeScreen() {
                 <ShieldCheck size={18} color={colors.text} />
                 <Text style={[styles.drawerMenuLabel, { color: colors.text }]}>Payout & Credentials</Text>
               </Pressable>
+
+              <Pressable
+                onPress={() => {
+                  setDrawerOpen(false);
+                  setUpdateModalVisible(true);
+                }}
+                style={styles.drawerMenuItem}
+              >
+                <RefreshCw size={18} color={StitchColors.primaryContainer} />
+                <Text style={[styles.drawerMenuLabel, { color: colors.text }]}>App Updates (OTA)</Text>
+              </Pressable>
             </View>
 
             {/* Log Out */}
@@ -447,6 +461,12 @@ export default function DoctorHomeScreen() {
           </View>
         </View>
       </Modal>
+
+      {/* App Updates (OTA) Modal */}
+      <AppUpdateModal
+        visible={updateModalVisible}
+        onClose={() => setUpdateModalVisible(false)}
+      />
     </SafeAreaView>
   );
 }

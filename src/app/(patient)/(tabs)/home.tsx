@@ -68,11 +68,13 @@ import {
   CreditCard,
   PhoneCall,
   ShieldCheck,
+  RefreshCw,
 } from 'lucide-react-native';
 
 import { SPECIALTIES, ALL_SPECIALTIES } from '@/constants/specialties';
 import { AllSpecialtiesModal } from '@/components/patient/AllSpecialtiesModal';
 import { FiYLogo } from '@/components/ui/FiYLogo';
+import { AppUpdateModal } from '@/components/ui/AppUpdateModal';
 
 const DOCTOR_AVATAR =
   'https://images.unsplash.com/photo-1594824813682-14c1e405a76e?w=600&auto=format&fit=crop&q=80';
@@ -86,6 +88,7 @@ export default function PatientHomeScreen() {
   const [locationModalVisible, setLocationModalVisible] = useState(false);
   const [allSpecialtiesModalVisible, setAllSpecialtiesModalVisible] = useState(false);
   const [guideModalVisible, setGuideModalVisible] = useState(false);
+  const [updateModalVisible, setUpdateModalVisible] = useState(false);
 
   const { formattedAddress, city, area, permissionStatus } = useLocationStore();
   const { data: doctors = [] } = useDoctorsQuery();
@@ -615,6 +618,22 @@ export default function PatientHomeScreen() {
                 </View>
                 <Text style={styles.drawerMenuText}>Payment History</Text>
               </Pressable>
+
+              <Pressable
+                onPress={() => {
+                  setDrawerOpen(false);
+                  setUpdateModalVisible(true);
+                }}
+                style={({ pressed }) => [
+                  styles.drawerMenuItem,
+                  pressed && { backgroundColor: '#f8fafc' },
+                ]}
+              >
+                <View style={[styles.drawerMenuIcon, { backgroundColor: '#F0FDFA' }]}>
+                  <RefreshCw size={18} color="#0d9488" />
+                </View>
+                <Text style={styles.drawerMenuText}>App Updates (OTA)</Text>
+              </Pressable>
             </View>
 
             {/* Drawer Footer with Log Out */}
@@ -659,6 +678,12 @@ export default function PatientHomeScreen() {
       <WelcomeGuideModal
         visible={guideModalVisible}
         onClose={() => setGuideModalVisible(false)}
+      />
+
+      {/* App Updates (OTA) Modal */}
+      <AppUpdateModal
+        visible={updateModalVisible}
+        onClose={() => setUpdateModalVisible(false)}
       />
     </SafeAreaView>
   );

@@ -24,8 +24,6 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import Animated, { FadeIn, FadeInDown } from 'react-native-reanimated';
 import { useQueryClient } from '@tanstack/react-query';
 import * as Haptics from 'expo-haptics';
-import * as ImagePicker from 'expo-image-picker';
-import * as FileSystem from 'expo-file-system/legacy';
 import Svg, { Circle } from 'react-native-svg';
 import { useAuthStore } from '@/store/useAuthStore';
 import { usePatientProfileQuery } from '@/hooks/queries/usePatientQuery';
@@ -110,17 +108,30 @@ export default function PatientProfileScreen() {
     return formatted;
   };
 
-  // Local device profile picture upload via expo-image-picker
+  // Local device profile picture upload with safe fallback for standalone APKs
   const handlePickLocalImage = async () => {
     try {
-      const permission = await ImagePicker.requestMediaLibraryPermissionsAsync();
+      // Dynamically attempt ImagePicker only if available in the installed runtime
+      let ImagePickerModule: any = null;
+      try {
+        ImagePickerModule = require('expo-image-picker');
+      } catch {
+        ImagePickerModule = null;
+      }
+
+      if (!ImagePickerModule || !ImagePickerModule.launchImageLibraryAsync) {
+        alert('Photo upload requires native image picker permissions. Please pick an avatar preset or default initials.');
+        return;
+      }
+
+      const permission = await ImagePickerModule.requestMediaLibraryPermissionsAsync();
       if (!permission.granted) {
         alert('Permission to access photo library is required to upload profile photos.');
         return;
       }
 
-      const res = await ImagePicker.launchImageLibraryAsync({
-        mediaTypes: ImagePicker.MediaTypeOptions.Images,
+      const res = await ImagePickerModule.launchImageLibraryAsync({
+        mediaTypes: ImagePickerModule.MediaTypeOptions?.Images || 'Images',
         allowsEditing: true,
         aspect: [1, 1],
         quality: 0.8,
@@ -128,23 +139,11 @@ export default function PatientProfileScreen() {
 
       if (!res.canceled && res.assets && res.assets[0]) {
         const sourceUri = res.assets[0].uri;
-        // Copy to device's permanent local documents directory
-        const fileName = `patient_avatar_${Date.now()}.jpg`;
-        const targetUri = `${FileSystem.documentDirectory || ''}${fileName}`;
-
-        try {
-          await FileSystem.copyAsync({
-            from: sourceUri,
-            to: targetUri,
-          });
-          setEditAvatar(targetUri);
-        } catch {
-          // Fallback to direct cache URI if file copy fails
-          setEditAvatar(sourceUri);
-        }
+        setEditAvatar(sourceUri);
       }
     } catch (err: any) {
       console.warn('[Profile] Image pick error:', err?.message);
+      alert('Unable to access device photos in current build. Please choose an avatar preset.');
     }
   };
 
@@ -520,7 +519,13 @@ export default function PatientProfileScreen() {
         onClose={() => setEditModalVisible(false)}
         title="Edit Profile"
       >
-        <ScrollView style={{ maxHeight: 520 }} showsVerticalScrollIndicator={false}>
+        <ScrollView
+          style={{ maxHeight: Platform.OS === 'android' ? 420 : 520 }}
+          contentContainerStyle={{ paddingBottom: 24 }}
+          keyboardShouldPersistTaps="handled"
+          keyboardDismissMode="on-drag"
+          showsVerticalScrollIndicator={false}
+        >
           <View style={styles.modalForm}>
             <Text style={[styles.modalFieldLabel, { color: colors.textSecondary }]}>Profile Photo</Text>
             <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.avatarPickerRow}>

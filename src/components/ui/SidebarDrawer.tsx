@@ -22,6 +22,7 @@ import { Avatar } from '@/components/ui/Avatar';
 import { Badge } from '@/components/ui/Badge';
 import { FiYLogo } from '@/components/ui/FiYLogo';
 import { ConfirmationDialog } from '@/components/ui/ConfirmationDialog';
+import { AppUpdateModal } from '@/components/ui/AppUpdateModal';
 import { Palette, Typography, BorderRadius, Shadows, Spacing } from '@/constants/theme';
 import {
   X,
@@ -48,6 +49,7 @@ export function SidebarDrawer({ visible, onClose, onOpenLocationPicker }: Sideba
   const { user, logout } = useAuthStore();
   const { city, formattedAddress } = useLocationStore();
   const [logoutConfirmVisible, setLogoutConfirmVisible] = useState(false);
+  const [updateModalVisible, setUpdateModalVisible] = useState(false);
 
   // Animation values: slide from right (drawerWidth -> 0) & backdrop opacity (0 -> 1)
   const slideAnim = useRef(new Animated.Value(drawerWidth)).current;
@@ -264,6 +266,24 @@ export function SidebarDrawer({ visible, onClose, onOpenLocationPicker }: Sideba
               </View>
               <ChevronRight size={16} color={Palette.textMuted} />
             </TouchableOpacity>
+
+            {/* App Updates (OTA) */}
+            <TouchableOpacity
+              onPress={() => {
+                setUpdateModalVisible(true);
+              }}
+              style={styles.menuItem}
+              activeOpacity={0.7}
+            >
+              <View style={[styles.menuIconBox, { backgroundColor: '#F0FDFA' }]}>
+                <RefreshCw size={18} color={Palette.healthcareTeal} />
+              </View>
+              <View style={{ flex: 1, minWidth: 0 }}>
+                <Text style={styles.menuLabel}>App Updates (OTA)</Text>
+                <Text style={styles.menuSub}>Check & install live updates</Text>
+              </View>
+              <ChevronRight size={16} color={Palette.textMuted} />
+            </TouchableOpacity>
           </ScrollView>
 
           {/* Drawer Bottom Bar with Sign Out */}
@@ -291,6 +311,12 @@ export function SidebarDrawer({ visible, onClose, onOpenLocationPicker }: Sideba
         iconVariant="warning"
         onConfirm={handleConfirmLogout}
         onCancel={() => setLogoutConfirmVisible(false)}
+      />
+
+      {/* App Updates Modal */}
+      <AppUpdateModal
+        visible={updateModalVisible}
+        onClose={() => setUpdateModalVisible(false)}
       />
     </Modal>
   );

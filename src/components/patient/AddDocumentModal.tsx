@@ -1,6 +1,5 @@
 import React, { useState } from 'react';
-import { View, Text, ActivityIndicator, StyleSheet, Pressable, Platform } from 'react-native';
-import * as DocumentPicker from 'expo-document-picker';
+import { View, Text, ActivityIndicator, StyleSheet, Pressable, Platform, Alert } from 'react-native';
 import { Modal } from '@/components/ui/Modal';
 import { Input } from '@/components/ui/Input';
 import { Button } from '@/components/ui/Button';
@@ -31,7 +30,19 @@ export function AddDocumentModal({ visible, onClose }: AddDocumentModalProps) {
 
   const handlePickFile = async () => {
     try {
-      const res = await DocumentPicker.getDocumentAsync({
+      let DocumentPickerModule: any = null;
+      try {
+        DocumentPickerModule = require('expo-document-picker');
+      } catch {
+        DocumentPickerModule = null;
+      }
+
+      if (!DocumentPickerModule || !DocumentPickerModule.getDocumentAsync) {
+        Alert.alert('File Selector', 'Direct document picking is supported on updated builds. You can manually enter test titles.');
+        return;
+      }
+
+      const res = await DocumentPickerModule.getDocumentAsync({
         type: ['application/pdf', 'image/*'],
         copyToCacheDirectory: true,
       });

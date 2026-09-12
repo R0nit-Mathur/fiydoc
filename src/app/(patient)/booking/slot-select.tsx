@@ -46,7 +46,6 @@ import {
   Check,
 } from 'lucide-react-native';
 import { StitchColors, DEFAULT_DOCTOR_AVATAR } from '@/constants/theme';
-import * as DocumentPicker from 'expo-document-picker';
 import { useAppointmentStore } from '@/store/useAppointmentStore';
 import { useAuthStore } from '@/store/useAuthStore';
 
@@ -114,7 +113,19 @@ export default function MedicalIntakeScreen() {
 
   const handlePickDocument = async () => {
     try {
-      const res = await DocumentPicker.getDocumentAsync({
+      let DocumentPickerModule: any = null;
+      try {
+        DocumentPickerModule = require('expo-document-picker');
+      } catch {
+        DocumentPickerModule = null;
+      }
+
+      if (!DocumentPickerModule || !DocumentPickerModule.getDocumentAsync) {
+        alert('Document upload is supported via camera or files on updated builds.');
+        return;
+      }
+
+      const res = await DocumentPickerModule.getDocumentAsync({
         type: ['application/pdf', 'image/*'],
         copyToCacheDirectory: true,
       });
