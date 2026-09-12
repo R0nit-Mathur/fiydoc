@@ -6,6 +6,13 @@ import { useAppointmentStore } from './useAppointmentStore';
 import { useHealthStore } from './useHealthStore';
 import { useNotificationStore } from './useNotificationStore';
 
+export interface FamilyMember {
+  id: string;
+  name: string;
+  relation: string;
+  phone?: string;
+}
+
 interface AuthState {
   user: UserSession | null;
   role: 'patient' | 'doctor' | 'admin';
@@ -13,6 +20,7 @@ interface AuthState {
   onboardingCompleted: boolean;
   verificationStatus: 'registered' | 'pending' | 'verified' | 'rejected' | 'info_required';
   hasHydrated: boolean;
+  familyMembers: FamilyMember[];
 
   // Actions
   setSession: (session: UserSession) => void;
@@ -21,6 +29,8 @@ interface AuthState {
   setVerificationStatus: (status: 'registered' | 'pending' | 'verified' | 'rejected' | 'info_required') => void;
   setHasHydrated: (hydrated: boolean) => void;
   updateUser: (fields: Partial<UserSession>) => void;
+  addFamilyMember: (member: Omit<FamilyMember, 'id'>) => FamilyMember;
+  removeFamilyMember: (id: string) => void;
   logout: () => void;
   signOutAll: (reason?: 'USER_ACTION' | 'SESSION_EXPIRED') => Promise<void>;
 }
@@ -34,6 +44,34 @@ export const useAuthStore = create<AuthState>()(
       onboardingCompleted: false,
       verificationStatus: 'registered',
       hasHydrated: false,
+      familyMembers: [],
+
+      addFamilyMember: (member) => {
+        const newMember: FamilyMember = {
+          ...member,
+          id: `fam_${Date.now()}`,
+        };
+        set((state) => {
+          // Avoid duplicate name
+          const existing = state.familyMembers.find(
+            (f) => f.name.toLowerCase().trim() === member.name.toLowerCase().trim()
+          );
+          if (existing) {
+            return {
+              familyMembers: state.familyMembers.map((f) =>
+                f.id === existing.id ? { ...existing, ...member } : f
+              ),
+            };
+          }
+          return { familyMembers: [...state.familyMembers, newMember] };
+        });
+        return newMember;
+      },
+
+      removeFamilyMember: (id) =>
+        set((state) => ({
+          familyMembers: state.familyMembers.filter((f) => f.id !== id),
+        })),
 
       setSession: (session) =>
         set({

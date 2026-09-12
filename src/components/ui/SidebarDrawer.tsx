@@ -27,7 +27,6 @@ import {
   X,
   FileText,
   ShieldCheck,
-  PhoneCall,
   MapPin,
   RefreshCw,
   LogOut,
@@ -159,16 +158,18 @@ export function SidebarDrawer({ visible, onClose, onOpenLocationPicker }: Sideba
             },
           ]}
         >
-          {/* Drawer Top Header with close button on right */}
+          {/* Drawer Top Header with centered logo and close button on right */}
           <View style={styles.topHeader}>
-            <FiYLogo size="md" />
+            <View style={{ flex: 1, alignItems: 'center', justifyContent: 'center' }}>
+              <FiYLogo size="sm" />
+            </View>
             <TouchableOpacity
               onPress={handleClose}
               activeOpacity={0.7}
               style={styles.closeBtn}
               hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
             >
-              <X size={20} color={Palette.textPrimary} />
+              <X size={18} color={Palette.textPrimary} />
             </TouchableOpacity>
           </View>
 
@@ -260,33 +261,6 @@ export function SidebarDrawer({ visible, onClose, onOpenLocationPicker }: Sideba
               <View style={{ flex: 1, minWidth: 0 }}>
                 <Text style={styles.menuLabel}>Personal Profile</Text>
                 <Text style={styles.menuSub}>Account details & settings</Text>
-              </View>
-              <ChevronRight size={16} color={Palette.textMuted} />
-            </TouchableOpacity>
-
-            {/* Medical Emergency Helpline */}
-            <TouchableOpacity
-              onPress={() => {
-                handleClose();
-                Alert.alert(
-                  'Emergency Helpline',
-                  'Which service would you like to call?',
-                  [
-                    { text: 'Ambulance (108)', onPress: () => Linking.openURL('tel:108') },
-                    { text: 'National Emergency (112)', onPress: () => Linking.openURL('tel:112') },
-                    { text: 'Cancel', style: 'cancel' }
-                  ]
-                );
-              }}
-              style={styles.menuItem}
-              activeOpacity={0.7}
-            >
-              <View style={[styles.menuIconBox, { backgroundColor: Palette.dangerBg }]}>
-                <PhoneCall size={18} color={Palette.danger} />
-              </View>
-              <View style={{ flex: 1, minWidth: 0 }}>
-                <Text style={styles.menuLabel}>Emergency Helpline</Text>
-                <Text style={styles.menuSub}>Ambulance 108 • National 112</Text>
               </View>
               <ChevronRight size={16} color={Palette.textMuted} />
             </TouchableOpacity>

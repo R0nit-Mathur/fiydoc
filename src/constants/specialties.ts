@@ -43,6 +43,14 @@ export const ALL_SPECIALTIES: SpecialtyConfig[] = [
     lightBg: '#EFF6FF',
   },
   {
+    id: 'general_medicine',
+    name: 'General Medicine',
+    desc: 'Primary Care, Fever, Infection & Health',
+    icon: Stethoscope,
+    color: '#2563eb',
+    lightBg: '#EFF6FF',
+  },
+  {
     id: 'cardiologist',
     name: 'Cardiologist',
     desc: 'Heart Health, BP & ECG Checks',

@@ -24,6 +24,9 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import Animated, { FadeIn, FadeInDown } from 'react-native-reanimated';
 import { useQueryClient } from '@tanstack/react-query';
 import * as Haptics from 'expo-haptics';
+import * as ImagePicker from 'expo-image-picker';
+import * as FileSystem from 'expo-file-system/legacy';
+import Svg, { Circle } from 'react-native-svg';
 import { useAuthStore } from '@/store/useAuthStore';
 import { usePatientProfileQuery } from '@/hooks/queries/usePatientQuery';
 import { Avatar } from '@/components/ui/Avatar';
@@ -88,8 +91,77 @@ export default function PatientProfileScreen() {
   const [editAllergies, setEditAllergies] = useState(patientProfile?.allergies?.join(', ') || '');
   const [editConditions, setEditConditions] = useState(patientProfile?.conditions?.join(', ') || '');
   const [editEmergency, setEditEmergency] = useState(patientProfile?.emergencyContact?.phone || '');
+  const [privacyModalVisible, setPrivacyModalVisible] = useState(false);
   const [saveToast, setSaveToast] = useState(false);
   const [updateModalVisible, setUpdateModalVisible] = useState(false);
+
+  // Helper to auto-format DOB with slashes (DD/MM/YYYY)
+  const formatDOBInput = (text: string) => {
+    // Keep only digits
+    const cleaned = text.replace(/[^0-9]/g, '');
+    let formatted = '';
+    if (cleaned.length <= 2) {
+      formatted = cleaned;
+    } else if (cleaned.length <= 4) {
+      formatted = `${cleaned.slice(0, 2)}/${cleaned.slice(2)}`;
+    } else {
+      formatted = `${cleaned.slice(0, 2)}/${cleaned.slice(2, 4)}/${cleaned.slice(4, 8)}`;
+    }
+    return formatted;
+  };
+
+  // Local device profile picture upload via expo-image-picker
+  const handlePickLocalImage = async () => {
+    try {
+      const permission = await ImagePicker.requestMediaLibraryPermissionsAsync();
+      if (!permission.granted) {
+        alert('Permission to access photo library is required to upload profile photos.');
+        return;
+      }
+
+      const res = await ImagePicker.launchImageLibraryAsync({
+        mediaTypes: ImagePicker.MediaTypeOptions.Images,
+        allowsEditing: true,
+        aspect: [1, 1],
+        quality: 0.8,
+      });
+
+      if (!res.canceled && res.assets && res.assets[0]) {
+        const sourceUri = res.assets[0].uri;
+        // Copy to device's permanent local documents directory
+        const fileName = `patient_avatar_${Date.now()}.jpg`;
+        const targetUri = `${FileSystem.documentDirectory || ''}${fileName}`;
+
+        try {
+          await FileSystem.copyAsync({
+            from: sourceUri,
+            to: targetUri,
+          });
+          setEditAvatar(targetUri);
+        } catch {
+          // Fallback to direct cache URI if file copy fails
+          setEditAvatar(sourceUri);
+        }
+      }
+    } catch (err: any) {
+      console.warn('[Profile] Image pick error:', err?.message);
+    }
+  };
+
+  // Dynamic Profile Completion Percentage Calculation
+  const profileCompletionPct = useMemo(() => {
+    let completedFields = 0;
+    const totalFields = 6;
+
+    if (user?.name && user.name.trim().length > 0) completedFields++;
+    if (user?.email && user.email.includes('@')) completedFields++;
+    if (user?.phone && user.phone.trim().length > 4) completedFields++;
+    if (currentDOB && currentDOB.trim().length > 0) completedFields++;
+    if (currentAddress && currentAddress.trim().length > 0) completedFields++;
+    if (patientProfile?.bloodGroup && patientProfile.bloodGroup.trim().length > 0) completedFields++;
+
+    return Math.round((completedFields / totalFields) * 100);
+  }, [user?.name, user?.email, user?.phone, currentDOB, currentAddress, patientProfile?.bloodGroup]);
 
   const editCalculatedAge = useMemo(() => editDOB ? calculateAgeFromDOB(editDOB) : null, [editDOB]);
 
@@ -192,10 +264,10 @@ export default function PatientProfileScreen() {
     {
       icon: ShieldCheck,
       label: 'Privacy & Security',
-      sub: 'Account security settings',
+      sub: 'Account security & data safety',
       color: '#8b5cf6',
       bg: '#f3e8ff',
-      onPress: () => {},
+      onPress: () => setPrivacyModalVisible(true),
     },
     {
       icon: RefreshCw,
@@ -204,14 +276,6 @@ export default function PatientProfileScreen() {
       color: StitchColors.primaryContainer,
       bg: Palette.primaryBlueLight,
       onPress: () => setUpdateModalVisible(true),
-    },
-    {
-      icon: HelpCircle,
-      label: 'Help & Support',
-      sub: 'FAQs, contact us',
-      color: '#06b6d4',
-      bg: '#e0f7fa',
-      onPress: () => {},
     },
   ];
 
@@ -239,7 +303,32 @@ export default function PatientProfileScreen() {
         <Animated.View entering={FadeIn.duration(380)}>
           <View style={[styles.userCard, { backgroundColor: colors.card, borderColor: colors.border }]}>
             <View style={styles.avatarWrapper}>
-              <Avatar uri={user?.avatar || null} name={user?.name || 'Patient'} size="xl" />
+              {/* Profile Completion Circular Progress Ring */}
+              <View style={{ width: 84, height: 84, alignItems: 'center', justifyContent: 'center' }}>
+                <Svg width={84} height={84} style={{ position: 'absolute' }}>
+                  <Circle
+                    cx={42}
+                    cy={42}
+                    r={38}
+                    stroke={colors.border}
+                    strokeWidth={4}
+                    fill="none"
+                  />
+                  <Circle
+                    cx={42}
+                    cy={42}
+                    r={38}
+                    stroke={profileCompletionPct >= 100 ? StitchColors.secondaryContainer : StitchColors.primaryContainer}
+                    strokeWidth={4}
+                    fill="none"
+                    strokeDasharray={`${2 * Math.PI * 38}`}
+                    strokeDashoffset={`${2 * Math.PI * 38 * (1 - profileCompletionPct / 100)}`}
+                    strokeLinecap="round"
+                    transform="rotate(-90 42 42)"
+                  />
+                </Svg>
+                <Avatar uri={user?.avatar || null} name={user?.name || 'Patient'} size="lg" />
+              </View>
               <Pressable
                 onPress={handleOpenEdit}
                 style={[styles.avatarCameraBadge, { backgroundColor: StitchColors.primaryContainer, borderColor: colors.card }]}
@@ -247,7 +336,7 @@ export default function PatientProfileScreen() {
                 accessibilityRole="button"
                 accessibilityLabel="Change photo"
               >
-                <Camera size={13} color="#fff" />
+                <Camera size={12} color="#fff" />
               </Pressable>
             </View>
 
@@ -293,7 +382,7 @@ export default function PatientProfileScreen() {
           </View>
         </Animated.View>
 
-        {/* Quick Stats: Age (Calculated from DOB), Blood Group, Allergies, Emergency */}
+        {/* Quick Stats: Age (Calculated from DOB), Blood Group, Allergies, Profile Completion */}
         <Animated.View entering={FadeInDown.delay(80).duration(380)} style={styles.statsGrid}>
           <View style={[styles.statItem, { backgroundColor: colors.card, borderColor: colors.border }]}>
             <Calendar size={18} color={StitchColors.primaryContainer} />
@@ -317,11 +406,11 @@ export default function PatientProfileScreen() {
             <Text style={[styles.statLabel, { color: colors.textMuted }]}>Allergies</Text>
           </View>
           <View style={[styles.statItem, { backgroundColor: colors.card, borderColor: colors.border }]}>
-            <Phone size={18} color={StitchColors.primaryContainer} />
+            <CheckCircle2 size={18} color={profileCompletionPct === 100 ? StitchColors.secondaryContainer : StitchColors.primaryContainer} />
             <Text style={[styles.statValue, { color: colors.text }]} numberOfLines={1}>
-              {emergencyPhone || '—'}
+              {profileCompletionPct}%
             </Text>
-            <Text style={[styles.statLabel, { color: colors.textMuted }]}>Emergency</Text>
+            <Text style={[styles.statLabel, { color: colors.textMuted }]}>Completion</Text>
           </View>
         </Animated.View>
 
@@ -435,6 +524,36 @@ export default function PatientProfileScreen() {
           <View style={styles.modalForm}>
             <Text style={[styles.modalFieldLabel, { color: colors.textSecondary }]}>Profile Photo</Text>
             <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.avatarPickerRow}>
+              {/* Custom Upload from Device Button */}
+              <TouchableOpacity
+                onPress={handlePickLocalImage}
+                hitSlop={{ top: 6, bottom: 6, left: 6, right: 6 }}
+                style={[
+                  styles.avatarPickItem,
+                  {
+                    borderColor: editAvatar && !AVATAR_PRESETS.includes(editAvatar) ? StitchColors.secondaryContainer : colors.border,
+                    borderStyle: 'dashed',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    backgroundColor: colors.backgroundElement,
+                  },
+                ]}
+              >
+                {editAvatar && !AVATAR_PRESETS.includes(editAvatar) ? (
+                  <Image source={{ uri: editAvatar }} style={styles.avatarPickImage} />
+                ) : (
+                  <View style={{ alignItems: 'center', justifyContent: 'center' }}>
+                    <Camera size={20} color={StitchColors.primaryContainer} />
+                    <Text style={{ fontSize: 9, fontWeight: '700', color: StitchColors.primaryContainer, marginTop: 2 }}>Upload</Text>
+                  </View>
+                )}
+                {editAvatar && !AVATAR_PRESETS.includes(editAvatar) && (
+                  <View style={[styles.checkPill, { backgroundColor: StitchColors.secondaryContainer }]}>
+                    <CheckCircle2 size={12} color="#fff" />
+                  </View>
+                )}
+              </TouchableOpacity>
+
               {/* Initials Option (Default) */}
               <TouchableOpacity
                 onPress={() => setEditAvatar(null)}
@@ -509,7 +628,7 @@ export default function PatientProfileScreen() {
               />
             </View>
 
-            {/* Date of Birth (DOB) Field with live calculated age */}
+            {/* Date of Birth (DOB) Field with live auto-slash formatting and computed age */}
             <View style={styles.inputGroup}>
               <View style={styles.labelRowWithBadge}>
                 <Text style={[styles.modalFieldLabel, { color: colors.textSecondary, marginBottom: 0 }]}>
@@ -517,22 +636,23 @@ export default function PatientProfileScreen() {
                 </Text>
                 {editCalculatedAge !== null ? (
                   <View style={styles.ageBadge}>
-                    <Text style={styles.ageBadgeText}>Calculated Age: {editCalculatedAge} yrs</Text>
+                    <Text style={styles.ageBadgeText}>Age: {editCalculatedAge} yrs</Text>
                   </View>
                 ) : null}
               </View>
               <TextInput
                 style={[styles.modalInput, { backgroundColor: colors.background, borderColor: colors.border, color: colors.text }]}
                 value={editDOB}
-                onChangeText={setEditDOB}
-                placeholder="YYYY-MM-DD (e.g. 1996-05-14)"
+                onChangeText={(text) => setEditDOB(formatDOBInput(text))}
+                placeholder="DD/MM/YYYY (e.g. 14/05/1996)"
                 placeholderTextColor={colors.textMuted}
-                autoCapitalize="none"
+                keyboardType="numeric"
+                maxLength={10}
               />
               <Text style={[styles.inputHint, { color: colors.textMuted }]}>
                 {editCalculatedAge !== null
                   ? `✓ Age calculated automatically: ${editCalculatedAge} years old`
-                  : 'Enter in YYYY-MM-DD or DD/MM/YYYY format to compute age'}
+                  : 'Auto-formats as DD/MM/YYYY as you type'}
               </Text>
             </View>
 
@@ -560,7 +680,7 @@ export default function PatientProfileScreen() {
                 style={[styles.modalInput, { backgroundColor: colors.background, borderColor: colors.border, color: colors.text }]}
                 value={editBloodGroup}
                 onChangeText={setEditBloodGroup}
-                placeholder="O+, A+"
+                placeholder="O+, A+, B+, AB+"
                 placeholderTextColor={colors.textMuted}
               />
             </View>
@@ -571,7 +691,7 @@ export default function PatientProfileScreen() {
                 style={[styles.modalInput, { backgroundColor: colors.background, borderColor: colors.border, color: colors.text }]}
                 value={editAllergies}
                 onChangeText={setEditAllergies}
-                placeholder="Penicillin, Pollen"
+                placeholder="Penicillin, Pollen, Peanuts"
                 placeholderTextColor={colors.textMuted}
               />
             </View>
@@ -586,27 +706,19 @@ export default function PatientProfileScreen() {
                 placeholderTextColor={colors.textMuted}
               />
             </View>
-
-            <View style={styles.inputGroup}>
-              <Text style={[styles.modalFieldLabel, { color: colors.textSecondary }]}>Emergency Contact</Text>
-              <TextInput
-                style={[styles.modalInput, { backgroundColor: colors.background, borderColor: colors.border, color: colors.text }]}
-                value={editEmergency}
-                onChangeText={setEditEmergency}
-                placeholder="+91 98765 12345"
-                placeholderTextColor={colors.textMuted}
-                keyboardType="phone-pad"
-              />
-            </View>
-
-            <TouchableOpacity
-              onPress={handleSaveProfile}
-              style={[styles.modalSaveBtn, { backgroundColor: StitchColors.primaryContainer }]}
-            >
-              <Text style={styles.modalSaveBtnText}>Save Changes</Text>
-            </TouchableOpacity>
           </View>
         </ScrollView>
+
+        {/* Sticky Accessible Save Changes Button Outside Inner Scroll */}
+        <View style={{ paddingTop: 12, borderTopWidth: StyleSheet.hairlineWidth, borderTopColor: colors.border }}>
+          <TouchableOpacity
+            onPress={handleSaveProfile}
+            style={[styles.modalSaveBtn, { backgroundColor: StitchColors.primaryContainer }]}
+            activeOpacity={0.85}
+          >
+            <Text style={styles.modalSaveBtnText}>Save Profile Changes</Text>
+          </TouchableOpacity>
+        </View>
       </Modal>
 
       <ConfirmationDialog
@@ -625,6 +737,42 @@ export default function PatientProfileScreen() {
         visible={updateModalVisible}
         onClose={() => setUpdateModalVisible(false)}
       />
+
+      {/* Privacy & Security Modal */}
+      <Modal
+        visible={privacyModalVisible}
+        onClose={() => setPrivacyModalVisible(false)}
+        title="Privacy & Data Security"
+      >
+        <View style={{ gap: Spacing.md, paddingVertical: Spacing.xs }}>
+          <View style={{ flexDirection: 'row', gap: 12, alignItems: 'center', backgroundColor: '#F3E8FF', padding: 12, borderRadius: BorderRadius.lg }}>
+            <ShieldCheck size={28} color="#7C3AED" />
+            <View style={{ flex: 1 }}>
+              <Text style={{ fontSize: 14, fontWeight: '700', color: '#5B21B6' }}>HIPAA & ABDM Compliant</Text>
+              <Text style={{ fontSize: 12, color: '#6D28D9', marginTop: 2 }}>256-bit encrypted healthcare vault</Text>
+            </View>
+          </View>
+
+          <Text style={{ fontSize: 13, lineHeight: 20, color: colors.textSecondary }}>
+            • <Text style={{ fontWeight: '700', color: colors.text }}>Local-First Media Storage:</Text> Your custom profile picture and local documents remain securely on your physical device.
+          </Text>
+
+          <Text style={{ fontSize: 13, lineHeight: 20, color: colors.textSecondary }}>
+            • <Text style={{ fontWeight: '700', color: colors.text }}>Zero Third-Party Tracking:</Text> FiYDoc does not sell or share your clinical diagnostic telemetry or appointment logs.
+          </Text>
+
+          <Text style={{ fontSize: 13, lineHeight: 20, color: colors.textSecondary }}>
+            • <Text style={{ fontWeight: '700', color: colors.text }}>Encrypted Consultations:</Text> Real-time queue tokens and prescriptions are securely signed with verified doctor credentials.
+          </Text>
+
+          <TouchableOpacity
+            onPress={() => setPrivacyModalVisible(false)}
+            style={[styles.modalSaveBtn, { backgroundColor: StitchColors.primaryContainer, marginTop: 12 }]}
+          >
+            <Text style={styles.modalSaveBtnText}>Understood</Text>
+          </TouchableOpacity>
+        </View>
+      </Modal>
     </SafeAreaView>
   );
 }

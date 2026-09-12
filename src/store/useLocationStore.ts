@@ -190,7 +190,7 @@ export const useLocationStore = create<LocationState>()(
           }
 
           const loc = await Location.getCurrentPositionAsync({
-            accuracy: Location.Accuracy.Balanced,
+            accuracy: Location.Accuracy.High,
           });
 
           const { latitude, longitude } = loc.coords;
@@ -204,13 +204,13 @@ export const useLocationStore = create<LocationState>()(
             if (Platform.OS === 'web') {
               // Web: Use lightweight reverse geocode without triggering Expo SDK 49 web geocode removal warning
               try {
-                const res = await fetch(`https://nominatim.openstreetmap.org/reverse?format=json&lat=${latitude}&lon=${longitude}&zoom=14&addressdetails=1`, {
+                const res = await fetch(`https://nominatim.openstreetmap.org/reverse?format=json&lat=${latitude}&lon=${longitude}&zoom=16&addressdetails=1`, {
                   headers: { 'Accept': 'application/json' },
                 });
                 if (res.ok) {
                   const data = await res.json();
                   const addr = data.address || {};
-                  cityName = addr.city || addr.town || addr.state_district || 'Bengaluru';
+                  cityName = addr.city || addr.town || addr.municipality || addr.state_district || 'Bengaluru';
                   areaName = addr.suburb || addr.neighbourhood || addr.residential || addr.road || cityName;
                   localityName = `${areaName}, ${cityName}`;
                 }
@@ -223,19 +223,19 @@ export const useLocationStore = create<LocationState>()(
                 const place = geocoded[0];
                 cityName = place.city || place.subregion || place.district || 'City Center';
 
-                // Extract clean locality / neighborhood name (ignore numbers/pincodes)
+                // Extract clean pinpoint locality / neighborhood name
                 const candidateArea = [
-                  place.subregion,
-                  place.district,
                   place.street,
                   place.name,
+                  place.district,
+                  place.subregion,
                 ].find((val) => {
                   if (!val) return false;
                   const trimmed = val.trim();
                   return trimmed.length > 2 && !/^\d+$/.test(trimmed) && trimmed.toLowerCase() !== cityName.toLowerCase();
                 });
 
-                areaName = candidateArea || place.name || cityName;
+                areaName = candidateArea || place.subregion || place.name || cityName;
                 localityName = `${areaName}, ${cityName}`;
               }
             }

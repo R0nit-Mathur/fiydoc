@@ -52,12 +52,13 @@ export function FiYLogo({ size = 'md', variant = 'horizontal', style }: FiYLogoP
   }
 
   // Full Brand Wordmark (tightly-cropped transparent PNG, true aspect ratio 2.616)
+  // Scaled down ~60% to fit neatly in mobile headers and sidebars without overflow
   const logoDimensions = {
-    sm: { width: 96, height: 37 },
-    md: { width: 130, height: 50 },
-    lg: { width: 165, height: 63 },
-    xl: { width: 195, height: 75 },
-    '2xl': { width: 220, height: 84 },
+    sm: { width: 62, height: 24 },
+    md: { width: 78, height: 30 },
+    lg: { width: 105, height: 40 },
+    xl: { width: 130, height: 50 },
+    '2xl': { width: 155, height: 59 },
   };
   const dim = logoDimensions[size] || logoDimensions.md;
 

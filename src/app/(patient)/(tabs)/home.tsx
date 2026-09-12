@@ -38,6 +38,7 @@ import { useDoctorsQuery } from '@/hooks/queries/useDoctorsQuery';
 import { useLocationStore } from '@/store/useLocationStore';
 import { useAuthStore } from '@/store/useAuthStore';
 import { useAppointmentStore } from '@/store/useAppointmentStore';
+import { useHealthStore } from '@/store/useHealthStore';
 import { WelcomeGuideModal } from '@/components/ui/WelcomeGuideModal';
 import { LocationPermissionModal } from '@/components/location/LocationPermissionModal';
 import { DoctorCard } from '@/components/ui/DoctorCard';
@@ -90,16 +91,29 @@ export default function PatientHomeScreen() {
   const { data: doctors = [] } = useDoctorsQuery();
   const user = useAuthStore((s) => s.user);
   const appointments = useAppointmentStore((s) => s.appointments);
+  const records = useHealthStore((s) => s.records);
 
-  // Check if user profile is incomplete, prompt welcome guide
+  // Prompt for location on first visit if permission is undetermined
   useEffect(() => {
-    const timer = setTimeout(() => {
-      if (!user?.dob || !user?.bloodGroup || !user?.address) {
-        setGuideModalVisible(true);
-      }
-    }, 1500);
-    return () => clearTimeout(timer);
-  }, []);
+    if (permissionStatus === 'undetermined') {
+      const timer = setTimeout(() => {
+        setLocationModalVisible(true);
+      }, 1000);
+      return () => clearTimeout(timer);
+    }
+  }, [permissionStatus]);
+
+  // Check if user profile is incomplete, prompt welcome guide ONLY after location is resolved/dismissed
+  useEffect(() => {
+    if (permissionStatus !== 'undetermined' && !locationModalVisible) {
+      const timer = setTimeout(() => {
+        if (!user?.dob || !user?.bloodGroup || !user?.address) {
+          setGuideModalVisible(true);
+        }
+      }, 1200);
+      return () => clearTimeout(timer);
+    }
+  }, [permissionStatus, locationModalVisible, user?.dob, user?.bloodGroup, user?.address]);
 
   // Find nearest upcoming confirmed/valid appointment from store
   const upcomingAppointment = useMemo(() => {
@@ -115,16 +129,6 @@ export default function PatientHomeScreen() {
   const userInitials = user?.name
     ? user.name.split(' ').map((n: string) => n[0]).join('').toUpperCase().slice(0, 2)
     : 'PT';
-
-  // Prompt for location on first visit if permission is undetermined
-  useEffect(() => {
-    if (permissionStatus === 'undetermined') {
-      const timer = setTimeout(() => {
-        setLocationModalVisible(true);
-      }, 1200);
-      return () => clearTimeout(timer);
-    }
-  }, [permissionStatus]);
 
   const handleOpenSearch = () => {
     if (Platform.OS !== 'web') {
@@ -487,23 +491,6 @@ export default function PatientHomeScreen() {
             ))}
           </View>
         </Animated.View>
-
-        {/* 5. 24/7 OPD Emergency Helpline Banner */}
-        <View style={styles.emergencyCard}>
-          <View style={styles.emergencyIconWrap}>
-            <PhoneCall size={20} color="#DC2626" />
-          </View>
-          <View style={{ flex: 1, marginLeft: 12 }}>
-            <Text style={styles.emergencyTitle}>24x7 Medical & OPD Support</Text>
-            <Text style={styles.emergencySub}>Immediate assistance for hospital check-in & triage</Text>
-          </View>
-          <Pressable
-            onPress={() => alert('FiYDOC Emergency Support: Call 1800-200-4455')}
-            style={styles.callButton}
-          >
-            <Text style={styles.callButtonText}>Call</Text>
-          </Pressable>
-        </View>
       </ScrollView>
 
       {/* Slide-out Navigation Drawer wrapped in root-level Modal to cover bottom tabs */}
@@ -525,13 +512,15 @@ export default function PatientHomeScreen() {
             style={styles.drawerPanel}
           >
             <View style={styles.drawerHeader}>
-              <FiYLogo size="md" />
+              <View style={{ flex: 1, alignItems: 'center', justifyContent: 'center' }}>
+                <FiYLogo size="sm" />
+              </View>
               <Pressable
                 onPress={() => setDrawerOpen(false)}
-                hitSlop={{ top: 6, bottom: 6, left: 6, right: 6 }}
+                hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
                 style={styles.drawerClose}
               >
-                <X size={19} color={StitchColors.onSurfaceVariant} />
+                <X size={18} color={StitchColors.onSurfaceVariant} />
               </Pressable>
             </View>
             <Pressable
@@ -572,9 +561,11 @@ export default function PatientHomeScreen() {
                   <FileText size={18} color="#2563eb" />
                 </View>
                 <Text style={styles.drawerMenuText}>My Health Records</Text>
-                <View style={styles.drawerMenuBadge}>
-                  <Text style={styles.drawerMenuBadgeText}>3 New</Text>
-                </View>
+                {records.length > 0 ? (
+                  <View style={styles.drawerMenuBadge}>
+                    <Text style={styles.drawerMenuBadgeText}>{records.length}</Text>
+                  </View>
+                ) : null}
               </Pressable>
 
               <Pressable
@@ -607,13 +598,12 @@ export default function PatientHomeScreen() {
                   <Heart size={18} color="#e11d48" />
                 </View>
                 <Text style={styles.drawerMenuText}>Saved Doctors</Text>
-                <Text style={{ fontSize: 11, color: '#94a3b8', marginRight: 4 }}>4</Text>
               </Pressable>
 
               <Pressable
                 onPress={() => {
                   setDrawerOpen(false);
-                  router.push('/(patient)/(tabs)/profile');
+                  router.push('/(patient)/(tabs)/appointments');
                 }}
                 style={({ pressed }) => [
                   styles.drawerMenuItem,
@@ -623,25 +613,7 @@ export default function PatientHomeScreen() {
                 <View style={[styles.drawerMenuIcon, { backgroundColor: '#FFFBEB' }]}>
                   <CreditCard size={18} color="#d97706" />
                 </View>
-                <Text style={styles.drawerMenuText}>Payment Methods</Text>
-              </Pressable>
-
-              <View style={{ height: 1, backgroundColor: '#f1f5f9', marginVertical: 6, marginHorizontal: 12 }} />
-
-              <Pressable
-                onPress={() => {
-                  setDrawerOpen(false);
-                  alert('Need assistance? Contact FiYDOC Support: 1800-200-4455 (24x7)');
-                }}
-                style={({ pressed }) => [
-                  styles.drawerMenuItem,
-                  pressed && { backgroundColor: '#f8fafc' },
-                ]}
-              >
-                <View style={[styles.drawerMenuIcon, { backgroundColor: '#f1f5f9' }]}>
-                  <Sparkles size={18} color="#475569" />
-                </View>
-                <Text style={styles.drawerMenuText}>Help & Support</Text>
+                <Text style={styles.drawerMenuText}>Payment History</Text>
               </Pressable>
             </View>
 

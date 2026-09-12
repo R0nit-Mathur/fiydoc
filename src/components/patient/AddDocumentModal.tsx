@@ -1,14 +1,15 @@
 import React, { useState } from 'react';
-import { View, Text, ActivityIndicator, StyleSheet } from 'react-native';
+import { View, Text, ActivityIndicator, StyleSheet, Pressable, Platform } from 'react-native';
+import * as DocumentPicker from 'expo-document-picker';
 import { Modal } from '@/components/ui/Modal';
 import { Input } from '@/components/ui/Input';
 import { Button } from '@/components/ui/Button';
 import { useAuthStore } from '@/store/useAuthStore';
 import { useHealthStore } from '@/store/useHealthStore';
 import { MedicalRecord } from '@/types/index';
-import { Palette, Typography, Spacing } from '@/constants/theme';
+import { Palette, Typography, Spacing, StitchColors } from '@/constants/theme';
 import { useAppTheme } from '@/hooks/useAppTheme';
-import { ScanText, CheckCircle2, AlertCircle } from 'lucide-react-native';
+import { ScanText, CheckCircle2, AlertCircle, FileUp, FileCheck } from 'lucide-react-native';
 
 interface AddDocumentModalProps {
   visible: boolean;
@@ -23,9 +24,35 @@ export function AddDocumentModal({ visible, onClose }: AddDocumentModalProps) {
 
   const [docTitle, setDocTitle] = useState('');
   const [docType, setDocType] = useState<'Lab Result' | 'Prescription' | 'Scan/X-Ray'>('Lab Result');
+  const [selectedFile, setSelectedFile] = useState<{ name: string; size?: number; uri: string } | null>(null);
   const [scanStep, setScanStep] = useState<'idle' | 'scanning' | 'complete'>('idle');
   const [extractedData, setExtractedData] = useState<Record<string, string> | null>(null);
   const [error, setError] = useState('');
+
+  const handlePickFile = async () => {
+    try {
+      const res = await DocumentPicker.getDocumentAsync({
+        type: ['application/pdf', 'image/*'],
+        copyToCacheDirectory: true,
+      });
+
+      if (!res.canceled && res.assets && res.assets[0]) {
+        const file = res.assets[0];
+        setSelectedFile({
+          name: file.name,
+          size: file.size,
+          uri: file.uri,
+        });
+        if (!docTitle.trim()) {
+          // Auto fill title with file base name without extension
+          const cleanName = file.name.replace(/\.[^/.]+$/, '');
+          setDocTitle(cleanName);
+        }
+      }
+    } catch (err: any) {
+      console.warn('[AddDocumentModal] Document picker error:', err?.message);
+    }
+  };
 
   const handleStartScan = async () => {
     setError('');
@@ -151,6 +178,33 @@ export function AddDocumentModal({ visible, onClose }: AddDocumentModalProps) {
               </View>
             ) : null}
 
+            {/* Document / File upload picker */}
+            <Pressable
+              onPress={handlePickFile}
+              style={styles.filePickerBox}
+            >
+              {selectedFile ? (
+                <View style={styles.filePickedRow}>
+                  <FileCheck size={22} color={Palette.success} />
+                  <View style={{ flex: 1 }}>
+                    <Text style={styles.fileNameText} numberOfLines={1}>
+                      {selectedFile.name}
+                    </Text>
+                    <Text style={styles.fileSubText}>
+                      {selectedFile.size ? `${(selectedFile.size / (1024 * 1024)).toFixed(1)} MB • Ready` : 'Ready to attach'}
+                    </Text>
+                  </View>
+                  <Text style={styles.changeFileText}>Change</Text>
+                </View>
+              ) : (
+                <View style={styles.filePickerPlaceholder}>
+                  <FileUp size={24} color={StitchColors.primary} />
+                  <Text style={styles.filePickerTitle}>Upload PDF or Scan Image</Text>
+                  <Text style={styles.filePickerSub}>Tap to browse files from device</Text>
+                </View>
+              )}
+            </Pressable>
+
             <Input
               label="Document / Test Title"
               placeholder="e.g. Lipid Profile, Complete Blood Count, Chest X-Ray"
@@ -186,6 +240,51 @@ const useStyles = (colors: any) => StyleSheet.create({
     fontSize: 13,
     fontWeight: '500',
     flex: 1,
+  },
+  filePickerBox: {
+    borderWidth: 1.5,
+    borderStyle: 'dashed',
+    borderColor: StitchColors.outlineVariant || '#c3c6d3',
+    borderRadius: 12,
+    padding: 14,
+    backgroundColor: StitchColors.surfaceContainerLowest,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  filePickerPlaceholder: {
+    alignItems: 'center',
+    gap: 6,
+    paddingVertical: 4,
+  },
+  filePickerTitle: {
+    fontSize: 13,
+    fontWeight: '600',
+    color: StitchColors.onSurface,
+  },
+  filePickerSub: {
+    fontSize: 11,
+    color: StitchColors.outline,
+  },
+  filePickedRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 10,
+    width: '100%',
+  },
+  fileNameText: {
+    fontSize: 12.5,
+    fontWeight: '600',
+    color: StitchColors.onSurface,
+  },
+  fileSubText: {
+    fontSize: 11,
+    color: StitchColors.outline,
+    marginTop: 2,
+  },
+  changeFileText: {
+    fontSize: 12,
+    fontWeight: '700',
+    color: StitchColors.primary,
   },
   ocrSuccessBox: {
     flexDirection: 'row',

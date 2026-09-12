@@ -202,18 +202,7 @@ export default function PatientAppointmentsScreen() {
           <Text style={styles.topBarSubtitle}>Appointments & Queue Passes</Text>
         </View>
 
-        <Pressable
-          accessibilityRole="button"
-          accessibilityLabel="Filter appointments"
-          style={({ pressed }) => [styles.iconButton, pressed && styles.buttonPressed]}
-          onPress={() => {
-            if (Platform.OS !== 'web') {
-              Haptics.selectionAsync();
-            }
-          }}
-        >
-          <SlidersHorizontal size={18} color={StitchColors.outline} />
-        </Pressable>
+        <View style={{ width: 40 }} />
       </View>
 
       <ScrollView

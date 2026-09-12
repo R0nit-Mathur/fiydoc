@@ -168,7 +168,7 @@ export function LocationPermissionModal({
 
           {/* Location Pin Hero Icon */}
           <View style={styles.heroIconBox}>
-            <MapPin size={26} color={Palette.healthcareTeal} />
+            <MapPin size={26} color="#ffffff" />
           </View>
 
           {/* Title & Patient Explanation */}
@@ -378,15 +378,16 @@ const styles = StyleSheet.create({
     backgroundColor: Palette.background,
   },
   heroIconBox: {
-    width: 52,
-    height: 52,
+    width: 54,
+    height: 54,
     borderRadius: BorderRadius['2xl'],
-    backgroundColor: Palette.healthcareTealLight,
-    borderWidth: 1,
-    borderColor: Palette.healthcareTealBorder,
+    backgroundColor: StitchColors.secondary,
+    borderWidth: 2,
+    borderColor: '#ffffff',
     alignItems: 'center',
     justifyContent: 'center',
     marginBottom: Spacing.sm,
+    ...Shadows.card,
   },
   title: {
     ...Typography.h2,

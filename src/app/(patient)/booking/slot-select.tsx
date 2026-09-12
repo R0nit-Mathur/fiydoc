@@ -46,6 +46,7 @@ import {
   Check,
 } from 'lucide-react-native';
 import { StitchColors, DEFAULT_DOCTOR_AVATAR } from '@/constants/theme';
+import * as DocumentPicker from 'expo-document-picker';
 import { useAppointmentStore } from '@/store/useAppointmentStore';
 import { useAuthStore } from '@/store/useAuthStore';
 
@@ -66,6 +67,8 @@ export default function MedicalIntakeScreen() {
   const router = useRouter();
   const insets = useSafeAreaInsets();
   const user = useAuthStore((state) => state.user);
+  const familyMembers = useAuthStore((state) => state.familyMembers || []);
+  const addFamilyMember = useAuthStore((state) => state.addFamilyMember);
 
   const params = useLocalSearchParams<{
     doctorId?: string;
@@ -91,6 +94,7 @@ export default function MedicalIntakeScreen() {
 
   const [currentStep, setCurrentStep] = useState<0 | 1 | 2>(0);
   const [patientType, setPatientType] = useState<'self' | 'family'>('self');
+  const [selectedFamilyId, setSelectedFamilyId] = useState<string | null>(null);
   const [familyMemberName, setFamilyMemberName] = useState('');
   const [familyMemberRelation, setFamilyMemberRelation] = useState('Parent');
   const [familyMemberPhone, setFamilyMemberPhone] = useState('');
@@ -106,9 +110,24 @@ export default function MedicalIntakeScreen() {
   const [conditions, setConditions] = useState<string[]>(INITIAL_CONDITIONS);
 
   // File upload state
-  const [attachedFile, setAttachedFile] = useState<string | null>(
-    'ecg_report_aug2023.pdf (1.2 MB)'
-  );
+  const [attachedFile, setAttachedFile] = useState<string | null>(null);
+
+  const handlePickDocument = async () => {
+    try {
+      const res = await DocumentPicker.getDocumentAsync({
+        type: ['application/pdf', 'image/*'],
+        copyToCacheDirectory: true,
+      });
+
+      if (!res.canceled && res.assets && res.assets[0]) {
+        const file = res.assets[0];
+        const sizeMb = file.size ? (file.size / (1024 * 1024)).toFixed(1) : '1.0';
+        setAttachedFile(`${file.name} (${sizeMb} MB)`);
+      }
+    } catch (err: any) {
+      console.warn('[slot-select] Document pick error:', err?.message);
+    }
+  };
 
   const goToStep = (step: 0 | 1 | 2) => {
     if (Platform.OS !== 'web') {
@@ -161,6 +180,12 @@ export default function MedicalIntakeScreen() {
         );
         return;
       }
+      // Save family member into persisted store for future one-tap reuse
+      addFamilyMember({
+        name: finalPatientName,
+        relation: familyMemberRelation.trim() || 'Family',
+        phone: familyMemberPhone.trim() || undefined,
+      });
     }
 
     if (Platform.OS !== 'web') {
@@ -455,11 +480,53 @@ export default function MedicalIntakeScreen() {
               ) : (
                 /* Family Member Input Card */
                 <View style={styles.familyCard}>
+                  {familyMembers.length > 0 ? (
+                    <View style={styles.savedFamilySection}>
+                      <Text style={styles.familyInputLabel}>Select Saved Family Member:</Text>
+                      <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.savedFamilyList}>
+                        {familyMembers.map((member) => {
+                          const isSelected = selectedFamilyId === member.id;
+                          return (
+                            <Pressable
+                              key={member.id}
+                              onPress={() => {
+                                if (isSelected) {
+                                  setSelectedFamilyId(null);
+                                } else {
+                                  setSelectedFamilyId(member.id);
+                                  setFamilyMemberName(member.name);
+                                  if (member.relation) setFamilyMemberRelation(member.relation);
+                                  if (member.phone) setFamilyMemberPhone(member.phone);
+                                }
+                              }}
+                              style={[
+                                styles.savedFamilyChip,
+                                isSelected && styles.savedFamilyChipActive,
+                              ]}
+                            >
+                              <Text
+                                style={[
+                                  styles.savedFamilyChipText,
+                                  isSelected && styles.savedFamilyChipTextActive,
+                                ]}
+                              >
+                                {member.name} ({member.relation})
+                              </Text>
+                            </Pressable>
+                          );
+                        })}
+                      </ScrollView>
+                    </View>
+                  ) : null}
+
                   <View style={styles.familyInputRow}>
                     <Text style={styles.familyInputLabel}>Family Member's Full Name *</Text>
                     <TextInput
                       value={familyMemberName}
-                      onChangeText={setFamilyMemberName}
+                      onChangeText={(val) => {
+                        setFamilyMemberName(val);
+                        if (selectedFamilyId) setSelectedFamilyId(null);
+                      }}
                       placeholder="e.g. Meera Sharma"
                       placeholderTextColor={StitchColors.outline}
                       style={styles.familyTextInput}
@@ -1183,6 +1250,35 @@ const styles = StyleSheet.create({
     gap: 12,
     borderWidth: 1,
     borderColor: 'rgba(195, 198, 211, 0.25)',
+  },
+  savedFamilySection: {
+    marginBottom: 4,
+    gap: 6,
+  },
+  savedFamilyList: {
+    flexDirection: 'row',
+    gap: 8,
+    paddingVertical: 2,
+  },
+  savedFamilyChip: {
+    paddingHorizontal: 10,
+    paddingVertical: 6,
+    borderRadius: 12,
+    backgroundColor: StitchColors.surfaceContainerLowest,
+    borderWidth: 1,
+    borderColor: 'rgba(195, 198, 211, 0.4)',
+  },
+  savedFamilyChipActive: {
+    backgroundColor: StitchColors.primary,
+    borderColor: StitchColors.primary,
+  },
+  savedFamilyChipText: {
+    fontSize: 11.5,
+    fontWeight: '600',
+    color: StitchColors.onSurface,
+  },
+  savedFamilyChipTextActive: {
+    color: '#ffffff',
   },
   familyInputRow: {
     gap: 4,
