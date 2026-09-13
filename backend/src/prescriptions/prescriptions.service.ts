@@ -113,9 +113,11 @@ export class PrescriptionsService {
       include: { medicines: true, doctor: true, patient: true },
     });
     if (existingRx) {
+      const effectiveIssuedAt = (existingRx as any).issuedAt || existingRx.createdAt;
       return {
         ...existingRx,
-        issuedAt: (existingRx as any).issuedAt || (existingRx as any).signedAt || existingRx.createdAt,
+        issuedAt: effectiveIssuedAt,
+        signedAt: effectiveIssuedAt,
       };
     }
 
@@ -145,25 +147,29 @@ export class PrescriptionsService {
       throw new ForbiddenException('You cannot issue a prescription for another doctor’s patient encounter.');
     }
 
-    // Validate medicine items
+    // Validate and sanitize medicine items
     if (!dto.medicines || dto.medicines.length === 0) {
       throw new BadRequestException('Prescription must include at least one medication.');
     }
 
-    for (const m of dto.medicines) {
-      if (!m.name || m.name.trim().length === 0) {
+    const sanitizedMedicines = dto.medicines.map((m) => {
+      const name = m.name?.trim();
+      if (!name) {
         throw new BadRequestException('Every prescribed medicine must have a valid medication name.');
       }
-      if (!m.dosage || m.dosage.trim().length === 0) {
-        throw new BadRequestException(`Dosage is required for medicine '${m.name}'.`);
-      }
-      if (!m.frequency || m.frequency.trim().length === 0) {
-        throw new BadRequestException(`Frequency is required for medicine '${m.name}'.`);
-      }
-      if (m.durationDays === undefined || m.durationDays === null || Number(m.durationDays) <= 0) {
-        throw new BadRequestException(`Duration in days (> 0) is required for medicine '${m.name}'.`);
-      }
-    }
+      const dosage = m.dosage?.trim() || '1 unit';
+      const frequency = m.frequency?.trim() || 'OD';
+      const durationDays = Number(m.durationDays) > 0 ? Number(m.durationDays) : 5;
+      const instructions = m.instructions?.trim() || '';
+
+      return {
+        name,
+        dosage,
+        frequency,
+        durationDays,
+        instructions,
+      };
+    });
 
     // Cryptographically secure verification code
     const randomSuffix = crypto.randomBytes(3).toString('hex').toUpperCase();
@@ -180,15 +186,8 @@ export class PrescriptionsService {
         followUpInstructions: dto.followUpInstructions,
         verificationCode,
         issuedAt: issuedTimestamp,
-        signedAt: issuedTimestamp,
         medicines: {
-          create: dto.medicines.map((m) => ({
-            name: m.name.trim(),
-            dosage: m.dosage.trim(),
-            frequency: m.frequency.trim(),
-            durationDays: Number(m.durationDays),
-            instructions: m.instructions?.trim() || '',
-          })),
+          create: sanitizedMedicines,
         },
       };
 
@@ -283,9 +282,11 @@ export class PrescriptionsService {
       }
     }
 
+    const effectiveIssuedAt = (createdPrescription as any).issuedAt || createdPrescription.createdAt;
     return {
       ...createdPrescription,
-      issuedAt: (createdPrescription as any).issuedAt || (createdPrescription as any).signedAt || createdPrescription.createdAt,
+      issuedAt: effectiveIssuedAt,
+      signedAt: effectiveIssuedAt,
       pdfUrl: documentUrl || storagePath,
     };
   }
@@ -309,7 +310,8 @@ export class PrescriptionsService {
       }
     }
 
-    return { ...rx, pdfUrl: signedUrl };
+    const effectiveIssuedAt = (rx as any).issuedAt || rx.createdAt;
+    return { ...rx, issuedAt: effectiveIssuedAt, signedAt: effectiveIssuedAt, pdfUrl: signedUrl };
   }
 
   async verifyPrescriptionCode(verificationCode: string) {
@@ -326,11 +328,13 @@ export class PrescriptionsService {
     }
 
     // Minimum required verification info to protect PHI
+    const effectiveIssuedAt = (rx as any).issuedAt || rx.createdAt;
     return {
       verified: true,
       doctorName: rx.doctor.fullName,
       specialization: rx.doctor.specialization,
-      issuedAt: (rx as any).issuedAt || (rx as any).signedAt || rx.createdAt,
+      issuedAt: effectiveIssuedAt,
+      signedAt: effectiveIssuedAt,
       medicineCount: rx.medicines.length,
       verificationCode: rx.verificationCode,
     };
