@@ -1,4 +1,4 @@
-import { Controller, Get, Post, Body, Query, Param, UseGuards, Request } from '@nestjs/common';
+import { Controller, Get, Post, Patch, Body, Query, Param, UseGuards, Request } from '@nestjs/common';
 import { AdminService } from './admin.service';
 import { JwtAuthGuard } from '../auth/jwt-auth.guard';
 import { RolesGuard, Roles } from '../auth/roles.guard';
@@ -30,6 +30,21 @@ export class AdminController {
   @Get('doctors/:id')
   async getDoctorDetail(@Param('id') id: string) {
     return this.adminService.getDoctorDetail(id);
+  }
+
+  @Patch('doctors/:id/verify')
+  async verifyDoctorDirect(
+    @Request() req,
+    @Param('id') id: string,
+    @Body() body: { status?: string; rejectionReason?: string },
+  ) {
+    const action = body.status === 'REJECTED' ? 'REJECT' : 'APPROVE';
+    return this.adminService.reviewVerification({
+      doctorId: id,
+      action,
+      rejectionReason: body.rejectionReason,
+      adminUserId: req.user.id,
+    });
   }
 
   @Get('verifications')

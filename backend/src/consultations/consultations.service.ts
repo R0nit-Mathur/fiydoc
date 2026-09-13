@@ -68,9 +68,9 @@ export class ConsultationsService {
       }
     }
 
-    // Atomic transaction for all completion operations
-    return this.prisma.$transaction(async (tx) => {
-      const consultation = await tx.consultation.upsert({
+    // Atomic transaction for core clinical operations
+    const consultation = await this.prisma.$transaction(async (tx) => {
+      const result = await tx.consultation.upsert({
         where: { appointmentId: dto.appointmentId },
         create: {
           appointmentId: dto.appointmentId,
@@ -102,9 +102,15 @@ export class ConsultationsService {
           where: { id: dto.appointmentId },
           data: { status: AppointmentStatus.COMPLETED },
         });
+      }
 
-        // Automatically create MedicalRecord entry in patient timeline
-        await tx.medicalRecord.create({
+      return result;
+    });
+
+    if (dto.completeNow) {
+      // Automatically create MedicalRecord entry in patient timeline (non-fatal)
+      try {
+        await this.prisma.medicalRecord.create({
           data: {
             patientId: apt.patientId,
             title: `Consultation with ${apt.doctor.fullName}`,
@@ -114,25 +120,35 @@ export class ConsultationsService {
             tags: dto.symptoms || ['CLINICAL_CONSULTATION'],
           },
         });
+      } catch (recErr: any) {
+        console.warn('[consultations] MedicalRecord creation failed (non-fatal):', recErr?.message);
+      }
 
-        // Log audit trail
-        await tx.auditLog.create({
-          data: {
-            actorUserId: currentUser.id,
-            action: 'CONSULTATION_COMPLETED',
-            targetType: 'CONSULTATION',
-            targetId: consultation.id,
-            metadata: {
-              appointmentId: apt.id,
-              patientId: apt.patientId,
-              doctorId: apt.doctorId,
+      // Log audit trail (non-fatal)
+      try {
+        if (currentUser?.id) {
+          await this.prisma.auditLog.create({
+            data: {
+              actorUserId: currentUser.id,
+              action: 'CONSULTATION_COMPLETED',
+              targetType: 'CONSULTATION',
+              targetId: consultation.id,
+              metadata: {
+                appointmentId: apt.id,
+                patientId: apt.patientId,
+                doctorId: apt.doctorId,
+              },
             },
-          },
-        });
+          });
+        }
+      } catch (auditErr: any) {
+        console.warn('[consultations] AuditLog insert failed (non-fatal):', auditErr?.message);
+      }
 
-        // Notify patient of consultation summary
+      // Notify patient of consultation summary (non-fatal)
+      try {
         if (apt.patient?.userId) {
-          await tx.notification.create({
+          await this.prisma.notification.create({
             data: {
               userId: apt.patient.userId,
               type: 'CONSULTATION_COMPLETED',
@@ -141,10 +157,12 @@ export class ConsultationsService {
             },
           });
         }
+      } catch (notifErr: any) {
+        console.warn('[consultations] Notification creation failed (non-fatal):', notifErr?.message);
       }
+    }
 
-      return consultation;
-    });
+    return consultation;
   }
 
   async getConsultationByAppointment(appointmentId: string, currentUser: any) {

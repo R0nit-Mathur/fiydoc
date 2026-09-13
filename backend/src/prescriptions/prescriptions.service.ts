@@ -27,12 +27,12 @@ export class PrescriptionsService {
       pdf.on('error', reject);
 
       pdf.fillColor('#3055A8').fontSize(22).text('FiYDoc Digital Prescription');
-      pdf.fillColor('#52606D').fontSize(10).text(`Verification code: ${prescription.verificationCode}`);
+      pdf.fillColor('#52606D').fontSize(10).text(`Verification code: ${prescription.verificationCode || '—'}`);
       pdf.moveDown();
       pdf.fillColor('#172033').fontSize(11)
-        .text(`Doctor: ${prescription.doctor.fullName}`)
-        .text(`Patient: ${prescription.patient.fullName}`)
-        .text(`Issued: ${new Date(prescription.createdAt).toLocaleString('en-IN')}`);
+        .text(`Doctor: ${prescription.doctor?.fullName || 'Licensed Practitioner'}`)
+        .text(`Patient: ${prescription.patient?.fullName || 'Patient'}`)
+        .text(`Issued: ${new Date(prescription.issuedAt || prescription.createdAt || Date.now()).toLocaleString('en-IN')}`);
       pdf.moveDown().fontSize(13).fillColor('#3055A8').text('Medicines');
       pdf.moveDown(0.4).fontSize(10).fillColor('#172033');
       if (!prescription.medicines || prescription.medicines.length === 0) {
@@ -86,8 +86,12 @@ export class PrescriptionsService {
 
     // Doctor must be verified by clinical authority to write prescriptions
     if (currentUser.role === Role.DOCTOR) {
+      const docId = currentUser.doctor?.id;
+      if (!docId) {
+        throw new ForbiddenException('Doctor profile not found.');
+      }
       const docRecord = await this.prisma.doctor.findUnique({
-        where: { id: currentUser.doctor?.id },
+        where: { id: docId },
         include: { verification: true },
       });
       if (!docRecord) {
@@ -96,6 +100,18 @@ export class PrescriptionsService {
       if (docRecord.verification?.status !== VerificationStatus.VERIFIED) {
         throw new ForbiddenException('Only verified medical practitioners with active credentials can issue prescriptions.');
       }
+    }
+
+    // Check if prescription already exists for this consultation (Idempotency)
+    const existingRx = await this.prisma.prescription.findUnique({
+      where: { consultationId: dto.consultationId },
+      include: { medicines: true, doctor: true, patient: true },
+    });
+    if (existingRx) {
+      return {
+        ...existingRx,
+        issuedAt: existingRx.issuedAt || existingRx.createdAt,
+      };
     }
 
     // Require genuine, existing clinical consultation
@@ -144,8 +160,9 @@ export class PrescriptionsService {
     const verificationCode = `FYD-RX-${Date.now().toString().slice(-6)}-${randomSuffix}`;
     const issuedTimestamp = new Date();
 
+    // Core transaction: Only prescription and its medicines
     const createdPrescription = await this.prisma.$transaction(async (tx) => {
-      const prescription = await tx.prescription.create({
+      return tx.prescription.create({
         data: {
           consultationId: consultation.id,
           patientId: consultation.patientId,
@@ -166,37 +183,49 @@ export class PrescriptionsService {
         },
         include: { medicines: true, doctor: true, patient: true },
       });
+    });
 
-      // Auto-create timeline MedicalRecord entry
-      await tx.medicalRecord.create({
+    // Auto-create timeline MedicalRecord entry (non-fatal)
+    try {
+      await this.prisma.medicalRecord.create({
         data: {
           patientId: consultation.patientId,
           title: `Prescription from ${consultation.doctor.fullName}`,
           type: 'PRESCRIPTION',
-          sourceId: prescription.id,
+          sourceId: createdPrescription.id,
           summary: `Prescribed ${dto.medicines.length} medicine(s)`,
           tags: ['DIGITAL_RX', 'OFFICIAL_PRESCRIPTION'],
         },
       });
+    } catch (recordErr: any) {
+      console.warn('[prescriptions] Timeline MedicalRecord creation failed (non-fatal):', recordErr?.message);
+    }
 
-      // Audit log entry
-      await tx.auditLog.create({
-        data: {
-          actorUserId: currentUser.id,
-          action: 'PRESCRIPTION_ISSUED',
-          targetType: 'PRESCRIPTION',
-          targetId: prescription.id,
-          metadata: {
-            consultationId: consultation.id,
-            patientId: consultation.patientId,
-            medicineCount: dto.medicines.length,
+    // Audit log entry (non-fatal)
+    try {
+      if (currentUser?.id) {
+        await this.prisma.auditLog.create({
+          data: {
+            actorUserId: currentUser.id,
+            action: 'PRESCRIPTION_ISSUED',
+            targetType: 'PRESCRIPTION',
+            targetId: createdPrescription.id,
+            metadata: {
+              consultationId: consultation.id,
+              patientId: consultation.patientId,
+              medicineCount: dto.medicines.length,
+            },
           },
-        },
-      });
+        });
+      }
+    } catch (auditErr: any) {
+      console.warn('[prescriptions] AuditLog insert failed (non-fatal):', auditErr?.message);
+    }
 
-      // Notify patient
+    // Notify patient (non-fatal)
+    try {
       if (consultation.patient?.userId) {
-        await tx.notification.create({
+        await this.prisma.notification.create({
           data: {
             userId: consultation.patient.userId,
             type: 'PRESCRIPTION_ISSUED',
@@ -205,9 +234,9 @@ export class PrescriptionsService {
           },
         });
       }
-
-      return prescription;
-    });
+    } catch (notifErr: any) {
+      console.warn('[prescriptions] Notification creation failed (non-fatal):', notifErr?.message);
+    }
 
     // Generate PDF and upload to Supabase Storage OUTSIDE the database transaction
     let storagePath: string | null = null;

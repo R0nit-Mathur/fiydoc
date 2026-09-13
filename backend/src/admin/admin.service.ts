@@ -115,37 +115,51 @@ export class AdminService {
       },
     });
 
-    // If suspended or revoked, update User status
-    if (dto.action === 'SUSPEND') {
-      await this.prisma.user.update({
-        where: { id: existing.doctor.userId },
-        data: { status: 'SUSPENDED' },
-      });
+    // If suspended or revoked, update User status (non-fatal)
+    if (dto.action === 'SUSPEND' && existing.doctor?.userId) {
+      try {
+        await this.prisma.user.update({
+          where: { id: existing.doctor.userId },
+          data: { status: 'SUSPENDED' },
+        });
+      } catch (err: any) {
+        console.warn('[admin] User suspend failed (non-fatal):', err?.message);
+      }
     }
 
-    // Notify doctor
-    await this.prisma.notification.create({
-      data: {
-        userId: existing.doctor.userId,
-        type: 'VERIFICATION_UPDATE',
-        title: `Doctor Verification Update: ${newStatus}`,
-        message:
-          newStatus === VerificationStatus.VERIFIED
-            ? 'Congratulations! Your medical credentials have been verified by administration. You are now discoverable to patients.'
-            : `Status: ${newStatus}. ${dto.rejectionReason || 'Please review your uploaded documents.'}`,
-      },
-    });
+    // Notify doctor (non-fatal)
+    if (existing.doctor?.userId) {
+      try {
+        await this.prisma.notification.create({
+          data: {
+            userId: existing.doctor.userId,
+            type: 'VERIFICATION_UPDATE',
+            title: `Doctor Verification Update: ${newStatus}`,
+            message:
+              newStatus === VerificationStatus.VERIFIED
+                ? 'Congratulations! Your medical credentials have been verified by administration. You are now discoverable to patients.'
+                : `Status: ${newStatus}. ${dto.rejectionReason || 'Please review your uploaded documents.'}`,
+          },
+        });
+      } catch (notifErr: any) {
+        console.warn('[admin] Verification notification failed (non-fatal):', notifErr?.message);
+      }
+    }
 
-    // Write audit log entry
-    await this.prisma.auditLog.create({
-      data: {
-        actorUserId: dto.adminUserId,
-        action: `VERIFICATION_${dto.action}`,
-        targetType: 'DoctorVerification',
-        targetId: existing.id,
-        metadata: { status: newStatus, reason: dto.rejectionReason, doctorId: existing.doctorId },
-      },
-    });
+    // Write audit log entry (non-fatal)
+    try {
+      await this.prisma.auditLog.create({
+        data: {
+          actorUserId: dto.adminUserId,
+          action: `VERIFICATION_${dto.action}`,
+          targetType: 'DoctorVerification',
+          targetId: existing.id,
+          metadata: { status: newStatus, reason: dto.rejectionReason, doctorId: existing.doctorId },
+        },
+      });
+    } catch (auditErr: any) {
+      console.warn('[admin] Verification auditLog failed (non-fatal):', auditErr?.message);
+    }
 
     return updated;
   }

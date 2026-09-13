@@ -205,11 +205,10 @@ export class AppointmentsService {
         throw new BadRequestException('This slot is already booked. Please choose another time.');
       }
 
-      // Concurrency-safe atomic token sequence allocation via DailyDoctorToken
-      // Non-fatal: if the table doesn't exist yet or upsert fails, fall back to timestamp-based token
+      // Concurrency-safe atomic token sequence allocation via DailyDoctorToken (non-fatal, outside tx)
       let allocatedToken = `Token #01`;
       try {
-        const tokenRecord = await tx.dailyDoctorToken.upsert({
+        const tokenRecord = await this.prisma.dailyDoctorToken.upsert({
           where: {
             doctorId_date: {
               doctorId: dto.doctorId,
@@ -235,9 +234,9 @@ export class AppointmentsService {
         ? `${dto.notes.trim()} [${allocatedToken}]`
         : `[${allocatedToken}]`;
 
-      let appointment;
+      let createdApt;
       try {
-        appointment = await tx.appointment.create({
+        createdApt = await tx.appointment.create({
           data: {
             patientId: dto.patientId,
             doctorId: dto.doctorId,
@@ -262,15 +261,17 @@ export class AppointmentsService {
         throw err;
       }
 
-      // Audit log entry — non-fatal
+      return { createdApt, allocatedToken, patientUser: patient };
+    }).then(async ({ createdApt, allocatedToken, patientUser }) => {
+      // Audit log entry — non-fatal (outside tx)
       if (currentUser?.id) {
         try {
-          await tx.auditLog.create({
+          await this.prisma.auditLog.create({
             data: {
               actorUserId: currentUser.id,
               action: 'APPOINTMENT_CREATED',
               targetType: 'APPOINTMENT',
-              targetId: appointment.id,
+              targetId: createdApt.id,
               metadata: {
                 doctorId: dto.doctorId,
                 patientId: dto.patientId,
@@ -285,34 +286,33 @@ export class AppointmentsService {
         }
       }
 
-      // Trigger notification for both patient and doctor — non-fatal
-      // If this fails (e.g. missing userId), the appointment is still saved
+      // Trigger notification for both patient and doctor — non-fatal (outside tx)
       try {
         const notifData: any[] = [];
-        if (patient.userId) {
+        if (patientUser?.userId) {
           notifData.push({
-            userId: patient.userId,
+            userId: patientUser.userId,
             type: 'APPOINTMENT_QUEUED',
             title: 'Appointment Slot Queued',
-            message: `Your slot request with ${appointment.doctor.fullName} on ${dto.date} at ${dto.startTime} is awaiting doctor approval.`,
+            message: `Your slot request with ${createdApt.doctor.fullName} on ${dto.date} at ${dto.startTime} is awaiting doctor approval.`,
           });
         }
-        if (appointment.doctor.userId) {
+        if (createdApt.doctor?.userId) {
           notifData.push({
-            userId: appointment.doctor.userId,
+            userId: createdApt.doctor.userId,
             type: 'NEW_BOOKING_REQUEST',
             title: 'New Patient Slot Request',
-            message: `${appointment.patient.fullName} requested ${dto.startTime} on ${dto.date}. Review and approve.`,
+            message: `${createdApt.patient.fullName} requested ${dto.startTime} on ${dto.date}. Review and approve.`,
           });
         }
         if (notifData.length > 0) {
-          await tx.notification.createMany({ data: notifData });
+          await this.prisma.notification.createMany({ data: notifData });
         }
       } catch (notifErr: any) {
         console.warn('[appointments] Notification insert failed (non-fatal):', notifErr?.message);
       }
 
-      return this.formatAppointment(appointment);
+      return this.formatAppointment(createdApt);
     });
   }
 
@@ -433,36 +433,46 @@ export class AppointmentsService {
         include: { doctor: { include: { clinic: true } }, patient: true },
       });
 
-      // Audit log entry
+      return { updated, previousStatus: apt.status, doctorUser: apt.doctor, patientUser: apt.patient, aptDate: apt.date, aptStart: apt.startTime };
+    }).then(async ({ updated, previousStatus, doctorUser, patientUser, aptDate, aptStart }) => {
+      // Audit log entry (non-fatal)
       if (currentUser?.id) {
-        await tx.auditLog.create({
-          data: {
-            actorUserId: currentUser.id,
-            action: 'APPOINTMENT_CANCELLED',
-            targetType: 'APPOINTMENT',
-            targetId: id,
-            metadata: {
-              previousStatus: apt.status,
-              newStatus: AppointmentStatus.CANCELLED,
+        try {
+          await this.prisma.auditLog.create({
+            data: {
+              actorUserId: currentUser.id,
+              action: 'APPOINTMENT_CANCELLED',
+              targetType: 'APPOINTMENT',
+              targetId: id,
+              metadata: {
+                previousStatus,
+                newStatus: AppointmentStatus.CANCELLED,
+              },
             },
-          },
-        });
+          });
+        } catch (auditErr: any) {
+          console.warn('[appointments] AuditLog insert failed (non-fatal):', auditErr?.message);
+        }
       }
 
-      // Notify the other party
-      const isCancelledByPatient = currentUser.patient?.id === apt.patientId;
-      const recipientUserId = isCancelledByPatient ? apt.doctor.userId : apt.patient.userId;
-      const cancelledByName = isCancelledByPatient ? apt.patient.fullName : `Dr. ${apt.doctor.fullName}`;
+      // Notify the other party (non-fatal)
+      try {
+        const isCancelledByPatient = currentUser.patient?.id === updated.patientId;
+        const recipientUserId = isCancelledByPatient ? doctorUser?.userId : patientUser?.userId;
+        const cancelledByName = isCancelledByPatient ? patientUser?.fullName || 'Patient' : `Dr. ${doctorUser?.fullName || 'Doctor'}`;
 
-      if (recipientUserId) {
-        await tx.notification.create({
-          data: {
-            userId: recipientUserId,
-            type: 'APPOINTMENT_CANCELLED',
-            title: 'Appointment Cancelled',
-            message: `The appointment for ${apt.date} at ${apt.startTime} was cancelled by ${cancelledByName}.`,
-          },
-        });
+        if (recipientUserId) {
+          await this.prisma.notification.create({
+            data: {
+              userId: recipientUserId,
+              type: 'APPOINTMENT_CANCELLED',
+              title: 'Appointment Cancelled',
+              message: `The appointment for ${aptDate} at ${aptStart} was cancelled by ${cancelledByName}.`,
+            },
+          });
+        }
+      } catch (notifErr: any) {
+        console.warn('[appointments] Notification creation failed (non-fatal):', notifErr?.message);
       }
 
       return this.formatAppointment(updated);
@@ -534,31 +544,42 @@ export class AppointmentsService {
         include: { doctor: { include: { clinic: true } }, patient: true, consultation: true },
       });
 
-      // Audit log entry
+      return { updated, previousStatus: apt.status, doctorUser: apt.doctor, patientUser: apt.patient, aptDate: apt.date, aptStart: apt.startTime };
+    }).then(async ({ updated, previousStatus, doctorUser, patientUser, aptDate, aptStart }) => {
+      // Audit log entry (non-fatal)
       if (currentUser?.id) {
-        await tx.auditLog.create({
-          data: {
-            actorUserId: currentUser.id,
-            action: `APPOINTMENT_STATUS_${targetStatus}`,
-            targetType: 'APPOINTMENT',
-            targetId: id,
-            metadata: {
-              previousStatus: apt.status,
-              newStatus: targetStatus,
+        try {
+          await this.prisma.auditLog.create({
+            data: {
+              actorUserId: currentUser.id,
+              action: `APPOINTMENT_STATUS_${targetStatus}`,
+              targetType: 'APPOINTMENT',
+              targetId: id,
+              metadata: {
+                previousStatus,
+                newStatus: targetStatus,
+              },
             },
-          },
-        });
+          });
+        } catch (auditErr: any) {
+          console.warn('[appointments] AuditLog insert failed (non-fatal):', auditErr?.message);
+        }
       }
 
-      if (targetStatus === AppointmentStatus.CONFIRMED && apt.patient?.userId) {
-        await tx.notification.create({
-          data: {
-            userId: apt.patient.userId,
-            type: 'APPOINTMENT_APPROVED',
-            title: 'Appointment Approved by Doctor',
-            message: `Dr. ${apt.doctor.fullName} approved your appointment for ${apt.date} at ${apt.startTime}.`,
-          },
-        });
+      // Notify patient on confirmation (non-fatal)
+      if (targetStatus === AppointmentStatus.CONFIRMED && patientUser?.userId) {
+        try {
+          await this.prisma.notification.create({
+            data: {
+              userId: patientUser.userId,
+              type: 'APPOINTMENT_APPROVED',
+              title: 'Appointment Approved by Doctor',
+              message: `Dr. ${doctorUser?.fullName || 'Doctor'} approved your appointment for ${aptDate} at ${aptStart}.`,
+            },
+          });
+        } catch (notifErr: any) {
+          console.warn('[appointments] Notification creation failed (non-fatal):', notifErr?.message);
+        }
       }
 
       return this.formatAppointment(updated);
