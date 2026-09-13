@@ -173,27 +173,9 @@ export default function MedicalIntakeScreen() {
   const proceedToConfirm = () => {
     let finalPatientName = '';
     if (patientType === 'self') {
-      finalPatientName = user?.name?.trim() || '';
-      if (!finalPatientName) {
-        Alert.alert(
-          'Patient Name Required',
-          'Please complete your patient profile name before booking an OPD slot.',
-          [
-            { text: 'Go to Profile', onPress: () => router.push('/(patient)/(tabs)/profile') },
-            { text: 'Cancel', style: 'cancel' },
-          ]
-        );
-        return;
-      }
+      finalPatientName = user?.name?.trim() || user?.email?.split('@')[0] || 'Patient';
     } else {
-      finalPatientName = familyMemberName.trim();
-      if (!finalPatientName) {
-        Alert.alert(
-          'Family Member Name Required',
-          'Please enter the patient\'s name before continuing.'
-        );
-        return;
-      }
+      finalPatientName = familyMemberName.trim() || 'Family Member';
     }
 
     if (Platform.OS !== 'web') {
@@ -208,6 +190,7 @@ export default function MedicalIntakeScreen() {
       specialty: params.doctorSpecialty || 'Specialist',
       consultationFee: cleanFee,
       clinicAddress: 'In-Clinic OPD',
+      hospital: `${doctorName}'s Clinic`,
     } as any);
     useAppointmentStore.getState().setBookingSlot(params.date || new Date().toISOString().slice(0, 10), slotTime);
     if (selectedReason) {

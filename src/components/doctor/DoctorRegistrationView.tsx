@@ -2003,9 +2003,11 @@ const styles = StyleSheet.create({
   inputWrapper: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: StitchColors.surfaceContainerLow,
+    backgroundColor: '#FFFFFF',
     borderRadius: 12,
-    height: 46,
+    borderWidth: 1,
+    borderColor: '#CBD5E1',
+    height: 48,
     paddingHorizontal: 12,
   },
   inputIcon: {
@@ -2013,8 +2015,8 @@ const styles = StyleSheet.create({
   },
   textInput: {
     flex: 1,
-    fontSize: 13,
-    color: StitchColors.onSurface,
+    fontSize: 14,
+    color: '#0F172A',
     height: '100%',
   },
   genderRow: {

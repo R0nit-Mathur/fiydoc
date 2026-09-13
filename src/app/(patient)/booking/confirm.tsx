@@ -123,6 +123,9 @@ export default function BookingConfirmScreen() {
     );
   }
 
+  const doctorDisplayName = doctor.name || doctor.fullName || params.doctorName || 'Doctor';
+  const hospitalName = (doctor.hospital || doctor.clinicName || doctor.clinic?.name || doctor.clinicAddress || 'In-Clinic OPD Consultation');
+
   const date = params.date || bookingDraft.date || new Date().toISOString().slice(0, 10);
   const slot = params.slot || params.slotTime || bookingDraft.timeSlot || '04:15 PM';
   const tokenNumber = params.token || (params.tokenNumber ? (params.tokenNumber.startsWith('Token') ? params.tokenNumber : `Token #${params.tokenNumber}`) : 'Token #12');
@@ -257,7 +260,7 @@ export default function BookingConfirmScreen() {
         <View style={{ flex: 1 }}>
           <Text style={[styles.headerTitle, { color: colors.text }]}>Confirm OPD Booking</Text>
           <Text style={[styles.headerSubtitle, { color: colors.textSecondary }]}>
-            {doctor.name} • {doctor.hospital.split(',')[0]}
+            {doctorDisplayName} • {hospitalName.split(',')[0]}
           </Text>
         </View>
 
@@ -305,12 +308,12 @@ export default function BookingConfirmScreen() {
               resizeMode="cover"
             />
             <View style={{ flex: 1, marginLeft: 14 }}>
-              <Text style={[styles.doctorName, { color: colors.text }]}>{doctor.name}</Text>
-              <Text style={styles.doctorSpecialty}>{doctor.specialty} • {doctor.experienceYears || 16} yrs exp</Text>
+              <Text style={[styles.doctorName, { color: colors.text }]}>{doctorDisplayName}</Text>
+              <Text style={styles.doctorSpecialty}>{(doctor.specialty || doctor.specialization || 'Specialist')} • {doctor.experienceYears || 10} yrs exp</Text>
               <View style={styles.hospitalRow}>
                 <Building2 size={13} color={colors.textSecondary} />
                 <Text style={[styles.hospitalText, { color: colors.textSecondary }]} numberOfLines={1}>
-                  {doctor.hospital}
+                  {hospitalName}
                 </Text>
               </View>
             </View>

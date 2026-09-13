@@ -112,13 +112,6 @@ export default function SignUpScreen() {
 
   return (
     <SafeAreaView style={styles.safeArea} edges={['bottom']}>
-      {/* Soft Ambient Medical Glow Header Background */}
-      <View style={styles.ambientGlowContainer} pointerEvents="none">
-        <View style={styles.glowSecondary} />
-        <View style={styles.glowPrimary} />
-        <View style={styles.glowTertiary} />
-      </View>
-
       {/* Universal Top Navigation Bar */}
       <UniversalTopBar
         onBackPress={() => {
@@ -325,48 +318,6 @@ const styles = StyleSheet.create({
   safeArea: {
     flex: 1,
     backgroundColor: StitchColors.surface,
-  },
-  ambientGlowContainer: {
-    ...StyleSheet.absoluteFill,
-    height: 380,
-    overflow: 'hidden',
-    zIndex: -1,
-  },
-  glowSecondary: {
-    position: 'absolute',
-    top: -60,
-    right: -60,
-    width: 280,
-    height: 280,
-    borderRadius: 140,
-    backgroundColor: 'rgba(118, 244, 224, 0.25)',
-    ...Platform.select({
-      web: { filter: 'blur(64px)' },
-    }),
-  },
-  glowPrimary: {
-    position: 'absolute',
-    top: -70,
-    left: -40,
-    width: 280,
-    height: 280,
-    borderRadius: 140,
-    backgroundColor: 'rgba(216, 226, 255, 0.35)',
-    ...Platform.select({
-      web: { filter: 'blur(64px)' },
-    }),
-  },
-  glowTertiary: {
-    position: 'absolute',
-    top: 50,
-    left: '25%',
-    width: 220,
-    height: 220,
-    borderRadius: 110,
-    backgroundColor: 'rgba(196, 231, 255, 0.25)',
-    ...Platform.select({
-      web: { filter: 'blur(48px)' },
-    }),
   },
   scrollContainer: {
     flexGrow: 1,

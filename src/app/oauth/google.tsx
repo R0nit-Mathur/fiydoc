@@ -1,6 +1,7 @@
 import React, { useEffect, useState } from 'react';
-import { View, Text, ActivityIndicator, StyleSheet, Platform } from 'react-native';
+import { View, Text, ActivityIndicator, StyleSheet, Platform, Pressable } from 'react-native';
 import { useLocalSearchParams, useRouter } from 'expo-router';
+import * as Linking from 'expo-linking';
 import { ShieldCheck, AlertTriangle } from 'lucide-react-native';
 import { authService } from '@/services/authService';
 import { useAuthStore } from '@/store/useAuthStore';
@@ -33,16 +34,26 @@ export default function GoogleOAuthCallback() {
       try {
         let token = searchParams.access_token || searchParams.token;
         let role = searchParams.role;
-        const oauthError = searchParams.error || searchParams.error_description;
+        let oauthError = searchParams.error || searchParams.error_description;
 
-        // On Web, check window.location.hash for access_token=... if not in query
-        if (Platform.OS === 'web' && typeof window !== 'undefined') {
-          if (!token && window.location.hash) {
-            const hashMatch = window.location.hash.match(/access_token=([^&#]+)/);
-            if (hashMatch) {
-              token = decodeURIComponent(hashMatch[1]);
+        // Extract from full deep-link URL (supports native and web hashes like #access_token=... or #error=...)
+        try {
+          const rawUrl = Platform.OS === 'web' && typeof window !== 'undefined'
+            ? window.location.href
+            : await Linking.getInitialURL();
+
+          if (rawUrl) {
+            if (!token) {
+              const tokenMatch = rawUrl.match(/[#?&](?:access_token|token)=([^&#]+)/);
+              if (tokenMatch) token = decodeURIComponent(tokenMatch[1]);
+            }
+            if (!oauthError) {
+              const errorMatch = rawUrl.match(/[#?&](?:error_description|error)=([^&#]+)/);
+              if (errorMatch) oauthError = decodeURIComponent(errorMatch[1].replace(/\+/g, ' '));
             }
           }
+        } catch (e) {
+          console.warn('[GoogleOAuthCallback] Error reading raw deep link:', e);
         }
 
         if (oauthError) {
@@ -50,9 +61,6 @@ export default function GoogleOAuthCallback() {
           if (isMounted) {
             setErrorMessage(`[Google Sign-In] ${oauthError}`);
           }
-          setTimeout(() => {
-            router.replace('/(auth)/login');
-          }, 2000);
           return;
         }
 
@@ -173,6 +181,18 @@ export default function GoogleOAuthCallback() {
             </View>
             <Text style={styles.errorTitle}>Authentication Failed</Text>
             <Text style={styles.errorMessage}>{errorMessage}</Text>
+            <Pressable
+              onPress={() => router.replace('/(auth)/login')}
+              style={{
+                marginTop: 20,
+                backgroundColor: StitchColors.primaryContainer,
+                paddingVertical: 12,
+                paddingHorizontal: 24,
+                borderRadius: 12,
+              }}
+            >
+              <Text style={{ color: '#FFFFFF', fontWeight: '700', fontSize: 14 }}>Continue with Email Login</Text>
+            </Pressable>
           </>
         ) : (
           <>

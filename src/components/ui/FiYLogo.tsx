@@ -32,11 +32,11 @@ export function FiYLogo({ size = 'md', variant = 'horizontal', style }: FiYLogoP
 
   if (variant === 'icon') {
     const iconDimensions = {
-      sm: { width: 28, height: 28 },
-      md: { width: 40, height: 40 },
-      lg: { width: 56, height: 56 },
-      xl: { width: 76, height: 76 },
-      '2xl': { width: 96, height: 96 },
+      sm: { width: 32, height: 32 },
+      md: { width: 44, height: 44 },
+      lg: { width: 60, height: 60 },
+      xl: { width: 80, height: 80 },
+      '2xl': { width: 100, height: 100 },
     };
     const dim = iconDimensions[size] || iconDimensions.md;
 
@@ -52,13 +52,13 @@ export function FiYLogo({ size = 'md', variant = 'horizontal', style }: FiYLogoP
   }
 
   // Full Brand Wordmark (tightly-cropped transparent PNG, true aspect ratio 2.616)
-  // Scaled down to fit neatly in mobile headers and screens without overflow
+  // Perfectly proportioned to render "FiYDOC" with no clipping or truncation
   const logoDimensions = {
-    sm: { width: 48, height: 18 },
-    md: { width: 62, height: 24 },
-    lg: { width: 80, height: 31 },
-    xl: { width: 100, height: 38 },
-    '2xl': { width: 120, height: 46 },
+    sm: { width: 80, height: 30 },
+    md: { width: 98, height: 37 },
+    lg: { width: 122, height: 46 },
+    xl: { width: 145, height: 55 },
+    '2xl': { width: 170, height: 65 },
   };
   const dim = logoDimensions[size] || logoDimensions.md;
 
