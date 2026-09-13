@@ -6,6 +6,14 @@ export interface DoctorFilters {
   specialty?: string;
 }
 
+export interface SlotDetails {
+  slots: string[];
+  delayMinutes?: number;
+  delayReason?: string | null;
+  isOnLeave?: boolean;
+  leaveReason?: string | null;
+}
+
 export const doctorService = {
   updateMyProfile: async (profile: {
     fullName?: string;
@@ -36,7 +44,44 @@ export const doctorService = {
   },
 
   getAvailableSlots: async (doctorId: string, date: string): Promise<string[]> => {
-    const res = await apiClient<{ slots: string[] }>(`/doctors/${doctorId}/slots?date=${date}`);
+    const res = await apiClient<SlotDetails>(`/doctors/${doctorId}/slots?date=${date}`);
     return res.slots || [];
   },
+
+  getAvailableSlotsDetailed: async (doctorId: string, date: string): Promise<SlotDetails> => {
+    const res = await apiClient<SlotDetails>(`/doctors/${doctorId}/slots?date=${date}`);
+    return {
+      slots: res.slots || [],
+      delayMinutes: res.delayMinutes || 0,
+      delayReason: res.delayReason || null,
+      isOnLeave: Boolean(res.isOnLeave),
+      leaveReason: res.leaveReason || null,
+    };
+  },
+
+  applyScheduleDelay: async (payload: { doctorId?: string; date: string; delayMinutes: number; reason?: string }) => {
+    return apiClient<{ success: boolean; delayMinutes: number; reason?: string }>('/doctors/schedule/delay', {
+      method: 'POST',
+      body: JSON.stringify(payload),
+    });
+  },
+
+  applyScheduleLeave: async (payload: { doctorId?: string; date: string; reason?: string }) => {
+    return apiClient<{ success: boolean; isOnLeave: boolean; reason?: string }>('/doctors/schedule/leave', {
+      method: 'POST',
+      body: JSON.stringify(payload),
+    });
+  },
+
+  undoScheduleOverride: async (payload: { doctorId?: string; date: string; action: 'delay' | 'leave' }) => {
+    return apiClient<{ success: boolean; action: string; reverted: boolean }>('/doctors/schedule/undo', {
+      method: 'POST',
+      body: JSON.stringify(payload),
+    });
+  },
+
+  getScheduleStatus: async (doctorId: string, date: string): Promise<SlotDetails> => {
+    return apiClient<SlotDetails>(`/doctors/${doctorId}/schedule/status?date=${date}`);
+  },
 };
+

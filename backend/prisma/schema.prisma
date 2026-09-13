@@ -279,4 +279,18 @@ model DailyDoctorToken {
   @@index([doctorId, date])
 }
 
+model DoctorScheduleOverride {
+  id           String   @id @default(uuid())
+  doctorId     String
+  date         String   // YYYY-MM-DD
+  delayMinutes Int      @default(0)
+  isOnLeave    Boolean  @default(false)
+  reason       String?
+  updatedAt    DateTime @updatedAt
+  createdAt    DateTime @default(now())
+
+  @@unique([doctorId, date])
+  @@index([doctorId, date])
+}
+
 

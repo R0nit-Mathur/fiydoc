@@ -93,6 +93,11 @@ export interface Appointment {
   tokenNumber?: string | number;
   paymentMethod?: string;
   paidAmount?: number;
+  delayMinutes?: number;
+  expectedTime?: string;
+  delayReason?: string | null;
+  isDoctorOnLeave?: boolean;
+  cancelReason?: string | null;
 }
 
 export interface ClinicalNote {

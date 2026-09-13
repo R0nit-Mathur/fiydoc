@@ -54,6 +54,8 @@ import { useAuthStore } from '@/store/useAuthStore';
 import { useNotificationStore } from '@/store/useNotificationStore';
 import { useAppointmentStore } from '@/store/useAppointmentStore';
 import { useAppointmentsQuery } from '@/hooks/queries/useAppointmentsQuery';
+import { useQueryClient } from '@tanstack/react-query';
+import { doctorService } from '@/services/doctorService';
 import { BorderRadius, Shadows, StitchColors, DEFAULT_DOCTOR_AVATAR } from '@/constants/theme';
 import UndoToast from '@/components/ui/UndoToast';
 import { Avatar } from '@/components/ui/Avatar';
@@ -136,11 +138,26 @@ export default function DoctorScheduleScreen() {
   const router = useRouter();
   const { colors, isDark } = useAppTheme();
   const { user } = useAuthStore();
+  const queryClient = useQueryClient();
 
   const [weekDays, setWeekDays] = useState(DYNAMIC_WEEK_DAYS);
   const [selectedDay, setSelectedDay] = useState(DYNAMIC_WEEK_DAYS[0]?.key || new Date().toISOString().slice(0, 10));
   const [selectedSession, setSelectedSession] = useState<'morning' | 'evening'>('morning');
   const [leaveDates, setLeaveDates] = useState<string[]>([]);
+
+  // Sync server schedule status for the selected day
+  useEffect(() => {
+    if (user?.id && selectedDay) {
+      doctorService
+        .getScheduleStatus(user.id, selectedDay)
+        .then((status) => {
+          if (status.isOnLeave) {
+            setLeaveDates((prev) => (prev.includes(selectedDay) ? prev : [...prev, selectedDay]));
+          }
+        })
+        .catch(() => {});
+    }
+  }, [user?.id, selectedDay]);
   const [currentMonth, setCurrentMonth] = useState(() => {
     const d = new Date();
     d.setDate(1);
@@ -393,7 +410,23 @@ const [undoDelayMins, setUndoDelayMins] = useState<number>(15);
       recipientRole: 'patient',
     });
 
-    setDelayNotice(`+${mins}m emergency delay applied for today only. Slots shifted & patients notified.`);
+    // Sync delay to server and broadcast
+    doctorService
+      .applyScheduleDelay({
+        doctorId: user?.id,
+        date: selectedDay,
+        delayMinutes: mins,
+        reason: 'OPD Clinical Delay / Emergency',
+      })
+      .then(() => {
+        queryClient.invalidateQueries({ queryKey: ['appointments'] });
+        queryClient.invalidateQueries({ queryKey: ['doctor-slots'] });
+      })
+      .catch((err) => {
+        console.warn('[schedule] Server delay sync notice:', err?.message);
+      });
+
+    setDelayNotice(`+${mins}m emergency delay applied & synced to server. Patients notified.`);
     setTimeout(() => setDelayNotice(null), 3500);
   };
 
@@ -415,8 +448,23 @@ const [undoDelayMins, setUndoDelayMins] = useState<number>(15);
       recipientRole: 'patient',
     });
 
+    // Sync leave to server: cancels active bookings on that date and disables new slots
+    doctorService
+      .applyScheduleLeave({
+        doctorId: user?.id,
+        date: selectedDay,
+        reason: leaveReason,
+      })
+      .then(() => {
+        queryClient.invalidateQueries({ queryKey: ['appointments'] });
+        queryClient.invalidateQueries({ queryKey: ['doctor-slots'] });
+      })
+      .catch((err) => {
+        console.warn('[schedule] Server leave sync notice:', err?.message);
+      });
+
     if (Platform.OS !== 'web') Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
-    setDelayNotice(`Leave marked for ${dayLabel} (${leaveReason}). Patients notified.`);
+    setDelayNotice(`Leave marked on server for ${dayLabel} (${leaveReason}). Booked visits cancelled.`);
     setTimeout(() => setDelayNotice(null), 4000);
   };
 
@@ -466,6 +514,8 @@ const [undoDelayMins, setUndoDelayMins] = useState<number>(15);
 
   const handleUndoScheduleChange = () => {
     if (!lastUndo) return;
+    const action = lastUndo.kind === 'leave' ? 'leave' : 'delay';
+
     if (lastUndo.kind === 'leave') {
       setLeaveDates((dates) => dates.filter((date) => date !== lastUndo.day));
     } else {
@@ -477,7 +527,23 @@ const [undoDelayMins, setUndoDelayMins] = useState<number>(15);
         return { ...previous, [lastUndo.day]: { ...current, [lastUndo.session]: lastUndo.slots } };
       });
     }
-    setDelayNotice(`${lastUndo.label.replace('Undo ', '')} reverted.`);
+
+    // Sync undo to server
+    doctorService
+      .undoScheduleOverride({
+        doctorId: user?.id,
+        date: lastUndo.day,
+        action,
+      })
+      .then(() => {
+        queryClient.invalidateQueries({ queryKey: ['appointments'] });
+        queryClient.invalidateQueries({ queryKey: ['doctor-slots'] });
+      })
+      .catch((err) => {
+        console.warn('[schedule] Server undo notice:', err?.message);
+      });
+
+    setDelayNotice(`${lastUndo.label.replace('Undo ', '')} reverted on server.`);
     setLastUndo(null);
     if (Platform.OS !== 'web') Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
   };

@@ -331,6 +331,36 @@ export class DoctorsService {
       ];
     }
 
+    // Check for schedule override (delay / leave)
+    let override: any = null;
+    try {
+      override = await (this.prisma as any).doctorScheduleOverride?.findUnique({
+        where: {
+          doctorId_date: {
+            doctorId: doctor.id,
+            date,
+          },
+        },
+      });
+    } catch (err: any) {
+      console.warn('[doctors] doctorScheduleOverride query failed (fallback):', err?.message);
+    }
+
+    if (override?.isOnLeave) {
+      return {
+        date,
+        doctorId: doctor.id,
+        slots: [],
+        isOnLeave: true,
+        leaveReason: override.reason || 'Doctor is on leave on this date',
+      };
+    }
+
+    const delayMinutes = override?.delayMinutes || 0;
+    if (delayMinutes > 0) {
+      candidateSlots = candidateSlots.map((slot) => this.shift24hTime(slot, delayMinutes));
+    }
+
     const bookedAppointments = await this.prisma.appointment.findMany({
       where: {
         doctorId: { in: [doctor.id, doctor.userId] },
@@ -370,6 +400,304 @@ export class DoctorsService {
       date,
       doctorId: doctor.id,
       slots: availableSlots,
+      delayMinutes,
+      delayReason: override?.reason || null,
+      isOnLeave: false,
+    };
+  }
+
+  private shift24hTime(timeStr: string, shiftMins: number): string {
+    const parts = timeStr.split(':');
+    const h = parseInt(parts[0], 10) || 0;
+    const m = parseInt(parts[1], 10) || 0;
+    const total = h * 60 + m + shiftMins;
+    const wrapped = ((total % 1440) + 1440) % 1440;
+    const newH = Math.floor(wrapped / 60);
+    const newM = wrapped % 60;
+    return `${String(newH).padStart(2, '0')}:${String(newM).padStart(2, '0')}`;
+  }
+
+  async applyScheduleDelay(
+    doctorId: string | undefined,
+    date: string,
+    delayMinutes: number,
+    reason?: string,
+    currentUser?: any
+  ) {
+    const doctor = await this.prisma.doctor.findFirst({
+      where: {
+        OR: [
+          ...(doctorId ? [{ id: doctorId }, { userId: doctorId }] : []),
+          ...(currentUser?.id ? [{ userId: currentUser.id }, { id: currentUser.id }] : []),
+        ],
+      },
+    });
+    if (!doctor) throw new NotFoundException('Doctor not found.');
+
+    const cleanReason = reason?.trim() || 'Clinical emergency / OPD delay';
+
+    try {
+      await (this.prisma as any).doctorScheduleOverride?.upsert({
+        where: {
+          doctorId_date: {
+            doctorId: doctor.id,
+            date,
+          },
+        },
+        create: {
+          doctorId: doctor.id,
+          date,
+          delayMinutes,
+          isOnLeave: false,
+          reason: cleanReason,
+        },
+        update: {
+          delayMinutes,
+          isOnLeave: false,
+          reason: cleanReason,
+        },
+      });
+    } catch (err: any) {
+      console.warn('[doctors] Failed to upsert doctorScheduleOverride:', err?.message);
+    }
+
+    // Update existing active appointments with delay tag
+    const appointments = await this.prisma.appointment.findMany({
+      where: {
+        doctorId: { in: [doctor.id, doctor.userId] },
+        date,
+        status: { in: ['PENDING', 'CONFIRMED'] },
+      },
+      include: { patient: true },
+    });
+
+    for (const apt of appointments) {
+      const cleanNotes = (apt.notes || '').replace(/\[(?:Delayed|Postponed):[^\]]*\]/gi, '').trim();
+      const updatedNotes = cleanNotes
+        ? `${cleanNotes} [Delayed: +${delayMinutes}m. Reason: ${cleanReason}]`
+        : `[Delayed: +${delayMinutes}m. Reason: ${cleanReason}]`;
+
+      await this.prisma.appointment.update({
+        where: { id: apt.id },
+        data: { notes: updatedNotes },
+      });
+
+      // Send patient notification
+      if (apt.patient?.userId) {
+        try {
+          const shiftedTime = this.shift24hTime(apt.startTime, delayMinutes);
+          await this.prisma.notification.create({
+            data: {
+              userId: apt.patient.userId,
+              type: 'SCHEDULE_DELAY',
+              title: `⚠️ OPD Delay (+${delayMinutes}m)`,
+              message: `Dr. ${doctor.fullName} is delayed by ~${delayMinutes} mins on ${date}. Your updated appointment time is approximately ${shiftedTime}. Reason: ${cleanReason}.`,
+            },
+          });
+        } catch (notifErr: any) {
+          console.warn('[doctors] Notification failed:', notifErr?.message);
+        }
+      }
+    }
+
+    return {
+      success: true,
+      doctorId: doctor.id,
+      date,
+      delayMinutes,
+      reason: cleanReason,
+      affectedAppointments: appointments.length,
+    };
+  }
+
+  async applyScheduleLeave(
+    doctorId: string | undefined,
+    date: string,
+    reason?: string,
+    currentUser?: any
+  ) {
+    const doctor = await this.prisma.doctor.findFirst({
+      where: {
+        OR: [
+          ...(doctorId ? [{ id: doctorId }, { userId: doctorId }] : []),
+          ...(currentUser?.id ? [{ userId: currentUser.id }, { id: currentUser.id }] : []),
+        ],
+      },
+    });
+    if (!doctor) throw new NotFoundException('Doctor not found.');
+
+    const cleanReason = reason?.trim() || 'Personal / Medical leave';
+
+    try {
+      await (this.prisma as any).doctorScheduleOverride?.upsert({
+        where: {
+          doctorId_date: {
+            doctorId: doctor.id,
+            date,
+          },
+        },
+        create: {
+          doctorId: doctor.id,
+          date,
+          delayMinutes: 0,
+          isOnLeave: true,
+          reason: cleanReason,
+        },
+        update: {
+          delayMinutes: 0,
+          isOnLeave: true,
+          reason: cleanReason,
+        },
+      });
+    } catch (err: any) {
+      console.warn('[doctors] Failed to upsert doctorScheduleOverride leave:', err?.message);
+    }
+
+    // Cancel all active appointments for this date
+    const appointments = await this.prisma.appointment.findMany({
+      where: {
+        doctorId: { in: [doctor.id, doctor.userId] },
+        date,
+        status: { in: ['PENDING', 'CONFIRMED'] },
+      },
+      include: { patient: true },
+    });
+
+    for (const apt of appointments) {
+      const cleanNotes = (apt.notes || '').replace(/\[Cancelled:[^\]]*\]/gi, '').trim();
+      const updatedNotes = cleanNotes
+        ? `${cleanNotes} [Cancelled: Doctor on leave - ${cleanReason}]`
+        : `[Cancelled: Doctor on leave - ${cleanReason}]`;
+
+      await this.prisma.appointment.update({
+        where: { id: apt.id },
+        data: {
+          status: 'CANCELLED',
+          notes: updatedNotes,
+        },
+      });
+
+      if (apt.patient?.userId) {
+        try {
+          await this.prisma.notification.create({
+            data: {
+              userId: apt.patient.userId,
+              type: 'SCHEDULE_LEAVE',
+              title: '❌ Appointment Cancelled — Doctor on Leave',
+              message: `Dr. ${doctor.fullName} will be on leave on ${date} (${cleanReason}). Your appointment has been cancelled. Full refund/rescheduling is enabled in the app.`,
+            },
+          });
+        } catch (notifErr: any) {
+          console.warn('[doctors] Notification failed:', notifErr?.message);
+        }
+      }
+    }
+
+    return {
+      success: true,
+      doctorId: doctor.id,
+      date,
+      isOnLeave: true,
+      reason: cleanReason,
+      cancelledAppointments: appointments.length,
+    };
+  }
+
+  async undoScheduleOverride(
+    doctorId: string | undefined,
+    date: string,
+    action: 'delay' | 'leave',
+    currentUser?: any
+  ) {
+    const doctor = await this.prisma.doctor.findFirst({
+      where: {
+        OR: [
+          ...(doctorId ? [{ id: doctorId }, { userId: doctorId }] : []),
+          ...(currentUser?.id ? [{ userId: currentUser.id }, { id: currentUser.id }] : []),
+        ],
+      },
+    });
+    if (!doctor) throw new NotFoundException('Doctor not found.');
+
+    try {
+      if (action === 'delay') {
+        await (this.prisma as any).doctorScheduleOverride?.upsert({
+          where: { doctorId_date: { doctorId: doctor.id, date } },
+          create: { doctorId: doctor.id, date, delayMinutes: 0 },
+          update: { delayMinutes: 0, reason: null },
+        });
+
+        // Clean delay note tag from appointments
+        const appointments = await this.prisma.appointment.findMany({
+          where: { doctorId: { in: [doctor.id, doctor.userId] }, date },
+          include: { patient: true },
+        });
+        for (const apt of appointments) {
+          if (apt.notes?.includes('[Delayed:')) {
+            const clean = apt.notes.replace(/\[(?:Delayed|Postponed):[^\]]*\]/gi, '').trim();
+            await this.prisma.appointment.update({
+              where: { id: apt.id },
+              data: { notes: clean },
+            });
+          }
+          if (apt.patient?.userId) {
+            try {
+              await this.prisma.notification.create({
+                data: {
+                  userId: apt.patient.userId,
+                  type: 'SCHEDULE_RESTORED',
+                  title: 'Schedule Restored',
+                  message: `Dr. ${doctor.fullName}'s delay has been resolved. Consultation is proceeding at normal scheduled time.`,
+                },
+              });
+            } catch {}
+          }
+        }
+      } else {
+        await (this.prisma as any).doctorScheduleOverride?.upsert({
+          where: { doctorId_date: { doctorId: doctor.id, date } },
+          create: { doctorId: doctor.id, date, isOnLeave: false },
+          update: { isOnLeave: false, reason: null },
+        });
+      }
+    } catch (err: any) {
+      console.warn('[doctors] Failed to undo schedule override:', err?.message);
+    }
+
+    return {
+      success: true,
+      doctorId: doctor.id,
+      date,
+      action,
+      reverted: true,
+    };
+  }
+
+  async getScheduleStatus(doctorId: string, date: string) {
+    const doctor = await this.prisma.doctor.findFirst({
+      where: {
+        OR: [
+          { id: doctorId },
+          { userId: doctorId },
+        ],
+      },
+    });
+    if (!doctor) throw new NotFoundException('Doctor not found.');
+
+    let override: any = null;
+    try {
+      override = await (this.prisma as any).doctorScheduleOverride?.findUnique({
+        where: { doctorId_date: { doctorId: doctor.id, date } },
+      });
+    } catch {}
+
+    return {
+      doctorId: doctor.id,
+      date,
+      delayMinutes: override?.delayMinutes || 0,
+      delayReason: override?.reason || null,
+      isOnLeave: override?.isOnLeave || false,
+      leaveReason: override?.isOnLeave ? (override?.reason || 'Doctor on leave') : null,
     };
   }
 }

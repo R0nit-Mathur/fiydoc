@@ -8,6 +8,8 @@ import { useAppointmentStore } from '@/store/useAppointmentStore';
 import { useNotificationStore } from '@/store/useNotificationStore';
 import { Palette, BorderRadius } from '@/constants/theme';
 import { useAppTheme } from '@/hooks/useAppTheme';
+import { useQueryClient } from '@tanstack/react-query';
+import { doctorService } from '@/services/doctorService';
 import { Clock3 } from 'lucide-react-native';
 
 const POSTPONE_PRESETS = [
@@ -60,6 +62,7 @@ export function PostponeModal({ visible, onClose, selectedApt, onSuccess }: Post
   const { colors } = useAppTheme();
   const styles = useStyles(colors);
   const { user } = useAuthStore();
+  const queryClient = useQueryClient();
 
   const [selectedMinutes, setSelectedMinutes] = useState<number>(30);
   const [selectedReason, setSelectedReason] = useState<string>(REASON_PRESETS[0]);
@@ -85,9 +88,28 @@ export function PostponeModal({ visible, onClose, selectedApt, onSuccess }: Post
     const updatedApt = {
       ...existing,
       time: newTime,
-      notes: finalReason ? `[Postponed: ${finalReason}] ${existing.notes || ''}` : existing.notes,
+      expectedTime: newTime,
+      delayMinutes: selectedMinutes,
+      delayReason: finalReason,
+      notes: finalReason ? `[Postponed: ${finalReason}] [Delayed: +${selectedMinutes}m. Reason: ${finalReason}] ${existing.notes || ''}` : existing.notes,
     };
     aptStore.addAppointment(updatedApt);
+
+    // Sync delay to backend server
+    doctorService
+      .applyScheduleDelay({
+        doctorId: user?.id || selectedApt.doctorId,
+        date: selectedApt.date || new Date().toISOString().slice(0, 10),
+        delayMinutes: selectedMinutes,
+        reason: finalReason,
+      })
+      .then(() => {
+        queryClient.invalidateQueries({ queryKey: ['appointments'] });
+        queryClient.invalidateQueries({ queryKey: ['doctor-slots'] });
+      })
+      .catch((err) => {
+        console.warn('[PostponeModal] Server delay sync notice:', err?.message);
+      });
 
     useNotificationStore.getState().addNotification({
       recipientId: selectedApt.patientId || 'pat_1',

@@ -34,6 +34,7 @@ import {
   Building2,
   Navigation,
   Calendar,
+  CalendarX,
   Clock,
   Sun,
   Moon,
@@ -130,11 +131,21 @@ export default function DoctorProfileScreen() {
 
   const currentDate = DATES[selectedDateIndex] || DATES[0];
 
-  const { data: serverSlots = [], isLoading: isLoadingSlots } = useQuery({
+  const { data: slotData, isLoading: isLoadingSlots } = useQuery({
     queryKey: ['doctor-slots', doctor?.id, currentDate?.isoDate],
-    queryFn: () => (doctor?.id && currentDate?.isoDate ? doctorService.getAvailableSlots(doctor.id, currentDate.isoDate) : Promise.resolve([])),
+    queryFn: () =>
+      doctor?.id && currentDate?.isoDate
+        ? doctorService.getAvailableSlotsDetailed(doctor.id, currentDate.isoDate)
+        : Promise.resolve({ slots: [], isOnLeave: false, delayMinutes: 0 }),
     enabled: Boolean(doctor?.id && currentDate?.isoDate),
   });
+
+  const isOnLeave = Boolean(slotData?.isOnLeave);
+  const leaveReason = slotData?.leaveReason || 'Doctor is on leave on this date';
+  const delayMinutes = slotData?.delayMinutes || 0;
+  const delayReason = slotData?.delayReason || 'Clinical delay';
+
+  const serverSlots = slotData?.slots || [];
 
   const formatDisplaySlot = (raw: string): string => {
     const trimmed = raw.trim();
@@ -170,11 +181,13 @@ export default function DoctorProfileScreen() {
 
   const formattedServerSlots = (serverSlots || []).map(formatDisplaySlot);
 
-  // Standard fallback slots if server slot table is empty for this date
+  // Standard fallback slots if server slot table is empty for this date, UNLESS doctor is on leave
   const fallbackMorning = ['09:30 AM', '10:00 AM', '10:30 AM', '11:00 AM', '11:30 AM', '12:00 PM', '12:30 PM'];
   const fallbackEvening = ['05:00 PM', '05:30 PM', '06:00 PM', '06:30 PM', '07:00 PM', '07:30 PM', '08:00 PM'];
 
-  const rawCandidateSlots = formattedServerSlots.length > 0
+  const rawCandidateSlots = isOnLeave
+    ? []
+    : formattedServerSlots.length > 0
     ? formattedServerSlots
     : [...fallbackMorning, ...fallbackEvening];
 
@@ -534,6 +547,34 @@ export default function DoctorProfileScreen() {
               })}
             </ScrollView>
 
+            {/* Leave Notice Banner */}
+            {isOnLeave && (
+              <View style={{ backgroundColor: '#FEF2F2', borderColor: '#FCA5A5', borderWidth: 1, padding: 14, borderRadius: 14, marginBottom: 14 }}>
+                <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8, marginBottom: 4 }}>
+                  <CalendarX size={18} color="#DC2626" />
+                  <Text style={{ fontSize: 14, fontWeight: '700', color: '#B91C1C' }}>Doctor is on Leave</Text>
+                </View>
+                <Text style={{ fontSize: 12.5, color: '#7F1D1D', lineHeight: 18 }}>
+                  Dr. {doctor?.name || 'Doctor'} will be on leave on {currentDate.day}, {currentDate.date} {currentDate.month} ({leaveReason}). Please select another date to schedule your visit.
+                </Text>
+              </View>
+            )}
+
+            {/* Delay Notice Banner */}
+            {delayMinutes > 0 && !isOnLeave && (
+              <View style={{ backgroundColor: '#FEF3C7', borderColor: '#FCD34D', borderWidth: 1, padding: 14, borderRadius: 14, marginBottom: 14, flexDirection: 'row', alignItems: 'flex-start', gap: 10 }}>
+                <Clock size={18} color="#D97706" style={{ marginTop: 2 }} />
+                <View style={{ flex: 1 }}>
+                  <Text style={{ fontSize: 13.5, fontWeight: '700', color: '#92400E' }}>
+                    Doctor Schedule Delayed (+{delayMinutes}m)
+                  </Text>
+                  <Text style={{ fontSize: 12, color: '#78350F', marginTop: 2, lineHeight: 17 }}>
+                    Dr. {doctor?.name || 'Doctor'} has an active delay of ~{delayMinutes} minutes on this date ({delayReason}). Displayed slot times reflect the adjusted consultation schedule.
+                  </Text>
+                </View>
+              </View>
+            )}
+
             {/* Morning / Evening Toggle Tabs */}
             <View style={styles.sessionToggleWrap}>
               <Pressable
@@ -601,14 +642,18 @@ export default function DoctorProfileScreen() {
               <View style={{ padding: 24, alignItems: 'center', backgroundColor: StitchColors.surfaceContainerLow, borderRadius: 12, marginVertical: 12 }}>
                 <Clock size={28} color={StitchColors.outline} style={{ marginBottom: 8 }} />
                 <Text style={{ fontSize: 15, fontWeight: '700', color: StitchColors.onSurface, marginBottom: 4, textAlign: 'center' }}>
-                  {isLoadingSlots
+                  {isOnLeave
+                    ? 'Doctor On Leave'
+                    : isLoadingSlots
                     ? 'Checking slot availability...'
                     : isSelectedDateToday
                     ? 'OPD Slots Closed for this Session'
                     : 'No Slots Available'}
                 </Text>
                 <Text style={{ fontSize: 13, color: StitchColors.outline, textAlign: 'center', lineHeight: 18 }}>
-                  {isLoadingSlots
+                  {isOnLeave
+                    ? `No consultations on this date due to ${leaveReason}. Please select another date above.`
+                    : isLoadingSlots
                     ? 'Retrieving live doctor schedule from clinic...'
                     : isSelectedDateToday
                     ? 'All slots for this session have passed or closed (advance booking closes 15 mins before slot start). Please select another session or upcoming date.'
@@ -691,18 +736,18 @@ export default function DoctorProfileScreen() {
           </View>
 
           <Pressable
-            disabled={!currentSlotTime || currentSlots.length === 0}
+            disabled={!currentSlotTime || currentSlots.length === 0 || isOnLeave}
             style={({ pressed }) => [
               styles.bookCtaButton,
-              (!currentSlotTime || currentSlots.length === 0) && { backgroundColor: StitchColors.outline, opacity: 0.6 },
-              pressed && currentSlotTime && styles.buttonPressed,
+              (!currentSlotTime || currentSlots.length === 0 || isOnLeave) && { backgroundColor: StitchColors.outline, opacity: 0.6 },
+              pressed && currentSlotTime && !isOnLeave && styles.buttonPressed,
             ]}
             onPress={handleBookContinue}
           >
             <Text style={styles.bookCtaText} numberOfLines={1}>
-              {currentSlotTime ? `Book ${currentSlotTime}` : 'No Slots Available'}
+              {isOnLeave ? 'Doctor On Leave' : currentSlotTime ? `Book ${currentSlotTime}` : 'No Slots Available'}
             </Text>
-            {currentSlotTime ? <ArrowRight size={17} color="#ffffff" /> : null}
+            {currentSlotTime && !isOnLeave ? <ArrowRight size={17} color="#ffffff" /> : null}
           </Pressable>
         </View>
       </View>

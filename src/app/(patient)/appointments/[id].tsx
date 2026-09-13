@@ -23,6 +23,8 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import Animated, { FadeIn, FadeInDown } from 'react-native-reanimated';
 import * as Haptics from 'expo-haptics';
 import { useAppointmentDetailQuery } from '@/hooks/queries/useAppointmentsQuery';
+import { useQueryClient } from '@tanstack/react-query';
+import { appointmentService } from '@/services/appointmentService';
 import { useAppointmentStore } from '@/store/useAppointmentStore';
 import { useNotificationStore } from '@/store/useNotificationStore';
 import { Avatar } from '@/components/ui/Avatar';
@@ -48,6 +50,7 @@ export default function AppointmentDetailScreen() {
   const router = useRouter();
   const { id } = useLocalSearchParams<{ id: string }>();
   const { data: apt, isLoading } = useAppointmentDetailQuery(id as string);
+  const queryClient = useQueryClient();
   const cancelAppointment = useAppointmentStore((s) => s.cancelAppointment);
   const [cancelDialogVisible, setCancelDialogVisible] = useState(false);
   const { colors, isDark } = useAppTheme();
@@ -83,12 +86,20 @@ export default function AppointmentDetailScreen() {
     ? 'danger'
     : 'blue';
 
-  const handleConfirmCancel = () => {
+  const handleConfirmCancel = async () => {
     setCancelDialogVisible(false);
     if (Platform.OS !== 'web') {
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Warning);
     }
     cancelAppointment(apt.id);
+    try {
+      await appointmentService.cancelAppointment(apt.id);
+      queryClient.invalidateQueries({ queryKey: ['appointments'] });
+      queryClient.invalidateQueries({ queryKey: ['appointment', apt.id] });
+    } catch (err: any) {
+      console.warn('[AppointmentDetail] Server cancellation warning:', err?.message);
+    }
+
     useNotificationStore.getState().addNotification({
       recipientId: apt.patientId,
       recipientRole: 'patient',
@@ -135,6 +146,35 @@ export default function AppointmentDetailScreen() {
         contentContainerStyle={styles.scrollContent}
         showsVerticalScrollIndicator={false}
       >
+        {/* Delay Notice Banner */}
+        {Boolean(apt.delayMinutes && apt.delayMinutes > 0 && apt.status !== 'cancelled') && (
+          <View style={{ backgroundColor: '#FEF3C7', borderColor: '#FCD34D', borderWidth: 1, padding: 14, borderRadius: 14, marginBottom: 14, flexDirection: 'row', alignItems: 'flex-start', gap: 10 }}>
+            <Clock size={18} color="#D97706" style={{ marginTop: 2 }} />
+            <View style={{ flex: 1 }}>
+              <Text style={{ fontSize: 13.5, fontWeight: '700', color: '#92400E' }}>
+                Consultation Delayed (+{apt.delayMinutes} mins)
+              </Text>
+              <Text style={{ fontSize: 12.5, color: '#78350F', marginTop: 2, lineHeight: 17 }}>
+                Dr. {apt.doctorName} is running behind schedule. Your adjusted expected consultation time is{' '}
+                <Text style={{ fontWeight: '700' }}>{apt.expectedTime || apt.time}</Text> (was {apt.time}).
+                {apt.delayReason ? ` Reason: ${apt.delayReason}.` : ''}
+              </Text>
+            </View>
+          </View>
+        )}
+
+        {/* Doctor Leave Cancellation Notice Banner */}
+        {Boolean(apt.status === 'cancelled' && apt.isDoctorOnLeave) && (
+          <View style={{ backgroundColor: '#FEF2F2', borderColor: '#FCA5A5', borderWidth: 1, padding: 14, borderRadius: 14, marginBottom: 14 }}>
+            <Text style={{ fontSize: 14, fontWeight: '700', color: '#B91C1C', marginBottom: 2 }}>
+              Cancelled: Doctor On Leave
+            </Text>
+            <Text style={{ fontSize: 12.5, color: '#7F1D1D', lineHeight: 18 }}>
+              {apt.cancelReason || 'Dr. ' + apt.doctorName + ' is on leave on this date. Your appointment has been cancelled and a full refund has been initiated.'}
+            </Text>
+          </View>
+        )}
+
         {/* Doctor Card */}
         <Animated.View entering={FadeIn.duration(380)}>
           <View style={[styles.doctorCard, { backgroundColor: colors.card, borderColor: colors.border }]}>
@@ -153,7 +193,7 @@ export default function AppointmentDetailScreen() {
                 {apt.hospital}
               </Text>
             </View>
-            <Badge label={apt.status.toUpperCase()} variant={statusVariant} size="sm" />
+            <Badge label={apt.isDoctorOnLeave ? 'DOC ON LEAVE' : apt.status.toUpperCase()} variant={statusVariant} size="sm" />
           </View>
         </Animated.View>
 
@@ -169,10 +209,14 @@ export default function AppointmentDetailScreen() {
             </View>
             <View style={[styles.vDivider, { backgroundColor: colors.border }]} />
             <View style={styles.scheduleItem}>
-              <Clock size={18} color={StitchColors.secondaryContainer} />
+              <Clock size={18} color={apt.delayMinutes ? '#D97706' : StitchColors.secondaryContainer} />
               <View>
-                <Text style={[styles.scheduleLabel, { color: colors.textMuted }]}>SLOT TIME</Text>
-                <Text style={[styles.scheduleValue, { color: colors.text }]}>{formatTimeSlot(apt.time)}</Text>
+                <Text style={[styles.scheduleLabel, { color: apt.delayMinutes ? '#D97706' : colors.textMuted }]}>
+                  {apt.delayMinutes ? 'EXPECTED' : 'SLOT TIME'}
+                </Text>
+                <Text style={[styles.scheduleValue, { color: apt.delayMinutes ? '#D97706' : colors.text, fontWeight: apt.delayMinutes ? '700' : '600' }]}>
+                  {apt.expectedTime || formatTimeSlot(apt.time)}
+                </Text>
               </View>
             </View>
             <View style={[styles.vDivider, { backgroundColor: colors.border }]} />

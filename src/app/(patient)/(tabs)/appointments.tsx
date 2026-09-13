@@ -32,6 +32,7 @@ import {
   Clock,
   ShieldCheck,
   Check,
+  AlertTriangle,
 } from 'lucide-react-native';
 import { StitchColors } from '@/constants/theme';
 import { useAppointmentStore } from '@/store/useAppointmentStore';
@@ -39,15 +40,37 @@ import { useAuthStore } from '@/store/useAuthStore';
 import { useHealthStore } from '@/store/useHealthStore';
 import { useAppointmentsQuery } from '@/hooks/queries/useAppointmentsQuery';
 import { usePrescriptionsQuery } from '@/hooks/queries/usePrescriptionsQuery';
+import { appointmentService } from '@/services/appointmentService';
+import { ConfirmationDialog } from '@/components/ui/ConfirmationDialog';
 import { Appointment } from '@/types/index';
 
-function AppointmentCard({ apt, onViewPass, onViewRx }: { apt: Appointment; onViewPass?: () => void; onViewRx?: () => void }) {
+function AppointmentCard({
+  apt,
+  onViewPass,
+  onViewRx,
+  onCancel,
+}: {
+  apt: Appointment;
+  onViewPass?: () => void;
+  onViewRx?: () => void;
+  onCancel?: () => void;
+}) {
   const router = useRouter();
   const isUpcoming = ['confirmed', 'checked_in', 'upcoming', 'in_progress', 'pending'].includes(apt.status);
   const isCancelled = apt.status === 'cancelled';
 
   const statusColor = isCancelled ? '#dc2626' : StitchColors.secondary;
-  const statusLabel = isCancelled ? 'Cancelled' : apt.status === 'confirmed' ? 'Confirmed' : apt.status === 'checked_in' ? 'Checked In' : apt.status === 'in_progress' ? 'In Progress' : apt.status === 'completed' ? 'Completed' : 'Upcoming';
+  const statusLabel = isCancelled
+    ? (apt.isDoctorOnLeave ? 'Doctor On Leave' : 'Cancelled')
+    : apt.status === 'confirmed'
+    ? 'Confirmed'
+    : apt.status === 'checked_in'
+    ? 'Checked In'
+    : apt.status === 'in_progress'
+    ? 'In Progress'
+    : apt.status === 'completed'
+    ? 'Completed'
+    : 'Upcoming';
 
   const avatarUri = apt.doctorAvatar || `https://ui-avatars.com/api/?name=${encodeURIComponent(apt.doctorName || 'D')}&background=DBEAFE&color=1D4ED8`;
 
@@ -66,6 +89,36 @@ function AppointmentCard({ apt, onViewPass, onViewRx }: { apt: Appointment; onVi
         </View>
       </View>
 
+      {/* Delay alert banner if doctor schedule is delayed */}
+      {apt.delayMinutes && apt.delayMinutes > 0 && !isCancelled && (
+        <View style={styles.delayBanner}>
+          <Clock size={14} color="#d97706" />
+          <View style={{ flex: 1 }}>
+            <Text style={styles.delayBannerTitle}>
+              Doctor Delayed (+{apt.delayMinutes} mins)
+            </Text>
+            <Text style={styles.delayBannerSubtitle}>
+              Expected consultation time: {apt.expectedTime || apt.time}
+              {apt.delayReason ? ` (${apt.delayReason})` : ''}
+            </Text>
+          </View>
+        </View>
+      )}
+
+      {/* Doctor leave notice if cancelled due to leave */}
+      {isCancelled && apt.isDoctorOnLeave && (
+        <View style={styles.leaveBanner}>
+          <AlertTriangle size={14} color="#dc2626" />
+          <View style={{ flex: 1 }}>
+            <Text style={styles.leaveBannerTitle}>Cancelled: Doctor On Leave</Text>
+            <Text style={styles.leaveBannerSubtitle}>
+              The doctor is on leave on this date. Full refund initiated.
+              {apt.cancelReason ? ` • ${apt.cancelReason}` : ''}
+            </Text>
+          </View>
+        </View>
+      )}
+
       <View style={styles.doctorInfoRow}>
         <Image
           source={{ uri: avatarUri }}
@@ -75,7 +128,7 @@ function AppointmentCard({ apt, onViewPass, onViewRx }: { apt: Appointment; onVi
         <View style={styles.doctorDetails}>
           <Text style={styles.doctorName}>{apt.doctorName}</Text>
           <Text style={styles.doctorSpecialty}>{apt.doctorSpecialty} • {apt.hospital}</Text>
-          {isCancelled && (
+          {isCancelled && !apt.isDoctorOnLeave && (
             <Text style={[styles.queueTelemetryText, { marginTop: 4, color: '#dc2626' }]}>
               Cancelled — full refund will be processed within 3–5 business days
             </Text>
@@ -100,14 +153,27 @@ function AppointmentCard({ apt, onViewPass, onViewRx }: { apt: Appointment; onVi
         </View>
       )}
 
-      {isUpcoming && onViewPass && (
-        <Pressable
-          style={({ pressed }) => [styles.passCtaButton, pressed && styles.buttonPressed]}
-          onPress={onViewPass}
-        >
-          <QrCode size={18} color="#ffffff" />
-          <Text style={styles.passCtaText}>View Visit Pass & Live Queue →</Text>
-        </Pressable>
+      {isUpcoming && (
+        <View style={styles.actionRow}>
+          {onViewPass && (
+            <Pressable
+              style={({ pressed }) => [styles.passCtaButton, { flex: 1 }, pressed && styles.buttonPressed]}
+              onPress={onViewPass}
+            >
+              <QrCode size={16} color="#ffffff" />
+              <Text style={styles.passCtaText}>Visit Pass & Queue</Text>
+            </Pressable>
+          )}
+          {onCancel && (
+            <Pressable
+              style={({ pressed }) => [styles.cardCancelBtn, pressed && styles.buttonPressed]}
+              onPress={onCancel}
+            >
+              <X size={15} color="#dc2626" />
+              <Text style={styles.cardCancelBtnText}>Cancel</Text>
+            </Pressable>
+          )}
+        </View>
       )}
 
       {apt.status === 'completed' && onViewRx && (
@@ -125,7 +191,7 @@ function AppointmentCard({ apt, onViewPass, onViewRx }: { apt: Appointment; onVi
 
 export default function PatientAppointmentsScreen() {
   const router = useRouter();
-  const { appointments } = useAppointmentStore();
+  const { appointments, cancelAppointment: cancelInStore } = useAppointmentStore();
   const { user } = useAuthStore();
   const { prescriptions: storePrescriptions } = useHealthStore();
   const { data: serverAppointments = [], refetch: refetchAppointments } = useAppointmentsQuery();
@@ -135,6 +201,9 @@ export default function PatientAppointmentsScreen() {
   const [visitPassVisible, setVisitPassVisible] = useState(false);
   const [selectedApt, setSelectedApt] = useState<Appointment | null>(null);
   const [refreshing, setRefreshing] = useState(false);
+  const [cancelTargetApt, setCancelTargetApt] = useState<Appointment | null>(null);
+  const [cancelModalVisible, setCancelModalVisible] = useState(false);
+  const [cancelling, setCancelling] = useState(false);
 
   const handleRefresh = async () => {
     setRefreshing(true);
@@ -174,6 +243,31 @@ export default function PatientAppointmentsScreen() {
     }
     setSelectedApt(apt);
     setVisitPassVisible(true);
+  };
+
+  const handleInitiateCancel = (apt: Appointment) => {
+    if (Platform.OS !== 'web') {
+      Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+    }
+    setCancelTargetApt(apt);
+    setCancelModalVisible(true);
+  };
+
+  const handleConfirmCancel = async () => {
+    if (!cancelTargetApt) return;
+    setCancelling(true);
+    try {
+      await appointmentService.cancelAppointment(cancelTargetApt.id);
+      cancelInStore(cancelTargetApt.id);
+      await queryClient.invalidateQueries({ queryKey: ['appointments'] });
+    } catch (error) {
+      console.error('Failed to cancel appointment on server:', error);
+      cancelInStore(cancelTargetApt.id);
+    } finally {
+      setCancelling(false);
+      setCancelModalVisible(false);
+      setCancelTargetApt(null);
+    }
   };
 
   const handleViewRx = (apt: Appointment) => {
@@ -318,6 +412,11 @@ export default function PatientAppointmentsScreen() {
                   apt={apt}
                   onViewPass={() => handleOpenPass(apt)}
                   onViewRx={() => handleViewRx(apt)}
+                  onCancel={
+                    ['confirmed', 'checked_in', 'upcoming', 'in_progress', 'pending'].includes(apt.status)
+                      ? () => handleInitiateCancel(apt)
+                      : undefined
+                  }
                 />
               ))
             )}
@@ -400,6 +499,24 @@ export default function PatientAppointmentsScreen() {
                   </View>
                 </View>
 
+                {selectedApt?.delayMinutes && selectedApt.delayMinutes > 0 ? (
+                  <>
+                    <View style={styles.passDetailDivider} />
+                    <View style={styles.passDetailItem}>
+                      <Clock size={16} color="#d97706" />
+                      <View style={styles.passDetailText}>
+                        <Text style={[styles.passDetailLabel, { color: '#d97706', fontWeight: '700' }]}>
+                          Schedule Delayed (+{selectedApt.delayMinutes} mins)
+                        </Text>
+                        <Text style={[styles.passDetailValue, { color: '#b45309', fontWeight: '700' }]}>
+                          Expected Time: {selectedApt.expectedTime || selectedApt.time}
+                          {selectedApt.delayReason ? ` (${selectedApt.delayReason})` : ''}
+                        </Text>
+                      </View>
+                    </View>
+                  </>
+                ) : null}
+
                 <View style={styles.passDetailDivider} />
 
                 <View style={styles.passDetailItem}>
@@ -423,10 +540,41 @@ export default function PatientAppointmentsScreen() {
                 <Check size={18} color="#ffffff" />
                 <Text style={styles.sheetDoneText}>Done</Text>
               </Pressable>
+
+              {selectedApt && ['confirmed', 'checked_in', 'upcoming', 'in_progress', 'pending'].includes(selectedApt.status) && (
+                <Pressable
+                  style={styles.sheetCancelBtn}
+                  onPress={() => {
+                    const target = selectedApt;
+                    setVisitPassVisible(false);
+                    handleInitiateCancel(target);
+                  }}
+                >
+                  <X size={16} color="#dc2626" />
+                  <Text style={styles.sheetCancelBtnText}>Cancel Appointment</Text>
+                </Pressable>
+              )}
             </View>
           </View>
         </View>
       </Modal>
+
+      {/* Confirmation Dialog for Cancellation */}
+      <ConfirmationDialog
+        visible={cancelModalVisible}
+        title="Cancel Appointment"
+        message={`Are you sure you want to cancel your appointment with ${cancelTargetApt?.doctorName || 'the doctor'} on ${cancelTargetApt?.date} at ${cancelTargetApt?.time}? Full refund will be processed within 3–5 business days.`}
+        confirmText="Yes, Cancel"
+        cancelText="Keep Appointment"
+        confirmVariant="danger"
+        iconVariant="danger"
+        loading={cancelling}
+        onConfirm={handleConfirmCancel}
+        onCancel={() => {
+          setCancelModalVisible(false);
+          setCancelTargetApt(null);
+        }}
+      />
     </SafeAreaView>
   );
 }
@@ -979,5 +1127,87 @@ const styles = StyleSheet.create({
     fontSize: 15,
     fontWeight: '700',
     color: '#ffffff',
+  },
+  delayBanner: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    gap: 8,
+    backgroundColor: '#fffbeb',
+    borderWidth: 1,
+    borderColor: '#fde68a',
+    borderRadius: 12,
+    padding: 10,
+    marginTop: 10,
+  },
+  delayBannerTitle: {
+    fontSize: 12,
+    fontWeight: '700',
+    color: '#b45309',
+  },
+  delayBannerSubtitle: {
+    fontSize: 11,
+    color: '#92400e',
+    marginTop: 2,
+  },
+  leaveBanner: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    gap: 8,
+    backgroundColor: '#fef2f2',
+    borderWidth: 1,
+    borderColor: '#fecaca',
+    borderRadius: 12,
+    padding: 10,
+    marginTop: 10,
+  },
+  leaveBannerTitle: {
+    fontSize: 12,
+    fontWeight: '700',
+    color: '#b91c1c',
+  },
+  leaveBannerSubtitle: {
+    fontSize: 11,
+    color: '#991b1b',
+    marginTop: 2,
+  },
+  actionRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    marginTop: 6,
+  },
+  cardCancelBtn: {
+    height: 44,
+    paddingHorizontal: 14,
+    borderRadius: 14,
+    backgroundColor: '#fee2e2',
+    borderWidth: 1,
+    borderColor: '#fca5a5',
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 5,
+  },
+  cardCancelBtnText: {
+    fontSize: 13,
+    fontWeight: '700',
+    color: '#dc2626',
+  },
+  sheetCancelBtn: {
+    height: 44,
+    borderRadius: 14,
+    backgroundColor: '#fee2e2',
+    borderWidth: 1,
+    borderColor: '#fca5a5',
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 6,
+    marginTop: 8,
+  },
+  sheetCancelBtnText: {
+    fontSize: 14,
+    fontWeight: '700',
+    color: '#dc2626',
   },
 });

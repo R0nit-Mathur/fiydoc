@@ -6,10 +6,35 @@ import { AppointmentStatus, ConsultationType, Role } from '@prisma/client';
 export class AppointmentsService {
   constructor(private prisma: PrismaService) {}
 
+  private calculateShiftedTime(timeStr: string, minutes: number): string {
+    if (!timeStr) return '';
+    const match = timeStr.match(/^(\d{1,2}):(\d{2})/);
+    if (!match) return timeStr;
+    const h = parseInt(match[1], 10);
+    const m = parseInt(match[2], 10);
+    const total = h * 60 + m + minutes;
+    const wrapped = ((total % 1440) + 1440) % 1440;
+    const newH = Math.floor(wrapped / 60);
+    const newM = wrapped % 60;
+    const meridian = newH >= 12 ? 'PM' : 'AM';
+    const displayH = newH > 12 ? newH - 12 : newH === 0 ? 12 : newH;
+    return `${String(displayH).padStart(2, '0')}:${String(newM).padStart(2, '0')} ${meridian}`;
+  }
+
   private formatAppointment(apt: any) {
     if (!apt) return null;
     const tokenMatch = apt.notes?.match(/\[(Token\s*#\d+)\]/) || apt.notes?.match(/(Token\s*#\d+)/);
     const tokenNumber = tokenMatch ? tokenMatch[1] : (apt.tokenNumber || null);
+
+    const delayMatch = apt.notes?.match(/\[(?:Delayed|Postponed):\s*\+?(\d+)m?(?:\.\s*Reason:\s*([^\]]+))?\]/i);
+    const delayMinutes = delayMatch ? parseInt(delayMatch[1], 10) : 0;
+    const delayReason = delayMatch && delayMatch[2] ? delayMatch[2].trim() : null;
+
+    const leaveMatch = apt.notes?.match(/\[Cancelled:\s*Doctor on leave(?:\s*-\s*([^\]]+))?\]/i);
+    const isDoctorOnLeave = Boolean(leaveMatch);
+    const leaveReason = leaveMatch && leaveMatch[1] ? leaveMatch[1].trim() : null;
+
+    const expectedTime = delayMinutes > 0 ? this.calculateShiftedTime(apt.startTime, delayMinutes) : apt.startTime;
 
     return {
       id: apt.id,
@@ -26,6 +51,11 @@ export class AppointmentsService {
       time: apt.startTime,
       startTime: apt.startTime,
       endTime: apt.endTime,
+      expectedTime,
+      delayMinutes,
+      delayReason,
+      isDoctorOnLeave,
+      cancelReason: isDoctorOnLeave ? `Doctor on leave: ${leaveReason || 'Clinic closed'}` : null,
       tokenNumber,
       status: (apt.status || 'CONFIRMED').toLowerCase(),
       consultationType: apt.consultationType,
