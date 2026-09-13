@@ -32,16 +32,28 @@ import { PrescriptionsTab } from '@/components/patient/PrescriptionsTab';
 import { HealthHistoryTab } from '@/components/patient/HealthHistoryTab';
 import { AddDocumentModal } from '@/components/patient/AddDocumentModal';
 import { PrescriptionDetailModal } from '@/components/patient/PrescriptionDetailModal';
+import { usePrescriptionsQuery } from '@/hooks/queries/usePrescriptionsQuery';
 
 export default function HealthHubScreen() {
   const router = useRouter();
   const { user } = useAuthStore();
-  const { records, prescriptions } = useHealthStore();
+  const { records, prescriptions: storePrescriptions } = useHealthStore();
+  const { data: serverPrescriptions = [], refetch: refetchPrescriptions } = usePrescriptionsQuery();
   const { colors } = useAppTheme();
   const queryClient = useQueryClient();
 
+  const allPrescriptions = useMemo(() => {
+    const map = new Map();
+    [...serverPrescriptions, ...storePrescriptions].forEach((p) => {
+      if (p?.id && !map.has(p.id)) {
+        map.set(p.id, p);
+      }
+    });
+    return Array.from(map.values());
+  }, [serverPrescriptions, storePrescriptions]);
+
   const patientPrescriptions = useMemo(() => {
-    return prescriptions.filter((p) => {
+    return allPrescriptions.filter((p) => {
       if (!user) return true;
       if (user.role === 'patient') {
         return !p.patientId || p.patientId === user.id ||
@@ -49,7 +61,7 @@ export default function HealthHubScreen() {
       }
       return true;
     });
-  }, [prescriptions, user]);
+  }, [allPrescriptions, user]);
 
   const [activeTab, setActiveTab] = useState<'PRESCRIPTIONS' | 'HISTORY'>('PRESCRIPTIONS');
   const [uploadModalVisible, setUploadModalVisible] = useState(false);
@@ -60,12 +72,17 @@ export default function HealthHubScreen() {
   const handleRefresh = useCallback(async () => {
     setRefreshing(true);
     try {
-      await queryClient.invalidateQueries({ queryKey: ['appointments'] });
+      await Promise.all([
+        queryClient.invalidateQueries({ queryKey: ['prescriptions'] }),
+        queryClient.invalidateQueries({ queryKey: ['health-records'] }),
+        queryClient.invalidateQueries({ queryKey: ['appointments'] }),
+        refetchPrescriptions(),
+      ]);
       await new Promise((r) => setTimeout(r, 400));
     } finally {
       setRefreshing(false);
     }
-  }, [queryClient]);
+  }, [queryClient, refetchPrescriptions]);
 
   const openPrescriptionModal = (rx: Prescription) => {
     setSelectedPrescription(rx);

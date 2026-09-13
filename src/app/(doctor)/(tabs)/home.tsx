@@ -22,8 +22,10 @@ import {
   Platform,
   StatusBar,
   Modal,
+  RefreshControl,
 } from 'react-native';
 import { useRouter } from 'expo-router';
+import { useQueryClient } from '@tanstack/react-query';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { BlurView } from 'expo-blur';
 import Animated, { FadeInDown, FadeInUp } from 'react-native-reanimated';
@@ -65,15 +67,37 @@ export default function DoctorHomeScreen() {
   const { colors, isDark } = useAppTheme();
   const { user } = useAuthStore();
   const { appointments: storeAppointments } = useAppointmentStore();
-  const { data: serverAppointments = [] } = useAppointmentsQuery(undefined, user?.id);
+  const queryClient = useQueryClient();
   const [drawerOpen, setDrawerOpen] = useState(false);
   const [updateModalVisible, setUpdateModalVisible] = useState(false);
+  const [refreshing, setRefreshing] = useState(false);
 
-  // Combine server queue with local appointments, prioritizing freshest server data
+  const handleRefresh = async () => {
+    setRefreshing(true);
+    try {
+      await Promise.all([
+        queryClient.invalidateQueries({ queryKey: ['appointments'] }),
+        queryClient.invalidateQueries({ queryKey: ['notifications'] }),
+      ]);
+      await new Promise((r) => setTimeout(r, 400));
+    } finally {
+      setRefreshing(false);
+    }
+  };
+
+  // Combine server queue with local appointments, honoring completed status
   const combinedAppointments = useMemo(() => {
-    const serverIds = new Set(serverAppointments.map((a) => a.id));
+    const storeMap = new Map(storeAppointments.map((a) => [a.id, a]));
+    const mergedServer = serverAppointments.map((sa) => {
+      const la = storeMap.get(sa.id);
+      if (la && la.status === 'completed' && sa.status !== 'completed') {
+        return { ...sa, status: 'completed' };
+      }
+      return sa;
+    });
+    const serverIds = new Set(mergedServer.map((a) => a.id));
     const localRemaining = storeAppointments.filter((a) => !serverIds.has(a.id));
-    return [...serverAppointments, ...localRemaining];
+    return [...mergedServer, ...localRemaining];
   }, [serverAppointments, storeAppointments]);
 
   // Derive today's queue dynamically using both ISO and local time
@@ -102,10 +126,14 @@ export default function DoctorHomeScreen() {
     }).sort((a, b) => (a.time || '').localeCompare(b.time || ''));
   }, [combinedAppointments, todayIso, todayLocal, user?.id, currentDocName, user?.role]);
 
-  const completedToday = todayApts.filter((a) => a.status === 'completed').length;
+  // Completed count includes any appointment completed today or marked completed
+  const completedToday = useMemo(() => {
+    return combinedAppointments.filter((a) => a.status === 'completed').length;
+  }, [combinedAppointments]);
+
   const activeStatuses = ['confirmed', 'checked_in', 'upcoming', 'in_progress', 'pending'];
-  const nextPatient = todayApts.find((a) => activeStatuses.includes(a.status)) || null;
-  const upcomingPatients = todayApts.filter((a) => activeStatuses.includes(a.status)).slice(0, 5);
+  const nextPatient = todayApts.find((a) => activeStatuses.includes(a.status) && a.status !== 'completed') || null;
+  const upcomingPatients = todayApts.filter((a) => activeStatuses.includes(a.status) && a.status !== 'completed').slice(0, 5);
 
   // Get first name for greeting
   const firstName = user?.name?.split(' ')[0] || 'Doctor';
@@ -160,6 +188,14 @@ export default function DoctorHomeScreen() {
       <ScrollView
         contentContainerStyle={styles.scrollContent}
         showsVerticalScrollIndicator={false}
+        refreshControl={
+          <RefreshControl
+            refreshing={refreshing}
+            onRefresh={handleRefresh}
+            colors={[StitchColors.primaryContainer]}
+            tintColor={StitchColors.primaryContainer}
+          />
+        }
       >
         {/* 2. Greeting & Status Row */}
         <View style={styles.greetingRow}>

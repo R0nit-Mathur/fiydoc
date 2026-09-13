@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import {
   View,
   Text,
@@ -6,11 +6,14 @@ import {
   TouchableOpacity,
   Share,
   StyleSheet,
+  ActivityIndicator,
 } from 'react-native';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useHealthStore } from '@/store/useHealthStore';
 import { useAuthStore } from '@/store/useAuthStore';
+import { apiClient } from '@/services/apiClient';
+import { Prescription } from '@/types/index';
 import { Badge } from '@/components/ui/Badge';
 import { FiYLogo } from '@/components/ui/FiYLogo';
 import { BorderRadius, Shadows, Spacing, StitchColors, Palette } from '@/constants/theme';
@@ -40,9 +43,67 @@ export default function DedicatedPrescriptionScreen() {
   const { prescriptions } = useHealthStore();
   const { user } = useAuthStore();
   const [downloadToast, setDownloadToast] = useState(false);
+  const [remoteRx, setRemoteRx] = useState<Prescription | null>(null);
+  const [loading, setLoading] = useState(false);
 
-  // Find prescription or fallback to the first available
-  const rx = prescriptions.find((p) => p.id === id) || prescriptions[0];
+  useEffect(() => {
+    const existing = prescriptions.find((p) => p.id === id);
+    if (!existing && id) {
+      setLoading(true);
+      apiClient<any>(`/prescriptions/${id}`)
+        .then((data) => {
+          if (data && data.id) {
+            const mapped: Prescription = {
+              id: data.id,
+              consultationId: data.consultationId,
+              patientId: data.patientId,
+              doctorId: data.doctorId,
+              doctorName: data.doctor?.fullName
+                ? data.doctor.fullName.startsWith('Dr.')
+                  ? data.doctor.fullName
+                  : `Dr. ${data.doctor.fullName}`
+                : 'Licensed Doctor',
+              doctorSpecialty: data.doctor?.specialization || 'Specialist',
+              doctorMciNumber: data.doctor?.verification?.registrationNumber || undefined,
+              clinicName: data.doctor?.clinic?.name || 'FiYDoc Partner Clinic',
+              clinicAddress: data.doctor?.clinic?.address || undefined,
+              patientName: data.patient?.fullName || user?.name || 'Patient',
+              doctorNotes: data.doctorNotes || 'Follow prescribed regimen.',
+              followUpInstructions: data.followUpInstructions || 'Review in clinic as advised.',
+              verificationCode: data.verificationCode,
+              pdfUrl: data.pdfUrl || undefined,
+              signedAt: data.issuedAt || data.signedAt || data.createdAt,
+              createdAt: data.createdAt
+                ? new Date(data.createdAt).toLocaleDateString('en-IN', {
+                    day: '2-digit',
+                    month: 'short',
+                    year: 'numeric',
+                  })
+                : '',
+              medicines: (data.medicines || []).map((m: any) => ({
+                id: m.id || `${data.id}-${m.name}`,
+                name: m.name,
+                dosage: m.dosage,
+                frequency: m.frequency,
+                durationDays: m.durationDays,
+                instructions: m.instructions || '',
+              })),
+            };
+            setRemoteRx(mapped);
+            useHealthStore.getState().addPrescription(mapped);
+          }
+        })
+        .catch((err) => {
+          console.warn('[prescription/[id]] Failed to fetch prescription:', err?.message);
+        })
+        .finally(() => {
+          setLoading(false);
+        });
+    }
+  }, [id, prescriptions, user]);
+
+  // Find prescription in store, remote fetch, or fallback to first
+  const rx = prescriptions.find((p) => p.id === id) || remoteRx || prescriptions[0];
 
   const handleDownloadPDF = () => {
     setDownloadToast(true);
@@ -60,6 +121,23 @@ export default function DedicatedPrescriptionScreen() {
       console.error(e);
     }
   };
+
+  if (loading && !rx) {
+    return (
+      <SafeAreaView style={styles.safeArea} edges={['top']}>
+        <View style={styles.header}>
+          <TouchableOpacity onPress={() => router.back()} style={styles.backBtn}>
+            <ArrowLeft size={20} color={colors.text} />
+          </TouchableOpacity>
+          <Text style={styles.headerTitle}>Digital Prescription</Text>
+        </View>
+        <View style={[styles.emptyContainer, { justifyContent: 'center' }]}>
+          <ActivityIndicator size="large" color={StitchColors.primaryContainer} />
+          <Text style={[styles.emptySubtitle, { marginTop: 16 }]}>Loading verified prescription...</Text>
+        </View>
+      </SafeAreaView>
+    );
+  }
 
   if (!rx) {
     return (

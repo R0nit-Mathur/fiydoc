@@ -3,16 +3,28 @@ import { Platform } from 'react-native';
 
 const TOKEN_KEY = 'fiydoc_auth_token';
 
+let inMemoryToken: string | null = null;
+
 export const tokenStorage = {
+  getCachedToken(): string | null {
+    return inMemoryToken;
+  },
+
   async getToken(): Promise<string | null> {
+    if (inMemoryToken) {
+      return inMemoryToken;
+    }
+
     try {
       if (Platform.OS === 'web') {
         if (typeof window !== 'undefined' && window.localStorage) {
-          return window.localStorage.getItem(TOKEN_KEY);
+          inMemoryToken = window.localStorage.getItem(TOKEN_KEY);
+          return inMemoryToken;
         }
         return null;
       }
-      return await SecureStore.getItemAsync(TOKEN_KEY);
+      inMemoryToken = await SecureStore.getItemAsync(TOKEN_KEY);
+      return inMemoryToken;
     } catch (err) {
       console.warn('[tokenStorage] Error getting token:', err);
       return null;
@@ -20,6 +32,7 @@ export const tokenStorage = {
   },
 
   async setToken(token: string): Promise<void> {
+    inMemoryToken = token;
     try {
       if (Platform.OS === 'web') {
         if (typeof window !== 'undefined' && window.localStorage) {
@@ -34,6 +47,7 @@ export const tokenStorage = {
   },
 
   async removeToken(): Promise<void> {
+    inMemoryToken = null;
     try {
       if (Platform.OS === 'web') {
         if (typeof window !== 'undefined' && window.localStorage) {

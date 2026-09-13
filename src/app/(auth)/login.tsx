@@ -134,33 +134,6 @@ export default function LoginScreen() {
 
           {/* Primary Interactive Card */}
           <View style={styles.interactiveCard}>
-            {/* Fast Social Identity CTA */}
-            <Pressable
-              onPress={handleGoogleAuth}
-              disabled={googleLoading}
-              style={({ pressed }) => [
-                styles.googleButton,
-                pressed && styles.buttonPressed,
-              ]}
-              accessibilityRole="button"
-              accessibilityLabel="Continue with Google"
-            >
-              {googleLoading ? (
-                <ActivityIndicator size="small" color={StitchColors.primary} />
-              ) : (
-                <>
-                  <GoogleLogo size={20} />
-                  <Text style={styles.googleButtonText}>Continue with Google</Text>
-                </>
-              )}
-            </Pressable>
-
-            {/* Subtle Clean Divider */}
-            <View style={styles.dividerRow}>
-              <View style={styles.dividerLine} />
-              <Text style={styles.dividerText}>or sign in with email</Text>
-              <View style={styles.dividerLine} />
-            </View>
 
             {/* Error Message */}
             {error ? (

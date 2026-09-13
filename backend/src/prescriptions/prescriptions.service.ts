@@ -250,36 +250,14 @@ export class PrescriptionsService {
       console.warn('[prescriptions] Notification creation failed (non-fatal):', notifErr?.message);
     }
 
-    // Generate PDF and upload to Supabase Storage OUTSIDE the database transaction
+    // Generate PDF and upload in background (non-blocking) for instant signing response
     let storagePath: string | null = null;
-    let documentUrl: string | null = null;
-
     if (this.supabase.isConfigured()) {
-      try {
-        const bucket = process.env.SUPABASE_STORAGE_BUCKET || 'fiydoc-medical-docs';
-        storagePath = `prescriptions/${consultation.patientId}/${createdPrescription.id}.pdf`;
-        const pdfBuffer = await this.buildPrescriptionDocument(createdPrescription);
-        await this.supabase.uploadPrivateFile(
-          bucket,
-          storagePath,
-          pdfBuffer,
-          'application/pdf',
-        );
-
-        await this.prisma.prescription.update({
-          where: { id: createdPrescription.id },
-          data: { pdfUrl: storagePath },
-        });
-
-        await this.prisma.medicalRecord.updateMany({
-          where: { sourceId: createdPrescription.id, type: 'PRESCRIPTION' },
-          data: { documentUrl: storagePath },
-        });
-
-        documentUrl = await this.supabase.createSignedUrl(bucket, storagePath, 3600).catch(() => null);
-      } catch (storageErr) {
-        // Log error but preserve committed prescription record
-      }
+      const bucket = process.env.SUPABASE_STORAGE_BUCKET || 'fiydoc-medical-docs';
+      storagePath = `prescriptions/${consultation.patientId}/${createdPrescription.id}.pdf`;
+      this.generateAndStorePdf(createdPrescription, bucket, storagePath).catch((err) => {
+        console.warn('[prescriptions] Background PDF upload error:', err?.message);
+      });
     }
 
     const effectiveIssuedAt = (createdPrescription as any).issuedAt || createdPrescription.createdAt;
@@ -287,8 +265,27 @@ export class PrescriptionsService {
       ...createdPrescription,
       issuedAt: effectiveIssuedAt,
       signedAt: effectiveIssuedAt,
-      pdfUrl: documentUrl || storagePath,
+      pdfUrl: storagePath,
     };
+  }
+
+  private async generateAndStorePdf(prescription: any, bucket: string, storagePath: string) {
+    try {
+      const pdfBuffer = await this.buildPrescriptionDocument(prescription);
+      await this.supabase.uploadPrivateFile(bucket, storagePath, pdfBuffer, 'application/pdf');
+
+      await this.prisma.prescription.update({
+        where: { id: prescription.id },
+        data: { pdfUrl: storagePath },
+      });
+
+      await this.prisma.medicalRecord.updateMany({
+        where: { sourceId: prescription.id, type: 'PRESCRIPTION' },
+        data: { documentUrl: storagePath },
+      });
+    } catch (err: any) {
+      console.warn('[prescriptions] Background PDF generation/upload error:', err?.message);
+    }
   }
 
   async getPrescriptionById(id: string, currentUser: any) {
@@ -341,18 +338,42 @@ export class PrescriptionsService {
   }
 
   async getPrescriptionsForPatient(patientId: string, currentUser: any) {
-    const targetPatientId =
+    let targetPatientId =
       patientId === 'me' || patientId === currentUser.id
         ? currentUser.patient?.id
         : patientId;
 
     if (!targetPatientId) {
-      throw new NotFoundException('Patient record not found.');
+      const pat = await this.prisma.patient.findFirst({
+        where: {
+          OR: [
+            { id: patientId },
+            { userId: patientId },
+            ...(currentUser?.id ? [{ userId: currentUser.id }, { id: currentUser.id }] : []),
+          ],
+        },
+      });
+      targetPatientId = pat?.id;
     }
+
+    const possiblePatientIds = Array.from(
+      new Set(
+        [
+          targetPatientId,
+          patientId,
+          currentUser?.patient?.id,
+          currentUser?.id,
+        ].filter(Boolean) as string[]
+      )
+    );
 
     // Patient can only access own prescriptions
     if (currentUser.role === Role.PATIENT) {
-      if (currentUser.patient?.id !== targetPatientId && currentUser.id !== targetPatientId) {
+      const isOwner =
+        patientId === 'me' ||
+        possiblePatientIds.includes(currentUser.patient?.id) ||
+        possiblePatientIds.includes(currentUser.id);
+      if (!isOwner) {
         throw new ForbiddenException('Cannot access another patient’s prescriptions.');
       }
     }
@@ -365,7 +386,7 @@ export class PrescriptionsService {
       }
       const hasEncounter = await this.prisma.appointment.findFirst({
         where: {
-          patientId: targetPatientId,
+          patientId: { in: possiblePatientIds },
           doctorId: docId,
           status: { in: ['CONFIRMED', 'COMPLETED'] },
         },
@@ -375,8 +396,8 @@ export class PrescriptionsService {
       }
     }
 
-    return this.prisma.prescription.findMany({
-      where: { patientId: targetPatientId },
+    const list = await this.prisma.prescription.findMany({
+      where: { patientId: { in: possiblePatientIds } },
       include: {
         medicines: true,
         doctor: {
@@ -388,6 +409,15 @@ export class PrescriptionsService {
       },
       orderBy: { createdAt: 'desc' },
     });
+
+    return list.map((rx) => {
+      const effectiveIssuedAt = (rx as any).issuedAt || rx.createdAt;
+      return {
+        ...rx,
+        issuedAt: effectiveIssuedAt,
+        signedAt: effectiveIssuedAt,
+      };
+    });
   }
 
   private checkPrescriptionActorAccess(rx: any, currentUser: any) {
@@ -398,8 +428,15 @@ export class PrescriptionsService {
       return;
     }
 
-    const isPatient = currentUser.patient && currentUser.patient.id === rx.patientId;
-    const isDoctor = currentUser.doctor && currentUser.doctor.id === rx.doctorId;
+    const isPatient =
+      (currentUser.patient && currentUser.patient.id === rx.patientId) ||
+      currentUser.id === rx.patientId ||
+      (rx.patient && rx.patient.userId === currentUser.id);
+
+    const isDoctor =
+      (currentUser.doctor && currentUser.doctor.id === rx.doctorId) ||
+      currentUser.id === rx.doctorId ||
+      (rx.doctor && rx.doctor.userId === currentUser.id);
 
     if (!isPatient && !isDoctor) {
       throw new ForbiddenException('You do not have permission to view this prescription.');

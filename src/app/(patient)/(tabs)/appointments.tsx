@@ -12,11 +12,13 @@ import {
   StyleSheet,
   Platform,
   Modal,
+  RefreshControl,
 } from 'react-native';
 import { useRouter } from 'expo-router';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Image } from 'expo-image';
 import * as Haptics from 'expo-haptics';
+import { useQueryClient } from '@tanstack/react-query';
 import {
   ChevronLeft,
   SlidersHorizontal,
@@ -36,6 +38,7 @@ import { useAppointmentStore } from '@/store/useAppointmentStore';
 import { useAuthStore } from '@/store/useAuthStore';
 import { useHealthStore } from '@/store/useHealthStore';
 import { useAppointmentsQuery } from '@/hooks/queries/useAppointmentsQuery';
+import { usePrescriptionsQuery } from '@/hooks/queries/usePrescriptionsQuery';
 import { Appointment } from '@/types/index';
 
 function AppointmentCard({ apt, onViewPass, onViewRx }: { apt: Appointment; onViewPass?: () => void; onViewRx?: () => void }) {
@@ -124,11 +127,39 @@ export default function PatientAppointmentsScreen() {
   const router = useRouter();
   const { appointments } = useAppointmentStore();
   const { user } = useAuthStore();
-  const { prescriptions } = useHealthStore();
-  const { data: serverAppointments = [] } = useAppointmentsQuery();
+  const { prescriptions: storePrescriptions } = useHealthStore();
+  const { data: serverAppointments = [], refetch: refetchAppointments } = useAppointmentsQuery();
+  const { data: serverPrescriptions = [], refetch: refetchPrescriptions } = usePrescriptionsQuery();
+  const queryClient = useQueryClient();
   const [activeTab, setActiveTab] = useState<'upcoming' | 'completed' | 'cancelled'>('upcoming');
   const [visitPassVisible, setVisitPassVisible] = useState(false);
   const [selectedApt, setSelectedApt] = useState<Appointment | null>(null);
+  const [refreshing, setRefreshing] = useState(false);
+
+  const handleRefresh = async () => {
+    setRefreshing(true);
+    try {
+      await Promise.all([
+        queryClient.invalidateQueries({ queryKey: ['appointments'] }),
+        queryClient.invalidateQueries({ queryKey: ['prescriptions'] }),
+        refetchAppointments(),
+        refetchPrescriptions(),
+      ]);
+      await new Promise((r) => setTimeout(r, 400));
+    } finally {
+      setRefreshing(false);
+    }
+  };
+
+  const allPrescriptions = useMemo(() => {
+    const map = new Map();
+    [...serverPrescriptions, ...storePrescriptions].forEach((p) => {
+      if (p?.id && !map.has(p.id)) {
+        map.set(p.id, p);
+      }
+    });
+    return Array.from(map.values());
+  }, [serverPrescriptions, storePrescriptions]);
 
   const handleTabChange = (tab: 'upcoming' | 'completed' | 'cancelled') => {
     if (Platform.OS !== 'web') {
@@ -146,8 +177,16 @@ export default function PatientAppointmentsScreen() {
   };
 
   const handleViewRx = (apt: Appointment) => {
-    const rx = prescriptions.find((p) => p.patientId === apt.patientId || p.consultationId === apt.id);
-    if (rx) {
+    // 1. Try exact match by consultationId or appointment id
+    // 2. Try match by doctorId and patientId
+    // 3. Fallback to latest available prescription for this patient
+    const rx =
+      allPrescriptions.find((p) => p.consultationId === apt.id || p.id === apt.consultationId) ||
+      allPrescriptions.find((p) => p.doctorId === apt.doctorId && p.patientId === apt.patientId) ||
+      allPrescriptions.find((p) => p.patientId === apt.patientId) ||
+      allPrescriptions[0];
+
+    if (rx?.id) {
       router.push(`/(patient)/health/prescription/${rx.id}`);
     } else {
       router.push('/(patient)/(tabs)/health');
@@ -215,6 +254,14 @@ export default function PatientAppointmentsScreen() {
       <ScrollView
         contentContainerStyle={styles.scrollContainer}
         showsVerticalScrollIndicator={false}
+        refreshControl={
+          <RefreshControl
+            refreshing={refreshing}
+            onRefresh={handleRefresh}
+            colors={[StitchColors.primaryContainer]}
+            tintColor={StitchColors.primaryContainer}
+          />
+        }
       >
         <View style={styles.contentWrap}>
           {/* Segmented Filter Pills */}

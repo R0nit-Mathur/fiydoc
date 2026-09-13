@@ -12,6 +12,7 @@ interface HealthState {
   activeFilter: string;
   addRecord: (record: MedicalRecord) => void;
   addPrescription: (prescription: Prescription) => void;
+  setPrescriptions: (prescriptions: Prescription[]) => void;
   addLabReport: (report: LabReport) => void;
   setActiveFilter: (filter: string) => void;
   getPrescriptionsForDoctor: (doctorId: string, doctorName?: string) => Prescription[];
@@ -50,6 +51,16 @@ export const useHealthStore = create<HealthState>()(
         set((state) => ({
           prescriptions: [prescription, ...state.prescriptions.filter((p) => p.id !== prescription.id)],
         })),
+
+      setPrescriptions: (newPrescriptions) =>
+        set((state) => {
+          const newMap = new Map(newPrescriptions.map((p) => [p.id, p]));
+          const merged = [
+            ...newPrescriptions,
+            ...state.prescriptions.filter((p) => !newMap.has(p.id)),
+          ];
+          return { prescriptions: merged };
+        }),
 
       setActiveFilter: (activeFilter) => set({ activeFilter }),
 

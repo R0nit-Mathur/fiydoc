@@ -24,8 +24,10 @@ function getBaseUrl(): string {
 }
 
 export async function apiClient<T>(endpoint: string, options: RequestInit = {}): Promise<T> {
-  const secureToken = await tokenStorage.getToken();
-  const token = secureToken || useAuthStore.getState().user?.accessToken;
+  const token =
+    tokenStorage.getCachedToken() ||
+    useAuthStore.getState().user?.accessToken ||
+    (await tokenStorage.getToken());
   const baseUrl = getBaseUrl();
 
   const headers: Record<string, string> = {

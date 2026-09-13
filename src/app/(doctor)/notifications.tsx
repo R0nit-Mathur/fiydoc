@@ -1,16 +1,15 @@
 /**
- * Doctor Notifications Screen — Stitch Clinical Clarity design
+ * Doctor Notifications Screen — Stitch Clinical Clarity
  *
- * Features:
- * - HeaderBar with title and unread count
- * - Mark all as read button
- * - Notification cards with type icon, title, message, timestamp
- * - Unread highlighting with primary tint
- * - Empty state
- *
- * Part of FiYDoc Clinical Clarity design system
+ * Aligned with Patient Notifications design:
+ * - Custom header with back button, title, unread count subtext, and "Mark all read" button
+ * - Category filter chips (All, Appointments, Prescriptions, System) with counts
+ * - Notification cards with icon, title, message, time, action footer
+ * - Unread highlight with blue tint and accent dot
+ * - Empty state with Inbox circle icon
+ * - Pull-to-refresh support
  */
-import React, { useState, useMemo } from 'react';
+import React, { useMemo, useState, useCallback } from 'react';
 import {
   View,
   Text,
@@ -18,17 +17,17 @@ import {
   Pressable,
   StyleSheet,
   Platform,
+  RefreshControl,
 } from 'react-native';
 import { useRouter } from 'expo-router';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import Animated, {
-  FadeIn,
-  SlideInDown,
-  useAnimatedStyle,
-  useSharedValue,
-  withSpring,
-} from 'react-native-reanimated';
+import Animated, { FadeIn, FadeInDown } from 'react-native-reanimated';
 import * as Haptics from 'expo-haptics';
+import { useQueryClient } from '@tanstack/react-query';
+import { useNotificationStore } from '@/store/useNotificationStore';
+import { useAuthStore } from '@/store/useAuthStore';
+import { NotificationItem } from '@/types/index';
+import { Badge } from '@/components/ui/Badge';
 import {
   ArrowLeft,
   Bell,
@@ -40,158 +39,27 @@ import {
   Inbox,
   Stethoscope,
 } from 'lucide-react-native';
-import { HeaderBar } from '@/components/ui/HeaderBar';
-import { Pill as PillBadge } from '@/components/ui/Pill';
-import { EmptyState } from '@/components/ui/EmptyState';
-import { useNotificationStore } from '@/store/useNotificationStore';
-import { useAuthStore } from '@/store/useAuthStore';
-import { NotificationItem } from '@/types/index';
 import { StitchColors, BorderRadius, Shadows, Spacing, Palette } from '@/constants/theme';
 import { useAppTheme } from '@/hooks/useAppTheme';
 
-const AnimatedPressable = Animated.createAnimatedComponent(Pressable);
-
-function getNotificationIcon(type: NotificationItem['type'], colors: ReturnType<typeof useAppTheme>['colors']) {
-  const iconProps = { size: 18, strokeWidth: 2 } as const;
-  switch (type) {
-    case 'appointment':
-      return <Calendar {...iconProps} color={StitchColors.primaryContainer} />;
-    case 'prescription':
-      return <Pill {...iconProps} color={StitchColors.secondary} />;
-    case 'verification':
-      return <ShieldCheck {...iconProps} color={StitchColors.secondary} />;
-    default:
-      return <Bell {...iconProps} color={StitchColors.primaryContainer} />;
-  }
-}
-
-function NotificationCard({
-  item,
-  index,
-  onPress,
-}: {
-  item: NotificationItem;
-  index: number;
-  onPress: () => void;
-}) {
-  const { colors, isDark } = useAppTheme();
-  const scale = useSharedValue(1);
-  const isUnread = !item.read;
-
-  const animatedStyle = useAnimatedStyle(() => ({
-    transform: [{ scale: scale.value }],
-  }));
-
-  const cardBg = isUnread
-    ? isDark
-      ? 'rgba(20, 80, 163, 0.14)'
-      : Palette.primaryBlueLight
-    : colors.card;
-  const cardBorder = isUnread
-    ? isDark
-      ? 'rgba(173, 198, 255, 0.3)'
-      : Palette.primaryBlueBorder
-    : colors.border;
-
-  return (
-    <Animated.View
-      entering={SlideInDown.delay(index * 40).springify().damping(18)}
-      style={animatedStyle}
-    >
-      <AnimatedPressable
-        onPress={onPress}
-        onPressIn={() => {
-          scale.value = withSpring(0.98, { damping: 15, stiffness: 300 });
-        }}
-        onPressOut={() => {
-          scale.value = withSpring(1, { damping: 15, stiffness: 300 });
-        }}
-        style={[
-          styles.notifCard,
-          { backgroundColor: cardBg, borderColor: cardBorder },
-        ]}
-        accessibilityRole="button"
-        accessibilityLabel={`${item.title}: ${item.message}`}
-      >
-        {/* Header row */}
-        <View style={styles.notifHeader}>
-          <View style={styles.notifHeaderLeft}>
-            <View
-              style={[
-                styles.notifIconWrap,
-                {
-                  backgroundColor: isDark
-                    ? 'rgba(20,80,163,0.2)'
-                    : Palette.primaryBlueLight,
-                  borderColor: isUnread
-                    ? Palette.primaryBlueBorder
-                    : colors.border,
-                },
-              ]}
-            >
-              {getNotificationIcon(item.type, colors)}
-            </View>
-            <PillBadge
-              label={
-                item.type === 'appointment'
-                  ? 'Consultation'
-                  : item.type === 'prescription'
-                  ? 'Rx Issued'
-                  : item.type === 'verification'
-                  ? 'Registry'
-                  : 'Alert'
-              }
-              variant={item.type === 'appointment' ? 'primary' : 'teal'}
-              size="sm"
-            />
-          </View>
-          <View style={styles.notifTimeRow}>
-            <Text style={[styles.notifTime, { color: colors.textMuted }]}>
-              {item.timestamp}
-            </Text>
-            {isUnread && <View style={styles.unreadDot} />}
-          </View>
-        </View>
-
-        {/* Body */}
-        <View style={styles.notifBody}>
-          <Text
-            style={[
-              styles.notifTitle,
-              {
-                color: colors.text,
-                fontWeight: isUnread ? '700' : '600',
-              },
-            ]}
-          >
-            {item.title}
-          </Text>
-          <Text style={[styles.notifMessage, { color: colors.textSecondary }]}>
-            {item.message}
-          </Text>
-        </View>
-
-        {/* Footer */}
-        {item.link && (
-          <View style={[styles.notifFooter, { borderTopColor: colors.border }]}>
-            <Text style={[styles.notifActionText, { color: StitchColors.primaryContainer }]}>
-              View Details
-            </Text>
-            <ChevronRight size={14} color={StitchColors.primaryContainer} />
-          </View>
-        )}
-      </AnimatedPressable>
-    </Animated.View>
-  );
-}
+const FILTERS = [
+  { key: 'all', label: 'All' },
+  { key: 'appointment', label: 'Appointments' },
+  { key: 'prescription', label: 'Prescriptions' },
+  { key: 'system', label: 'System' },
+];
 
 export default function DoctorNotificationsScreen() {
   const router = useRouter();
+  const queryClient = useQueryClient();
   const { colors, isDark } = useAppTheme();
   const { user } = useAuthStore();
   const notifications = useNotificationStore((s) => s.notifications);
   const markAsRead = useNotificationStore((s) => s.markAsRead);
   const markAllAsRead = useNotificationStore((s) => s.markAllAsRead);
+
+  const [activeFilter, setActiveFilter] = useState<string>('all');
+  const [refreshing, setRefreshing] = useState(false);
 
   const doctorNotifications = useMemo(() => {
     return notifications.filter((n) => {
@@ -201,10 +69,56 @@ export default function DoctorNotificationsScreen() {
     });
   }, [notifications, user?.id]);
 
-  const unreadCount = useMemo(
-    () => doctorNotifications.filter((n) => !n.read).length,
-    [doctorNotifications]
-  );
+  const filteredNotifications = useMemo(() => {
+    if (activeFilter === 'all') return doctorNotifications;
+    if (activeFilter === 'system') {
+      return doctorNotifications.filter((n) => !['appointment', 'prescription'].includes(n.type));
+    }
+    return doctorNotifications.filter((n) => n.type === activeFilter);
+  }, [doctorNotifications, activeFilter]);
+
+  const unreadCount = useMemo(() => {
+    return doctorNotifications.filter((n) => !n.read).length;
+  }, [doctorNotifications]);
+
+  const handleRefresh = useCallback(async () => {
+    setRefreshing(true);
+    try {
+      await queryClient.invalidateQueries({ queryKey: ['notifications'] });
+      await new Promise((r) => setTimeout(r, 400));
+    } finally {
+      setRefreshing(false);
+    }
+  }, [queryClient]);
+
+  const getIcon = (type: NotificationItem['type']) => {
+    switch (type) {
+      case 'appointment':
+        return <Calendar size={18} color={StitchColors.primaryContainer} />;
+      case 'prescription':
+        return <Pill size={18} color={StitchColors.secondaryContainer} />;
+      case 'verification':
+        return <ShieldCheck size={18} color={StitchColors.secondaryContainer} />;
+      default:
+        return <Bell size={18} color={StitchColors.primaryContainer} />;
+    }
+  };
+
+  const getIconBg = (type: NotificationItem['type'], read: boolean) => {
+    if (read) return isDark ? 'rgba(255, 255, 255, 0.05)' : Palette.surfaceTrack;
+    if (type === 'prescription' || type === 'verification') {
+      return isDark ? 'rgba(45, 212, 191, 0.18)' : Palette.healthcareTealLight;
+    }
+    return isDark ? 'rgba(20, 80, 163, 0.18)' : Palette.primaryBlueLight;
+  };
+
+  const getCardBorder = (type: NotificationItem['type'], read: boolean) => {
+    if (read) return colors.border;
+    if (type === 'prescription' || type === 'verification') {
+      return isDark ? 'rgba(45, 212, 191, 0.3)' : Palette.healthcareTealBorder;
+    }
+    return isDark ? 'rgba(20, 80, 163, 0.3)' : Palette.primaryBlueBorder;
+  };
 
   const handleNotificationPress = (item: NotificationItem) => {
     if (Platform.OS !== 'web') {
@@ -213,6 +127,8 @@ export default function DoctorNotificationsScreen() {
     markAsRead(item.id);
     if (item.link) {
       router.push(item.link as any);
+    } else if (item.type === 'appointment') {
+      router.push('/(doctor)/(tabs)/appointments');
     }
   };
 
@@ -224,69 +140,174 @@ export default function DoctorNotificationsScreen() {
   };
 
   return (
-    <SafeAreaView style={styles.safeArea} edges={['top']}>
-      <HeaderBar
-        title="Notifications"
-        subtitle={
-          unreadCount > 0
-            ? `${unreadCount} unread`
-            : 'All caught up'
-        }
-        showBackButton
-        onBackPress={() => router.back()}
-        rightAction={
-          unreadCount > 0 ? (
-            <Pressable
-              onPress={handleMarkAllRead}
-              hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
-              style={[
-                styles.markAllBtn,
-                {
-                  backgroundColor: isDark
-                    ? 'rgba(20,80,163,0.2)'
-                    : Palette.primaryBlueLight,
-                  borderColor: colors.border,
-                },
-              ]}
-              accessibilityRole="button"
-              accessibilityLabel="Mark all as read"
-            >
-              <CheckCheck size={13} color={StitchColors.primaryContainer} />
-              <Text
-                style={[
-                  styles.markAllBtnText,
-                  { color: StitchColors.primaryContainer },
-                ]}
-              >
-                Mark all read
+    <SafeAreaView style={[styles.safeArea, { backgroundColor: colors.background }]} edges={['top']}>
+      {/* Header Bar */}
+      <View style={[styles.headerBar, { backgroundColor: colors.card, borderBottomColor: colors.border }]}>
+        <View style={styles.headerLeft}>
+          <Pressable
+            onPress={() => router.back()}
+            hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+            style={[styles.backButton, { backgroundColor: colors.backgroundElement, borderColor: colors.border }]}
+            accessibilityRole="button"
+            accessibilityLabel="Go back"
+          >
+            <ArrowLeft size={20} color={colors.text} strokeWidth={2.2} />
+          </Pressable>
+          <View>
+            <Text style={[styles.headerTitle, { color: colors.text }]}>Notifications</Text>
+            {unreadCount > 0 && (
+              <Text style={[styles.unreadSubtext, { color: StitchColors.primaryContainer }]}>
+                {unreadCount} unread update{unreadCount > 1 ? 's' : ''}
               </Text>
-            </Pressable>
-          ) : undefined
-        }
-      />
+            )}
+          </View>
+        </View>
+
+        {unreadCount > 0 && (
+          <Pressable
+            onPress={handleMarkAllRead}
+            hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+            style={[styles.markAllBtn, { backgroundColor: Palette.primaryBlueLight, borderColor: Palette.primaryBlueBorder }]}
+            accessibilityRole="button"
+            accessibilityLabel="Mark all notifications as read"
+          >
+            <CheckCheck size={13} color={StitchColors.primaryContainer} />
+            <Text style={styles.markAllText}>Mark all read</Text>
+          </Pressable>
+        )}
+      </View>
+
+      {/* Filter Chips */}
+      <View style={[styles.filterSection, { backgroundColor: colors.card, borderBottomColor: colors.border }]}>
+        <ScrollView
+          horizontal
+          showsHorizontalScrollIndicator={false}
+          contentContainerStyle={styles.filterScroll}
+        >
+          {FILTERS.map((f) => {
+            const isActive = activeFilter === f.key;
+            const count =
+              f.key === 'all'
+                ? doctorNotifications.length
+                : f.key === 'system'
+                ? doctorNotifications.filter((n) => !['appointment', 'prescription'].includes(n.type)).length
+                : doctorNotifications.filter((n) => n.type === f.key).length;
+            return (
+              <Pressable
+                key={f.key}
+                onPress={() => setActiveFilter(f.key)}
+                hitSlop={{ top: 6, bottom: 6, left: 4, right: 4 }}
+                style={[
+                  styles.filterChip,
+                  {
+                    backgroundColor: isActive ? StitchColors.primaryContainer : colors.backgroundElement,
+                    borderColor: isActive ? StitchColors.primaryContainer : colors.border,
+                  },
+                ]}
+                accessibilityRole="tab"
+                accessibilityState={{ selected: isActive }}
+              >
+                <Text
+                  style={[
+                    styles.filterChipText,
+                    { color: isActive ? '#fff' : colors.textSecondary },
+                  ]}
+                >
+                  {f.label} {count > 0 && `(${count})`}
+                </Text>
+              </Pressable>
+            );
+          })}
+        </ScrollView>
+      </View>
 
       <ScrollView
         contentContainerStyle={styles.scrollContent}
         showsVerticalScrollIndicator={false}
+        refreshControl={
+          <RefreshControl
+            refreshing={refreshing}
+            onRefresh={handleRefresh}
+            colors={[StitchColors.primaryContainer]}
+            tintColor={StitchColors.primaryContainer}
+          />
+        }
       >
-        {doctorNotifications.length === 0 ? (
-          <Animated.View entering={FadeIn.duration(300)} style={styles.emptyWrap}>
-            <EmptyState
-              title="No notifications"
-              description="You're all caught up. Consultation bookings and clinical updates will appear here."
-              illustration="welcome"
-            />
+        {filteredNotifications.length === 0 ? (
+          <Animated.View entering={FadeIn.duration(400)} style={styles.emptyContainer}>
+            <View style={[styles.emptyIconCircle, { backgroundColor: colors.card, borderColor: colors.border }]}>
+              <Inbox size={32} color={colors.textMuted} />
+            </View>
+            <Text style={[styles.emptyTitle, { color: colors.text }]}>No Notifications Yet</Text>
+            <Text style={[styles.emptySubtitle, { color: colors.textSecondary }]}>
+              You will receive alerts here when patients book appointment slots, check in, or request follow-ups.
+            </Text>
           </Animated.View>
         ) : (
-          doctorNotifications.map((item, i) => (
-            <NotificationCard
-              key={item.id}
-              item={item}
-              index={i}
-              onPress={() => handleNotificationPress(item)}
-            />
-          ))
+          filteredNotifications.map((item, i) => {
+            const isPrescription = item.type === 'prescription';
+            const isAppointment = item.type === 'appointment';
+            return (
+              <Animated.View key={item.id} entering={FadeInDown.delay(i * 45).duration(320)}>
+                <Pressable
+                  onPress={() => handleNotificationPress(item)}
+                  style={({ pressed }) => [
+                    styles.notificationCard,
+                    {
+                      backgroundColor: colors.card,
+                      borderColor: getCardBorder(item.type, item.read),
+                      opacity: pressed ? 0.85 : 1,
+                    },
+                  ]}
+                  accessibilityRole="button"
+                >
+                  <View style={styles.cardHeaderRow}>
+                    <View style={styles.iconAndTitle}>
+                      <View
+                        style={[
+                          styles.iconWrap,
+                          { backgroundColor: getIconBg(item.type, item.read) },
+                        ]}
+                      >
+                        {getIcon(item.type)}
+                      </View>
+                      <View style={styles.titleColumn}>
+                        <Text style={[styles.itemTitle, { color: colors.text }]} numberOfLines={1}>
+                          {item.title}
+                        </Text>
+                        <Text style={[styles.itemTime, { color: colors.textMuted }]}>
+                          {item.time || item.timestamp || 'Today'}
+                        </Text>
+                      </View>
+                    </View>
+
+                    <View style={styles.badgeWrap}>
+                      {isPrescription && (
+                        <Badge label="RX ISSUED" variant="teal" size="sm" />
+                      )}
+                      {isAppointment && (
+                        <Badge label="CLINIC" variant="primary" size="sm" />
+                      )}
+                      {!item.read && <View style={styles.unreadDot} />}
+                    </View>
+                  </View>
+
+                  <Text style={[styles.itemMessage, { color: colors.textSecondary }]}>
+                    {item.message}
+                  </Text>
+
+                  {item.link && (
+                    <View style={[styles.cardFooter, { borderTopColor: colors.border }]}>
+                      <Text style={styles.actionText}>View Details</Text>
+                      <ChevronRight size={14} color={StitchColors.primaryContainer} />
+                    </View>
+                  )}
+                </Pressable>
+              </Animated.View>
+            );
+          })
         )}
+        <View style={{ height: 40 }} />
       </ScrollView>
     </SafeAreaView>
   );
@@ -295,93 +316,164 @@ export default function DoctorNotificationsScreen() {
 const styles = StyleSheet.create({
   safeArea: {
     flex: 1,
-    backgroundColor: StitchColors.background,
+  },
+  headerBar: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingHorizontal: 16,
+    paddingVertical: 14,
+    borderBottomWidth: StyleSheet.hairlineWidth,
+  },
+  headerLeft: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
+  },
+  backButton: {
+    width: 38,
+    height: 38,
+    borderRadius: 19,
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderWidth: 1,
+  },
+  headerTitle: {
+    fontSize: 18,
+    fontWeight: '700',
+    letterSpacing: -0.2,
+  },
+  unreadSubtext: {
+    fontSize: 12,
+    fontWeight: '600',
+    marginTop: 1,
   },
   markAllBtn: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 4,
+    gap: 5,
     paddingHorizontal: 10,
     paddingVertical: 6,
     borderRadius: BorderRadius.full,
     borderWidth: 1,
   },
-  markAllBtnText: {
-    fontSize: 11,
-    fontWeight: '700',
-    letterSpacing: 0.1,
+  markAllText: {
+    fontSize: 12,
+    fontWeight: '600',
+    color: StitchColors.primaryContainer,
+  },
+  filterSection: {
+    borderBottomWidth: StyleSheet.hairlineWidth,
+    paddingVertical: 10,
+  },
+  filterScroll: {
+    paddingHorizontal: 16,
+    gap: 8,
+  },
+  filterChip: {
+    paddingHorizontal: 14,
+    paddingVertical: 6,
+    borderRadius: BorderRadius.full,
+    borderWidth: 1,
+  },
+  filterChipText: {
+    fontSize: 13,
+    fontWeight: '600',
   },
   scrollContent: {
-    paddingHorizontal: Spacing.md,
-    paddingTop: Spacing.sm,
-    paddingBottom: 40,
-    gap: 10,
+    padding: 16,
+    gap: 12,
   },
-  emptyWrap: {
-    marginTop: 24,
-  },
-  notifCard: {
-    padding: 14,
-    borderRadius: BorderRadius.xl,
+  notificationCard: {
+    borderRadius: BorderRadius.lg,
     borderWidth: 1,
+    padding: 14,
     ...Shadows.subtle,
   },
-  notifHeader: {
+  cardHeaderRow: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    marginBottom: 10,
+    marginBottom: 8,
   },
-  notifHeaderLeft: {
+  iconAndTitle: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 8,
+    gap: 10,
+    flex: 1,
   },
-  notifIconWrap: {
-    width: 34,
-    height: 34,
-    borderRadius: 17,
+  iconWrap: {
+    width: 36,
+    height: 36,
+    borderRadius: 18,
     alignItems: 'center',
     justifyContent: 'center',
-    borderWidth: 1,
   },
-  notifTimeRow: {
+  titleColumn: {
+    flex: 1,
+  },
+  itemTitle: {
+    fontSize: 15,
+    fontWeight: '600',
+  },
+  itemTime: {
+    fontSize: 11,
+    marginTop: 1,
+  },
+  badgeWrap: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: 6,
-  },
-  notifTime: {
-    fontSize: 11,
-    fontWeight: '600',
+    marginLeft: 8,
   },
   unreadDot: {
-    width: 7,
-    height: 7,
-    borderRadius: 3.5,
+    width: 8,
+    height: 8,
+    borderRadius: 4,
     backgroundColor: StitchColors.primaryContainer,
   },
-  notifBody: {
-    gap: 4,
-  },
-  notifTitle: {
-    fontSize: 15,
-    lineHeight: 20,
-    letterSpacing: -0.1,
-  },
-  notifMessage: {
+  itemMessage: {
     fontSize: 13,
     lineHeight: 18,
   },
-  notifFooter: {
+  cardFooter: {
     flexDirection: 'row',
     alignItems: 'center',
+    justifyContent: 'flex-end',
     gap: 4,
     marginTop: 10,
     paddingTop: 8,
     borderTopWidth: StyleSheet.hairlineWidth,
   },
-  notifActionText: {
+  actionText: {
     fontSize: 12,
+    fontWeight: '600',
+    color: StitchColors.primaryContainer,
+  },
+  emptyContainer: {
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingVertical: 60,
+    paddingHorizontal: 32,
+    gap: 12,
+  },
+  emptyIconCircle: {
+    width: 64,
+    height: 64,
+    borderRadius: 32,
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderWidth: 1,
+    marginBottom: 4,
+  },
+  emptyTitle: {
+    fontSize: 17,
     fontWeight: '700',
+    textAlign: 'center',
+  },
+  emptySubtitle: {
+    fontSize: 13,
+    lineHeight: 19,
+    textAlign: 'center',
   },
 });

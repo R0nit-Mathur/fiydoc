@@ -34,6 +34,8 @@ export default function RootLayout() {
         console.warn('[OTA] Background update check error:', e?.message);
       }
     }
+    // Non-blocking server warmup to eliminate cloud cold start latency
+    fetch('https://fiydoc.onrender.com/health').catch(() => {});
     checkAutoUpdate();
   }, []);
 

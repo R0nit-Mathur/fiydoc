@@ -270,33 +270,6 @@ export default function SignUpScreen() {
                 </Pressable>
               </View>
 
-              <View style={styles.fastTrackDivider}>
-                <View style={styles.dividerLine} />
-                <Text style={styles.dividerText}>or fast track</Text>
-                <View style={styles.dividerLine} />
-              </View>
-
-              {/* Social Sign In Option */}
-              <Pressable
-                onPress={handleGoogleSignUp}
-                disabled={googleLoading}
-                style={({ pressed }) => [
-                  styles.googleButton,
-                  pressed && styles.buttonPressed,
-                ]}
-                accessibilityRole="button"
-                accessibilityLabel="Continue with Google"
-              >
-                {googleLoading ? (
-                  <ActivityIndicator size="small" color={StitchColors.primary} />
-                ) : (
-                  <>
-                    <GoogleLogo size={20} />
-                    <Text style={styles.googleButtonText}>Continue with Google</Text>
-                  </>
-                )}
-              </Pressable>
-
               {/* Footer Privacy and Sign-In Link */}
               <View style={styles.footerWrap}>
                 <Text style={styles.footerLegalText}>

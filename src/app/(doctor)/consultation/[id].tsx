@@ -33,6 +33,7 @@ import {
 } from 'react-native';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { SafeAreaView } from 'react-native-safe-area-context';
+import { useQueryClient } from '@tanstack/react-query';
 import Animated, { FadeIn, FadeInUp } from 'react-native-reanimated';
 import * as Haptics from 'expo-haptics';
 import {
@@ -101,6 +102,7 @@ interface PrescriptionItem {
 
 export default function DoctorConsultationScreen() {
   const router = useRouter();
+  const queryClient = useQueryClient();
   const params = useLocalSearchParams<{ id?: string }>();
   const { colors, isDark } = useAppTheme();
 
@@ -373,6 +375,12 @@ export default function DoctorConsultationScreen() {
 
       useHealthStore.getState().addPrescription(newPrescription);
       updateAppointmentStatus(appointmentId, 'completed');
+
+      // Invalidate queries so counters, queues, and patient screens update immediately
+      queryClient.invalidateQueries({ queryKey: ['appointments'] });
+      queryClient.invalidateQueries({ queryKey: ['prescriptions'] });
+      queryClient.invalidateQueries({ queryKey: ['health-records'] });
+      queryClient.invalidateQueries({ queryKey: ['notifications'] });
 
       // Notify patient — prescription dispatched
       useNotificationStore.getState().addNotification({

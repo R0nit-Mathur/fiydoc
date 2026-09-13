@@ -10,8 +10,10 @@ export function useAppointmentsQuery(patientId?: string, doctorId?: string) {
   const effectivePatientId = patientId || (currentUser?.role === 'patient' ? currentUser.id : undefined);
   const effectiveDoctorId = doctorId || (currentUser?.role === 'doctor' ? currentUser.id : undefined);
 
+  const storeSignature = storeAppointments.map((a) => `${a.id}:${a.status}`).join(',');
+
   return useQuery({
-    queryKey: ['appointments', effectivePatientId, effectiveDoctorId, storeAppointments.length],
+    queryKey: ['appointments', effectivePatientId, effectiveDoctorId, storeSignature],
     queryFn: async () => {
       let fetched: any[] = [];
       try {
@@ -54,9 +56,19 @@ export function useAppointmentsQuery(patientId?: string, doctorId?: string) {
         });
       }
 
-      const ids = new Set(fetched.map((a) => a.id));
+      // Merge: if local store marked an appointment completed, preserve completed status
+      const storeMap = new Map(relevantStoreAppointments.map((a) => [a.id, a]));
+      const mergedFetched = fetched.map((serverApt) => {
+        const localApt = storeMap.get(serverApt.id);
+        if (localApt && localApt.status === 'completed' && serverApt.status !== 'completed') {
+          return { ...serverApt, status: 'completed' };
+        }
+        return serverApt;
+      });
+
+      const ids = new Set(mergedFetched.map((a) => a.id));
       const custom = relevantStoreAppointments.filter((a) => !ids.has(a.id));
-      return [...custom, ...fetched];
+      return [...custom, ...mergedFetched];
     },
     enabled: Boolean(effectiveDoctorId || effectivePatientId),
   });
