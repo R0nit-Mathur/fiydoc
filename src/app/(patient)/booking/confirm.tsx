@@ -2,8 +2,8 @@
  * FiYDOC - Confirm Booking & Payment Sheet (Google Stitch 1:1)
  *
  * Implements the Clinical Clarity OPD booking confirmation and payment flow:
- * - OPD Clinic Pass Preview (Dr. Rajesh Sharma, Fortis OPD, Token #12, Slot)
- * - Patient Details Card (Rahul Sharma / Self) with Change toggle
+ * - OPD Clinic Pass Preview (Doctor, Clinic, Token, Slot from real booking)
+ * - Patient Details Card (authenticated user / Self or family member) with Change toggle
  * - Promo / Health Saver coupon (HEALTH150 toggle with live discount calculation)
  * - Transparent Bill Breakdown (Doctor fee, Platform fee FREE, Discount)
  * - Cancellation Guarantee
@@ -57,11 +57,12 @@ import { BorderRadius, Shadows, Spacing, StitchColors, Palette } from '@/constan
 import { useAppTheme } from '@/hooks/useAppTheme';
 import { formatHumanDate, formatTimeSlot, formatCurrency } from '@/utils/formatters';
 
+// UPI app icons use text labels only — no third-party image URLs
 const UPI_APPS = [
-  { id: 'gpay', name: 'Google Pay', icon: 'https://images.unsplash.com/photo-1556742049-0a67c5574f73?w=100&auto=format&fit=crop&q=80', popular: true },
-  { id: 'phonepe', name: 'PhonePe', icon: 'https://images.unsplash.com/photo-1559526324-4b87b5e36e44?w=100&auto=format&fit=crop&q=80', popular: true },
-  { id: 'paytm', name: 'Paytm UPI', icon: 'https://images.unsplash.com/photo-1563013544-824ae1b704d3?w=100&auto=format&fit=crop&q=80', popular: true },
-  { id: 'bhim', name: 'BHIM UPI', icon: 'https://images.unsplash.com/photo-1556740758-90de374c12ad?w=100&auto=format&fit=crop&q=80', popular: false },
+  { id: 'gpay', name: 'Google Pay', icon: null, popular: true },
+  { id: 'phonepe', name: 'PhonePe', icon: null, popular: true },
+  { id: 'paytm', name: 'Paytm UPI', icon: null, popular: true },
+  { id: 'bhim', name: 'BHIM UPI', icon: null, popular: false },
 ];
 
 const NET_BANKS = [
@@ -99,11 +100,11 @@ export default function BookingConfirmScreen() {
     id: params.doctorId || 'doc-1',
     fullName: params.doctorName,
     name: params.doctorName,
-    specialization: params.doctorSpecialty || 'Cardiologist',
-    consultationFee: parseInt((params.fee || '800').replace(/[^0-9]/g, ''), 10) || 800,
-    clinicAddress: 'Fortis OPD • Sector 44, Gurugram',
-    rating: 4.9,
-    experienceYears: 12,
+    specialization: params.doctorSpecialty || null,
+    consultationFee: parseInt((params.fee || '0').replace(/[^0-9]/g, ''), 10) || null,
+    clinicAddress: null,
+    rating: null,
+    experienceYears: null,
   } as any : null);
 
   // Guard — no doctor in draft means navigation error; show empty state
@@ -132,14 +133,10 @@ export default function BookingConfirmScreen() {
   const [couponApplied, setCouponApplied] = useState(true);
 
   // Patient info state
-  const [patientName, setPatientName] = useState(
-    params.patientName && params.patientName !== 'Rahul Sharma'
-      ? params.patientName
-      : (user?.name || '')
-  );
+  const [patientName, setPatientName] = useState(params.patientName || user?.name || '');
   const [patientPhone, setPatientPhone] = useState(user?.phone || '');
-  const [patientAge, setPatientAge] = useState(user?.age ? String(user.age) : '28');
-  const [patientGender, setPatientGender] = useState(user?.gender || 'Male');
+  const [patientAge, setPatientAge] = useState(user?.age ? String(user.age) : '');
+  const [patientGender, setPatientGender] = useState(user?.gender || '');
   const [isEditingPatient, setIsEditingPatient] = useState(false);
 
   // Payment Bottom Sheet

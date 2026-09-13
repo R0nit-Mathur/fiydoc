@@ -222,6 +222,12 @@ export class AuthService {
       include: includeRelations,
     });
 
+    // Enforce Product Invariant: Google Sign-In is strictly PATIENT-ONLY.
+    // Doctors must register/authenticate using medical credentials.
+    if (user && user.role === Role.DOCTOR) {
+      throw new UnauthorizedException('Doctor accounts must authenticate using password and institutional credentials, not Google Sign-In.');
+    }
+
     if (!user) {
       // Check if user exists by verified email
       const existingByEmail = await this.prisma.user.findUnique({
@@ -230,6 +236,10 @@ export class AuthService {
       });
 
       if (existingByEmail) {
+        if (existingByEmail.role === Role.DOCTOR) {
+          throw new UnauthorizedException('Doctor accounts must authenticate using password and institutional credentials, not Google Sign-In.');
+        }
+
         // Prevent Account Takeover: If the account was created with a password,
         // and doesn't have a googleId linked, require that the existing account does not have a conflicting googleId
         if (existingByEmail.googleId && existingByEmail.googleId !== verifiedGoogleSub) {
@@ -243,38 +253,17 @@ export class AuthService {
           include: includeRelations,
         });
       } else {
-        // Create new account: Role can only be PATIENT or DOCTOR (never ADMIN)
-        const assignedRole = dto.role === PublicRegisterRole.DOCTOR ? Role.DOCTOR : Role.PATIENT;
-
+        // Create new account: Google accounts are always PATIENT
         user = await this.prisma.user.create({
           data: {
             email: verifiedEmail,
             googleId: verifiedGoogleSub,
-            role: assignedRole,
-            ...(assignedRole === Role.PATIENT
-              ? {
-                  patient: {
-                    create: {
-                      fullName: verifiedName,
-                    },
-                  },
-                }
-              : {
-                  doctor: {
-                    create: {
-                      fullName: verifiedName,
-                      specialization: 'General Medicine',
-                      consultationFee: 0,
-                      verification: {
-                        create: {
-                          registrationNumber: null,
-                          registrationAuthority: null,
-                          status: VerificationStatus.PENDING,
-                        },
-                      },
-                    },
-                  },
-                }),
+            role: Role.PATIENT,
+            patient: {
+              create: {
+                fullName: verifiedName,
+              },
+            },
           },
           include: includeRelations,
         });

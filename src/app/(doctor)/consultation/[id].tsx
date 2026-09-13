@@ -73,8 +73,9 @@ import { useHealthStore } from '@/store/useHealthStore';
 import { useNotificationStore } from '@/store/useNotificationStore';
 import { useAppointmentDetailQuery } from '@/hooks/queries/useAppointmentsQuery';
 import { healthService } from '@/services/healthService';
-import { appointmentService } from '@/services/appointmentService';
-import { BorderRadius, Shadows, Spacing, StitchColors, DEFAULT_DOCTOR_AVATAR, DEFAULT_PATIENT_AVATAR } from '@/constants/theme';
+import { consultationService } from '@/services/consultationService';
+
+import { BorderRadius, Shadows, Spacing, StitchColors } from '@/constants/theme';
 import {
   MEDICAL_DIAGNOSES,
   MEDICATIONS_CATALOG,
@@ -85,8 +86,7 @@ import {
 import SmartMedicalTextInput from '@/components/doctor/SmartMedicalTextInput';
 import ClinicalDrawingNotepad from '@/components/doctor/ClinicalDrawingNotepad';
 
-const DOCTOR_AVATAR = DEFAULT_DOCTOR_AVATAR;
-const PATIENT_AVATAR = DEFAULT_PATIENT_AVATAR;
+
 
 interface PrescriptionItem {
   id: string;
@@ -293,22 +293,41 @@ export default function DoctorConsultationScreen() {
   };
 
   const handleSignAndSend = async () => {
+    if (!medications || medications.length === 0) {
+      Alert.alert('No Medications', 'Please add at least one medication before signing the prescription.');
+      return;
+    }
+    if (!diagnoses || diagnoses.length === 0) {
+      Alert.alert('No Diagnosis', 'Please add a diagnosis before completing the consultation.');
+      return;
+    }
+
     setIsSigning(true);
     if (Platform.OS !== 'web') {
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
     }
 
     const doctorName = user?.name ? `Dr. ${user.name}` : (currentApt?.doctorName || 'Doctor');
-    const doctorSpecialty = currentApt?.doctorSpecialty || user?.specialization || 'Specialist';
-    const clinicName = currentApt?.hospital || user?.clinicName || 'FiYDoc Clinic';
+    const clinicName = currentApt?.hospital || user?.clinicName || null;
 
-    let serverRx: any = null;
     try {
-      serverRx = await healthService.createPrescription({
-        consultationId: appointmentId,
-        patientId: currentApt?.patientId,
-        doctorId: user?.id || currentApt?.doctorId,
-        doctorNotes: `Diagnosis: ${diagnoses.map((d) => `${d.name} (${d.code})`).join(', ') || 'Clinical Evaluation'}. ${chiefComplaint}`,
+      // Step 1: Complete the consultation on the server — this transitions appointment to COMPLETED
+      // and returns the authoritative consultation record with its real `id`.
+      const assessmentText = `Diagnosis: ${diagnoses.map((d) => `${d.name} (${d.code})`).join(', ')}. ${chiefComplaint}`.trim();
+
+      const consultation = await consultationService.upsert({
+        appointmentId,
+        chiefComplaint: chiefComplaint || undefined,
+        symptoms: currentApt?.symptoms || [],
+        observations: physicalObservation || undefined,
+        assessment: assessmentText,
+        completeNow: true,
+      });
+
+      // Step 2: Issue the prescription using the authoritative server consultation ID
+      const serverRx = await healthService.createPrescription({
+        consultationId: consultation.id,
+        doctorNotes: assessmentText,
         followUpInstructions: `Review after ${followUpDays} in clinic. ${emergencyWarning}`,
         medicines: medications.map((m) => ({
           name: m.name,
@@ -317,76 +336,71 @@ export default function DoctorConsultationScreen() {
           durationDays: parseInt(m.duration?.replace(/\D/g, '') || '5', 10) || 5,
           instructions: `${m.timing} • ${m.instructions}`,
         })),
-        tests: labTests.map((t) => ({ name: t, category: 'Diagnostic' })),
       });
+
+      // Step 3: Reflect the completed state in local stores
+      const newPrescription = {
+        id: serverRx.id,
+        consultationId: consultation.id,
+        patientId: currentApt?.patientId ?? '',
+        patientName: currentApt?.patientName || 'Patient',
+        doctorId: consultation.doctorId,
+        doctorName,
+        clinicName: clinicName ?? undefined,
+        diagnosis: diagnoses.map((d) => `${d.name} (${d.code})`).join(', '),
+        doctorNotes: chiefComplaint,
+        followUpInstructions: `Review after ${followUpDays} in clinic. ${emergencyWarning}`,
+        vitals: {
+          bpSystolic: vitals.bpSystolic,
+          bpDiastolic: vitals.bpDiastolic,
+          heartRate: vitals.pulse,
+          temperature: vitals.temp,
+          weight: vitals.weight,
+          spO2: vitals.spO2,
+        },
+        verificationCode: serverRx.verificationCode,
+        createdAt: new Date().toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' }),
+        signedAt: new Date().toISOString(),
+        medicines: medications.map((m) => ({
+          id: m.id,
+          name: m.name,
+          dosage: m.dosage,
+          frequency: m.frequency,
+          durationDays: parseInt(m.duration?.replace(/\D/g, '') || '5', 10) || 5,
+          instructions: `${m.timing} • ${m.instructions}`,
+        })),
+      };
+
+      useHealthStore.getState().addPrescription(newPrescription);
+      updateAppointmentStatus(appointmentId, 'completed');
+
+      // Notify patient — prescription dispatched
+      useNotificationStore.getState().addNotification({
+        recipientId: currentApt?.patientId,
+        recipientRole: 'patient',
+        title: '📝 Prescription Dispatched',
+        message: `${doctorName} has sent your official digital prescription. View it in Health Records.`,
+        type: 'prescription',
+        link: '/(patient)/(tabs)/health',
+      });
+
+      setIsSigning(false);
+      setSignSuccess(true);
+
+      setTimeout(() => {
+        setRxPadVisible(false);
+        setSignSuccess(false);
+        if (nextPatient) {
+          router.replace(`/(doctor)/consultation/${nextPatient.id}` as any);
+        } else {
+          router.replace('/(doctor)/(tabs)/appointments');
+        }
+      }, 2000);
     } catch (err: any) {
-      console.warn('[DoctorConsultation] Remote prescription creation failed/warn:', err?.message);
+      setIsSigning(false);
+      const message = err?.message || 'Failed to complete consultation or issue prescription.';
+      Alert.alert('Error', message);
     }
-
-    const rxId = serverRx?.id || `rx_${Date.now()}`;
-    const newPrescription = {
-      id: rxId,
-      consultationId: appointmentId,
-      patientId: currentApt?.patientId || 'pat_1',
-      patientName: currentApt?.patientName || 'Patient',
-      doctorId: user?.id || currentApt?.doctorId || 'doc_1',
-      doctorName: doctorName,
-      doctorSpecialty: doctorSpecialty,
-      clinicName: clinicName,
-      diagnosis: diagnoses.map((d) => `${d.name} (${d.code})`).join(', '),
-      doctorNotes: chiefComplaint,
-      followUpInstructions: `Review after ${followUpDays} in clinic. ${emergencyWarning}`,
-      vitals: {
-        bpSystolic: vitals.bpSystolic,
-        bpDiastolic: vitals.bpDiastolic,
-        heartRate: vitals.pulse,
-        temperature: vitals.temp,
-        weight: vitals.weight,
-        height: '176',
-        spO2: vitals.spO2,
-      },
-      verificationCode: serverRx?.verificationCode || `FYD-RX-${Math.floor(100000 + Math.random() * 900000)}-MH`,
-      createdAt: new Date().toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' }),
-      signedAt: new Date().toISOString(),
-      medicines: medications.map((m) => ({
-        id: m.id,
-        name: m.name,
-        dosage: m.dosage,
-        frequency: m.frequency,
-        durationDays: parseInt(m.duration?.replace(/\D/g, '') || '5', 10) || 5,
-        instructions: `${m.timing} • ${m.instructions}`,
-      })),
-      tests: labTests.map((t, idx) => ({ id: `test_${idx}`, name: t, category: 'Diagnostic' })),
-    };
-
-    useHealthStore.getState().addPrescription(newPrescription);
-    // Mark current appointment as completed — removes from queue
-    await appointmentService.updateAppointmentStatus(appointmentId, 'COMPLETED').catch(() => {});
-    updateAppointmentStatus(appointmentId, 'completed');
-
-    // Notify patient — prescription dispatched
-    useNotificationStore.getState().addNotification({
-      recipientId: currentApt?.patientId,
-      recipientRole: 'patient',
-      title: '📝 Prescription Dispatched',
-      message: `${doctorName} has sent your official digital prescription. View it in Health Records.`,
-      type: 'prescription',
-      link: '/(patient)/(tabs)/health',
-    });
-
-    setIsSigning(false);
-    setSignSuccess(true);
-
-    setTimeout(() => {
-      setRxPadVisible(false);
-      setSignSuccess(false);
-      // Queue auto-advance: navigate to next patient if exists, else go to appointments
-      if (nextPatient) {
-        router.replace(`/(doctor)/consultation/${nextPatient.id}` as any);
-      } else {
-        router.replace('/(doctor)/(tabs)/appointments');
-      }
-    }, 2000);
   };
 
   // Filter diagnoses
@@ -458,7 +472,13 @@ export default function DoctorConsultationScreen() {
           </View>
         </View>
 
-        <Image source={{ uri: DOCTOR_AVATAR }} style={styles.headerDoctorImg} />
+        {user?.avatar ? (
+          <Image source={{ uri: user.avatar }} style={styles.headerDoctorImg} />
+        ) : (
+          <View style={[styles.headerDoctorImg, { backgroundColor: '#e2e8f0', alignItems: 'center', justifyContent: 'center' }]}>
+            <Text style={{ fontSize: 14, fontWeight: '700', color: '#64748b' }}>{user?.name?.charAt(0) || 'D'}</Text>
+          </View>
+        )}
       </View>
 
       <ScrollView
@@ -472,7 +492,13 @@ export default function DoctorConsultationScreen() {
         >
           {/* Identity Header */}
           <View style={styles.patientInfoRow}>
-            <Image source={{ uri: PATIENT_AVATAR }} style={styles.patientAvatar} />
+            {currentApt?.patientAvatar ? (
+              <Image source={{ uri: currentApt.patientAvatar }} style={styles.patientAvatar} />
+            ) : (
+              <View style={[styles.patientAvatar, { backgroundColor: '#e2e8f0', alignItems: 'center', justifyContent: 'center' }]}>
+                <Text style={{ fontSize: 16, fontWeight: '700', color: '#64748b' }}>{(currentApt?.patientName || 'P').charAt(0)}</Text>
+              </View>
+            )}
             <View style={{ flex: 1, marginLeft: 12 }}>
               <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }}>
                 <Text style={[styles.heroPatientName, { color: colors.text }]}>
@@ -1064,7 +1090,13 @@ export default function DoctorConsultationScreen() {
               </Text>
             </View>
 
-            <Image source={{ uri: DOCTOR_AVATAR }} style={styles.headerDoctorImg} />
+            {user?.avatar ? (
+              <Image source={{ uri: user.avatar }} style={styles.headerDoctorImg} />
+            ) : (
+              <View style={[styles.headerDoctorImg, { backgroundColor: '#e2e8f0', alignItems: 'center', justifyContent: 'center' }]}>
+                <Text style={{ fontSize: 14, fontWeight: '700', color: '#64748b' }}>{user?.name?.charAt(0) || 'D'}</Text>
+              </View>
+            )}
           </View>
 
           {/* Rx Steps Tab Strip (Horizontal Scrollable, Never Clips on Small Screens) */}
@@ -1901,48 +1933,8 @@ export default function DoctorConsultationScreen() {
 
             <ScrollView style={{ maxHeight: 420 }} showsVerticalScrollIndicator={false}>
               <Text style={[styles.modalSectionLabel, { color: colors.textSecondary }]}>
-                Select Clinical Preset
+                Attach a clinical image taken during examination (camera or file):
               </Text>
-              <View style={styles.imagePresetsGrid}>
-                {[
-                  {
-                    title: 'Throat & Pharynx View',
-                    uri: 'https://images.unsplash.com/photo-1584515979956-d9f6e5d09982?w=600&auto=format&fit=crop&q=80',
-                  },
-                  {
-                    title: 'Dermatological Rash / Lesion',
-                    uri: 'https://images.unsplash.com/photo-1579684385127-1ef15d508118?w=600&auto=format&fit=crop&q=80',
-                  },
-                  {
-                    title: 'Chest Radiograph (X-Ray)',
-                    uri: 'https://images.unsplash.com/photo-1516549655169-df83a0774514?w=600&auto=format&fit=crop&q=80',
-                  },
-                  {
-                    title: '12-Lead ECG Rhythm Strip',
-                    uri: 'https://images.unsplash.com/photo-1559757175-5700dde675bc?w=600&auto=format&fit=crop&q=80',
-                  },
-                ].map((preset, idx) => (
-                  <Pressable
-                    key={idx}
-                    onPress={() => {
-                      const newImg = {
-                        id: `img_${Date.now()}_${idx}`,
-                        title: preset.title,
-                        uri: preset.uri,
-                        date: 'Today, ' + new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
-                      };
-                      setClinicalImages([...clinicalImages, newImg]);
-                      setShowAddImageModal(false);
-                    }}
-                    style={[styles.presetImageBtn, { backgroundColor: colors.backgroundElement, borderColor: colors.border }]}
-                  >
-                    <Image source={{ uri: preset.uri }} style={styles.presetThumb} />
-                    <Text numberOfLines={2} style={[styles.presetImageTitle, { color: colors.text }]}>
-                      {preset.title}
-                    </Text>
-                  </Pressable>
-                ))}
-              </View>
 
               <Text style={[styles.modalSectionLabel, { color: colors.textSecondary, marginTop: 14 }]}>
                 Or Add Custom Clinical Image

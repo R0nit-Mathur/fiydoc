@@ -434,10 +434,7 @@ export const Fonts = Platform.select({
 
 export type FontFamily = keyof typeof Fonts;
 
-// ============================================
-// DEFAULT PROFILE PHOTOS (Crisp Clinical & Patient Portraits)
-// ============================================
-export const DEFAULT_DOCTOR_AVATAR =
-  'https://images.unsplash.com/photo-1622253692010-333f2da6031d?w=600&auto=format&fit=crop&q=80';
-export const DEFAULT_PATIENT_AVATAR =
-  'https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?w=600&auto=format&fit=crop&q=80';
+// DEFAULT_DOCTOR_AVATAR and DEFAULT_PATIENT_AVATAR are intentionally null.
+// Avatar.tsx renders initials when uri is null/undefined — never use a third-party photo as a substitute.
+export const DEFAULT_DOCTOR_AVATAR: null = null;
+export const DEFAULT_PATIENT_AVATAR: null = null;

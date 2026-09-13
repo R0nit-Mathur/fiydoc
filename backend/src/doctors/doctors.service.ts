@@ -149,8 +149,18 @@ export class DoctorsService {
     clinicAddress?: string;
     clinicTimings?: string;
   }) {
-    const doctor = await this.prisma.doctor.findUnique({ where: { userId } });
+    const doctor = await this.prisma.doctor.findUnique({
+      where: { userId },
+      include: { verification: true },
+    });
     if (!doctor) throw new ForbiddenException('Only doctors can update a practice profile.');
+
+    const nameChanged = dto.fullName?.trim() && dto.fullName.trim() !== doctor.fullName;
+    const specChanged = dto.specialization?.trim() && dto.specialization.trim() !== doctor.specialization;
+
+    // Rule: Clinical identity (name & specialty) are credential-backed.
+    // If a verified doctor alters their clinical name or specialty, require re-verification.
+    const shouldResetVerification = (nameChanged || specChanged) && doctor.verification?.status === VerificationStatus.VERIFIED;
 
     const updated = await this.prisma.doctor.update({
       where: { userId },
@@ -159,6 +169,16 @@ export class DoctorsService {
         specialization: dto.specialization?.trim() || undefined,
         profilePhoto: dto.profilePhoto === null ? null : dto.profilePhoto?.trim() || undefined,
         consultationFee: dto.consultationFee && dto.consultationFee > 0 ? dto.consultationFee : undefined,
+        ...(shouldResetVerification
+          ? {
+              verification: {
+                update: {
+                  status: VerificationStatus.PENDING,
+                  rejectionReason: null,
+                },
+              },
+            }
+          : {}),
         ...(dto.clinicName?.trim() || dto.clinicAddress?.trim() || dto.clinicTimings?.trim()
           ? {
               clinic: {

@@ -56,15 +56,9 @@ import {
 } from 'lucide-react-native';
 import { AppUpdateModal } from '@/components/ui/AppUpdateModal';
 import { calculateAgeFromDOB, formatHumanDate } from '@/utils/formatters';
-import { StitchColors, BorderRadius, Shadows, Spacing, Palette, DEFAULT_PATIENT_AVATAR } from '@/constants/theme';
+import { StitchColors, BorderRadius, Shadows, Spacing, Palette } from '@/constants/theme';
 
-const AVATAR_PRESETS = [
-  DEFAULT_PATIENT_AVATAR,
-  'https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?w=400&q=80',
-  'https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=400&q=80',
-  'https://images.unsplash.com/photo-1494790108377-be9c29b29330?w=400&q=80',
-  'https://images.unsplash.com/photo-1500648767791-00dcc994a43e?w=400&q=80',
-];
+
 
 export default function PatientProfileScreen() {
   const router = useRouter();

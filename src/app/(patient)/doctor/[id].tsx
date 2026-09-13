@@ -44,15 +44,12 @@ import {
   MapPin,
 } from 'lucide-react-native';
 import { useQuery } from '@tanstack/react-query';
-import { StitchColors, DEFAULT_DOCTOR_AVATAR } from '@/constants/theme';
+import { StitchColors } from '@/constants/theme';
 import { getSpecialtyConfig } from '@/constants/specialties';
 import { useDoctorsQuery } from '@/hooks/queries/useDoctorsQuery';
 import { doctorService } from '@/services/doctorService';
 
-const DEFAULT_DOCTOR_IMAGE = DEFAULT_DOCTOR_AVATAR;
 
-const CLINIC_BANNER_IMAGE =
-  'https://images.unsplash.com/photo-1519494026892-80bbd2d6fd0d?w=1200&auto=format&fit=crop&q=80';
 
 const generateDynamicDates = () => {
   const days = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
@@ -241,11 +238,17 @@ export default function DoctorProfileScreen() {
           <View style={styles.headerCard}>
             <View style={styles.doctorHeaderRow}>
               <View style={styles.avatarWrap}>
-                <Image
-                  source={{ uri: doctor.avatar || DEFAULT_DOCTOR_IMAGE }}
-                  style={styles.doctorAvatar}
-                  contentFit="cover"
-                />
+                {doctor.avatar ? (
+                  <Image
+                    source={{ uri: doctor.avatar }}
+                    style={styles.doctorAvatar}
+                    contentFit="cover"
+                  />
+                ) : (
+                  <View style={[styles.doctorAvatar, { backgroundColor: '#e2e8f0', alignItems: 'center', justifyContent: 'center' }]}>
+                    <Text style={{ fontSize: 28, fontWeight: '700', color: '#64748b' }}>{(doctor.name || 'D').charAt(0)}</Text>
+                  </View>
+                )}
                 <View style={styles.verifiedIconBadge}>
                   <ShieldCheck size={14} color="#ffffff" />
                 </View>
@@ -273,85 +276,80 @@ export default function DoctorProfileScreen() {
 
                 <Text style={styles.doctorProfileName}>{doctor.name}</Text>
                 <Text style={styles.doctorDegreeText}>
-                  {doctor.qualification || 'MD, DM (Cardiology)'}
+                  {doctor.qualification || null}
                 </Text>
                 <Text style={styles.doctorClinicText}>
-                  {doctor.hospital || 'Fortis Hospital, Bandra West'}
+                  {doctor.hospital || doctor.clinic?.name || null}
                 </Text>
               </View>
             </View>
 
             {/* Stats Row */}
             <View style={styles.statsRow}>
-              <View style={styles.statBox}>
-                <Text style={styles.statValue}>{doctor.experienceYears || 18}+ Yrs</Text>
-                <Text style={styles.statLabel}>Experience</Text>
-              </View>
-
-              <View style={styles.statBox}>
-                <View style={styles.ratingValRow}>
-                  <Star size={14} color="#f59e0b" fill="#f59e0b" />
-                  <Text style={[styles.statValue, { color: '#b45309' }]}>
-                    {doctor.rating ? doctor.rating.toFixed(1) : '4.9'}
-                  </Text>
+              {doctor.experienceYears > 0 ? (
+                <View style={styles.statBox}>
+                  <Text style={styles.statValue}>{doctor.experienceYears}+ Yrs</Text>
+                  <Text style={styles.statLabel}>Experience</Text>
                 </View>
-                <Text style={styles.statLabel}>Rating ({doctor.reviewCount || 420}+)</Text>
-              </View>
+              ) : null}
 
-              <View style={styles.statBox}>
-                <Text style={styles.statValue}>2.4k+</Text>
-                <Text style={styles.statLabel}>Patients</Text>
-              </View>
+              {doctor.rating != null ? (
+                <View style={styles.statBox}>
+                  <View style={styles.ratingValRow}>
+                    <Star size={14} color="#f59e0b" fill="#f59e0b" />
+                    <Text style={[styles.statValue, { color: '#b45309' }]}>
+                      {doctor.rating.toFixed(1)}
+                    </Text>
+                  </View>
+                  <Text style={styles.statLabel}>Rating ({doctor.reviewCount || 0}+)</Text>
+                </View>
+              ) : null}
             </View>
           </View>
 
-          {/* OPD Location Card */}
-          <Pressable
-            style={styles.locationCard}
-            onPress={() => {
-              Alert.alert(
-                'OPD Route & Parking Info',
-                'Fortis Associate OPD Center\nLinking Road, Bandra West, Mumbai\nOPD Timings: 4:00 PM – 8:00 PM\nValet parking available at Gate 2.'
-              );
-            }}
-          >
-            <View style={styles.locationCardHeader}>
-              <View>
-                <View style={styles.opdBadgeRow}>
-                  <Building2 size={13} color={StitchColors.primary} />
-                  <Text style={styles.opdBadgeText}>OPD LOCATION</Text>
-                </View>
-                <Text style={styles.locationCenterName}>Fortis Associate OPD Center</Text>
-                <Text style={styles.locationAddressText}>Linking Road, Bandra West, Mumbai</Text>
-              </View>
-
-              <View style={styles.distanceBadge}>
-                <Navigation size={12} color={StitchColors.primary} />
-                <Text style={styles.distanceBadgeText}>1.4 km</Text>
-              </View>
-            </View>
-
-            {/* Location Image Banner with Overlay */}
-            <View style={styles.locationImageBanner}>
-              <Image
-                source={{ uri: CLINIC_BANNER_IMAGE }}
-                style={styles.locationBannerImage}
-                contentFit="cover"
-              />
-              <View style={styles.bannerOverlay} />
-              <View style={styles.bannerBottomRow}>
-                <View style={styles.timingPill}>
-                  <Clock size={13} color={StitchColors.primary} />
-                  <Text style={styles.timingPillText}>4:00 PM – 8:00 PM</Text>
+          {/* OPD Location Card — only shown if the doctor has a clinic on file */}
+          {doctor.clinic?.name ? (
+            <Pressable
+              style={styles.locationCard}
+              onPress={() => {
+                const parts = [
+                  doctor.clinic?.name,
+                  doctor.clinic?.address,
+                  doctor.clinic?.timings ? `Timings: ${doctor.clinic.timings}` : null,
+                ].filter(Boolean);
+                Alert.alert('OPD Location', parts.join('\n') || 'Location details unavailable.');
+              }}
+            >
+              <View style={styles.locationCardHeader}>
+                <View>
+                  <View style={styles.opdBadgeRow}>
+                    <Building2 size={13} color={StitchColors.primary} />
+                    <Text style={styles.opdBadgeText}>OPD LOCATION</Text>
+                  </View>
+                  <Text style={styles.locationCenterName}>{doctor.clinic.name}</Text>
+                  {doctor.clinic.address ? (
+                    <Text style={styles.locationAddressText}>{doctor.clinic.address}</Text>
+                  ) : null}
                 </View>
 
-                <View style={styles.viewRoutePill}>
-                  <Text style={styles.viewRouteText}>View Route</Text>
-                  <ArrowRight size={11} color="#ffffff" />
-                </View>
+                {doctor.distanceKm != null ? (
+                  <View style={styles.distanceBadge}>
+                    <Navigation size={12} color={StitchColors.primary} />
+                    <Text style={styles.distanceBadgeText}>{doctor.distanceKm} km</Text>
+                  </View>
+                ) : null}
               </View>
-            </View>
-          </Pressable>
+
+              {doctor.clinic.timings ? (
+                <View style={[styles.bannerBottomRow, { paddingHorizontal: 16, paddingVertical: 10 }]}>
+                  <View style={styles.timingPill}>
+                    <Clock size={13} color={StitchColors.primary} />
+                    <Text style={styles.timingPillText}>{doctor.clinic.timings}</Text>
+                  </View>
+                </View>
+              ) : null}
+            </Pressable>
+          ) : null}
 
           {/* Choose Consultation Slot Card */}
           <View style={styles.slotCard}>

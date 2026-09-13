@@ -76,8 +76,6 @@ import { AllSpecialtiesModal } from '@/components/patient/AllSpecialtiesModal';
 import { FiYLogo } from '@/components/ui/FiYLogo';
 import { AppUpdateModal } from '@/components/ui/AppUpdateModal';
 
-const DOCTOR_AVATAR =
-  'https://images.unsplash.com/photo-1594824813682-14c1e405a76e?w=600&auto=format&fit=crop&q=80';
 
 
 export default function PatientHomeScreen() {
@@ -267,10 +265,18 @@ export default function PatientHomeScreen() {
                 </View>
 
                 <View style={styles.doctorRow}>
-                  <Image
-                    source={{ uri: upcomingAppointment.doctorAvatar || DOCTOR_AVATAR }}
-                    style={styles.doctorAvatar}
-                  />
+                  {upcomingAppointment.doctorAvatar ? (
+                    <Image
+                      source={{ uri: upcomingAppointment.doctorAvatar }}
+                      style={styles.doctorAvatar}
+                    />
+                  ) : (
+                    <View style={[styles.doctorAvatar, { backgroundColor: '#e2e8f0', alignItems: 'center', justifyContent: 'center' }]}>
+                      <Text style={{ fontSize: 16, fontWeight: '700', color: '#64748b' }}>
+                        {upcomingAppointment.doctorName?.charAt(0) || 'D'}
+                      </Text>
+                    </View>
+                  )}
                   <View style={styles.flex1}>
                     <View style={styles.doctorNameRow}>
                       <Text style={styles.doctorName}>{upcomingAppointment.doctorName}</Text>
@@ -335,17 +341,25 @@ export default function PatientHomeScreen() {
                 </View>
 
                 <View style={styles.doctorRow}>
-                  <Image
-                    source={{ uri: doctors[0].avatar || DOCTOR_AVATAR }}
-                    style={styles.doctorAvatar}
-                  />
+                  {doctors[0].avatar ? (
+                    <Image
+                      source={{ uri: doctors[0].avatar }}
+                      style={styles.doctorAvatar}
+                    />
+                  ) : (
+                    <View style={[styles.doctorAvatar, { backgroundColor: '#e2e8f0', alignItems: 'center', justifyContent: 'center' }]}>
+                      <Text style={{ fontSize: 16, fontWeight: '700', color: '#64748b' }}>
+                        {doctors[0].name?.charAt(0) || 'D'}
+                      </Text>
+                    </View>
+                  )}
                   <View style={styles.flex1}>
                     <View style={styles.doctorNameRow}>
                       <Text style={styles.doctorName}>{doctors[0].name}</Text>
                       <Verified size={15} color="#5eead4" fill="#5eead4" />
                     </View>
                     <Text style={styles.doctorSpecialty}>
-                      {doctors[0].specialty} • {doctors[0].hospital || 'OPD Practice'}
+                      {doctors[0].specialty} • {doctors[0].hospital || null}
                     </Text>
                     <View style={styles.tokenRow}>
                       <View style={styles.tokenPill}>

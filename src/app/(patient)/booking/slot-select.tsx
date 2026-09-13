@@ -292,7 +292,7 @@ export default function MedicalIntakeScreen() {
           <View style={styles.topHeaderCenter}>
             <Text style={styles.topHeaderTitle}>Medical Intake</Text>
             <Text style={styles.topHeaderSubtitle}>
-              Step {currentStep + 1} of 3 • {doctorName} • Fortis Hospital
+              Step {currentStep + 1} of 3 • {doctorName}
             </Text>
           </View>
 
@@ -340,7 +340,7 @@ export default function MedicalIntakeScreen() {
                 <Text style={styles.miniDocName}>{doctorName}</Text>
                 <ShieldCheck size={15} color={StitchColors.primary} />
               </View>
-              <Text style={styles.miniDocSub}>MD, DM Cardiology • Fortis OPD</Text>
+              <Text style={styles.miniDocSub}>{params.doctorSpecialty || null}</Text>
               <View style={styles.miniTimeRow}>
                 <Clock size={13} color={StitchColors.primary} />
                 <Text style={styles.miniTimeText}>
@@ -734,7 +734,7 @@ export default function MedicalIntakeScreen() {
                 <View style={styles.triageNoticeText}>
                   <Text style={styles.triageNoticeTitle}>Clinic Receptionist Vitals Notice</Text>
                   <Text style={styles.triageNoticeDesc}>
-                    BP, Pulse, Blood Sugar & Temp will be recorded by clinic staff upon OPD triage check-in at Fortis desk.
+                    BP, Pulse, Blood Sugar &amp; Temp will be recorded by clinic staff upon OPD triage check-in at the reception desk.
                   </Text>
                 </View>
               </View>

@@ -1,5 +1,4 @@
-import { IsNotEmpty, IsString, IsOptional, IsEnum } from 'class-validator';
-import { PublicRegisterRole } from './register.dto';
+import { IsNotEmpty, IsString, IsOptional } from 'class-validator';
 
 export class GoogleAuthDto {
   @IsNotEmpty({ message: 'Google authentication credential (idToken or server token) is required.' })
@@ -7,7 +6,7 @@ export class GoogleAuthDto {
   credential: string;
 
   @IsOptional()
-  @IsEnum(PublicRegisterRole, { message: 'Role must be PATIENT or DOCTOR.' })
-  role?: PublicRegisterRole;
+  @IsString()
+  role?: string;
 }
 

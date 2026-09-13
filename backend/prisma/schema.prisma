@@ -116,12 +116,12 @@ model Doctor {
 }
 
 model DoctorQualification {
-  id          String @id @default(uuid())
+  id          String  @id @default(uuid())
   doctorId    String
-  doctor      Doctor @relation(fields: [doctorId], references: [id], onDelete: Cascade)
+  doctor      Doctor  @relation(fields: [doctorId], references: [id], onDelete: Cascade)
   degree      String
-  institution String
-  year        Int
+  institution String?
+  year        Int?
 }
 
 model Clinic {
