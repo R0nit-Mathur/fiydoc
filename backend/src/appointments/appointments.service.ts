@@ -100,143 +100,143 @@ export class AppointmentsService {
       }
     }
 
-    return this.prisma.$transaction(async (tx) => {
-      // Fetch doctor to authoritatively determine consultation fee and verify existence
-      const doctor = await tx.doctor.findFirst({
-        where: {
-          OR: [
-            { id: dto.doctorId },
-            { userId: dto.doctorId },
-          ],
+    // Fetch doctor to authoritatively determine consultation fee and verify existence
+    const doctor = await this.prisma.doctor.findFirst({
+      where: {
+        OR: [
+          { id: dto.doctorId },
+          { userId: dto.doctorId },
+        ],
+      },
+      include: { clinic: true, availabilities: true, verification: true },
+    });
+    if (!doctor) {
+      throw new NotFoundException('Selected doctor does not exist.');
+    }
+    dto.doctorId = doctor.id;
+
+    // Ensure doctor is active/verified before accepting patient bookings
+    const isVerified = doctor.verification?.status === 'VERIFIED';
+    const isPendingOrRegistered = !doctor.verification || ['PENDING', 'REGISTERED'].includes(doctor.verification?.status);
+    if (!isVerified && !isPendingOrRegistered) {
+      throw new BadRequestException('Doctor profile is inactive or suspended.');
+    }
+
+    // Verify consultation fee is authoritatively configured on doctor profile (fallback to 500 default)
+    let authoritativeFee = Number(doctor.consultationFee);
+    if (isNaN(authoritativeFee) || authoritativeFee <= 0) {
+      authoritativeFee = 500;
+    }
+
+    // Validate consultation type is supported by doctor
+    const authoritativeConsultationType = dto.consultationType || ConsultationType.CLINIC;
+
+    // Verify patient exists or auto-upsert patient profile for authenticated user
+    let patient = await this.prisma.patient.findFirst({
+      where: {
+        OR: [
+          { id: dto.patientId },
+          { userId: dto.patientId },
+          ...(currentUser?.id ? [{ userId: currentUser.id }, { id: currentUser.id }] : []),
+        ],
+      },
+    });
+
+    if (!patient && currentUser?.id) {
+      // Auto-create patient record for active user
+      const patientName = currentUser.name || currentUser.fullName || currentUser.email?.split('@')[0] || 'Patient';
+      patient = await this.prisma.patient.create({
+        data: {
+          userId: currentUser.id,
+          fullName: patientName,
+          onboardingComplete: true,
         },
-        include: { clinic: true, availabilities: true, verification: true },
       });
-      if (!doctor) {
-        throw new NotFoundException('Selected doctor does not exist.');
-      }
-      dto.doctorId = doctor.id;
+    }
 
-      // Ensure doctor is active/verified before accepting patient bookings
-      const isVerified = doctor.verification?.status === 'VERIFIED';
-      const isPendingOrRegistered = !doctor.verification || ['PENDING', 'REGISTERED'].includes(doctor.verification?.status);
-      if (!isVerified && !isPendingOrRegistered) {
-        throw new BadRequestException('Doctor profile is inactive or suspended.');
-      }
+    if (!patient) {
+      throw new NotFoundException('Patient record not found. Please complete profile setup.');
+    }
+    dto.patientId = patient.id;
 
-      // Verify consultation fee is authoritatively configured on doctor profile (fallback to 500 default)
-      let authoritativeFee = Number(doctor.consultationFee);
-      if (isNaN(authoritativeFee) || authoritativeFee <= 0) {
-        authoritativeFee = 500;
-      }
+    // Derive authoritative slot duration and end time
+    let slotDuration = 30;
 
-      // Validate consultation type is supported by doctor
-      const authoritativeConsultationType = dto.consultationType || ConsultationType.CLINIC;
+    // Check doctor availability rules if configured
+    if (doctor.availabilities && doctor.availabilities.length > 0) {
+      const appointmentDayOfWeek = parsedStart.getDay(); // 0 = Sun, 1 = Mon ...
+      const matchingDayAvailabilities = doctor.availabilities.filter(
+        (a) => a.dayOfWeek === appointmentDayOfWeek
+      );
 
-      // Verify patient exists or auto-upsert patient profile for authenticated user
-      let patient = await tx.patient.findFirst({
-        where: {
-          OR: [
-            { id: dto.patientId },
-            { userId: dto.patientId },
-            ...(currentUser?.id ? [{ userId: currentUser.id }, { id: currentUser.id }] : []),
-          ],
-        },
-      });
-
-      if (!patient && currentUser?.id) {
-        // Auto-create patient record for active user
-        const patientName = currentUser.name || currentUser.fullName || currentUser.email?.split('@')[0] || 'Patient';
-        patient = await tx.patient.create({
-          data: {
-            userId: currentUser.id,
-            fullName: patientName,
-            onboardingComplete: true,
-          },
+      if (matchingDayAvailabilities.length > 0) {
+        const slotStartNorm = dto.startTime.slice(0, 5);
+        const matchedSlot = matchingDayAvailabilities.find((avail) => {
+          const availStartNorm = avail.startTime.slice(0, 5);
+          const availEndNorm = avail.endTime.slice(0, 5);
+          return slotStartNorm >= availStartNorm && slotStartNorm < availEndNorm;
         });
-      }
 
-      if (!patient) {
-        throw new NotFoundException('Patient record not found. Please complete profile setup.');
-      }
-      dto.patientId = patient.id;
-
-      // Derive authoritative slot duration and end time
-      let slotDuration = 30;
-
-      // Check doctor availability rules if configured
-      if (doctor.availabilities && doctor.availabilities.length > 0) {
-        const appointmentDayOfWeek = parsedStart.getDay(); // 0 = Sun, 1 = Mon ...
-        const matchingDayAvailabilities = doctor.availabilities.filter(
-          (a) => a.dayOfWeek === appointmentDayOfWeek
-        );
-
-        if (matchingDayAvailabilities.length > 0) {
-          const slotStartNorm = dto.startTime.slice(0, 5);
-          const matchedSlot = matchingDayAvailabilities.find((avail) => {
-            const availStartNorm = avail.startTime.slice(0, 5);
-            const availEndNorm = avail.endTime.slice(0, 5);
-            return slotStartNorm >= availStartNorm && slotStartNorm < availEndNorm;
-          });
-
-          if (matchedSlot) {
-            slotDuration = matchedSlot.slotDurationMinutes || 30;
-          }
+        if (matchedSlot) {
+          slotDuration = matchedSlot.slotDurationMinutes || 30;
         }
       }
+    }
 
-      // Authoritatively compute endTime from startTime + slotDuration
-      const [startH, startM] = dto.startTime.slice(0, 5).split(':').map(Number);
-      const totalMinutes = startH * 60 + startM + slotDuration;
-      const endH = Math.floor(totalMinutes / 60);
-      const endM = totalMinutes % 60;
-      const authoritativeEndTime = `${String(endH).padStart(2, '0')}:${String(endM).padStart(2, '0')}`;
+    // Authoritatively compute endTime from startTime + slotDuration
+    const [startH, startM] = dto.startTime.slice(0, 5).split(':').map(Number);
+    const totalMinutes = startH * 60 + startM + slotDuration;
+    const endH = Math.floor(totalMinutes / 60);
+    const endM = totalMinutes % 60;
+    const authoritativeEndTime = `${String(endH).padStart(2, '0')}:${String(endM).padStart(2, '0')}`;
 
-      // Transactional check for double-booking
-      const existing = await tx.appointment.findFirst({
+    // Concurrency-safe atomic token sequence allocation via DailyDoctorToken (non-fatal, outside tx)
+    let allocatedToken = `Token #01`;
+    try {
+      const tokenRecord = await this.prisma.dailyDoctorToken.upsert({
         where: {
-          doctorId: dto.doctorId,
-          date: dto.date,
-          startTime: dto.startTime,
-          status: { in: [AppointmentStatus.CONFIRMED, AppointmentStatus.PENDING] },
-        },
-      });
-
-      if (existing) {
-        throw new BadRequestException('This slot is already booked. Please choose another time.');
-      }
-
-      // Concurrency-safe atomic token sequence allocation via DailyDoctorToken (non-fatal, outside tx)
-      let allocatedToken = `Token #01`;
-      try {
-        const tokenRecord = await this.prisma.dailyDoctorToken.upsert({
-          where: {
-            doctorId_date: {
-              doctorId: dto.doctorId,
-              date: dto.date,
-            },
-          },
-          create: {
+          doctorId_date: {
             doctorId: dto.doctorId,
             date: dto.date,
-            lastToken: 1,
           },
-          update: {
-            lastToken: { increment: 1 },
+        },
+        create: {
+          doctorId: dto.doctorId,
+          date: dto.date,
+          lastToken: 1,
+        },
+        update: {
+          lastToken: { increment: 1 },
+        },
+      });
+      allocatedToken = `Token #${String(tokenRecord.lastToken).padStart(2, '0')}`;
+    } catch (tokenErr: any) {
+      console.warn('[appointments] DailyDoctorToken upsert failed (non-fatal):', tokenErr?.message);
+      allocatedToken = `Token #${String((Math.floor(Date.now() / 1000) % 99) + 1).padStart(2, '0')}`;
+    }
+
+    const canonicalNotes = dto.notes
+      ? `${dto.notes.trim()} [${allocatedToken}]`
+      : `[${allocatedToken}]`;
+
+    // Lean transactional check for double-booking and creation
+    let createdApt;
+    try {
+      createdApt = await this.prisma.$transaction(async (tx) => {
+        const existing = await tx.appointment.findFirst({
+          where: {
+            doctorId: dto.doctorId,
+            date: dto.date,
+            startTime: dto.startTime.slice(0, 5),
+            status: { in: [AppointmentStatus.CONFIRMED, AppointmentStatus.PENDING] },
           },
         });
-        allocatedToken = `Token #${String(tokenRecord.lastToken).padStart(2, '0')}`;
-      } catch (tokenErr: any) {
-        console.warn('[appointments] DailyDoctorToken upsert failed (non-fatal):', tokenErr?.message);
-        allocatedToken = `Token #${String(Math.floor(Date.now() / 1000) % 99 + 1).padStart(2, '0')}`;
-      }
 
-      const canonicalNotes = dto.notes
-        ? `${dto.notes.trim()} [${allocatedToken}]`
-        : `[${allocatedToken}]`;
+        if (existing) {
+          throw new BadRequestException('This slot is already booked. Please choose another time.');
+        }
 
-      let createdApt;
-      try {
-        createdApt = await tx.appointment.create({
+        return tx.appointment.create({
           data: {
             patientId: dto.patientId,
             doctorId: dto.doctorId,
@@ -254,66 +254,64 @@ export class AppointmentsService {
             patient: true,
           },
         });
-      } catch (err: any) {
-        if (err?.code === 'P2002') {
-          throw new BadRequestException('This slot is already booked. Please choose another time.');
-        }
-        throw err;
+      });
+    } catch (err: any) {
+      if (err?.code === 'P2002') {
+        throw new BadRequestException('This slot is already booked. Please choose another time.');
       }
+      throw err;
+    }
 
-      return { createdApt, allocatedToken, patientUser: patient };
-    }).then(async ({ createdApt, allocatedToken, patientUser }) => {
-      // Audit log entry — non-fatal (outside tx)
-      if (currentUser?.id) {
-        try {
-          await this.prisma.auditLog.create({
-            data: {
-              actorUserId: currentUser.id,
-              action: 'APPOINTMENT_CREATED',
-              targetType: 'APPOINTMENT',
-              targetId: createdApt.id,
-              metadata: {
-                doctorId: dto.doctorId,
-                patientId: dto.patientId,
-                date: dto.date,
-                startTime: dto.startTime,
-                token: allocatedToken,
-              },
-            },
-          });
-        } catch (auditErr: any) {
-          console.warn('[appointments] AuditLog insert failed (non-fatal):', auditErr?.message);
-        }
-      }
-
-      // Trigger notification for both patient and doctor — non-fatal (outside tx)
+    // Audit log entry — non-fatal (outside tx)
+    if (currentUser?.id) {
       try {
-        const notifData: any[] = [];
-        if (patientUser?.userId) {
-          notifData.push({
-            userId: patientUser.userId,
-            type: 'APPOINTMENT_QUEUED',
-            title: 'Appointment Slot Queued',
-            message: `Your slot request with ${createdApt.doctor.fullName} on ${dto.date} at ${dto.startTime} is awaiting doctor approval.`,
-          });
-        }
-        if (createdApt.doctor?.userId) {
-          notifData.push({
-            userId: createdApt.doctor.userId,
-            type: 'NEW_BOOKING_REQUEST',
-            title: 'New Patient Slot Request',
-            message: `${createdApt.patient.fullName} requested ${dto.startTime} on ${dto.date}. Review and approve.`,
-          });
-        }
-        if (notifData.length > 0) {
-          await this.prisma.notification.createMany({ data: notifData });
-        }
-      } catch (notifErr: any) {
-        console.warn('[appointments] Notification insert failed (non-fatal):', notifErr?.message);
+        await this.prisma.auditLog.create({
+          data: {
+            actorUserId: currentUser.id,
+            action: 'APPOINTMENT_CREATED',
+            targetType: 'APPOINTMENT',
+            targetId: createdApt.id,
+            metadata: {
+              doctorId: dto.doctorId,
+              patientId: dto.patientId,
+              date: dto.date,
+              startTime: dto.startTime,
+              token: allocatedToken,
+            },
+          },
+        });
+      } catch (auditErr: any) {
+        console.warn('[appointments] AuditLog insert failed (non-fatal):', auditErr?.message);
       }
+    }
 
-      return this.formatAppointment(createdApt);
-    });
+    // Trigger notification for both patient and doctor — non-fatal (outside tx)
+    try {
+      const notifData: any[] = [];
+      if (patient?.userId) {
+        notifData.push({
+          userId: patient.userId,
+          type: 'APPOINTMENT_QUEUED',
+          title: 'Appointment Slot Queued',
+          message: `Your slot request with ${createdApt.doctor.fullName} on ${dto.date} at ${dto.startTime} is awaiting doctor approval.`,
+        });
+      }
+      if (createdApt.doctor?.userId) {
+        notifData.push({
+          userId: createdApt.doctor.userId,
+          type: 'NEW_BOOKING_REQUEST',
+          title: 'New Patient Slot Request',
+          message: `${createdApt.patient.fullName} requested ${dto.startTime} on ${dto.date}. Review and approve.`,
+        });
+      }
+      if (notifData.length > 0) {
+        await this.prisma.notification.createMany({ data: notifData });
+      }
+    } catch (notifErr: any) {
+      console.warn('[appointments] Notification insert failed (non-fatal):', notifErr?.message);
+    }
+
+    return this.formatAppointment(createdApt);
   }
 
   async getPatientAppointments(patientId: string, currentUser: any) {
@@ -511,7 +509,11 @@ export class AppointmentsService {
 
       // Role-specific constraints on transitions
       if (targetStatus === AppointmentStatus.CONFIRMED) {
-        const isDoctor = currentUser.role === Role.DOCTOR && currentUser.doctor?.id === apt.doctorId;
+        const isDoctor =
+          currentUser.role === Role.DOCTOR &&
+          ((currentUser.doctor && currentUser.doctor.id === apt.doctorId) ||
+            apt.doctor?.userId === currentUser.id ||
+            apt.doctorId === currentUser.id);
         const isAdmin = currentUser.role === Role.ADMIN;
         if (!isDoctor && !isAdmin) {
           throw new ForbiddenException('Only the assigned doctor or admin can confirm/approve an appointment.');
@@ -519,7 +521,11 @@ export class AppointmentsService {
       }
 
       if (targetStatus === AppointmentStatus.COMPLETED || targetStatus === AppointmentStatus.NO_SHOW) {
-        const isDoctor = currentUser.role === Role.DOCTOR && currentUser.doctor?.id === apt.doctorId;
+        const isDoctor =
+          currentUser.role === Role.DOCTOR &&
+          ((currentUser.doctor && currentUser.doctor.id === apt.doctorId) ||
+            apt.doctor?.userId === currentUser.id ||
+            apt.doctorId === currentUser.id);
         const isAdmin = currentUser.role === Role.ADMIN;
         if (!isDoctor && !isAdmin) {
           throw new ForbiddenException('Only the assigned doctor or admin can complete or mark no-show for an appointment.');
@@ -552,7 +558,7 @@ export class AppointmentsService {
           await this.prisma.auditLog.create({
             data: {
               actorUserId: currentUser.id,
-              action: `APPOINTMENT_STATUS_${targetStatus}`,
+              action: 'APPOINTMENT_STATUS_UPDATED',
               targetType: 'APPOINTMENT',
               targetId: id,
               metadata: {
@@ -594,8 +600,14 @@ export class AppointmentsService {
       return;
     }
 
-    const isPatientOwner = currentUser.patient && currentUser.patient.id === apt.patientId;
-    const isDoctorOwner = currentUser.doctor && currentUser.doctor.id === apt.doctorId;
+    const isPatientOwner =
+      (currentUser.patient && currentUser.patient.id === apt.patientId) ||
+      (apt.patient && apt.patient.userId === currentUser.id) ||
+      apt.patientId === currentUser.id;
+    const isDoctorOwner =
+      (currentUser.doctor && currentUser.doctor.id === apt.doctorId) ||
+      (apt.doctor && apt.doctor.userId === currentUser.id) ||
+      apt.doctorId === currentUser.id;
 
     if (!isPatientOwner && !isDoctorOwner) {
       throw new ForbiddenException('You do not have permission to view or manage this appointment.');
