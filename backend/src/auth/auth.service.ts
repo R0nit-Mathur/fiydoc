@@ -109,8 +109,8 @@ export class AuthService {
             ? {
                 create: {
                   degree: Array.isArray(dto.qualifications) ? dto.qualifications.join(', ') : String(dto.qualifications).trim(),
-                  institution: 'Medical University',
-                  year: new Date().getFullYear(),
+                  institution: null,
+                  year: null,
                 },
               }
             : undefined,
@@ -161,6 +161,10 @@ export class AuthService {
 
     if (!user || !user.passwordHash) {
       throw new UnauthorizedException('Invalid login credentials.');
+    }
+
+    if (user.status !== 'ACTIVE') {
+      throw new UnauthorizedException('User account is suspended or revoked.');
     }
 
     const valid = await bcrypt.compare(dto.password || '', user.passwordHash);
@@ -259,12 +263,12 @@ export class AuthService {
                   doctor: {
                     create: {
                       fullName: verifiedName,
-                      specialization: 'Pending Onboarding',
+                      specialization: 'General Medicine',
                       consultationFee: 0,
                       verification: {
                         create: {
-                          registrationNumber: 'PENDING_ONBOARDING',
-                          registrationAuthority: 'Pending Onboarding',
+                          registrationNumber: null,
+                          registrationAuthority: null,
                           status: VerificationStatus.PENDING,
                         },
                       },
@@ -277,19 +281,11 @@ export class AuthService {
       }
     }
 
+    if (user.status !== 'ACTIVE') {
+      throw new UnauthorizedException('User account is suspended or revoked.');
+    }
+
     return this.generateTokenResponse(user);
-  }
-
-  async forgotPassword(email: string) {
-    const cleanEmail = email.trim().toLowerCase();
-    await this.prisma.user.findUnique({
-      where: { email: cleanEmail },
-    });
-
-    return {
-      success: true,
-      message: `If an account exists for ${cleanEmail}, a password recovery link has been sent.`,
-    };
   }
 
   private generateTokenResponse(user: any) {

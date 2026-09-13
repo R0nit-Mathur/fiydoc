@@ -177,7 +177,33 @@ export class ConsultationsService {
       }
     }
 
-    return consultation;
+    return {
+      id: consultation.id,
+      appointmentId: consultation.appointmentId,
+      patientId: consultation.patientId,
+      patientName: consultation.patient?.fullName || null,
+      doctorId: consultation.doctorId,
+      doctorName: consultation.doctor?.fullName || null,
+      doctorSpecialty: consultation.doctor?.specialization || null,
+      chiefComplaint: consultation.chiefComplaint,
+      symptoms: consultation.symptoms,
+      observations: consultation.observations,
+      assessment: consultation.assessment,
+      clinicalNotes: consultation.clinicalNotes,
+      followUpDate: consultation.followUpDate,
+      completedAt: consultation.completedAt,
+      createdAt: consultation.createdAt,
+      prescription: consultation.prescription
+        ? {
+            id: consultation.prescription.id,
+            verificationCode: consultation.prescription.verificationCode,
+            issuedAt: consultation.prescription.issuedAt || consultation.prescription.createdAt,
+            doctorNotes: consultation.prescription.doctorNotes,
+            followUpInstructions: consultation.prescription.followUpInstructions,
+            medicines: consultation.prescription.medicines || [],
+          }
+        : null,
+    };
   }
 }
 

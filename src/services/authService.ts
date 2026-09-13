@@ -252,19 +252,4 @@ export const authService = {
       );
     }
   },
-
-  async requestPasswordReset(email: string): Promise<{ success: boolean; message: string }> {
-    try {
-      const res = await apiClient.post<{ success: boolean; message: string }>('/auth/forgot-password', {
-        email: email.trim().toLowerCase(),
-      });
-      return {
-        success: true,
-        message: res.message || `Password recovery link dispatched to ${email}. Check your inbox.`,
-      };
-    } catch (err: any) {
-      const msg = err?.message || 'Failed to send password recovery link. Please verify your email and try again.';
-      throw new Error(`[Password Recovery] ${msg}`);
-    }
-  },
 };

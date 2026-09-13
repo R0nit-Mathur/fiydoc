@@ -13,7 +13,6 @@ import { AuthService } from './auth.service';
 import { RegisterDto } from './dto/register.dto';
 import { LoginDto } from './dto/login.dto';
 import { GoogleAuthDto } from './dto/google-auth.dto';
-import { ForgotPasswordDto } from './dto/forgot-password.dto';
 import { AuthRateLimitGuard } from './auth-rate-limit.guard';
 
 @Controller('auth')
@@ -36,12 +35,6 @@ export class AuthController {
   @Post('google')
   async googleAuth(@Body() dto: GoogleAuthDto) {
     return this.authService.googleOAuthLogin(dto);
-  }
-
-  @HttpCode(HttpStatus.OK)
-  @Post('forgot-password')
-  async forgotPassword(@Body() dto: ForgotPasswordDto) {
-    return this.authService.forgotPassword(dto.email);
   }
 
   @Get('google/callback')

@@ -153,7 +153,7 @@ export class PrescriptionsService {
           doctorNotes: dto.doctorNotes,
           followUpInstructions: dto.followUpInstructions,
           verificationCode,
-          signedAt: issuedTimestamp,
+          issuedAt: issuedTimestamp,
           medicines: {
             create: dto.medicines.map((m) => ({
               name: m.name.trim(),
@@ -243,7 +243,7 @@ export class PrescriptionsService {
 
     return {
       ...createdPrescription,
-      issuedAt: createdPrescription.signedAt || createdPrescription.createdAt,
+      issuedAt: createdPrescription.issuedAt || createdPrescription.createdAt,
       pdfUrl: documentUrl || storagePath,
     };
   }
@@ -288,7 +288,7 @@ export class PrescriptionsService {
       verified: true,
       doctorName: rx.doctor.fullName,
       specialization: rx.doctor.specialization,
-      issuedAt: rx.createdAt,
+      issuedAt: rx.issuedAt || rx.createdAt,
       medicineCount: rx.medicines.length,
       verificationCode: rx.verificationCode,
     };
@@ -311,7 +311,7 @@ export class PrescriptionsService {
       }
     }
 
-    // Doctor can only access prescriptions for patients with whom they have an encounter relationship
+    // Doctor can only access prescriptions for patients with whom they have an active or completed encounter relationship
     if (currentUser.role === Role.DOCTOR) {
       const docId = currentUser.doctor?.id;
       if (!docId) {
@@ -321,6 +321,7 @@ export class PrescriptionsService {
         where: {
           patientId: targetPatientId,
           doctorId: docId,
+          status: { in: ['CONFIRMED', 'COMPLETED'] },
         },
       });
       if (!hasEncounter) {

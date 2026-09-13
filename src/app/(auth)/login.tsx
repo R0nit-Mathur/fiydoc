@@ -191,12 +191,6 @@ export default function LoginScreen() {
               <View style={styles.inputGroup}>
                 <View style={styles.labelRow}>
                   <Text style={styles.inputLabel}>Password</Text>
-                  <Pressable
-                    onPress={() => router.push('/(auth)/forgot-password')}
-                    hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
-                  >
-                    <Text style={styles.forgotPasswordText}>Forgot password?</Text>
-                  </Pressable>
                 </View>
                 <View style={styles.inputWrapper}>
                   <Lock size={19} color="#737783" style={styles.inputIcon} />

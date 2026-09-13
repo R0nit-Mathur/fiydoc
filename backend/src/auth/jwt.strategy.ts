@@ -26,6 +26,9 @@ export class JwtStrategy extends PassportStrategy(Strategy) {
     if (!user) {
       throw new UnauthorizedException('Invalid user token');
     }
+    if (user.status !== 'ACTIVE') {
+      throw new UnauthorizedException('User account is suspended or revoked.');
+    }
     return user;
   }
 }

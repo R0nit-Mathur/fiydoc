@@ -53,17 +53,18 @@ export class RecordsService {
         throw new ForbiddenException('Doctor profile not found.');
       }
 
-      // Doctor can only access records if there is an active/previous clinical encounter
+      // Doctor can only access records if there is an active/completed clinical encounter
       const hasRelationship = await this.prisma.appointment.findFirst({
         where: {
           patientId: resolvedId,
           doctorId: doc.id,
+          status: { in: ['CONFIRMED', 'COMPLETED'] },
         },
       });
 
       if (!hasRelationship) {
         throw new ForbiddenException(
-          'You are not authorized to view this patient’s medical records without an appointment relationship.',
+          'You are not authorized to view this patient’s medical records without an active or completed appointment relationship.',
         );
       }
     }

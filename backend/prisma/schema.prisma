@@ -8,6 +8,12 @@ generator client {
   provider = "prisma-client-js"
 }
 
+enum UserStatus {
+  ACTIVE
+  SUSPENDED
+  REVOKED
+}
+
 enum Role {
   PATIENT
   DOCTOR
@@ -48,14 +54,15 @@ enum MedicalRecordType {
 }
 
 model User {
-  id           String   @id @default(uuid())
-  email        String?  @unique
-  phone        String?  @unique
+  id           String     @id @default(uuid())
+  email        String?    @unique
+  phone        String?    @unique
   passwordHash String?
-  googleId     String?  @unique
+  googleId     String?    @unique
   role         Role
-  createdAt    DateTime @default(now())
-  updatedAt    DateTime @updatedAt
+  status       UserStatus @default(ACTIVE)
+  createdAt    DateTime   @default(now())
+  updatedAt    DateTime   @updatedAt
 
   patient               Patient?
   doctor                Doctor?
@@ -95,7 +102,7 @@ model Doctor {
   profilePhoto      String?
   specialization    String
   languages         String[]           @default([])
-  consultationFee   Float
+  consultationFee   Decimal            @db.Decimal(10, 2)
   consultationModes ConsultationType[] @default([CLINIC, VIDEO])
 
   qualifications DoctorQualification[]
@@ -163,7 +170,7 @@ model Appointment {
   endTime          String            // HH:mm
   status           AppointmentStatus @default(CONFIRMED)
   consultationType ConsultationType  @default(VIDEO)
-  fee              Float
+  fee              Decimal           @db.Decimal(10, 2)
   symptoms         String[]          @default([])
   notes            String?
   createdAt        DateTime          @default(now())
@@ -171,6 +178,7 @@ model Appointment {
 
   consultation Consultation?
 
+  @@unique([doctorId, date, startTime])
   @@index([doctorId, date])
   @@index([patientId])
 }
@@ -207,7 +215,7 @@ model Prescription {
   doctorNotes          String?
   followUpInstructions String?
   pdfUrl               String?
-  signedAt             DateTime?
+  issuedAt             DateTime?
   verificationCode     String                 @unique @default(uuid())
   medicines            PrescriptionMedicine[]
   createdAt            DateTime               @default(now())
@@ -270,4 +278,5 @@ model DailyDoctorToken {
   @@unique([doctorId, date])
   @@index([doctorId, date])
 }
+
 

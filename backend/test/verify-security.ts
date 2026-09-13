@@ -1,4 +1,5 @@
 import * as assert from 'assert';
+import * as bcrypt from 'bcryptjs';
 import { BadRequestException, ForbiddenException, NotFoundException } from '@nestjs/common';
 import { AppointmentsService } from '../src/appointments/appointments.service';
 import { PrescriptionsService } from '../src/prescriptions/prescriptions.service';
@@ -516,6 +517,165 @@ async function runTests() {
       }
     }
     assert.strictEqual(threw, true, 'Should reject booking when doctor not available on day of week');
+  });
+
+  // Test 17: UserStatus checks in AuthService login
+  await test('AuthService login rejects suspended or revoked accounts', async () => {
+    mockPrisma.user.findUnique = async () => ({
+      id: 'u_suspended',
+      email: 'suspended@example.com',
+      passwordHash: await bcrypt.hash('password123', 10),
+      status: 'SUSPENDED',
+      role: Role.PATIENT,
+    });
+
+    let threw = false;
+    try {
+      await authService.login({ email: 'suspended@example.com', password: 'password123' });
+    } catch (e: any) {
+      if (e.message && e.message.includes('suspended or revoked')) {
+        threw = true;
+      }
+    }
+    assert.strictEqual(threw, true, 'Should reject suspended account');
+  });
+
+  // Test 18: Doctor search filters out unverified doctors strictly
+  await test('DoctorsService searchDoctors and getDoctorById hide unverified doctors', async () => {
+    let capturedWhere: any = null;
+    mockPrisma.doctor.findMany = async (args: any) => {
+      capturedWhere = args.where;
+      return [];
+    };
+
+    await doctorsService.searchDoctors('Dr.', 'Cardiology');
+    assert.strictEqual(capturedWhere?.verification?.status, VerificationStatus.VERIFIED, 'Must filter by VERIFIED status');
+
+    mockPrisma.doctor.findUnique = async () => ({
+      id: 'doc_unverified',
+      verification: { status: VerificationStatus.PENDING },
+    });
+
+    let threw = false;
+    try {
+      await doctorsService.getDoctorById('doc_unverified');
+    } catch (e: any) {
+      if (e instanceof NotFoundException) {
+        threw = true;
+      }
+    }
+    assert.strictEqual(threw, true, 'getDoctorById must reject unverified doctor with NotFoundException');
+  });
+
+  // Test 19: Server-side endTime derivation from slot duration
+  await test('Appointment creation derives endTime authoritatively from slotDurationMinutes', async () => {
+    mockPrisma.doctor.findUnique = async () => ({
+      id: 'doc_1',
+      consultationFee: 600,
+      consultationModes: ['CLINIC'],
+      verification: { status: VerificationStatus.VERIFIED },
+      availabilities: [
+        { dayOfWeek: 1, startTime: '09:00', endTime: '12:00', slotDurationMinutes: 45 },
+      ],
+    });
+    mockPrisma.patient.findUnique = async () => ({ id: 'pat_1' });
+
+    let capturedCreateData: any = null;
+    mockPrisma.appointment.create = async (args: any) => {
+      capturedCreateData = args.data;
+      return { id: 'apt_test', ...args.data, doctor: { fullName: 'Dr.' }, patient: { fullName: 'Pat' } };
+    };
+
+    await appointmentsService.createAppointment({
+      patientId: 'pat_1',
+      doctorId: 'doc_1',
+      date: '2029-01-01', // Monday
+      startTime: '09:00',
+      endTime: '23:59', // Malicious client end time
+    });
+
+    assert.strictEqual(capturedCreateData.startTime, '09:00');
+    assert.strictEqual(capturedCreateData.endTime, '09:45', 'Must compute 09:00 + 45 mins = 09:45 authoritatively');
+  });
+
+  // Test 20: DB unique constraint violation (P2002) mapped to 400 double-booking error
+  await test('Appointment creation catches Prisma P2002 unique constraint error and returns friendly error', async () => {
+    mockPrisma.doctor.findUnique = async () => ({
+      id: 'doc_1',
+      consultationFee: 500,
+      consultationModes: ['CLINIC'],
+      verification: { status: VerificationStatus.VERIFIED },
+      availabilities: [],
+    });
+    mockPrisma.patient.findUnique = async () => ({ id: 'pat_1' });
+    mockPrisma.appointment.findFirst = async () => null; // Passed application check (race condition)
+    mockPrisma.appointment.create = async () => {
+      const p2002Err: any = new Error('Unique constraint failed on the fields: (`doctorId`,`date`,`startTime`)');
+      p2002Err.code = 'P2002';
+      throw p2002Err;
+    };
+
+    let threw = false;
+    try {
+      await appointmentsService.createAppointment({
+        patientId: 'pat_1',
+        doctorId: 'doc_1',
+        date: '2029-01-01',
+        startTime: '10:00',
+        endTime: '10:30',
+      });
+    } catch (e: any) {
+      if (e instanceof BadRequestException && e.message.includes('already booked')) {
+        threw = true;
+      }
+    }
+    assert.strictEqual(threw, true, 'Must catch P2002 and throw friendly double booking error');
+  });
+
+  // Test 21: Real NestJS HTTP Endpoints, CORS and Rate Limiting
+  await test('Real HTTP integration: NestJS app boots, enforces CORS and authentication', async () => {
+    const { Test } = require('@nestjs/testing');
+    const { AppModule } = require('../src/app.module');
+    const request = require('supertest');
+
+    const moduleFixture = await Test.createTestingModule({
+      imports: [AppModule],
+    }).compile();
+
+    const app = moduleFixture.createNestApplication();
+    app.useGlobalPipes(
+      new (require('@nestjs/common').ValidationPipe)({
+        whitelist: true,
+        transform: true,
+        forbidNonWhitelisted: true,
+      })
+    );
+    await app.init();
+
+    try {
+      // 1. Forgot password returns 404 (removed)
+      const forgotRes = await request(app.getHttpServer())
+        .post('/auth/forgot-password')
+        .send({ email: 'test@example.com' });
+      assert.strictEqual(forgotRes.status, 404, 'Forgot password route should be 404');
+
+      // 2. Doctor search returns only verified doctors
+      const docSearchRes = await request(app.getHttpServer())
+        .get('/doctors');
+      assert.strictEqual(docSearchRes.status, 200);
+      assert(Array.isArray(docSearchRes.body), 'Doctors should be an array');
+      for (const d of docSearchRes.body) {
+        assert.strictEqual(d.verificationStatus, 'verified', 'Every public doctor must have status verified');
+      }
+
+      // 3. Unauthenticated access to protected appointments endpoint returns 401
+      const aptRes = await request(app.getHttpServer())
+        .get('/appointments/patient/me');
+      assert.strictEqual(aptRes.status, 401, 'Protected appointments route must reject unauthenticated request');
+
+    } finally {
+      await app.close();
+    }
   });
 
   console.log(`\nResults: ${passed} passed, ${failed} failed.`);

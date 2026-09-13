@@ -77,7 +77,11 @@ export class DoctorsService {
   }
 
   async searchDoctors(query?: string, specialty?: string, lat?: number, lng?: number) {
-    const whereClause: any = {};
+    const whereClause: any = {
+      verification: {
+        status: VerificationStatus.VERIFIED,
+      },
+    };
 
     if (specialty && specialty !== 'All') {
       // Search categories are human labels (e.g. "Cardiology") while database
@@ -86,11 +90,15 @@ export class DoctorsService {
     }
 
     if (query) {
-      whereClause.OR = [
-        { fullName: { contains: query, mode: 'insensitive' } },
-        { specialization: { contains: query, mode: 'insensitive' } },
-        { clinic: { is: { name: { contains: query, mode: 'insensitive' } } } },
-        { clinic: { is: { address: { contains: query, mode: 'insensitive' } } } },
+      whereClause.AND = [
+        {
+          OR: [
+            { fullName: { contains: query, mode: 'insensitive' } },
+            { specialization: { contains: query, mode: 'insensitive' } },
+            { clinic: { is: { name: { contains: query, mode: 'insensitive' } } } },
+            { clinic: { is: { address: { contains: query, mode: 'insensitive' } } } },
+          ],
+        },
       ];
     }
 
@@ -126,7 +134,9 @@ export class DoctorsService {
         availabilities: true,
       },
     });
-    if (!doctor) throw new NotFoundException('Doctor not found');
+    if (!doctor || doctor.verification?.status !== VerificationStatus.VERIFIED) {
+      throw new NotFoundException('Doctor not found or pending verification.');
+    }
     return this.formatDoctor(doctor);
   }
 
@@ -154,9 +164,9 @@ export class DoctorsService {
               clinic: {
                 upsert: {
                   create: {
-                    name: dto.clinicName?.trim() || 'Private Practice',
-                    address: dto.clinicAddress?.trim() || 'Address pending',
-                    timings: dto.clinicTimings?.trim() || undefined,
+                    name: dto.clinicName?.trim() || `${doctor.fullName}'s Clinic`,
+                    address: dto.clinicAddress?.trim() || null,
+                    timings: dto.clinicTimings?.trim() || null,
                   },
                   update: {
                     name: dto.clinicName?.trim() || undefined,

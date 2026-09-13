@@ -84,10 +84,11 @@ export class AppointmentsService {
       }
 
       // Verify consultation fee is authoritatively configured on doctor profile
-      if (typeof doctor.consultationFee !== 'number' || doctor.consultationFee <= 0) {
+      const rawFee = Number(doctor.consultationFee);
+      if (isNaN(rawFee) || rawFee <= 0) {
         throw new BadRequestException('Selected doctor has not set an authoritative consultation fee.');
       }
-      const authoritativeFee = doctor.consultationFee;
+      const authoritativeFee = rawFee;
 
       // Validate consultation type is supported by doctor
       const authoritativeConsultationType = dto.consultationType || ConsultationType.CLINIC;
@@ -105,6 +106,9 @@ export class AppointmentsService {
       if (!patient) {
         throw new NotFoundException('Patient record not found.');
       }
+
+      // Derive authoritative slot duration and end time
+      let slotDuration = 30;
 
       // Check doctor availability rules if configured
       if (doctor.availabilities && doctor.availabilities.length > 0) {
@@ -127,11 +131,11 @@ export class AppointmentsService {
             return false;
           }
           // Check alignment with slotDurationMinutes
-          const slotDuration = avail.slotDurationMinutes || 30;
+          const duration = avail.slotDurationMinutes || 30;
           const [startH, startM] = availStartNorm.split(':').map(Number);
           const [reqH, reqM] = slotStartNorm.split(':').map(Number);
           const diffMinutes = (reqH * 60 + reqM) - (startH * 60 + startM);
-          return diffMinutes % slotDuration === 0;
+          return diffMinutes % duration === 0;
         });
 
         if (!matchedSlot) {
@@ -139,7 +143,15 @@ export class AppointmentsService {
             `The requested time ${dto.startTime} is outside the doctor's scheduled availability intervals for this day.`
           );
         }
+        slotDuration = matchedSlot.slotDurationMinutes || 30;
       }
+
+      // Authoritatively compute endTime from startTime + slotDuration
+      const [startH, startM] = dto.startTime.slice(0, 5).split(':').map(Number);
+      const totalMinutes = startH * 60 + startM + slotDuration;
+      const endH = Math.floor(totalMinutes / 60);
+      const endM = totalMinutes % 60;
+      const authoritativeEndTime = `${String(endH).padStart(2, '0')}:${String(endM).padStart(2, '0')}`;
 
       // Transactional check for double-booking
       const existing = await tx.appointment.findFirst({
@@ -179,24 +191,33 @@ export class AppointmentsService {
         ? `${dto.notes.trim()} [${allocatedToken}]`
         : `[${allocatedToken}]`;
 
-      const appointment = await tx.appointment.create({
-        data: {
-          patientId: dto.patientId,
-          doctorId: dto.doctorId,
-          date: dto.date,
-          startTime: dto.startTime,
-          endTime: dto.endTime,
-          consultationType: authoritativeConsultationType,
-          fee: authoritativeFee,
-          symptoms: dto.symptoms || [],
-          notes: canonicalNotes,
-          status: AppointmentStatus.PENDING,
-        },
-        include: {
-          doctor: { include: { clinic: true } },
-          patient: true,
-        },
-      });
+      let appointment;
+      try {
+        appointment = await tx.appointment.create({
+          data: {
+            patientId: dto.patientId,
+            doctorId: dto.doctorId,
+            date: dto.date,
+            startTime: dto.startTime.slice(0, 5),
+            endTime: authoritativeEndTime,
+            consultationType: authoritativeConsultationType,
+            fee: authoritativeFee,
+            symptoms: dto.symptoms || [],
+            notes: canonicalNotes,
+            status: AppointmentStatus.PENDING,
+          },
+          include: {
+            doctor: { include: { clinic: true } },
+            patient: true,
+          },
+        });
+      } catch (err: any) {
+        // Intercept DB-level unique constraint violation (P2002) for race condition protection
+        if (err?.code === 'P2002') {
+          throw new BadRequestException('This slot is already booked. Please choose another time.');
+        }
+        throw err;
+      }
 
       // Audit log entry
       if (currentUser?.id) {
