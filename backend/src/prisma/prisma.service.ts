@@ -10,6 +10,26 @@ export class PrismaService extends PrismaClient implements OnModuleInit, OnModul
       await this.$connect();
       this.logger.log('✅ Connected to PostgreSQL database via Prisma.');
 
+      // Ensure UserStatus enum exists (was added to schema but never migrated)
+      await this.$executeRawUnsafe(`
+        DO $$ BEGIN
+          CREATE TYPE "UserStatus" AS ENUM ('ACTIVE', 'SUSPENDED', 'REVOKED');
+        EXCEPTION WHEN duplicate_object THEN NULL;
+        END $$;
+      `);
+
+      // Ensure User.status column exists with ACTIVE default
+      await this.$executeRawUnsafe(`
+        ALTER TABLE "User" ADD COLUMN IF NOT EXISTS "status" "UserStatus" NOT NULL DEFAULT 'ACTIVE';
+      `);
+
+      // Ensure Patient.address column exists (added in schema revision)
+      await this.$executeRawUnsafe(`
+        ALTER TABLE "Patient" ADD COLUMN IF NOT EXISTS "address" TEXT;
+      `);
+
+      this.logger.log('✅ User schema migration verified (UserStatus enum + status column).');
+
       // Ensure DoctorScheduleOverride table and indexes exist in PostgreSQL
       await this.$executeRawUnsafe(`
         CREATE TABLE IF NOT EXISTS "DoctorScheduleOverride" (
