@@ -57,22 +57,13 @@ import { TouchableOpacity } from 'react-native';
 import { useAuthStore } from '@/store/useAuthStore';
 import { signOutAll } from '@/services/authService';
 import { useAppTheme } from '@/hooks/useAppTheme';
-import { BorderRadius, Shadows, StitchColors, Palette, DEFAULT_DOCTOR_AVATAR } from '@/constants/theme';
+import { BorderRadius, Shadows, StitchColors, Palette } from '@/constants/theme';
 import { AppUpdateModal } from '@/components/ui/AppUpdateModal';
 import { pickImageFromGallery } from '@/utils/mediaPicker';
 import { Avatar } from '@/components/ui/Avatar';
 import { useAppointmentStore } from '@/store/useAppointmentStore';
 import { doctorService } from '@/services/doctorService';
 
-const DOCTOR_AVATAR = DEFAULT_DOCTOR_AVATAR;
-
-const AVATAR_PRESETS = [
-  DEFAULT_DOCTOR_AVATAR,
-  'https://images.unsplash.com/photo-1622253692010-333f2da6031d?w=600&auto=format&fit=crop&q=80',
-  'https://images.unsplash.com/photo-1594824813682-14c1e405a76e?w=600&auto=format&fit=crop&q=80',
-  'https://images.unsplash.com/photo-1559839734-2b71ea197ec2?w=600&auto=format&fit=crop&q=80',
-  'https://images.unsplash.com/photo-1537368910025-700350fe46c7?w=600&auto=format&fit=crop&q=80',
-];
 
 export default function DoctorProfileScreen() {
   const router = useRouter();
@@ -80,15 +71,15 @@ export default function DoctorProfileScreen() {
   const { user, updateUser } = useAuthStore();
   const appointments = useAppointmentStore((state) => state.appointments);
 
-  // Profile data state bound to user
+  // Profile data state bound to user — no fabricated defaults
   const initialName = user?.name || '';
-  const initialSpec = user?.specialization || user?.specialty || 'Senior Interventional Cardiologist • AIIMS';
-  const initialFee = user?.consultationFee ? String(user.consultationFee) : '800';
-  const initialReg = user?.licenseNumber || user?.registrationNumber || 'MCI-48291 • Karnataka Medical Council';
+  const initialSpec = user?.specialization || user?.specialty || '';
+  const initialFee = user?.consultationFee ? String(user.consultationFee) : '';
+  const initialReg = user?.licenseNumber || user?.registrationNumber || '';
 
   const [docName, setDocName] = useState(initialName);
   const [docSpec, setDocSpec] = useState(initialSpec);
-  const [docAvatar, setDocAvatar] = useState(user?.avatar || DOCTOR_AVATAR);
+  const [docAvatar, setDocAvatar] = useState(user?.avatar || undefined);
   const [opdFee, setOpdFee] = useState(initialFee);
   const [upiId, setUpiId] = useState((user as any)?.upiId || '');
 
@@ -222,9 +213,11 @@ export default function DoctorProfileScreen() {
                 </View>
               </View>
               <Text style={[styles.docSpec, { color: colors.textSecondary }]}>{docSpec}</Text>
-              <Text style={[styles.docLicense, { color: colors.textMuted }]}>
-                {user?.licenseNumber ? `${user.licenseNumber} • Verified Council` : 'MCI-48291 • Karnataka Medical Council'}
-              </Text>
+              {user?.licenseNumber ? (
+                <Text style={[styles.docLicense, { color: colors.textMuted }]}>
+                  {user.licenseNumber} • Verified Council
+                </Text>
+              ) : null}
 
               <View style={styles.verifiedTagRow}>
                 <View style={[styles.verifiedTag, { backgroundColor: '#CCFBF1' }]}>
@@ -624,26 +617,20 @@ export default function DoctorProfileScreen() {
                 <Text style={[styles.inputLabel, { color: colors.textSecondary }]}>Profile Photo</Text>
                 <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap: 10, paddingVertical: 4 }}>
                   {/* Custom Upload from Device Button */}
+                  {/* Upload from gallery */}
                   <Pressable
                     onPress={async () => {
                       const uri = await pickImageFromGallery();
                       if (uri) setTempAvatar(uri);
                     }}
                     style={{
-                      width: 52,
-                      height: 52,
-                      borderRadius: 26,
-                      borderWidth: 2,
-                      borderColor: tempAvatar && !AVATAR_PRESETS.includes(tempAvatar) ? StitchColors.primaryContainer : colors.border,
-                      borderStyle: 'dashed',
-                      alignItems: 'center',
-                      justifyContent: 'center',
-                      backgroundColor: colors.backgroundElement,
-                      overflow: 'hidden',
-                      position: 'relative',
+                      width: 52, height: 52, borderRadius: 26, borderWidth: 2,
+                      borderColor: tempAvatar ? StitchColors.primaryContainer : colors.border,
+                      borderStyle: 'dashed', alignItems: 'center', justifyContent: 'center',
+                      backgroundColor: colors.backgroundElement, overflow: 'hidden', position: 'relative',
                     }}
                   >
-                    {tempAvatar && !AVATAR_PRESETS.includes(tempAvatar) ? (
+                    {tempAvatar ? (
                       <Image source={{ uri: tempAvatar }} style={{ width: '100%', height: '100%' }} />
                     ) : (
                       <View style={{ alignItems: 'center', justifyContent: 'center' }}>
@@ -651,27 +638,21 @@ export default function DoctorProfileScreen() {
                         <Text style={{ fontSize: 9, fontWeight: '700', color: StitchColors.primaryContainer, marginTop: 1 }}>Upload</Text>
                       </View>
                     )}
-                    {tempAvatar && !AVATAR_PRESETS.includes(tempAvatar) && (
+                    {tempAvatar ? (
                       <View style={{ position: 'absolute', top: 2, right: 2, backgroundColor: StitchColors.primaryContainer, borderRadius: 10 }}>
                         <CheckCircle2 size={14} color="#FFFFFF" />
                       </View>
-                    )}
+                    ) : null}
                   </Pressable>
 
-                  {/* Initials Option (Default Name Initials) */}
+                  {/* Initials Option */}
                   <Pressable
                     onPress={() => setTempAvatar(null as any)}
                     style={{
-                      width: 52,
-                      height: 52,
-                      borderRadius: 26,
-                      borderWidth: 2,
+                      width: 52, height: 52, borderRadius: 26, borderWidth: 2,
                       borderColor: !tempAvatar ? StitchColors.primaryContainer : colors.border,
-                      overflow: 'hidden',
-                      backgroundColor: Palette.healthcareTeal,
-                      alignItems: 'center',
-                      justifyContent: 'center',
-                      position: 'relative',
+                      overflow: 'hidden', backgroundColor: Palette.healthcareTeal,
+                      alignItems: 'center', justifyContent: 'center', position: 'relative',
                     }}
                   >
                     <Text style={{ color: '#fff', fontWeight: '800', fontSize: 16 }}>
@@ -684,31 +665,6 @@ export default function DoctorProfileScreen() {
                     )}
                   </Pressable>
 
-                  {AVATAR_PRESETS.map((preset, idx) => {
-                    const isSelected = tempAvatar === preset;
-                    return (
-                      <Pressable
-                        key={idx}
-                        onPress={() => setTempAvatar(preset)}
-                        style={{
-                          width: 52,
-                          height: 52,
-                          borderRadius: 26,
-                          borderWidth: 2,
-                          borderColor: isSelected ? StitchColors.primaryContainer : colors.border,
-                          overflow: 'hidden',
-                          position: 'relative',
-                        }}
-                      >
-                        <Image source={{ uri: preset }} style={{ width: '100%', height: '100%' }} />
-                        {isSelected && (
-                          <View style={{ position: 'absolute', top: 2, right: 2, backgroundColor: StitchColors.primaryContainer, borderRadius: 10 }}>
-                            <CheckCircle2 size={14} color="#FFFFFF" />
-                          </View>
-                        )}
-                      </Pressable>
-                    );
-                  })}
                 </ScrollView>
               </View>
 
@@ -781,7 +737,7 @@ export default function DoctorProfileScreen() {
                   VERIFIED COUNCIL REGISTRATION (LOCKED)
                 </Text>
                 <Text style={{ fontSize: 13, color: colors.text, fontWeight: '600' }}>
-                  {user?.licenseNumber || 'MCI-48291 • Karnataka Medical Council'}
+                  {user?.licenseNumber || '—'}
                 </Text>
                 <Text style={{ fontSize: 11, color: colors.textMuted, marginTop: 2 }}>
                   Medical Council license numbers cannot be edited after initial onboarding. You may add additional qualifications or update clinic details above.
