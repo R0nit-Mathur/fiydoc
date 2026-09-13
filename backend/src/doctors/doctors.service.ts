@@ -55,15 +55,14 @@ export class DoctorsService {
           }
         : null,
       timings: doc.clinic?.timings || '09:00 AM - 05:00 PM',
-      rating: 4.9,
-      reviewCount: 128,
-      experienceYears: doc.experienceYears || 10,
+      rating: null,
+      reviewCount: 0,
+      experienceYears: doc.experienceYears || 0,
       verificationStatus: (doc.verification?.status || VerificationStatus.REGISTERED).toLowerCase(),
       modes: ['clinic'],
       isInPersonAvailable: true,
       isOnlineAvailable: false,
-      nextAvailableSlot: 'Today, 11:30 AM',
-      timeSlots: ['09:30 AM', '10:30 AM', '11:30 AM', '02:00 PM', '03:30 PM', '05:00 PM'],
+      availabilities: doc.availabilities || [],
     };
   }
 

@@ -8,17 +8,13 @@ export class RecordsController {
   constructor(private recordsService: RecordsService) {}
 
   @Get('patient/:patientId')
-  async getTimeline(@Param('patientId') patientId: string, @Request() req) {
+  async getTimeline(@Param('patientId') patientId: string, @Request() req: any) {
     return this.recordsService.getPatientTimeline(patientId, req.user);
   }
 
   @Post('upload')
-  async upload(@Body() body: any) {
-    return this.recordsService.uploadRecord(body);
-  }
-
-  @Post('process')
-  async processOcr(@Body() body: { patientId: string; title: string; type: string; rawText?: string }) {
-    return this.recordsService.processOcrDocument(body);
+  async upload(@Request() req: any, @Body() body: any) {
+    return this.recordsService.uploadRecord(body, req.user);
   }
 }
+

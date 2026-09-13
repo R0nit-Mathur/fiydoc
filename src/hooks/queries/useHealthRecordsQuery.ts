@@ -25,14 +25,18 @@ export function useUploadDocumentMutation() {
     mutationFn: ({
       patientId,
       title,
-      type,
+      documentUrl,
+      summary,
+      tags,
     }: {
       patientId: string;
       title: string;
-      type: MedicalRecord['type'];
-    }) => healthService.uploadAndProcessDocument(patientId, title, type),
-    onSuccess: (result) => {
-      addRecord(result.record);
+      documentUrl: string;
+      summary?: string;
+      tags?: string[];
+    }) => healthService.uploadRecord({ patientId, title, documentUrl, summary, tags }),
+    onSuccess: (record) => {
+      addRecord(record);
       queryClient.invalidateQueries({ queryKey: ['health-records'] });
     },
   });

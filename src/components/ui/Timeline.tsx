@@ -51,12 +51,6 @@ export function Timeline({ records, onRecordPress }: TimelineProps) {
                 <Text style={styles.typeText} numberOfLines={1}>
                   {item.type} • {item.createdAt}
                 </Text>
-                {item.ocrConfidence && (
-                  <View style={styles.ocrPill}>
-                    <CheckCircle2 size={10} color={Palette.success} />
-                    <Text style={styles.ocrText}>{item.ocrConfidence}% OCR</Text>
-                  </View>
-                )}
               </View>
 
               <View style={styles.titleRow}>

@@ -34,22 +34,40 @@ export class AppointmentsService {
     };
   }
 
-  async createAppointment(dto: {
-    patientId: string;
-    doctorId: string;
-    date: string;
-    startTime: string;
-    endTime: string;
-    consultationType?: ConsultationType;
-    fee?: number;
-    symptoms?: string[];
-    notes?: string;
-  }) {
+  async createAppointment(
+    dto: {
+      patientId: string;
+      doctorId: string;
+      date: string;
+      startTime: string;
+      endTime: string;
+      consultationType?: ConsultationType;
+      fee?: number;
+      symptoms?: string[];
+      notes?: string;
+    },
+    currentUser?: any
+  ) {
+    if (!dto.date || !dto.startTime) {
+      throw new BadRequestException('Appointment date and start time are required.');
+    }
+
+    // Validate that appointment date/time is strictly in the future
+    // Support date "YYYY-MM-DD" and startTime "HH:mm" or "HH:mm:ss"
+    const parsedStart = new Date(`${dto.date}T${dto.startTime.length === 5 ? dto.startTime + ':00' : dto.startTime}`);
+    if (isNaN(parsedStart.getTime())) {
+      throw new BadRequestException('Invalid date or start time format. Use YYYY-MM-DD and HH:mm.');
+    }
+    const now = new Date();
+    if (parsedStart.getTime() <= now.getTime()) {
+      throw new BadRequestException('Appointment slot must be strictly in the future.');
+    }
+
     return this.prisma.$transaction(async (tx) => {
       // Fetch doctor to authoritatively determine consultation fee and verify existence
       const doctor = await tx.doctor.findUnique({
         where: { id: dto.doctorId },
-        include: { clinic: true },
+        include: { clinic: true, availabilities: true },
       });
       if (!doctor) {
         throw new NotFoundException('Selected doctor does not exist.');
@@ -61,6 +79,29 @@ export class AppointmentsService {
       });
       if (!patient) {
         throw new NotFoundException('Patient record not found.');
+      }
+
+      // Check doctor availability rules if configured
+      if (doctor.availabilities && doctor.availabilities.length > 0) {
+        const appointmentDayOfWeek = parsedStart.getDay(); // 0 = Sun, 1 = Mon ...
+        const matchingDayAvailabilities = doctor.availabilities.filter(
+          (a) => a.dayOfWeek === appointmentDayOfWeek
+        );
+
+        if (matchingDayAvailabilities.length > 0) {
+          const slotStartNorm = dto.startTime.slice(0, 5);
+          const isWithinSlot = matchingDayAvailabilities.some((avail) => {
+            const availStartNorm = avail.startTime.slice(0, 5);
+            const availEndNorm = avail.endTime.slice(0, 5);
+            return slotStartNorm >= availStartNorm && slotStartNorm < availEndNorm;
+          });
+
+          if (!isWithinSlot) {
+            throw new BadRequestException(
+              `The requested time ${dto.startTime} is outside the doctor's scheduled availability for this day.`
+            );
+          }
+        }
       }
 
       // Transactional check for double-booking
@@ -127,6 +168,25 @@ export class AppointmentsService {
         },
       });
 
+      // Audit log entry
+      if (currentUser?.id) {
+        await tx.auditLog.create({
+          data: {
+            actorUserId: currentUser.id,
+            action: 'APPOINTMENT_CREATED',
+            targetType: 'APPOINTMENT',
+            targetId: appointment.id,
+            metadata: {
+              doctorId: dto.doctorId,
+              patientId: dto.patientId,
+              date: dto.date,
+              startTime: dto.startTime,
+              token: allocatedToken,
+            },
+          },
+        });
+      }
+
       // Trigger notification for both patient and doctor
       await tx.notification.createMany({
         data: [
@@ -166,7 +226,7 @@ export class AppointmentsService {
     const appointments = await this.prisma.appointment.findMany({
       where: { patientId: queryId },
       include: { doctor: { include: { clinic: true } }, patient: true, consultation: true },
-      orderBy: { createdAt: 'desc' },
+      orderBy: [{ date: 'asc' }, { startTime: 'asc' }],
     });
 
     return appointments.map((a) => this.formatAppointment(a));
@@ -189,7 +249,7 @@ export class AppointmentsService {
     const appointments = await this.prisma.appointment.findMany({
       where: { doctorId: queryId },
       include: { patient: true, doctor: { include: { clinic: true } }, consultation: true },
-      orderBy: { date: 'asc' },
+      orderBy: [{ date: 'asc' }, { startTime: 'asc' }],
     });
 
     return appointments.map((a) => this.formatAppointment(a));
@@ -208,114 +268,174 @@ export class AppointmentsService {
   }
 
   async cancelAppointment(id: string, currentUser: any) {
-    const apt = await this.prisma.appointment.findUnique({
-      where: { id },
-      include: { doctor: { include: { clinic: true } }, patient: true },
-    });
-    if (!apt) throw new NotFoundException('Appointment not found.');
-
-    this.checkAppointmentActorAccess(apt, currentUser);
-
-    // Validate state transition for cancellation
-    const cancellableStatuses: AppointmentStatus[] = [
-      AppointmentStatus.PENDING,
-      AppointmentStatus.CONFIRMED,
-    ];
-    if (!cancellableStatuses.includes(apt.status)) {
-      throw new BadRequestException(
-        `Cannot cancel appointment in '${apt.status}' state. Only pending or confirmed appointments can be cancelled.`
-      );
-    }
-
-    const updated = await this.prisma.appointment.update({
-      where: { id },
-      data: { status: AppointmentStatus.CANCELLED },
-      include: { doctor: { include: { clinic: true } }, patient: true },
-    });
-
-    // Notify the other party
-    const isCancelledByPatient = currentUser.patient?.id === apt.patientId;
-    const recipientUserId = isCancelledByPatient ? apt.doctor.userId : apt.patient.userId;
-    const cancelledByName = isCancelledByPatient ? apt.patient.fullName : `Dr. ${apt.doctor.fullName}`;
-
-    if (recipientUserId) {
-      await this.prisma.notification.create({
-        data: {
-          userId: recipientUserId,
-          type: 'APPOINTMENT_CANCELLED',
-          title: 'Appointment Cancelled',
-          message: `The appointment for ${apt.date} at ${apt.startTime} was cancelled by ${cancelledByName}.`,
-        },
+    return this.prisma.$transaction(async (tx) => {
+      const apt = await tx.appointment.findUnique({
+        where: { id },
+        include: { doctor: { include: { clinic: true } }, patient: true },
       });
-    }
+      if (!apt) throw new NotFoundException('Appointment not found.');
 
-    return this.formatAppointment(updated);
+      this.checkAppointmentActorAccess(apt, currentUser);
+
+      // Validate state transition for cancellation
+      const cancellableStatuses: AppointmentStatus[] = [
+        AppointmentStatus.PENDING,
+        AppointmentStatus.CONFIRMED,
+      ];
+      if (!cancellableStatuses.includes(apt.status)) {
+        throw new BadRequestException(
+          `Cannot cancel appointment in '${apt.status}' state. Only pending or confirmed appointments can be cancelled.`
+        );
+      }
+
+      // Atomic conditional update to prevent race conditions
+      const updateResult = await tx.appointment.updateMany({
+        where: {
+          id,
+          status: { in: cancellableStatuses },
+        },
+        data: { status: AppointmentStatus.CANCELLED },
+      });
+
+      if (updateResult.count === 0) {
+        throw new BadRequestException('Appointment state changed concurrently. Cancellation aborted.');
+      }
+
+      const updated = await tx.appointment.findUnique({
+        where: { id },
+        include: { doctor: { include: { clinic: true } }, patient: true },
+      });
+
+      // Audit log entry
+      if (currentUser?.id) {
+        await tx.auditLog.create({
+          data: {
+            actorUserId: currentUser.id,
+            action: 'APPOINTMENT_CANCELLED',
+            targetType: 'APPOINTMENT',
+            targetId: id,
+            metadata: {
+              previousStatus: apt.status,
+              newStatus: AppointmentStatus.CANCELLED,
+            },
+          },
+        });
+      }
+
+      // Notify the other party
+      const isCancelledByPatient = currentUser.patient?.id === apt.patientId;
+      const recipientUserId = isCancelledByPatient ? apt.doctor.userId : apt.patient.userId;
+      const cancelledByName = isCancelledByPatient ? apt.patient.fullName : `Dr. ${apt.doctor.fullName}`;
+
+      if (recipientUserId) {
+        await tx.notification.create({
+          data: {
+            userId: recipientUserId,
+            type: 'APPOINTMENT_CANCELLED',
+            title: 'Appointment Cancelled',
+            message: `The appointment for ${apt.date} at ${apt.startTime} was cancelled by ${cancelledByName}.`,
+          },
+        });
+      }
+
+      return this.formatAppointment(updated);
+    });
   }
 
   async updateAppointmentStatus(id: string, targetStatus: AppointmentStatus, currentUser: any) {
-    const apt = await this.prisma.appointment.findUnique({
-      where: { id },
-      include: { doctor: { include: { clinic: true } }, patient: true },
-    });
-    if (!apt) throw new NotFoundException('Appointment not found.');
-
-    this.checkAppointmentActorAccess(apt, currentUser);
-
-    // State machine validation
-    const allowedTransitions: Record<AppointmentStatus, AppointmentStatus[]> = {
-      [AppointmentStatus.PENDING]: [AppointmentStatus.CONFIRMED, AppointmentStatus.CANCELLED],
-      [AppointmentStatus.CONFIRMED]: [
-        AppointmentStatus.COMPLETED,
-        AppointmentStatus.CANCELLED,
-        AppointmentStatus.NO_SHOW,
-      ],
-      [AppointmentStatus.COMPLETED]: [],
-      [AppointmentStatus.CANCELLED]: [],
-      [AppointmentStatus.NO_SHOW]: [],
-    };
-
-    const validNextStates = allowedTransitions[apt.status] || [];
-    if (!validNextStates.includes(targetStatus)) {
-      throw new BadRequestException(
-        `Invalid status transition from '${apt.status}' to '${targetStatus}'.`
-      );
-    }
-
-    // Role-specific constraints on transitions
-    if (targetStatus === AppointmentStatus.CONFIRMED) {
-      const isDoctor = currentUser.role === Role.DOCTOR && currentUser.doctor?.id === apt.doctorId;
-      const isAdmin = currentUser.role === Role.ADMIN;
-      if (!isDoctor && !isAdmin) {
-        throw new ForbiddenException('Only the assigned doctor or admin can confirm/approve an appointment.');
-      }
-    }
-
-    if (targetStatus === AppointmentStatus.COMPLETED || targetStatus === AppointmentStatus.NO_SHOW) {
-      const isDoctor = currentUser.role === Role.DOCTOR && currentUser.doctor?.id === apt.doctorId;
-      const isAdmin = currentUser.role === Role.ADMIN;
-      if (!isDoctor && !isAdmin) {
-        throw new ForbiddenException('Only the assigned doctor or admin can complete or mark no-show for an appointment.');
-      }
-    }
-
-    const updated = await this.prisma.appointment.update({
-      where: { id },
-      data: { status: targetStatus },
-      include: { doctor: { include: { clinic: true } }, patient: true, consultation: true },
-    });
-
-    if (targetStatus === AppointmentStatus.CONFIRMED && apt.patient?.userId) {
-      await this.prisma.notification.create({
-        data: {
-          userId: apt.patient.userId,
-          type: 'APPOINTMENT_APPROVED',
-          title: 'Appointment Approved by Doctor',
-          message: `Dr. ${apt.doctor.fullName} approved your appointment for ${apt.date} at ${apt.startTime}.`,
-        },
+    return this.prisma.$transaction(async (tx) => {
+      const apt = await tx.appointment.findUnique({
+        where: { id },
+        include: { doctor: { include: { clinic: true } }, patient: true },
       });
-    }
+      if (!apt) throw new NotFoundException('Appointment not found.');
 
-    return this.formatAppointment(updated);
+      this.checkAppointmentActorAccess(apt, currentUser);
+
+      // State machine validation
+      const allowedTransitions: Record<AppointmentStatus, AppointmentStatus[]> = {
+        [AppointmentStatus.PENDING]: [AppointmentStatus.CONFIRMED, AppointmentStatus.CANCELLED],
+        [AppointmentStatus.CONFIRMED]: [
+          AppointmentStatus.COMPLETED,
+          AppointmentStatus.CANCELLED,
+          AppointmentStatus.NO_SHOW,
+        ],
+        [AppointmentStatus.COMPLETED]: [],
+        [AppointmentStatus.CANCELLED]: [],
+        [AppointmentStatus.NO_SHOW]: [],
+      };
+
+      const validNextStates = allowedTransitions[apt.status] || [];
+      if (!validNextStates.includes(targetStatus)) {
+        throw new BadRequestException(
+          `Invalid status transition from '${apt.status}' to '${targetStatus}'.`
+        );
+      }
+
+      // Role-specific constraints on transitions
+      if (targetStatus === AppointmentStatus.CONFIRMED) {
+        const isDoctor = currentUser.role === Role.DOCTOR && currentUser.doctor?.id === apt.doctorId;
+        const isAdmin = currentUser.role === Role.ADMIN;
+        if (!isDoctor && !isAdmin) {
+          throw new ForbiddenException('Only the assigned doctor or admin can confirm/approve an appointment.');
+        }
+      }
+
+      if (targetStatus === AppointmentStatus.COMPLETED || targetStatus === AppointmentStatus.NO_SHOW) {
+        const isDoctor = currentUser.role === Role.DOCTOR && currentUser.doctor?.id === apt.doctorId;
+        const isAdmin = currentUser.role === Role.ADMIN;
+        if (!isDoctor && !isAdmin) {
+          throw new ForbiddenException('Only the assigned doctor or admin can complete or mark no-show for an appointment.');
+        }
+      }
+
+      // Atomic conditional update
+      const updateResult = await tx.appointment.updateMany({
+        where: {
+          id,
+          status: apt.status,
+        },
+        data: { status: targetStatus },
+      });
+
+      if (updateResult.count === 0) {
+        throw new BadRequestException('Appointment state changed concurrently. Update aborted.');
+      }
+
+      const updated = await tx.appointment.findUnique({
+        where: { id },
+        include: { doctor: { include: { clinic: true } }, patient: true, consultation: true },
+      });
+
+      // Audit log entry
+      if (currentUser?.id) {
+        await tx.auditLog.create({
+          data: {
+            actorUserId: currentUser.id,
+            action: `APPOINTMENT_STATUS_${targetStatus}`,
+            targetType: 'APPOINTMENT',
+            targetId: id,
+            metadata: {
+              previousStatus: apt.status,
+              newStatus: targetStatus,
+            },
+          },
+        });
+      }
+
+      if (targetStatus === AppointmentStatus.CONFIRMED && apt.patient?.userId) {
+        await tx.notification.create({
+          data: {
+            userId: apt.patient.userId,
+            type: 'APPOINTMENT_APPROVED',
+            title: 'Appointment Approved by Doctor',
+            message: `Dr. ${apt.doctor.fullName} approved your appointment for ${apt.date} at ${apt.startTime}.`,
+          },
+        });
+      }
+
+      return this.formatAppointment(updated);
+    });
   }
 
   private checkAppointmentActorAccess(apt: any, currentUser: any) {

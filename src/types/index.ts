@@ -169,7 +169,6 @@ export interface MedicalRecord {
   date?: string;
   facility?: string;
   doctorName?: string;
-  ocrConfidence?: number;
   extractedTags?: string[];
 }
 

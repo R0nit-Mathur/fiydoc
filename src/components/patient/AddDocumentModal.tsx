@@ -69,7 +69,6 @@ export function AddDocumentModal({ visible, onClose }: AddDocumentModalProps) {
       createdAt: 'Today',
       doctorName: 'FiYDoc Health Records',
       facility: 'FiYDoc Healthcare Diagnostics',
-      ocrConfidence: undefined,
       documentUrl: selectedFile?.uri,
       summary,
       extractedTags: tags,

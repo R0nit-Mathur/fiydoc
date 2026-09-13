@@ -13,7 +13,7 @@ export class ConsultationsController {
   }
 
   @Get('appointment/:appointmentId')
-  async getByAppointment(@Param('appointmentId') appointmentId: string) {
-    return this.consultationsService.getConsultationByAppointment(appointmentId);
+  async getByAppointment(@Param('appointmentId') appointmentId: string, @Request() req: any) {
+    return this.consultationsService.getConsultationByAppointment(appointmentId, req.user);
   }
 }

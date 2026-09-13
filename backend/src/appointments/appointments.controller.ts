@@ -21,12 +21,16 @@ export class AppointmentsController {
       consultationType: ConsultationType;
       fee: number;
       symptoms?: string[];
+      notes?: string;
     }
   ) {
-    return this.appointmentsService.createAppointment({
-      ...body,
-      patientId: req.user.patient?.id || body.patientId,
-    });
+    return this.appointmentsService.createAppointment(
+      {
+        ...body,
+        patientId: req.user.patient?.id || body.patientId,
+      },
+      req.user
+    );
   }
 
   @Get('patient/:patientId')

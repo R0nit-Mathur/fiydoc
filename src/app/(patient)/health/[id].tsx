@@ -58,12 +58,6 @@ export default function RecordDetailScreen() {
                   <Text style={styles.metaLabel}>Facility / Lab</Text>
                   <Text style={styles.metaValue}>{rec.facility || 'FiYDoc Healthcare'}</Text>
                 </View>
-                {rec.ocrConfidence ? (
-                  <View style={styles.metaRow}>
-                    <Text style={styles.metaLabel}>Confidence Index</Text>
-                    <Text style={styles.confidenceValue}>{rec.ocrConfidence}%</Text>
-                  </View>
-                ) : null}
               </View>
 
               <View style={styles.summaryCard}>
