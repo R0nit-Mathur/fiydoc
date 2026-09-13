@@ -18,6 +18,20 @@ export interface BookAppointmentInput {
   patientAvatar?: string;
 }
 
+function to24Hour(time: string): string {
+  const match = time.trim().match(/^(\d{1,2}):(\d{2})\s*(AM|PM)?$/i);
+  if (!match) return time;
+
+  let hours = Number(match[1]);
+  const minutes = Number(match[2]);
+  const meridiem = match[3]?.toUpperCase();
+  if (meridiem) {
+    if (meridiem === 'PM' && hours !== 12) hours += 12;
+    if (meridiem === 'AM' && hours === 12) hours = 0;
+  }
+  return `${String(hours).padStart(2, '0')}:${String(minutes).padStart(2, '0')}`;
+}
+
 function endTimeFor(startTime: string): string {
   const match = startTime.trim().match(/^(\d{1,2}):(\d{2})\s*(AM|PM)?$/i);
   if (!match) return startTime;
@@ -65,7 +79,7 @@ export const appointmentService = {
         patientId: input.patientId,
         doctorId: input.doctorId,
         date: input.date,
-        startTime: input.time,
+        startTime: to24Hour(input.time),
         endTime: endTimeFor(input.time),
         consultationType: input.mode === 'video' ? 'VIDEO' : 'CLINIC',
         fee: input.fee,

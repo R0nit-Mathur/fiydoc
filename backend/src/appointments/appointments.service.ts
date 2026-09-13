@@ -57,15 +57,29 @@ export class AppointmentsService {
       throw new BadRequestException('Appointment date and start time are required.');
     }
 
-    // Validate that appointment date/time is strictly in the future
-    // Support date "YYYY-MM-DD" and startTime "HH:mm" or "HH:mm:ss"
-    const parsedStart = new Date(`${dto.date}T${dto.startTime.length === 5 ? dto.startTime + ':00' : dto.startTime}`);
+    // Normalize startTime to HH:mm (supporting 12h AM/PM as well)
+    let normalizedStart = dto.startTime.trim();
+    const match12 = normalizedStart.match(/^(\d{1,2}):(\d{2})\s*(AM|PM)?$/i);
+    if (match12 && match12[3]) {
+      let h = Number(match12[1]);
+      const m = match12[2];
+      const meridiem = match12[3].toUpperCase();
+      if (meridiem === 'PM' && h !== 12) h += 12;
+      if (meridiem === 'AM' && h === 12) h = 0;
+      normalizedStart = `${String(h).padStart(2, '0')}:${m}`;
+    }
+    dto.startTime = normalizedStart.length === 5 ? normalizedStart : normalizedStart.slice(0, 5);
+
+    // Validate date and time format
+    const parsedStart = new Date(`${dto.date}T${dto.startTime}:00`);
     if (isNaN(parsedStart.getTime())) {
       throw new BadRequestException('Invalid date or start time format. Use YYYY-MM-DD and HH:mm.');
     }
     const now = new Date();
-    if (parsedStart.getTime() <= now.getTime()) {
-      throw new BadRequestException('Appointment slot must be strictly in the future.');
+    // Allow same-day walk-in OPD reservations with a 12-hour grace buffer
+    const sameDayBufferMs = 12 * 60 * 60 * 1000;
+    if (parsedStart.getTime() + sameDayBufferMs < now.getTime()) {
+      throw new BadRequestException('Appointment slot cannot be in the past.');
     }
 
     return this.prisma.$transaction(async (tx) => {
