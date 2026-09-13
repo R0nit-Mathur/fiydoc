@@ -122,6 +122,7 @@ export const authService = {
       clinicAddress?: string;
       clinicLatitude?: number;
       clinicLongitude?: number;
+      clinicTimings?: string;
       consultationFee?: number;
     }
   ): Promise<UserSession> {

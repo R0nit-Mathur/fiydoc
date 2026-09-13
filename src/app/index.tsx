@@ -34,7 +34,7 @@ export default function Index() {
 
   return (
     <View style={[styles.container, { backgroundColor: colors.background }]}>
-      <FiYLogo size="2xl" />
+      <FiYLogo size="xl" />
       <ActivityIndicator size="large" color={colors.primary} style={styles.spinner} />
     </View>
   );

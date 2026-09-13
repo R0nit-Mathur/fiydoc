@@ -102,10 +102,52 @@ export default function DoctorProfileScreen() {
     enabled: Boolean(doctor?.id && currentDate?.isoDate),
   });
 
-  const morningSlots = (serverSlots || []).filter((s) => s.includes('AM') || s.startsWith('09:') || s.startsWith('10:') || s.startsWith('11:'));
-  const eveningSlots = (serverSlots || []).filter((s) => !morningSlots.includes(s));
+  const formatDisplaySlot = (raw: string): string => {
+    const trimmed = raw.trim();
+    if (trimmed.toUpperCase().includes('AM') || trimmed.toUpperCase().includes('PM')) {
+      return trimmed;
+    }
+    const match = trimmed.match(/^(\d{1,2}):(\d{2})$/);
+    if (match) {
+      let h = parseInt(match[1], 10);
+      const m = match[2];
+      const meridian = h >= 12 ? 'PM' : 'AM';
+      if (h > 12) h -= 12;
+      if (h === 0) h = 12;
+      return `${String(h).padStart(2, '0')}:${m} ${meridian}`;
+    }
+    return trimmed;
+  };
+
+  const isMorningSlot = (slotStr: string): boolean => {
+    const upper = slotStr.toUpperCase();
+    if (upper.includes('AM')) return true;
+    if (upper.includes('PM')) {
+      const match = upper.match(/^(\d{1,2})/);
+      if (match && match[1] === '12') return true;
+      return false;
+    }
+    const match24 = slotStr.match(/^(\d{1,2})/);
+    if (match24) {
+      return parseInt(match24[1], 10) < 14;
+    }
+    return true;
+  };
+
+  const formattedServerSlots = (serverSlots || []).map(formatDisplaySlot);
+
+  // Standard fallback slots if server slot table is empty for this date
+  const fallbackMorning = ['09:30 AM', '10:00 AM', '10:30 AM', '11:00 AM', '11:30 AM', '12:00 PM', '12:30 PM'];
+  const fallbackEvening = ['05:00 PM', '05:30 PM', '06:00 PM', '06:30 PM', '07:00 PM', '07:30 PM'];
+
+  const allAvailableSlots = formattedServerSlots.length > 0
+    ? formattedServerSlots
+    : [...fallbackMorning, ...fallbackEvening];
+
+  const morningSlots = allAvailableSlots.filter(isMorningSlot);
+  const eveningSlots = allAvailableSlots.filter((s) => !isMorningSlot(s));
   const currentSlots = selectedSession === 'morning' ? morningSlots : eveningSlots;
-  const currentSlotTime = currentSlots[selectedSlotIndex] || currentSlots[0] || serverSlots[0] || '10:30 AM';
+  const currentSlotTime = currentSlots[selectedSlotIndex] || currentSlots[0] || allAvailableSlots[0] || '10:30 AM';
 
   const toggleFavorite = () => {
     if (Platform.OS !== 'web') {
@@ -341,10 +383,10 @@ export default function DoctorProfileScreen() {
               </View>
 
               {doctor.clinic.timings ? (
-                <View style={[styles.bannerBottomRow, { paddingHorizontal: 16, paddingVertical: 10 }]}>
-                  <View style={styles.timingPill}>
+                <View style={styles.locationTimingsContainer}>
+                  <View style={styles.locationTimingPill}>
                     <Clock size={13} color={StitchColors.primary} />
-                    <Text style={styles.timingPillText}>{doctor.clinic.timings}</Text>
+                    <Text style={styles.locationTimingText}>{doctor.clinic.timings}</Text>
                   </View>
                 </View>
               ) : null}
@@ -364,7 +406,7 @@ export default function DoctorProfileScreen() {
 
               <View style={styles.slotsLeftBadge}>
                 <View style={styles.slotsLeftDot} />
-                <Text style={styles.slotsLeftText}>{currentDate.slots}</Text>
+                <Text style={styles.slotsLeftText}>{allAvailableSlots.length > 0 ? `${allAvailableSlots.length} Slots Available` : currentDate.slots}</Text>
               </View>
             </View>
 
@@ -830,6 +872,27 @@ const styles = StyleSheet.create({
   bannerOverlay: {
     ...StyleSheet.absoluteFill,
     backgroundColor: 'rgba(0, 0, 0, 0.25)',
+  },
+  locationTimingsContainer: {
+    marginTop: 10,
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
+  locationTimingPill: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    paddingHorizontal: 10,
+    paddingVertical: 6,
+    borderRadius: 8,
+    backgroundColor: StitchColors.surfaceContainerHigh,
+    borderWidth: 1,
+    borderColor: StitchColors.outlineVariant,
+  },
+  locationTimingText: {
+    fontSize: 12,
+    fontWeight: '600',
+    color: StitchColors.onSurface,
   },
   bannerBottomRow: {
     position: 'absolute',

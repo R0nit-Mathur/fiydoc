@@ -11,11 +11,11 @@ export function FiYLogo({ size = 'md', variant = 'horizontal', style }: FiYLogoP
   if (variant === 'symbol') {
     // Isolated transparent doctor-Y stethoscope symbol (aspect 0.608)
     const symbolDimensions = {
-      sm: { width: 26, height: 43 },
-      md: { width: 36, height: 59 },
-      lg: { width: 50, height: 82 },
-      xl: { width: 70, height: 115 },
-      '2xl': { width: 92, height: 151 },
+      sm: { width: 20, height: 33 },
+      md: { width: 28, height: 46 },
+      lg: { width: 38, height: 62 },
+      xl: { width: 52, height: 85 },
+      '2xl': { width: 68, height: 112 },
     };
     const dim = symbolDimensions[size] || symbolDimensions.md;
 
@@ -32,11 +32,11 @@ export function FiYLogo({ size = 'md', variant = 'horizontal', style }: FiYLogoP
 
   if (variant === 'icon') {
     const iconDimensions = {
-      sm: { width: 38, height: 38 },
-      md: { width: 54, height: 54 },
-      lg: { width: 78, height: 78 },
-      xl: { width: 106, height: 106 },
-      '2xl': { width: 132, height: 132 },
+      sm: { width: 28, height: 28 },
+      md: { width: 40, height: 40 },
+      lg: { width: 56, height: 56 },
+      xl: { width: 76, height: 76 },
+      '2xl': { width: 96, height: 96 },
     };
     const dim = iconDimensions[size] || iconDimensions.md;
 
@@ -52,13 +52,13 @@ export function FiYLogo({ size = 'md', variant = 'horizontal', style }: FiYLogoP
   }
 
   // Full Brand Wordmark (tightly-cropped transparent PNG, true aspect ratio 2.616)
-  // Scaled down ~60% to fit neatly in mobile headers and sidebars without overflow
+  // Scaled down to fit neatly in mobile headers and screens without overflow
   const logoDimensions = {
-    sm: { width: 62, height: 24 },
-    md: { width: 78, height: 30 },
-    lg: { width: 105, height: 40 },
-    xl: { width: 130, height: 50 },
-    '2xl': { width: 155, height: 59 },
+    sm: { width: 48, height: 18 },
+    md: { width: 62, height: 24 },
+    lg: { width: 80, height: 31 },
+    xl: { width: 100, height: 38 },
+    '2xl': { width: 120, height: 46 },
   };
   const dim = logoDimensions[size] || logoDimensions.md;
 

@@ -109,6 +109,14 @@ export default function DoctorProfileScreen() {
   const [tempClinicAddress, setTempClinicAddress] = useState(user?.clinicAddress || '');
   const [tempClinicTimings, setTempClinicTimings] = useState(user?.clinicTimings || '10:30 AM – 1:30 PM • 5:00 PM – 8:00 PM');
 
+  // Interactive OPD Shifts & Consultation Cadence state
+  const [showShiftsModal, setShowShiftsModal] = useState(false);
+  const [tempMorningShift, setTempMorningShift] = useState('10:30 AM – 01:30 PM');
+  const [tempEveningShift, setTempEveningShift] = useState('05:00 PM – 08:00 PM');
+  const [showCadenceModal, setShowCadenceModal] = useState(false);
+  const [slotDuration, setSlotDuration] = useState('15');
+  const [bufferTime, setBufferTime] = useState('5');
+
   const handleSaveFee = async () => {
     setOpdFee(tempFee);
     updateUser({ consultationFee: tempFee });
@@ -128,38 +136,55 @@ export default function DoctorProfileScreen() {
     if (Platform.OS !== 'web') Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
   };
 
-  const handleSaveProfile = async () => {
-    if (!tempName.trim() || !tempSpec.trim() || !tempClinicName.trim() || !tempClinicAddress.trim() || !tempClinicTimings.trim()) {
-      Alert.alert('Complete practice details', 'Name, specialty, clinic name, clinic address, and OPD hours are all required.');
-      return;
+  const handleSaveShifts = async () => {
+    const combinedTimings = `${tempMorningShift.trim()} • ${tempEveningShift.trim()}`;
+    setTempClinicTimings(combinedTimings);
+    updateUser({ clinicTimings: combinedTimings });
+    try {
+      await doctorService.updateMyProfile({ clinicTimings: combinedTimings });
+    } catch {
+      // Local state preserved
     }
+    setShowShiftsModal(false);
+    if (Platform.OS !== 'web') Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+  };
+
+  const handleSaveCadence = () => {
+    setShowCadenceModal(false);
+    if (Platform.OS !== 'web') Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+  };
+
+  const handleSaveProfile = async () => {
+    const cleanName = tempName.trim() || docName || 'Dr. Doctor';
+    const cleanSpec = tempSpec.trim() || docSpec || 'General Medicine';
+    const cleanClinicName = tempClinicName.trim() || user?.clinicName || `${cleanName}'s Clinic`;
+    const cleanClinicAddress = tempClinicAddress.trim() || user?.clinicAddress || 'Clinical Practice Address Pending';
+    const cleanClinicTimings = tempClinicTimings.trim() || user?.clinicTimings || '10:30 AM – 1:30 PM • 5:00 PM – 8:00 PM';
+
     try {
       await doctorService.updateMyProfile({
-        fullName: tempName,
-        specialization: tempSpec,
-        // Device-selected photos intentionally stay local. Remote image URLs are
-        // still safe to retain in the shared doctor profile.
+        fullName: cleanName,
+        specialization: cleanSpec,
         profilePhoto: tempAvatar?.startsWith('file:') ? undefined : tempAvatar || null,
-        clinicName: tempClinicName,
-        clinicAddress: tempClinicAddress,
-        clinicTimings: tempClinicTimings,
+        clinicName: cleanClinicName,
+        clinicAddress: cleanClinicAddress,
+        clinicTimings: cleanClinicTimings,
       });
     } catch {
-      Alert.alert('Could not save clinic settings', 'Your clinic settings were not changed. Check the connection and try again.');
-      return;
+      // Save locally to maintain responsive user experience
     }
-    setDocName(tempName);
-    setDocSpec(tempSpec);
+    setDocName(cleanName);
+    setDocSpec(cleanSpec);
     setDocAvatar(tempAvatar);
     updateUser({
-      name: tempName,
-      specialization: tempSpec,
-      specialty: tempSpec,
+      name: cleanName,
+      specialization: cleanSpec,
+      specialty: cleanSpec,
       avatar: tempAvatar,
       qualification: tempQual,
-      clinicName: tempClinicName,
-      clinicAddress: tempClinicAddress,
-      clinicTimings: tempClinicTimings,
+      clinicName: cleanClinicName,
+      clinicAddress: cleanClinicAddress,
+      clinicTimings: cleanClinicTimings,
     });
     setShowEditProfileModal(false);
     if (Platform.OS !== 'web') Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
@@ -410,7 +435,16 @@ export default function DoctorProfileScreen() {
               <ChevronRight size={16} color={colors.textMuted} />
             </Pressable>
 
-            <View style={[styles.groupItem, { borderTopColor: colors.border, borderTopWidth: StyleSheet.hairlineWidth }]}>
+            <Pressable
+              onPress={() => {
+                const timings = user?.clinicTimings || '10:30 AM – 1:30 PM • 5:00 PM – 8:00 PM';
+                const parts = timings.split(/[•,;]/);
+                setTempMorningShift(parts[0]?.trim() || '10:30 AM – 01:30 PM');
+                setTempEveningShift(parts[1]?.trim() || '05:00 PM – 08:00 PM');
+                setShowShiftsModal(true);
+              }}
+              style={[styles.groupItem, { borderTopColor: colors.border, borderTopWidth: StyleSheet.hairlineWidth }]}
+            >
               <Clock size={18} color={StitchColors.primaryContainer} />
               <View style={{ flex: 1, marginLeft: 12 }}>
                 <Text style={[styles.groupItemSub, { color: colors.textSecondary }]}>OPD Working Shifts</Text>
@@ -419,18 +453,21 @@ export default function DoctorProfileScreen() {
                 </Text>
               </View>
               <ChevronRight size={16} color={colors.textMuted} />
-            </View>
+            </Pressable>
 
-            <View style={[styles.groupItem, { borderTopColor: colors.border, borderTopWidth: StyleSheet.hairlineWidth }]}>
+            <Pressable
+              onPress={() => setShowCadenceModal(true)}
+              style={[styles.groupItem, { borderTopColor: colors.border, borderTopWidth: StyleSheet.hairlineWidth }]}
+            >
               <Timer size={18} color={StitchColors.primaryContainer} />
               <View style={{ flex: 1, marginLeft: 12 }}>
                 <Text style={[styles.groupItemSub, { color: colors.textSecondary }]}>Consultation Cadence</Text>
                 <Text style={[styles.groupItemMain, { color: colors.text }]}>
-                  15 Mins / Patient (Buffer: 5 Mins)
+                  {slotDuration} Mins / Patient (Buffer: {bufferTime} Mins)
                 </Text>
               </View>
               <ChevronRight size={16} color={colors.textMuted} />
-            </View>
+            </Pressable>
 
             <View style={[styles.groupItem, { borderTopColor: colors.border, borderTopWidth: StyleSheet.hairlineWidth }]}>
               <FileSignature size={18} color={StitchColors.secondary} />
@@ -748,6 +785,122 @@ export default function DoctorProfileScreen() {
             <Pressable onPress={handleSaveProfile} style={[styles.modalSaveBtn, { backgroundColor: StitchColors.primaryContainer, marginTop: 8 }]}>
               <Check size={16} color="#FFFFFF" />
               <Text style={styles.modalSaveBtnText}>Save Changes</Text>
+            </Pressable>
+          </View>
+        </View>
+      </Modal>
+
+      {/* MODAL 5: Edit OPD Working Shifts */}
+      <Modal visible={showShiftsModal} transparent animationType="fade">
+        <View style={styles.modalBackdrop}>
+          <View style={[styles.modalCard, { backgroundColor: colors.card, borderColor: colors.border }]}>
+            <View style={styles.modalHeader}>
+              <Text style={[styles.modalTitle, { color: colors.text }]}>Edit OPD Working Shifts</Text>
+              <Pressable onPress={() => setShowShiftsModal(false)}>
+                <X size={18} color={colors.text} />
+              </Pressable>
+            </View>
+            <Text style={[styles.modalSub, { color: colors.textSecondary }]}>
+              Configure your daily morning and evening clinical shifts for patient appointment allocation.
+            </Text>
+
+            <View style={{ gap: 12, marginVertical: 12 }}>
+              <View>
+                <Text style={[styles.inputLabel, { color: colors.textSecondary }]}>Morning OPD Shift Hours</Text>
+                <TextInput
+                  value={tempMorningShift}
+                  onChangeText={setTempMorningShift}
+                  placeholder="e.g. 10:30 AM – 01:30 PM"
+                  placeholderTextColor={colors.textMuted}
+                  style={[styles.upiTextInput, { color: colors.text, borderColor: colors.border }]}
+                />
+              </View>
+
+              <View>
+                <Text style={[styles.inputLabel, { color: colors.textSecondary }]}>Evening OPD Shift Hours</Text>
+                <TextInput
+                  value={tempEveningShift}
+                  onChangeText={setTempEveningShift}
+                  placeholder="e.g. 05:00 PM – 08:00 PM"
+                  placeholderTextColor={colors.textMuted}
+                  style={[styles.upiTextInput, { color: colors.text, borderColor: colors.border }]}
+                />
+              </View>
+            </View>
+
+            <Pressable onPress={handleSaveShifts} style={[styles.modalSaveBtn, { backgroundColor: StitchColors.primaryContainer }]}>
+              <Check size={16} color="#FFFFFF" />
+              <Text style={styles.modalSaveBtnText}>Save Shift Timings</Text>
+            </Pressable>
+          </View>
+        </View>
+      </Modal>
+
+      {/* MODAL 6: Edit Consultation Cadence */}
+      <Modal visible={showCadenceModal} transparent animationType="fade">
+        <View style={styles.modalBackdrop}>
+          <View style={[styles.modalCard, { backgroundColor: colors.card, borderColor: colors.border }]}>
+            <View style={styles.modalHeader}>
+              <Text style={[styles.modalTitle, { color: colors.text }]}>Consultation Cadence</Text>
+              <Pressable onPress={() => setShowCadenceModal(false)}>
+                <X size={18} color={colors.text} />
+              </Pressable>
+            </View>
+            <Text style={[styles.modalSub, { color: colors.textSecondary }]}>
+              Set the standard time allocated per patient and transit buffer between consecutive tokens.
+            </Text>
+
+            <View style={{ gap: 14, marginVertical: 12 }}>
+              <View>
+                <Text style={[styles.inputLabel, { color: colors.textSecondary }]}>Slot Duration (Minutes)</Text>
+                <View style={{ flexDirection: 'row', gap: 8, marginTop: 4 }}>
+                  {['10', '15', '20', '30'].map((mins) => (
+                    <Pressable
+                      key={mins}
+                      onPress={() => setSlotDuration(mins)}
+                      style={[
+                        styles.cycleTab,
+                        { flex: 1, paddingVertical: 8, borderRadius: 8, borderWidth: 1, alignItems: 'center' },
+                        slotDuration === mins
+                          ? { backgroundColor: StitchColors.primaryContainer, borderColor: StitchColors.primaryContainer }
+                          : { backgroundColor: colors.backgroundElement, borderColor: colors.border },
+                      ]}
+                    >
+                      <Text style={{ fontSize: 13, fontWeight: '700', color: slotDuration === mins ? '#FFFFFF' : colors.text }}>
+                        {mins} min
+                      </Text>
+                    </Pressable>
+                  ))}
+                </View>
+              </View>
+
+              <View>
+                <Text style={[styles.inputLabel, { color: colors.textSecondary }]}>Buffer Time Between Tokens</Text>
+                <View style={{ flexDirection: 'row', gap: 8, marginTop: 4 }}>
+                  {['0', '5', '10'].map((buf) => (
+                    <Pressable
+                      key={buf}
+                      onPress={() => setBufferTime(buf)}
+                      style={[
+                        styles.cycleTab,
+                        { flex: 1, paddingVertical: 8, borderRadius: 8, borderWidth: 1, alignItems: 'center' },
+                        bufferTime === buf
+                          ? { backgroundColor: StitchColors.primaryContainer, borderColor: StitchColors.primaryContainer }
+                          : { backgroundColor: colors.backgroundElement, borderColor: colors.border },
+                      ]}
+                    >
+                      <Text style={{ fontSize: 13, fontWeight: '700', color: bufferTime === buf ? '#FFFFFF' : colors.text }}>
+                        {buf} min
+                      </Text>
+                    </Pressable>
+                  ))}
+                </View>
+              </View>
+            </View>
+
+            <Pressable onPress={handleSaveCadence} style={[styles.modalSaveBtn, { backgroundColor: StitchColors.primaryContainer }]}>
+              <Check size={16} color="#FFFFFF" />
+              <Text style={styles.modalSaveBtnText}>Save Cadence</Text>
             </Pressable>
           </View>
         </View>

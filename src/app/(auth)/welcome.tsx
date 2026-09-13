@@ -89,7 +89,7 @@ export default function WelcomeScreen() {
           >
           {/* Apple Minimal Squircle App Icon */}
           <View style={styles.logoWrapper}>
-            <FiYLogo size="xl" />
+            <FiYLogo size="lg" />
           </View>
 
           {/* Typography Stack */}

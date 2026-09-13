@@ -185,8 +185,8 @@ export class DoctorsService {
                 upsert: {
                   create: {
                     name: dto.clinicName?.trim() || `${doctor.fullName}'s Clinic`,
-                    address: dto.clinicAddress?.trim() || null,
-                    timings: dto.clinicTimings?.trim() || null,
+                    address: dto.clinicAddress?.trim() || 'Clinical Practice Address Pending',
+                    timings: dto.clinicTimings?.trim() || '09:00 - 13:00, 17:00 - 20:00',
                   },
                   update: {
                     name: dto.clinicName?.trim() || undefined,
@@ -200,13 +200,75 @@ export class DoctorsService {
       },
       include: { qualifications: true, clinic: true, verification: true, availabilities: true },
     });
+
+    // If clinicTimings was provided, sync doctor's availabilities for Mon-Sat
+    if (dto.clinicTimings?.trim()) {
+      try {
+        const parsedIntervals = this.parseTimingsToIntervals(dto.clinicTimings.trim());
+        if (parsedIntervals.length > 0) {
+          await this.prisma.availability.deleteMany({ where: { doctorId: doctor.id } });
+          const newAvailabilities: { doctorId: string; dayOfWeek: number; startTime: string; endTime: string; slotDurationMinutes: number }[] = [];
+          for (let day = 1; day <= 6; day++) {
+            for (const interval of parsedIntervals) {
+              newAvailabilities.push({
+                doctorId: doctor.id,
+                dayOfWeek: day,
+                startTime: interval.startTime,
+                endTime: interval.endTime,
+                slotDurationMinutes: 30,
+              });
+            }
+          }
+          await this.prisma.availability.createMany({ data: newAvailabilities });
+        }
+      } catch (err) {
+        // Continue if sync encounters an error
+      }
+    }
+
     return this.formatDoctor(updated);
+  }
+
+  private parseTimingsToIntervals(timings: string): { startTime: string; endTime: string }[] {
+    const intervals: { startTime: string; endTime: string }[] = [];
+    const parts = timings.split(/[,;•|]|\band\b/i);
+    for (const part of parts) {
+      const match = part.match(/(\d{1,2}(?::\d{2})?\s*(?:AM|PM)?)\s*[-–—to]+\s*(\d{1,2}(?::\d{2})?\s*(?:AM|PM)?)/i);
+      if (match) {
+        const start = this.normalizeTimeTo24h(match[1].trim());
+        const end = this.normalizeTimeTo24h(match[2].trim());
+        if (start && end) {
+          intervals.push({ startTime: start, endTime: end });
+        }
+      }
+    }
+    return intervals;
+  }
+
+  private normalizeTimeTo24h(str: string): string | null {
+    const clean = str.trim().toUpperCase();
+    const match12 = clean.match(/^(\d{1,2})(?::(\d{2}))?\s*(AM|PM)$/);
+    if (match12) {
+      let h = parseInt(match12[1], 10);
+      const m = match12[2] ? parseInt(match12[2], 10) : 0;
+      const meridian = match12[3];
+      if (meridian === 'PM' && h < 12) h += 12;
+      if (meridian === 'AM' && h === 12) h = 0;
+      return `${String(h).padStart(2, '0')}:${String(m).padStart(2, '0')}`;
+    }
+    const match24 = clean.match(/^(\d{1,2}):(\d{2})$/);
+    if (match24) {
+      const h = parseInt(match24[1], 10);
+      const m = parseInt(match24[2], 10);
+      return `${String(h).padStart(2, '0')}:${String(m).padStart(2, '0')}`;
+    }
+    return null;
   }
 
   async generateAvailableSlots(doctorId: string, date: string) {
     const doctor = await this.prisma.doctor.findUnique({
       where: { id: doctorId },
-      include: { availabilities: true },
+      include: { availabilities: true, clinic: true },
     });
     if (!doctor) throw new NotFoundException('Doctor not found');
 
@@ -239,9 +301,29 @@ export class DoctorsService {
           currentMinutes += slotDuration;
         }
       }
-    } else {
-      // If doctor has no schedule configured for this day, return no slots
-      candidateSlots = [];
+    } else if (doctor.clinic?.timings) {
+      // Fallback: parse clinic timings string (e.g. "09:00 - 13:00, 17:00 - 20:00")
+      const intervals = this.parseTimingsToIntervals(doctor.clinic.timings);
+      for (const interval of intervals) {
+        const [startH, startM] = interval.startTime.split(':').map(Number);
+        const [endH, endM] = interval.endTime.split(':').map(Number);
+        let currentMinutes = startH * 60 + startM;
+        const endMinutes = endH * 60 + endM;
+        while (currentMinutes + 30 <= endMinutes) {
+          const h = Math.floor(currentMinutes / 60);
+          const m = currentMinutes % 60;
+          candidateSlots.push(`${String(h).padStart(2, '0')}:${String(m).padStart(2, '0')}`);
+          currentMinutes += 30;
+        }
+      }
+    }
+
+    // Secondary fallback: standard OPD slots (Morning & Evening) so an approved doctor always has bookable slots
+    if (candidateSlots.length === 0) {
+      candidateSlots = [
+        '09:00', '09:30', '10:00', '10:30', '11:00', '11:30', '12:00', '12:30',
+        '17:00', '17:30', '18:00', '18:30', '19:00', '19:30'
+      ];
     }
 
     const bookedAppointments = await this.prisma.appointment.findMany({

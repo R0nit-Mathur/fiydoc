@@ -66,5 +66,9 @@ export class RegisterDto {
   consultationFee?: number;
 
   @IsOptional()
+  @IsString()
+  clinicTimings?: string;
+
+  @IsOptional()
   qualifications?: string[];
 }

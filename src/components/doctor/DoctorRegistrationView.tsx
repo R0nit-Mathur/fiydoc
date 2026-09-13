@@ -348,6 +348,7 @@ export function DoctorRegistrationView({
           qualifications: qualificationList,
           clinicName: clinicName.trim() || hospitalName.trim() || `${cleanName}'s Clinic`,
           clinicAddress: fullClinicAddress,
+          clinicTimings: `${morningShiftTime}, ${eveningShiftTime}`,
           consultationFee: Number(consultationFee) || 800,
         }
       );
@@ -386,7 +387,13 @@ export function DoctorRegistrationView({
       )}
 
       {/* Stepper Progress Bar (Step 1, 2, 3) */}
-      <StepProgressTracker currentStep={mainStep} />
+      <StepProgressTracker
+        currentStep={mainStep}
+        onSelectStep={(step) => {
+          setError('');
+          setMainStep(step as 1 | 2 | 3);
+        }}
+      />
 
       {/* Error Message */}
       {error ? (
@@ -742,19 +749,22 @@ export function DoctorRegistrationView({
               />
 
               {/* Card 1 Action */}
-              <Pressable
-                onPress={handleCard1Continue}
-                style={({ pressed }) => [
-                  styles.primaryPillButton,
-                  { marginTop: 12 },
-                  pressed && styles.buttonPressed,
-                ]}
-              >
-                <View style={styles.loadingRow}>
-                  <Text style={styles.primaryPillButtonText}>Next: Council Registration</Text>
-                  <ArrowRight size={18} color="#ffffff" strokeWidth={2.4} />
-                </View>
-              </Pressable>
+              <View style={[styles.buttonRowTwo, { marginTop: 12 }]}>
+                <Pressable
+                  onPress={() => setMainStep(1)}
+                  style={styles.secondaryButton}
+                >
+                  <ArrowLeft size={16} color="#334155" />
+                  <Text style={styles.secondaryButtonText}>Back: Step 1</Text>
+                </Pressable>
+                <Pressable
+                  onPress={handleCard1Continue}
+                  style={styles.primaryFlexButton}
+                >
+                  <Text style={styles.primaryFlexButtonText}>Next: Council</Text>
+                  <ArrowRight size={16} color="#ffffff" />
+                </Pressable>
+              </View>
             </View>
           )}
 
@@ -1345,19 +1355,25 @@ export function DoctorRegistrationView({
               />
 
               {/* Slide 1 CTA */}
-              <Pressable
-                onPress={handleSlide1Continue}
-                style={({ pressed }) => [
-                  styles.primaryPillButton,
-                  { marginTop: 12 },
-                  pressed && styles.buttonPressed,
-                ]}
-              >
-                <View style={styles.loadingRow}>
-                  <Text style={styles.primaryPillButtonText}>Next: Hospital Affiliation</Text>
-                  <ArrowRight size={18} color="#ffffff" strokeWidth={2.4} />
-                </View>
-              </Pressable>
+              <View style={[styles.buttonRowTwo, { marginTop: 12 }]}>
+                <Pressable
+                  onPress={() => {
+                    setMainStep(2);
+                    setCardIndex(3);
+                  }}
+                  style={styles.secondaryButton}
+                >
+                  <ArrowLeft size={16} color="#334155" />
+                  <Text style={styles.secondaryButtonText}>Back: Step 2</Text>
+                </Pressable>
+                <Pressable
+                  onPress={handleSlide1Continue}
+                  style={styles.primaryFlexButton}
+                >
+                  <Text style={styles.primaryFlexButtonText}>Next: Hospital</Text>
+                  <ArrowRight size={16} color="#ffffff" />
+                </Pressable>
+              </View>
             </View>
           )}
 

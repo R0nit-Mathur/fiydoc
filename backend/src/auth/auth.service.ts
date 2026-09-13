@@ -85,8 +85,17 @@ export class AuthService {
       const fee = Number(dto.consultationFee);
       const clinicName = dto.clinicName.trim();
       const clinicAddress = dto.clinicAddress?.trim() || null;
+      const clinicTimings = dto.clinicTimings?.trim() || '09:00 - 13:00, 17:00 - 20:00';
       const clinicLatitude = dto.clinicLatitude !== undefined && dto.clinicLatitude !== null ? Number(dto.clinicLatitude) : null;
       const clinicLongitude = dto.clinicLongitude !== undefined && dto.clinicLongitude !== null ? Number(dto.clinicLongitude) : null;
+
+      const defaultAvailabilities: { dayOfWeek: number; startTime: string; endTime: string; slotDurationMinutes: number }[] = [];
+      for (let day = 1; day <= 6; day++) {
+        defaultAvailabilities.push(
+          { dayOfWeek: day, startTime: '09:00', endTime: '13:00', slotDurationMinutes: 30 },
+          { dayOfWeek: day, startTime: '17:00', endTime: '20:00', slotDurationMinutes: 30 },
+        );
+      }
 
       await this.prisma.doctor.create({
         data: {
@@ -94,17 +103,18 @@ export class AuthService {
           fullName: dto.fullName.trim(),
           specialization,
           consultationFee: fee,
-          clinic: clinicAddress
-            ? {
-                create: {
-                  name: clinicName,
-                  address: clinicAddress,
-                  latitude: clinicLatitude,
-                  longitude: clinicLongitude,
-                  timings: null,
-                },
-              }
-            : undefined,
+          clinic: {
+            create: {
+              name: clinicName || `${dto.fullName.trim()}'s Clinic`,
+              address: clinicAddress || 'Clinical Practice Address Pending',
+              latitude: clinicLatitude,
+              longitude: clinicLongitude,
+              timings: clinicTimings,
+            },
+          },
+          availabilities: {
+            create: defaultAvailabilities,
+          },
           qualifications: dto.qualifications && dto.qualifications.length > 0
             ? {
                 create: {

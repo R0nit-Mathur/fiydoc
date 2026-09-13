@@ -1,5 +1,5 @@
 import React from 'react';
-import { View, Text, StyleSheet } from 'react-native';
+import { View, Text, Pressable, StyleSheet } from 'react-native';
 import { Check } from 'lucide-react-native';
 import { StitchColors } from '@/constants/theme';
 
@@ -11,6 +11,7 @@ export interface StepItem {
 export interface StepProgressTrackerProps {
   currentStep: number; // 1, 2, or 3
   steps?: StepItem[];
+  onSelectStep?: (stepId: number) => void;
   style?: any;
 }
 
@@ -23,6 +24,7 @@ const DEFAULT_STEPS: StepItem[] = [
 export function StepProgressTracker({
   currentStep,
   steps = DEFAULT_STEPS,
+  onSelectStep,
   style,
 }: StepProgressTrackerProps) {
   return (
@@ -36,7 +38,11 @@ export function StepProgressTracker({
         return (
           <React.Fragment key={step.id}>
             {/* Step Node */}
-            <View style={styles.stepNodeContainer}>
+            <Pressable
+              onPress={() => onSelectStep?.(step.id)}
+              disabled={!onSelectStep}
+              style={styles.stepNodeContainer}
+            >
               <View
                 style={[
                   styles.nodeCircle,
@@ -69,7 +75,7 @@ export function StepProgressTracker({
               >
                 {step.label}
               </Text>
-            </View>
+            </Pressable>
 
             {/* Connecting Bar */}
             {hasNext && (
