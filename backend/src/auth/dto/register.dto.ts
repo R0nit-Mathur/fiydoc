@@ -7,7 +7,10 @@ import {
   MinLength,
   IsNumber,
 } from 'class-validator';
-import { Role } from '@prisma/client';
+export enum PublicRegisterRole {
+  PATIENT = 'PATIENT',
+  DOCTOR = 'DOCTOR',
+}
 
 export class RegisterDto {
   @IsOptional()
@@ -24,8 +27,8 @@ export class RegisterDto {
   password?: string;
 
   @IsNotEmpty({ message: 'Role is required.' })
-  @IsEnum(Role, { message: 'Role must be PATIENT or DOCTOR.' })
-  role: Role;
+  @IsEnum(PublicRegisterRole, { message: 'Role must be PATIENT or DOCTOR.' })
+  role: PublicRegisterRole;
 
   @IsOptional()
   @IsString()

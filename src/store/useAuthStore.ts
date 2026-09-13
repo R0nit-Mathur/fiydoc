@@ -5,6 +5,7 @@ import { UserSession } from '@/services/authService';
 import { useAppointmentStore } from './useAppointmentStore';
 import { useHealthStore } from './useHealthStore';
 import { useNotificationStore } from './useNotificationStore';
+import { tokenStorage } from '@/utils/tokenStorage';
 
 export interface FamilyMember {
   id: string;
@@ -73,14 +74,18 @@ export const useAuthStore = create<AuthState>()(
           familyMembers: state.familyMembers.filter((f) => f.id !== id),
         })),
 
-      setSession: (session) =>
+      setSession: (session) => {
+        if (session.accessToken) {
+          tokenStorage.setToken(session.accessToken).catch((e) => console.warn('[useAuthStore] setToken error:', e));
+        }
         set({
           user: session,
           role: session.role,
           isAuthenticated: true,
           onboardingCompleted: session.onboardingCompleted,
           verificationStatus: session.verificationStatus || 'registered',
-        }),
+        });
+      },
 
       updateUser: (fields) =>
         set((state) => ({
@@ -108,6 +113,7 @@ export const useAuthStore = create<AuthState>()(
       setHasHydrated: (hasHydrated) => set({ hasHydrated }),
 
       logout: () => {
+        tokenStorage.removeToken().catch((e) => console.warn('[useAuthStore] removeToken error:', e));
         set({
           user: null,
           role: 'patient',
@@ -127,6 +133,7 @@ export const useAuthStore = create<AuthState>()(
       },
 
       signOutAll: async (reason?: 'USER_ACTION' | 'SESSION_EXPIRED') => {
+        await tokenStorage.removeToken().catch((e) => console.warn('[useAuthStore] removeToken error:', e));
         set({
           user: null,
           role: 'patient',

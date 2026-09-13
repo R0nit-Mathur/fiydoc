@@ -57,8 +57,15 @@ export class ConsultationsService {
       }
     }
 
-    if (dto.completeNow && (!dto.assessment || dto.assessment.trim().length === 0)) {
-      throw new BadRequestException('Complete Consultation requires at minimum a clinical assessment/diagnosis.');
+    if (dto.completeNow) {
+      if (apt.status !== AppointmentStatus.CONFIRMED) {
+        throw new BadRequestException(
+          `Cannot complete consultation. Appointment is in '${apt.status}' status, but must be 'CONFIRMED' to conduct and finalize an encounter.`
+        );
+      }
+      if (!dto.assessment || dto.assessment.trim().length === 0) {
+        throw new BadRequestException('Complete Consultation requires at minimum a clinical assessment/diagnosis.');
+      }
     }
 
     // Atomic transaction for all completion operations

@@ -1,5 +1,6 @@
 import Constants from 'expo-constants';
 import { useAuthStore } from '@/store/useAuthStore';
+import { tokenStorage } from '@/utils/tokenStorage';
 
 function getBaseUrl(): string {
   const envUrl = process.env.EXPO_PUBLIC_API_URL?.trim();
@@ -23,7 +24,8 @@ function getBaseUrl(): string {
 }
 
 export async function apiClient<T>(endpoint: string, options: RequestInit = {}): Promise<T> {
-  const token = useAuthStore.getState().user?.accessToken;
+  const secureToken = await tokenStorage.getToken();
+  const token = secureToken || useAuthStore.getState().user?.accessToken;
   const baseUrl = getBaseUrl();
 
   const headers: Record<string, string> = {

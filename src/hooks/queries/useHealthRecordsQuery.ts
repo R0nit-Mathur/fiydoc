@@ -4,15 +4,10 @@ import { useHealthStore } from '@/store/useHealthStore';
 import { MedicalRecord } from '@/types/index';
 
 export function useHealthRecordsQuery(patientId: string) {
-  const customRecords = useHealthStore((s) => s.records);
-
   return useQuery({
-    queryKey: ['health-records', patientId, customRecords.length],
+    queryKey: ['health-records', patientId],
     queryFn: async () => {
-      const fetched = await healthService.getMedicalRecords(patientId);
-      const ids = new Set(fetched.map((r) => r.id));
-      const custom = customRecords.filter((r) => !ids.has(r.id));
-      return [...custom, ...fetched];
+      return healthService.getMedicalRecords(patientId);
     },
   });
 }

@@ -1,29 +1,13 @@
-import { IsEmail, IsNotEmpty, IsString, IsOptional, IsEnum } from 'class-validator';
-import { Role } from '@prisma/client';
+import { IsNotEmpty, IsString, IsOptional, IsEnum } from 'class-validator';
+import { PublicRegisterRole } from './register.dto';
 
 export class GoogleAuthDto {
-  @IsNotEmpty({ message: 'Google ID is required.' })
+  @IsNotEmpty({ message: 'Google authentication credential (idToken or server token) is required.' })
   @IsString()
-  googleId: string;
-
-  @IsNotEmpty({ message: 'Email is required.' })
-  @IsEmail({}, { message: 'Invalid Google account email.' })
-  email: string;
-
-  @IsNotEmpty({ message: 'Name is required.' })
-  @IsString()
-  name: string;
+  credential: string;
 
   @IsOptional()
-  @IsEnum(Role, { message: 'Role must be PATIENT, DOCTOR, or ADMIN.' })
-  role?: Role;
-
-  @IsOptional()
-  @IsString()
-  idToken?: string;
-
-  @IsOptional()
-  @IsString()
-  token?: string;
+  @IsEnum(PublicRegisterRole, { message: 'Role must be PATIENT or DOCTOR.' })
+  role?: PublicRegisterRole;
 }
 

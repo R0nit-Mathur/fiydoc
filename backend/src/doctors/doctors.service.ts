@@ -28,8 +28,9 @@ export class DoctorsService {
       distanceKm = this.calculateDistanceKm(userLat, userLng, clinicLat, clinicLng);
     }
 
+    const modes = (doc.consultationModes || ['CLINIC']).map((m: any) => String(m).toLowerCase());
+
     return {
-      ...doc,
       id: doc.id,
       name: doc.fullName,
       fullName: doc.fullName,
@@ -38,6 +39,7 @@ export class DoctorsService {
       avatar: doc.profilePhoto || 'https://images.unsplash.com/photo-1559839734-2b71ea197ec2?w=400&q=80',
       profilePhoto: doc.profilePhoto,
       consultationFee: doc.consultationFee,
+      consultationModes: doc.consultationModes || ['CLINIC'],
       qualification: qualificationText,
       hospital: doc.clinic?.name || 'In-Clinic Practice',
       location: doc.clinic?.address || 'Medical Practice Clinic',
@@ -59,10 +61,16 @@ export class DoctorsService {
       reviewCount: 0,
       experienceYears: doc.experienceYears || 0,
       verificationStatus: (doc.verification?.status || VerificationStatus.REGISTERED).toLowerCase(),
-      modes: ['clinic'],
-      isInPersonAvailable: true,
-      isOnlineAvailable: false,
-      availabilities: doc.availabilities || [],
+      modes,
+      isInPersonAvailable: modes.includes('clinic'),
+      isOnlineAvailable: modes.includes('video') || modes.includes('chat'),
+      availabilities: (doc.availabilities || []).map((a: any) => ({
+        id: a.id,
+        dayOfWeek: a.dayOfWeek,
+        startTime: a.startTime,
+        endTime: a.endTime,
+        slotDurationMinutes: a.slotDurationMinutes || 30,
+      })),
     };
   }
 
@@ -170,7 +178,39 @@ export class DoctorsService {
     });
     if (!doctor) throw new NotFoundException('Doctor not found');
 
-    const defaultSlots = ['09:30 AM', '10:30 AM', '11:30 AM', '02:00 PM', '03:30 PM', '05:00 PM'];
+    const dateObj = new Date(`${date}T00:00:00`);
+    if (isNaN(dateObj.getTime())) {
+      throw new NotFoundException('Invalid date format. Expected YYYY-MM-DD.');
+    }
+    const dayOfWeek = dateObj.getDay();
+
+    const matchingAvailabilities = (doctor.availabilities || []).filter(
+      (a) => a.dayOfWeek === dayOfWeek
+    );
+
+    let candidateSlots: string[] = [];
+
+    if (matchingAvailabilities.length > 0) {
+      for (const avail of matchingAvailabilities) {
+        const slotDuration = avail.slotDurationMinutes || 30;
+        const [startH, startM] = avail.startTime.split(':').map(Number);
+        const [endH, endM] = avail.endTime.split(':').map(Number);
+
+        let currentMinutes = startH * 60 + startM;
+        const endMinutes = endH * 60 + endM;
+
+        while (currentMinutes + slotDuration <= endMinutes) {
+          const h = Math.floor(currentMinutes / 60);
+          const m = currentMinutes % 60;
+          const timeStr = `${String(h).padStart(2, '0')}:${String(m).padStart(2, '0')}`;
+          candidateSlots.push(timeStr);
+          currentMinutes += slotDuration;
+        }
+      }
+    } else {
+      // Fallback: if no specific availabilities configured, standard business hours
+      candidateSlots = ['09:30', '10:30', '11:30', '14:00', '15:30', '17:00'];
+    }
 
     const bookedAppointments = await this.prisma.appointment.findMany({
       where: {
@@ -178,10 +218,11 @@ export class DoctorsService {
         date,
         status: { in: ['CONFIRMED', 'PENDING'] },
       },
+      select: { startTime: true },
     });
 
-    const bookedTimes = new Set(bookedAppointments.map((a) => a.startTime));
-    const availableSlots = defaultSlots.filter((slot) => !bookedTimes.has(slot));
+    const bookedTimes = new Set(bookedAppointments.map((a) => a.startTime.slice(0, 5)));
+    const availableSlots = candidateSlots.filter((slot) => !bookedTimes.has(slot));
 
     return {
       date,

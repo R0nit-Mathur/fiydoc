@@ -16,6 +16,9 @@ export default function ForgotPasswordScreen() {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
 
+  const [submitted, setSubmitted] = useState(false);
+  const [successMessage, setSuccessMessage] = useState('');
+
   const handleReset = async () => {
     if (!email.trim()) {
       setError('Please enter your email address.');
@@ -24,8 +27,9 @@ export default function ForgotPasswordScreen() {
     try {
       setError('');
       setLoading(true);
-      await authService.requestPasswordReset(email);
-      router.push({ pathname: '/(auth)/verify-otp', params: { email: email.trim(), from: 'reset' } });
+      const res = await authService.requestPasswordReset(email);
+      setSuccessMessage(res.message);
+      setSubmitted(true);
     } catch (err: any) {
       setError(err?.message || 'Failed to send password recovery instructions.');
     } finally {
@@ -56,35 +60,44 @@ export default function ForgotPasswordScreen() {
           <View style={styles.header}>
             <Text style={[styles.title, Typography.h2, { color: colors.text }]}>Reset password</Text>
             <Text style={[styles.subtitle, Typography.body, { color: colors.textSecondary }]}>
-              Enter your registered email address and we will send you a 6-digit verification code.
+              Enter your registered email address and we will send you official password reset instructions.
             </Text>
           </View>
 
-          {/* Email Input */}
-          <Input
-            label="Email Address"
-            placeholder="name@example.com"
-            value={email}
-            onChangeText={(text) => {
-              setEmail(text);
-              if (error) setError('');
-            }}
-            error={error}
-            autoCapitalize="none"
-            keyboardType="email-address"
-            leftIcon={<Mail size={18} color={colors.textMuted} />}
-          />
+          {submitted ? (
+            <View style={{ backgroundColor: colors.card, padding: 16, borderRadius: 12, borderWidth: 1, borderColor: colors.border, marginBottom: 16 }}>
+              <Text style={{ color: colors.teal, fontWeight: '600', fontSize: 16, marginBottom: 8 }}>Recovery Instructions Dispatched</Text>
+              <Text style={{ color: colors.textSecondary, fontSize: 14, lineHeight: 20 }}>{successMessage}</Text>
+            </View>
+          ) : (
+            <>
+              {/* Email Input */}
+              <Input
+                label="Email Address"
+                placeholder="name@example.com"
+                value={email}
+                onChangeText={(text) => {
+                  setEmail(text);
+                  if (error) setError('');
+                }}
+                error={error}
+                autoCapitalize="none"
+                keyboardType="email-address"
+                leftIcon={<Mail size={18} color={colors.textMuted} />}
+              />
 
-          {error ? (
-            <Text style={[styles.errorText, { color: colors.danger }]}>{error}</Text>
-          ) : null}
+              {error ? (
+                <Text style={[styles.errorText, { color: colors.danger }]}>{error}</Text>
+              ) : null}
+            </>
+          )}
         </View>
       </ScrollView>
 
       {/* Footer */}
       <View style={styles.footerWrap}>
         <Button
-          title="Send Reset Code"
+          title={submitted ? "Resend Instructions" : "Send Recovery Instructions"}
           onPress={handleReset}
           loading={loading}
           variant="primary"

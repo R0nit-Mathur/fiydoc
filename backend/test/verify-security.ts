@@ -56,11 +56,17 @@ const mockSupabase: any = {
   uploadFile: async () => 'https://mock.supabase.co/prescriptions/mock.pdf',
 };
 
+import { AuthService } from '../src/auth/auth.service';
+import { NotificationsService } from '../src/notifications/notifications.service';
+import { PublicRegisterRole } from '../src/auth/dto/register.dto';
+
 const appointmentsService = new AppointmentsService(mockPrisma);
 const prescriptionsService = new PrescriptionsService(mockPrisma, mockSupabase);
 const consultationsService = new ConsultationsService(mockPrisma);
 const recordsService = new RecordsService(mockPrisma);
 const patientsService = new PatientsService(mockPrisma);
+const authService = new AuthService(mockPrisma, { sign: () => 'mock_token' } as any);
+const notificationsService = new NotificationsService(mockPrisma);
 
 async function runTests() {
   let passed = 0;
@@ -101,8 +107,10 @@ async function runTests() {
     mockPrisma.doctor.findUnique = async () => ({
       id: 'doc_1',
       consultationFee: 500,
+      consultationModes: ['CLINIC'],
+      verification: { status: VerificationStatus.VERIFIED },
       availabilities: [
-        { dayOfWeek: 1, startTime: '09:00', endTime: '12:00' },
+        { dayOfWeek: 1, startTime: '09:00', endTime: '12:00', slotDurationMinutes: 30 },
       ],
     });
     mockPrisma.patient.findUnique = async () => ({ id: 'pat_1' });
@@ -324,6 +332,79 @@ async function runTests() {
       }
     }
     assert.strictEqual(threw, true, 'Should forbid cross-patient profile update');
+  });
+
+  // Test 10: Rejects public ADMIN registration
+  await test('Rejects public registration with ADMIN role', async () => {
+    let threw = false;
+    try {
+      await authService.register({
+        email: 'attacker@evil.com',
+        password: 'password123',
+        role: 'ADMIN' as any,
+      });
+    } catch (e: any) {
+      if (e instanceof BadRequestException && e.message.includes('Public administrator registration is prohibited')) {
+        threw = true;
+      }
+    }
+    assert.strictEqual(threw, true, 'Should prohibit public ADMIN registration');
+  });
+
+  // Test 11: Notification IDOR prevention
+  await test('Prevents Patient B from accessing Patient A notifications', async () => {
+    const userB = {
+      id: 'u_pat_B',
+      role: Role.PATIENT,
+      patient: { id: 'pat_B' },
+    };
+
+    let threw = false;
+    try {
+      await notificationsService.getForUser('u_pat_A', userB);
+    } catch (e: any) {
+      if (e instanceof ForbiddenException && e.message.includes('another user’s notifications')) {
+        threw = true;
+      }
+    }
+    assert.strictEqual(threw, true, 'Should prevent notification IDOR');
+  });
+
+  // Test 12: Prescription requires consultation to be completed
+  await test('Rejects prescription for incomplete/draft consultation', async () => {
+    mockPrisma.doctor.findUnique = async () => ({
+      id: 'doc_1',
+      verification: { status: VerificationStatus.VERIFIED },
+    });
+    mockPrisma.consultation.findUnique = async () => ({
+      id: 'c_incomplete',
+      doctorId: 'doc_1',
+      patientId: 'pat_1',
+      completedAt: null,
+      appointment: { status: AppointmentStatus.CONFIRMED },
+    });
+
+    const verifiedDoc = {
+      id: 'u_doc',
+      role: Role.DOCTOR,
+      doctor: { id: 'doc_1' },
+    };
+
+    let threw = false;
+    try {
+      await prescriptionsService.createPrescription(
+        {
+          consultationId: 'c_incomplete',
+          medicines: [{ name: 'Amoxicillin', dosage: '500mg', frequency: 'TID', durationDays: 5 }],
+        },
+        verifiedDoc
+      );
+    } catch (e: any) {
+      if (e instanceof BadRequestException && e.message.includes('completed, finalized clinical consultations')) {
+        threw = true;
+      }
+    }
+    assert.strictEqual(threw, true, 'Should reject prescription for uncompleted consultation');
   });
 
   console.log(`\nResults: ${passed} passed, ${failed} failed.`);

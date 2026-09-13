@@ -26,6 +26,38 @@ export class SupabaseService {
     return this.supabase !== null;
   }
 
+  async uploadPrivateFile(bucket: string, path: string, fileBuffer: Buffer, contentType: string): Promise<string> {
+    if (!this.supabase) {
+      throw new ServiceUnavailableException('Supabase Storage is not configured. File was not saved.');
+    }
+
+    const { data, error } = await this.supabase.storage.from(bucket).upload(path, fileBuffer, {
+      contentType,
+      upsert: true,
+    });
+
+    if (error) {
+      this.logger.error(`Supabase Storage upload error: ${error.message}`);
+      throw error;
+    }
+
+    return data.path;
+  }
+
+  async createSignedUrl(bucket: string, path: string, expiresInSeconds = 3600): Promise<string> {
+    if (!this.supabase) {
+      throw new ServiceUnavailableException('Supabase Storage is not configured.');
+    }
+
+    const { data, error } = await this.supabase.storage.from(bucket).createSignedUrl(path, expiresInSeconds);
+    if (error || !data?.signedUrl) {
+      this.logger.error(`Supabase createSignedUrl error: ${error?.message}`);
+      throw error || new ServiceUnavailableException('Failed to generate secure URL.');
+    }
+
+    return data.signedUrl;
+  }
+
   async uploadFile(bucket: string, path: string, fileBuffer: Buffer, contentType: string): Promise<string> {
     if (!this.supabase) {
       throw new ServiceUnavailableException('Supabase Storage is not configured. File was not saved.');
@@ -45,3 +77,4 @@ export class SupabaseService {
     return publicUrlData.publicUrl;
   }
 }
+

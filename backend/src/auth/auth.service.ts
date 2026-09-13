@@ -4,7 +4,9 @@ import { PrismaService } from '../prisma/prisma.service';
 import * as bcrypt from 'bcryptjs';
 import { Role, VerificationStatus } from '@prisma/client';
 
-import { RegisterDto } from './dto/register.dto';
+import { RegisterDto, PublicRegisterRole } from './dto/register.dto';
+import { GoogleAuthDto } from './dto/google-auth.dto';
+import { OAuth2Client } from 'google-auth-library';
 
 @Injectable()
 export class AuthService {
@@ -14,6 +16,10 @@ export class AuthService {
   ) {}
 
   async register(dto: RegisterDto) {
+    if ((dto.role as any) === Role.ADMIN || (dto.role as any) === 'ADMIN') {
+      throw new BadRequestException('Public administrator registration is prohibited.');
+    }
+
     if (!dto.email && !dto.phone) {
       throw new BadRequestException('Email or phone number is required.');
     }
@@ -159,32 +165,90 @@ export class AuthService {
     return this.generateTokenResponse(user);
   }
 
-  async googleOAuthLogin(googleUser: {
-    googleId: string;
-    email: string;
-    name: string;
-    role?: Role;
-    idToken?: string;
-    token?: string;
-  }) {
-    const cleanEmail = googleUser.email.trim().toLowerCase();
-    const cleanGoogleId = googleUser.googleId.trim();
+  async googleOAuthLogin(dto: GoogleAuthDto) {
+    if (!dto.credential || dto.credential.trim().length === 0) {
+      throw new UnauthorizedException('Missing required Google authentication credential.');
+    }
 
-    // Verify token if provided
-    const tokenToVerify = googleUser.idToken || googleUser.token;
-    if (tokenToVerify) {
+    const credential = dto.credential.trim();
+    let verifiedEmail: string;
+    let verifiedGoogleSub: string;
+    let verifiedName: string;
+
+    // 1. First attempt: Verify using official Google OAuth2Client
+    let verified = false;
+    const clientId = process.env.GOOGLE_CLIENT_ID;
+
+    try {
+      const client = new OAuth2Client(clientId);
+      const ticket = await client.verifyIdToken({
+        idToken: credential,
+        audience: clientId || undefined,
+      });
+      const payload = ticket.getPayload();
+      if (payload && payload.email && payload.sub) {
+        if (!payload.email_verified) {
+          throw new UnauthorizedException('Google email address has not been verified by Google.');
+        }
+        verifiedEmail = payload.email.trim().toLowerCase();
+        verifiedGoogleSub = payload.sub.trim();
+        verifiedName = payload.name?.trim() || payload.email.split('@')[0];
+        verified = true;
+      }
+    } catch (err: any) {
+      if (err instanceof UnauthorizedException) throw err;
+      // If verifyIdToken failed (e.g. token is an OAuth2 userinfo access token or tokeninfo)
+    }
+
+    // 2. Second attempt: Check Google TokenInfo API if not verified by client
+    if (!verified) {
       try {
-        const verifyRes = await fetch(`https://oauth2.googleapis.com/tokeninfo?id_token=${tokenToVerify}`);
-        if (verifyRes.ok) {
-          const verifiedData = await verifyRes.json();
-          if (verifiedData.email && verifiedData.email.toLowerCase() !== cleanEmail) {
-            throw new UnauthorizedException('Google token email does not match provided email.');
+        const tokenInfoRes = await fetch(`https://oauth2.googleapis.com/tokeninfo?id_token=${encodeURIComponent(credential)}`);
+        if (tokenInfoRes.ok) {
+          const data: any = await tokenInfoRes.json();
+          if (data.email && data.sub) {
+            if (data.email_verified === 'false' || data.email_verified === false) {
+              throw new UnauthorizedException('Google email address is not verified.');
+            }
+            if (clientId && data.aud && data.aud !== clientId) {
+              throw new UnauthorizedException('Google token audience does not match application client ID.');
+            }
+            verifiedEmail = data.email.trim().toLowerCase();
+            verifiedGoogleSub = data.sub.trim();
+            verifiedName = data.name?.trim() || data.email.split('@')[0];
+            verified = true;
           }
         }
       } catch (err: any) {
         if (err instanceof UnauthorizedException) throw err;
-        // If token was not an id_token or network issue, proceed with standard checks
       }
+    }
+
+    // 3. Third attempt: Google UserInfo API (in case an OAuth2 access_token was passed)
+    if (!verified) {
+      try {
+        const userinfoRes = await fetch('https://www.googleapis.com/oauth2/v3/userinfo', {
+          headers: { Authorization: `Bearer ${credential}` },
+        });
+        if (userinfoRes.ok) {
+          const data: any = await userinfoRes.json();
+          if (data.email && data.sub) {
+            if (data.email_verified === false) {
+              throw new UnauthorizedException('Google email address is not verified.');
+            }
+            verifiedEmail = data.email.trim().toLowerCase();
+            verifiedGoogleSub = data.sub.trim();
+            verifiedName = data.name?.trim() || data.email.split('@')[0];
+            verified = true;
+          }
+        }
+      } catch (err: any) {
+        if (err instanceof UnauthorizedException) throw err;
+      }
+    }
+
+    if (!verified || !verifiedEmail! || !verifiedGoogleSub!) {
+      throw new UnauthorizedException('Cryptographic verification of Google credential failed. Access denied.');
     }
 
     const includeRelations = {
@@ -194,38 +258,75 @@ export class AuthService {
       },
     };
 
-    let user = await this.prisma.user.findFirst({
-      where: {
-        OR: [
-          { googleId: cleanGoogleId },
-          { email: cleanEmail },
-        ],
-      },
+    // Check if user already exists by verified googleId
+    let user = await this.prisma.user.findUnique({
+      where: { googleId: verifiedGoogleSub },
       include: includeRelations,
     });
 
     if (!user) {
-      // Healthcare security rule: Google sign-in new accounts are created as PATIENT.
-      // Medical practitioner accounts require verified credential onboarding with formal license submission.
-      user = await this.prisma.user.create({
-        data: {
-          email: cleanEmail,
-          googleId: cleanGoogleId,
-          role: Role.PATIENT,
-          patient: {
-            create: {
-              fullName: googleUser.name?.trim() || 'Patient User',
-            },
+      // Check if user exists by verified email
+      const existingByEmail = await this.prisma.user.findUnique({
+        where: { email: verifiedEmail },
+        include: includeRelations,
+      });
+
+      if (existingByEmail) {
+        // Prevent Account Takeover: If the account was created with a password,
+        // and doesn't have a googleId linked, require that the existing account does not have a conflicting googleId
+        if (existingByEmail.googleId && existingByEmail.googleId !== verifiedGoogleSub) {
+          throw new UnauthorizedException('Conflict: Account is already linked to a different Google account.');
+        }
+
+        // Link verified googleId to the verified email owner
+        user = await this.prisma.user.update({
+          where: { id: existingByEmail.id },
+          data: { googleId: verifiedGoogleSub },
+          include: includeRelations,
+        });
+      } else {
+        // Create new account: Role can only be PATIENT or DOCTOR (never ADMIN)
+        const assignedRole = dto.role === PublicRegisterRole.DOCTOR ? Role.DOCTOR : Role.PATIENT;
+
+        user = await this.prisma.user.create({
+          data: {
+            email: verifiedEmail,
+            googleId: verifiedGoogleSub,
+            role: assignedRole,
+            ...(assignedRole === Role.PATIENT
+              ? {
+                  patient: {
+                    create: {
+                      fullName: verifiedName,
+                    },
+                  },
+                }
+              : {
+                  doctor: {
+                    create: {
+                      fullName: verifiedName,
+                      specialization: 'General Medicine',
+                      consultationFee: 500,
+                      clinic: {
+                        create: {
+                          name: `${verifiedName}'s Clinic`,
+                          address: 'Address Pending Verification',
+                        },
+                      },
+                      verification: {
+                        create: {
+                          registrationNumber: `PENDING-${verifiedGoogleSub.slice(-6)}`,
+                          registrationAuthority: 'National Medical Commission',
+                          status: VerificationStatus.PENDING,
+                        },
+                      },
+                    },
+                  },
+                }),
           },
-        },
-        include: includeRelations,
-      });
-    } else if (!user.googleId) {
-      user = await this.prisma.user.update({
-        where: { id: user.id },
-        data: { googleId: cleanGoogleId },
-        include: includeRelations,
-      });
+          include: includeRelations,
+        });
+      }
     }
 
     return this.generateTokenResponse(user);

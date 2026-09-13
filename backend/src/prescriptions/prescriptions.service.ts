@@ -108,6 +108,12 @@ export class PrescriptionsService {
       throw new NotFoundException('Specified clinical consultation does not exist.');
     }
 
+    if (!consultation.completedAt || consultation.appointment?.status !== 'COMPLETED') {
+      throw new BadRequestException(
+        'Prescriptions can only be issued for completed, finalized clinical consultations.'
+      );
+    }
+
     // Authenticated doctor must match the assigned consultation doctor
     if (currentUser.role === Role.DOCTOR && consultation.doctorId !== currentUser.doctor?.id) {
       throw new ForbiddenException('You cannot issue a prescription for another doctor’s patient encounter.');
@@ -152,20 +158,23 @@ export class PrescriptionsService {
         include: { medicines: true, doctor: true, patient: true },
       });
 
+      let storagePath: string | null = null;
       let documentUrl: string | null = null;
       if (this.supabase.isConfigured()) {
         try {
           const bucket = process.env.SUPABASE_STORAGE_BUCKET || 'fiydoc-medical-docs';
-          documentUrl = await this.supabase.uploadFile(
+          storagePath = `prescriptions/${consultation.patientId}/${prescription.id}.pdf`;
+          await this.supabase.uploadPrivateFile(
             bucket,
-            `prescriptions/${consultation.patientId}/${prescription.id}.pdf`,
+            storagePath,
             await this.buildPrescriptionDocument(prescription),
             'application/pdf',
           );
           await tx.prescription.update({
             where: { id: prescription.id },
-            data: { pdfUrl: documentUrl },
+            data: { pdfUrl: storagePath },
           });
+          documentUrl = await this.supabase.createSignedUrl(bucket, storagePath, 3600).catch(() => null);
         } catch (storageErr) {
           // Keep prescription record even if PDF upload deferred
         }
@@ -178,7 +187,7 @@ export class PrescriptionsService {
           title: `Prescription from ${consultation.doctor.fullName}`,
           type: 'PRESCRIPTION',
           sourceId: prescription.id,
-          documentUrl: documentUrl || undefined,
+          documentUrl: storagePath || undefined,
           summary: `Prescribed ${(dto.medicines || []).length} medicine(s)`,
           tags: ['DIGITAL_RX', 'OFFICIAL_PRESCRIPTION'],
         },
@@ -211,7 +220,7 @@ export class PrescriptionsService {
         });
       }
 
-      return { ...prescription, pdfUrl: documentUrl };
+      return { ...prescription, pdfUrl: documentUrl || storagePath };
     });
   }
 
@@ -224,7 +233,17 @@ export class PrescriptionsService {
 
     this.checkPrescriptionActorAccess(rx, currentUser);
 
-    return rx;
+    let signedUrl = rx.pdfUrl;
+    if (rx.pdfUrl && this.supabase.isConfigured() && !rx.pdfUrl.startsWith('http')) {
+      const bucket = process.env.SUPABASE_STORAGE_BUCKET || 'fiydoc-medical-docs';
+      try {
+        signedUrl = await this.supabase.createSignedUrl(bucket, rx.pdfUrl, 3600);
+      } catch (err) {
+        // Fallback to stored path
+      }
+    }
+
+    return { ...rx, pdfUrl: signedUrl };
   }
 
   async verifyPrescriptionCode(verificationCode: string) {

@@ -78,7 +78,7 @@ export const useHealthStore = create<HealthState>()(
               : prescription.medicines && prescription.medicines.length > 0
                 ? `Official prescription with ${prescription.medicines.length} medication(s).`
                 : `Official clinical assessment & consultation advice.`,
-            tags: ['DIGITAL_RX', 'MCI_VERIFIED'],
+            tags: ['DIGITAL_RX', 'CLINICAL_PRESCRIPTION'],
           };
 
           return {

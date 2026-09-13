@@ -12,7 +12,6 @@ export class AppointmentsService {
     const tokenNumber = tokenMatch ? tokenMatch[1] : (apt.tokenNumber || 'Token #01');
 
     return {
-      ...apt,
       id: apt.id,
       patientId: apt.patientId,
       patientName: apt.patient?.fullName || 'Patient',
@@ -25,12 +24,18 @@ export class AppointmentsService {
       location: apt.doctor?.clinic?.address || 'Medical Enclave, Mumbai',
       date: apt.date,
       time: apt.startTime,
+      startTime: apt.startTime,
+      endTime: apt.endTime,
       tokenNumber,
       status: (apt.status || 'CONFIRMED').toLowerCase(),
-      mode: 'clinic',
+      consultationType: apt.consultationType,
+      mode: (apt.consultationType || 'clinic').toLowerCase(),
       fee: apt.fee,
       symptoms: apt.symptoms || [],
       notes: apt.notes,
+      createdAt: apt.createdAt,
+      updatedAt: apt.updatedAt,
+      hasConsultation: Boolean(apt.consultation),
     };
   }
 
@@ -67,10 +72,30 @@ export class AppointmentsService {
       // Fetch doctor to authoritatively determine consultation fee and verify existence
       const doctor = await tx.doctor.findUnique({
         where: { id: dto.doctorId },
-        include: { clinic: true, availabilities: true },
+        include: { clinic: true, availabilities: true, verification: true },
       });
       if (!doctor) {
         throw new NotFoundException('Selected doctor does not exist.');
+      }
+
+      // Ensure doctor is verified before accepting patient bookings
+      if (doctor.verification?.status !== 'VERIFIED') {
+        throw new BadRequestException('Appointments can only be booked with verified healthcare providers.');
+      }
+
+      // Verify consultation fee is authoritatively configured on doctor profile
+      if (typeof doctor.consultationFee !== 'number' || doctor.consultationFee <= 0) {
+        throw new BadRequestException('Selected doctor has not set an authoritative consultation fee.');
+      }
+      const authoritativeFee = doctor.consultationFee;
+
+      // Validate consultation type is supported by doctor
+      const authoritativeConsultationType = dto.consultationType || ConsultationType.CLINIC;
+      const doctorModes = doctor.consultationModes || [ConsultationType.CLINIC];
+      if (!doctorModes.includes(authoritativeConsultationType)) {
+        throw new BadRequestException(
+          `Doctor does not support '${authoritativeConsultationType}' consultation mode.`
+        );
       }
 
       // Verify patient exists
@@ -90,15 +115,23 @@ export class AppointmentsService {
 
         if (matchingDayAvailabilities.length > 0) {
           const slotStartNorm = dto.startTime.slice(0, 5);
-          const isWithinSlot = matchingDayAvailabilities.some((avail) => {
+          const matchedSlot = matchingDayAvailabilities.find((avail) => {
             const availStartNorm = avail.startTime.slice(0, 5);
             const availEndNorm = avail.endTime.slice(0, 5);
-            return slotStartNorm >= availStartNorm && slotStartNorm < availEndNorm;
+            if (slotStartNorm < availStartNorm || slotStartNorm >= availEndNorm) {
+              return false;
+            }
+            // Check alignment with slotDurationMinutes
+            const slotDuration = avail.slotDurationMinutes || 30;
+            const [startH, startM] = availStartNorm.split(':').map(Number);
+            const [reqH, reqM] = slotStartNorm.split(':').map(Number);
+            const diffMinutes = (reqH * 60 + reqM) - (startH * 60 + startM);
+            return diffMinutes % slotDuration === 0;
           });
 
-          if (!isWithinSlot) {
+          if (!matchedSlot) {
             throw new BadRequestException(
-              `The requested time ${dto.startTime} is outside the doctor's scheduled availability for this day.`
+              `The requested time ${dto.startTime} is outside the doctor's scheduled availability intervals for this day.`
             );
           }
         }
@@ -144,10 +177,6 @@ export class AppointmentsService {
       const canonicalNotes = dto.notes
         ? `${dto.notes.trim()} [${allocatedToken}]`
         : `[${allocatedToken}]`;
-
-      // Server-authoritative fee from doctor record
-      const authoritativeFee = doctor.consultationFee ?? 800;
-      const authoritativeConsultationType = dto.consultationType || ConsultationType.CLINIC;
 
       const appointment = await tx.appointment.create({
         data: {
