@@ -276,44 +276,63 @@ export class AppointmentsService {
         });
       }
 
-      // Trigger notification for both patient and doctor
-      await tx.notification.createMany({
-        data: [
-          {
+      // Trigger notification for both patient and doctor — non-fatal
+      // If this fails (e.g. missing userId), the appointment is still saved
+      try {
+        const notifData: any[] = [];
+        if (patient.userId) {
+          notifData.push({
             userId: patient.userId,
             type: 'APPOINTMENT_QUEUED',
             title: 'Appointment Slot Queued',
             message: `Your slot request with ${appointment.doctor.fullName} on ${dto.date} at ${dto.startTime} is awaiting doctor approval.`,
-          },
-          {
+          });
+        }
+        if (appointment.doctor.userId) {
+          notifData.push({
             userId: appointment.doctor.userId,
             type: 'NEW_BOOKING_REQUEST',
             title: 'New Patient Slot Request',
             message: `${appointment.patient.fullName} requested ${dto.startTime} on ${dto.date}. Review and approve.`,
-          },
-        ],
-      });
+          });
+        }
+        if (notifData.length > 0) {
+          await tx.notification.createMany({ data: notifData });
+        }
+      } catch (notifErr: any) {
+        console.warn('[appointments] Notification insert failed (non-fatal):', notifErr?.message);
+      }
 
       return this.formatAppointment(appointment);
     });
   }
 
   async getPatientAppointments(patientId: string, currentUser: any) {
-    const targetPatientId =
-      patientId === 'me' || patientId === currentUser.id || !patientId
-        ? currentUser.patient?.id
-        : patientId;
+    // Resolve the canonical Patient.id to query with
+    // patientId from client = User.id (auth user UUID), not Patient row UUID
+    let resolvedPatientId: string | null = currentUser.patient?.id || null;
 
-    if (currentUser.role === Role.PATIENT) {
-      if (currentUser.patient?.id !== targetPatientId && currentUser.id !== targetPatientId) {
-        throw new ForbiddenException('Cannot access another patient’s appointments.');
-      }
+    // If the JWT-loaded patient relation is missing, do a fresh DB lookup by userId
+    if (!resolvedPatientId) {
+      const patientRecord = await this.prisma.patient.findFirst({
+        where: {
+          OR: [
+            { id: patientId },
+            { userId: patientId },
+            ...(currentUser?.id && currentUser.id !== patientId ? [{ userId: currentUser.id }] : []),
+          ],
+        },
+      });
+      resolvedPatientId = patientRecord?.id || null;
     }
 
-    const queryId = currentUser.patient?.id || targetPatientId;
+    if (!resolvedPatientId) {
+      // No patient record yet — return empty list rather than throwing
+      return [];
+    }
 
     const appointments = await this.prisma.appointment.findMany({
-      where: { patientId: queryId },
+      where: { patientId: resolvedPatientId },
       include: { doctor: { include: { clinic: true } }, patient: true, consultation: true },
       orderBy: [{ date: 'asc' }, { startTime: 'asc' }],
     });
