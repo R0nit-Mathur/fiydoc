@@ -348,13 +348,20 @@ export default function DoctorAppointmentsScreen() {
     }
   }, [queryClient, refetch]);
 
+  const now = new Date();
+  const todayIso = now.toISOString().slice(0, 10);
+  const localYear = now.getFullYear();
+  const localMonth = String(now.getMonth() + 1).padStart(2, '0');
+  const localDay = String(now.getDate()).padStart(2, '0');
+  const todayLocal = `${localYear}-${localMonth}-${localDay}`;
+  const isDateToday = (d?: string) => Boolean(d && (d.slice(0, 10) === todayIso || d.slice(0, 10) === todayLocal));
+
   const counts = useMemo(() => {
-    const today = new Date().toISOString().slice(0, 10);
     return {
       today:
         appointments?.filter(
           (a) =>
-            a.date?.slice(0, 10) === today &&
+            isDateToday(a.date) &&
             ['upcoming', 'confirmed', 'checked_in', 'in_progress', 'pending'].includes(a.status)
         ).length || 0,
       upcoming:
@@ -364,15 +371,14 @@ export default function DoctorAppointmentsScreen() {
       completed:
         appointments?.filter((a) => a.status === 'completed').length || 0,
     };
-  }, [appointments]);
+  }, [appointments, todayIso, todayLocal]);
 
   const filtered = useMemo(() => {
     if (!appointments) return [];
-    const today = new Date().toISOString().slice(0, 10);
     if (activeFilter === 'today') {
       return appointments.filter(
         (a) =>
-          a.date?.slice(0, 10) === today &&
+          isDateToday(a.date) &&
           ['upcoming', 'confirmed', 'checked_in', 'in_progress', 'pending'].includes(a.status)
       );
     }
@@ -382,7 +388,7 @@ export default function DoctorAppointmentsScreen() {
       );
     }
     return appointments.filter((a) => a.status === 'completed');
-  }, [appointments, activeFilter]);
+  }, [appointments, activeFilter, todayIso, todayLocal]);
 
   const handleApprove = async (apt: any) => {
     if (Platform.OS !== 'web') {

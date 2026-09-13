@@ -10,7 +10,7 @@
  * - Session Operations: Emergency Delay (+15m / +30m), Modify Capacity modal, Interactive Leave manager
  */
 
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import {
   View,
   Text,
@@ -52,6 +52,8 @@ import {
 import { useAppTheme } from '@/hooks/useAppTheme';
 import { useAuthStore } from '@/store/useAuthStore';
 import { useNotificationStore } from '@/store/useNotificationStore';
+import { useAppointmentStore } from '@/store/useAppointmentStore';
+import { useAppointmentsQuery } from '@/hooks/queries/useAppointmentsQuery';
 import { BorderRadius, Shadows, StitchColors, DEFAULT_DOCTOR_AVATAR } from '@/constants/theme';
 import UndoToast from '@/components/ui/UndoToast';
 import { Avatar } from '@/components/ui/Avatar';
@@ -252,11 +254,62 @@ export default function DoctorScheduleScreen() {
       status: 'available',
     },
   ]);
+  const { data: serverAppointments = [] } = useAppointmentsQuery(undefined, user?.id);
+  const storeAppointments = useAppointmentStore((s) => s.appointments);
+
+  const allAppointments = useMemo(() => {
+    const sIds = new Set(serverAppointments.map((a) => a.id));
+    const local = storeAppointments.filter((a) => !sIds.has(a.id));
+    return [...serverAppointments, ...local];
+  }, [serverAppointments, storeAppointments]);
+
   // Operations belong to a calendar date, never to the reusable session template.
   // A delay, block, or reschedule on Tuesday must not alter Wednesday's OPD.
   const [slotsByDate, setSlotsByDate] = useState<Record<string, { morning: ScheduleSlot[]; evening: ScheduleSlot[] }>>({});
-  const selectedMorningSlots = slotsByDate[selectedDay]?.morning || morningSlots;
-  const selectedEveningSlots = slotsByDate[selectedDay]?.evening || eveningSlots;
+  const rawMorningSlots = slotsByDate[selectedDay]?.morning || morningSlots;
+  const rawEveningSlots = slotsByDate[selectedDay]?.evening || eveningSlots;
+
+  const normalizeTimeForMatch = (t?: string) => {
+    if (!t) return '';
+    const match = t.trim().match(/^(\d{1,2}):(\d{2})/);
+    return match ? `${match[1].padStart(2, '0')}:${match[2]}` : t.trim();
+  };
+
+  const selectedMorningSlots = useMemo(() => {
+    const dayApts = allAppointments.filter((a) => a.date?.slice(0, 10) === selectedDay);
+    return rawMorningSlots.map((slot) => {
+      const match = dayApts.find((a) => normalizeTimeForMatch(a.time) === normalizeTimeForMatch(slot.time));
+      if (match) {
+        return {
+          ...slot,
+          status: 'booked' as const,
+          patientId: match.patientId,
+          patientName: match.patientName,
+          token: match.tokenNumber ? String(match.tokenNumber).replace(/^Token\s*/i, '') : slot.token,
+          reason: match.symptoms?.join(', ') || match.notes || 'OPD Consultation',
+        };
+      }
+      return slot;
+    });
+  }, [rawMorningSlots, allAppointments, selectedDay]);
+
+  const selectedEveningSlots = useMemo(() => {
+    const dayApts = allAppointments.filter((a) => a.date?.slice(0, 10) === selectedDay);
+    return rawEveningSlots.map((slot) => {
+      const match = dayApts.find((a) => normalizeTimeForMatch(a.time) === normalizeTimeForMatch(slot.time));
+      if (match) {
+        return {
+          ...slot,
+          status: 'booked' as const,
+          patientId: match.patientId,
+          patientName: match.patientName,
+          token: match.tokenNumber ? String(match.tokenNumber).replace(/^Token\s*/i, '') : slot.token,
+          reason: match.symptoms?.join(', ') || match.notes || 'OPD Consultation',
+        };
+      }
+      return slot;
+    });
+  }, [rawEveningSlots, allAppointments, selectedDay]);
   const updateSelectedSessionSlots = (session: 'morning' | 'evening', updater: (slots: ScheduleSlot[]) => ScheduleSlot[]) => {
     setSlotsByDate((previous) => {
       const current = previous[selectedDay] || {

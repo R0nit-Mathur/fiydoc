@@ -8,7 +8,7 @@
  * - Zero cancellation charge reassurance
  * - Sticky Bottom Checkout Action Card: Fee ₹800, "Book 04:15 PM • Token #12"
  */
-import React, { useState } from 'react';
+import React, { useState, useMemo, useEffect } from 'react';
 import {
   View,
   Text,
@@ -57,6 +57,12 @@ const generateDynamicDates = () => {
   const result = [];
   const today = new Date();
 
+  // Current time in minutes
+  const currentMinutes = today.getHours() * 60 + today.getMinutes();
+  // Standard evening OPD usually ends by 20:00 (8:00 PM).
+  // Requiring booking at least 15 mins before slot means after 19:45 (7:45 PM), no slots remain today.
+  const isTodaySlotsEnded = currentMinutes >= 19 * 60 + 45;
+
   for (let i = 0; i < 7; i++) {
     const d = new Date(today);
     d.setDate(today.getDate() + i);
@@ -65,12 +71,19 @@ const generateDynamicDates = () => {
     const monthName = months[d.getMonth()];
     const isSunday = d.getDay() === 0;
 
+    let slotStatus = 'Live Availability';
+    if (isSunday) {
+      slotStatus = 'On Leave';
+    } else if (i === 0 && isTodaySlotsEnded) {
+      slotStatus = 'Slots Closed';
+    }
+
     result.push({
       id: `date_${i}`,
       day: dayName,
       date: dateNum,
       month: `${monthName}, ${days[d.getDay()]}`,
-      slots: isSunday ? 'On Leave' : 'Live Availability',
+      slots: slotStatus,
       isLeave: isSunday,
       isoDate: d.toISOString().slice(0, 10),
     });
@@ -78,7 +91,17 @@ const generateDynamicDates = () => {
   return result;
 };
 
-const DATES = generateDynamicDates();
+const parseSlotToMinutes = (raw: string): number => {
+  const trimmed = raw.trim();
+  const match = trimmed.match(/^(\d{1,2}):(\d{2})\s*(AM|PM)?$/i);
+  if (!match) return -1;
+  let h = parseInt(match[1], 10);
+  const m = parseInt(match[2], 10);
+  const meridiem = match[3]?.toUpperCase();
+  if (meridiem === 'PM' && h !== 12) h += 12;
+  if (meridiem === 'AM' && h === 12) h = 0;
+  return h * 60 + m;
+};
 
 export default function DoctorProfileScreen() {
   const router = useRouter();
@@ -90,8 +113,19 @@ export default function DoctorProfileScreen() {
   const doctor = doctors?.find((d) => d.id === id) || null;
 
   const [isFavorite, setIsFavorite] = useState(false);
-  const [selectedDateIndex, setSelectedDateIndex] = useState(0);
-  const [selectedSession, setSelectedSession] = useState<'morning' | 'evening'>('evening');
+
+  const DATES = useMemo(() => generateDynamicDates(), []);
+  const initialDateIdx = useMemo(() => {
+    const now = new Date();
+    const currentMins = now.getHours() * 60 + now.getMinutes();
+    if (now.getDay() === 0 || currentMins >= 19 * 60 + 45) {
+      return 1;
+    }
+    return 0;
+  }, []);
+
+  const [selectedDateIndex, setSelectedDateIndex] = useState(initialDateIdx);
+  const [selectedSession, setSelectedSession] = useState<'morning' | 'evening'>('morning');
   const [selectedSlotIndex, setSelectedSlotIndex] = useState(0);
 
   const currentDate = DATES[selectedDateIndex] || DATES[0];
@@ -138,16 +172,43 @@ export default function DoctorProfileScreen() {
 
   // Standard fallback slots if server slot table is empty for this date
   const fallbackMorning = ['09:30 AM', '10:00 AM', '10:30 AM', '11:00 AM', '11:30 AM', '12:00 PM', '12:30 PM'];
-  const fallbackEvening = ['05:00 PM', '05:30 PM', '06:00 PM', '06:30 PM', '07:00 PM', '07:30 PM'];
+  const fallbackEvening = ['05:00 PM', '05:30 PM', '06:00 PM', '06:30 PM', '07:00 PM', '07:30 PM', '08:00 PM'];
 
-  const allAvailableSlots = formattedServerSlots.length > 0
+  const rawCandidateSlots = formattedServerSlots.length > 0
     ? formattedServerSlots
     : [...fallbackMorning, ...fallbackEvening];
 
+  const now = new Date();
+  const todayIso = now.toISOString().slice(0, 10);
+  const localYear = now.getFullYear();
+  const localMonth = String(now.getMonth() + 1).padStart(2, '0');
+  const localDay = String(now.getDate()).padStart(2, '0');
+  const todayLocal = `${localYear}-${localMonth}-${localDay}`;
+  const isSelectedDateToday = currentDate?.isoDate === todayIso || currentDate?.isoDate === todayLocal;
+  const currentMinutes = now.getHours() * 60 + now.getMinutes();
+
+  // Enforce clock behavior: hide past slots and enforce 15-minute advance booking window
+  const allAvailableSlots = rawCandidateSlots.filter((slot) => {
+    if (!isSelectedDateToday) return true;
+    const slotMins = parseSlotToMinutes(slot);
+    if (slotMins < 0) return false;
+    return slotMins - currentMinutes >= 15;
+  });
+
   const morningSlots = allAvailableSlots.filter(isMorningSlot);
   const eveningSlots = allAvailableSlots.filter((s) => !isMorningSlot(s));
+
+  // Auto-switch to evening if morning is empty for today
+  useEffect(() => {
+    if (isSelectedDateToday) {
+      if (morningSlots.length === 0 && eveningSlots.length > 0 && selectedSession === 'morning') {
+        setSelectedSession('evening');
+      }
+    }
+  }, [isSelectedDateToday, morningSlots.length, eveningSlots.length]);
+
   const currentSlots = selectedSession === 'morning' ? morningSlots : eveningSlots;
-  const currentSlotTime = currentSlots[selectedSlotIndex] || currentSlots[0] || allAvailableSlots[0] || '10:30 AM';
+  const currentSlotTime = currentSlots[selectedSlotIndex] || currentSlots[0] || allAvailableSlots[0] || null;
 
   const toggleFavorite = () => {
     if (Platform.OS !== 'web') {
@@ -169,6 +230,14 @@ export default function DoctorProfileScreen() {
 
   const handleBookContinue = () => {
     if (!doctor) return;
+    if (!currentSlotTime || currentSlots.length === 0) {
+      Alert.alert(
+        'No Slots Available',
+        'There are no remaining booking slots for this date and session. Booking is closed 15 minutes prior to slot start time. Please choose another session or upcoming date.',
+        [{ text: 'OK' }]
+      );
+      return;
+    }
     if (Platform.OS !== 'web') {
       Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
     }
@@ -529,9 +598,21 @@ export default function DoctorProfileScreen() {
 
             {/* Slots Grid */}
             {currentSlots.length === 0 ? (
-              <View style={{ padding: 20, alignItems: 'center' }}>
-                <Text style={{ fontSize: 14, color: StitchColors.outline }}>
-                  {isLoadingSlots ? 'Checking slot availability...' : 'No available slots for this session.'}
+              <View style={{ padding: 24, alignItems: 'center', backgroundColor: StitchColors.surfaceContainerLow, borderRadius: 12, marginVertical: 12 }}>
+                <Clock size={28} color={StitchColors.outline} style={{ marginBottom: 8 }} />
+                <Text style={{ fontSize: 15, fontWeight: '700', color: StitchColors.onSurface, marginBottom: 4, textAlign: 'center' }}>
+                  {isLoadingSlots
+                    ? 'Checking slot availability...'
+                    : isSelectedDateToday
+                    ? 'OPD Slots Closed for this Session'
+                    : 'No Slots Available'}
+                </Text>
+                <Text style={{ fontSize: 13, color: StitchColors.outline, textAlign: 'center', lineHeight: 18 }}>
+                  {isLoadingSlots
+                    ? 'Retrieving live doctor schedule from clinic...'
+                    : isSelectedDateToday
+                    ? 'All slots for this session have passed or closed (advance booking closes 15 mins before slot start). Please select another session or upcoming date.'
+                    : 'No slots found for this session. Please select another date.'}
                 </Text>
               </View>
             ) : (
@@ -610,13 +691,18 @@ export default function DoctorProfileScreen() {
           </View>
 
           <Pressable
-            style={({ pressed }) => [styles.bookCtaButton, pressed && styles.buttonPressed]}
+            disabled={!currentSlotTime || currentSlots.length === 0}
+            style={({ pressed }) => [
+              styles.bookCtaButton,
+              (!currentSlotTime || currentSlots.length === 0) && { backgroundColor: StitchColors.outline, opacity: 0.6 },
+              pressed && currentSlotTime && styles.buttonPressed,
+            ]}
             onPress={handleBookContinue}
           >
             <Text style={styles.bookCtaText} numberOfLines={1}>
-              Book {currentSlotTime}
+              {currentSlotTime ? `Book ${currentSlotTime}` : 'No Slots Available'}
             </Text>
-            <ArrowRight size={17} color="#ffffff" />
+            {currentSlotTime ? <ArrowRight size={17} color="#ffffff" /> : null}
           </Pressable>
         </View>
       </View>

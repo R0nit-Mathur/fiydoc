@@ -25,19 +25,33 @@ export function useAppointmentsQuery(patientId?: string, doctorId?: string) {
       }
 
       // Combine store appointments with fetched appointments, filtering by effective user
+      const cleanName = (s?: string) => s?.toLowerCase().replace(/^dr\.?\s*/i, '').trim() || '';
+
       let relevantStoreAppointments = storeAppointments;
       if (effectiveDoctorId) {
-        relevantStoreAppointments = storeAppointments.filter(
-          (a) =>
-            a.doctorId === effectiveDoctorId ||
-            (currentUser?.name && a.doctorName?.toLowerCase() === currentUser.name.toLowerCase())
-        );
+        const curDocName = cleanName(currentUser?.name);
+        relevantStoreAppointments = storeAppointments.filter((a) => {
+          if (a.doctorId === effectiveDoctorId) return true;
+          if (curDocName) {
+            const aDocName = cleanName(a.doctorName);
+            if (aDocName && (aDocName === curDocName || aDocName.includes(curDocName) || curDocName.includes(aDocName))) {
+              return true;
+            }
+          }
+          return currentUser?.role === 'doctor';
+        });
       } else if (effectivePatientId) {
-        relevantStoreAppointments = storeAppointments.filter(
-          (a) =>
-            a.patientId === effectivePatientId ||
-            (currentUser?.name && a.patientName?.toLowerCase() === currentUser.name.toLowerCase())
-        );
+        const curPatName = cleanName(currentUser?.name);
+        relevantStoreAppointments = storeAppointments.filter((a) => {
+          if (a.patientId === effectivePatientId) return true;
+          if (curPatName) {
+            const aPatName = cleanName(a.patientName);
+            if (aPatName && (aPatName === curPatName || aPatName.includes(curPatName) || curPatName.includes(aPatName))) {
+              return true;
+            }
+          }
+          return false;
+        });
       }
 
       const ids = new Set(fetched.map((a) => a.id));

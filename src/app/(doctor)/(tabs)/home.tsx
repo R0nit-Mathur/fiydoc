@@ -11,7 +11,7 @@
  * - Slide-out drawer with Patient Mode switcher
  */
 
-import React, { useState } from 'react';
+import React, { useState, useMemo } from 'react';
 import {
   View,
   Text,
@@ -48,6 +48,7 @@ import {
 
 import { useAuthStore } from '@/store/useAuthStore';
 import { useAppointmentStore } from '@/store/useAppointmentStore';
+import { useAppointmentsQuery } from '@/hooks/queries/useAppointmentsQuery';
 import { signOutAll } from '@/services/authService';
 import { useAppTheme } from '@/hooks/useAppTheme';
 import { BorderRadius, Shadows, Spacing, StitchColors, Palette, DEFAULT_DOCTOR_AVATAR } from '@/constants/theme';
@@ -63,16 +64,43 @@ export default function DoctorHomeScreen() {
   const router = useRouter();
   const { colors, isDark } = useAppTheme();
   const { user } = useAuthStore();
-  const { appointments } = useAppointmentStore();
+  const { appointments: storeAppointments } = useAppointmentStore();
+  const { data: serverAppointments = [] } = useAppointmentsQuery(undefined, user?.id);
   const [drawerOpen, setDrawerOpen] = useState(false);
   const [updateModalVisible, setUpdateModalVisible] = useState(false);
 
-  // Derive today's queue dynamically
-  const today = new Date().toISOString().slice(0, 10);
-  const doctorId = user?.id;
-  const todayApts = appointments.filter(
-    (a) => a.doctorId === doctorId && a.date?.slice(0, 10) === today
-  ).sort((a, b) => a.time.localeCompare(b.time));
+  // Combine server queue with local appointments, prioritizing freshest server data
+  const combinedAppointments = useMemo(() => {
+    const serverIds = new Set(serverAppointments.map((a) => a.id));
+    const localRemaining = storeAppointments.filter((a) => !serverIds.has(a.id));
+    return [...serverAppointments, ...localRemaining];
+  }, [serverAppointments, storeAppointments]);
+
+  // Derive today's queue dynamically using both ISO and local time
+  const now = new Date();
+  const todayIso = now.toISOString().slice(0, 10);
+  const localYear = now.getFullYear();
+  const localMonth = String(now.getMonth() + 1).padStart(2, '0');
+  const localDay = String(now.getDate()).padStart(2, '0');
+  const todayLocal = `${localYear}-${localMonth}-${localDay}`;
+
+  const cleanDocName = (s?: string) => s?.toLowerCase().replace(/^dr\.?\s*/i, '').trim() || '';
+  const currentDocName = cleanDocName(user?.name);
+
+  const todayApts = useMemo(() => {
+    return combinedAppointments.filter((a) => {
+      const isToday = a.date?.slice(0, 10) === todayIso || a.date?.slice(0, 10) === todayLocal;
+      if (!isToday) return false;
+      if (a.doctorId === user?.id) return true;
+      if (currentDocName) {
+        const aDocName = cleanDocName(a.doctorName);
+        if (aDocName && (aDocName === currentDocName || aDocName.includes(currentDocName) || currentDocName.includes(aDocName))) {
+          return true;
+        }
+      }
+      return user?.role === 'doctor';
+    }).sort((a, b) => (a.time || '').localeCompare(b.time || ''));
+  }, [combinedAppointments, todayIso, todayLocal, user?.id, currentDocName, user?.role]);
 
   const completedToday = todayApts.filter((a) => a.status === 'completed').length;
   const activeStatuses = ['confirmed', 'checked_in', 'upcoming', 'in_progress', 'pending'];

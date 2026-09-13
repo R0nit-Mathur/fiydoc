@@ -266,8 +266,13 @@ export class DoctorsService {
   }
 
   async generateAvailableSlots(doctorId: string, date: string) {
-    const doctor = await this.prisma.doctor.findUnique({
-      where: { id: doctorId },
+    const doctor = await this.prisma.doctor.findFirst({
+      where: {
+        OR: [
+          { id: doctorId },
+          { userId: doctorId },
+        ],
+      },
       include: { availabilities: true, clinic: true },
     });
     if (!doctor) throw new NotFoundException('Doctor not found');
@@ -328,7 +333,7 @@ export class DoctorsService {
 
     const bookedAppointments = await this.prisma.appointment.findMany({
       where: {
-        doctorId,
+        doctorId: { in: [doctor.id, doctor.userId] },
         date,
         status: { in: ['CONFIRMED', 'PENDING'] },
       },
@@ -336,11 +341,34 @@ export class DoctorsService {
     });
 
     const bookedTimes = new Set(bookedAppointments.map((a) => a.startTime.slice(0, 5)));
-    const availableSlots = candidateSlots.filter((slot) => !bookedTimes.has(slot));
+
+    const now = new Date();
+    const todayIso = now.toISOString().slice(0, 10);
+    const localYear = now.getFullYear();
+    const localMonth = String(now.getMonth() + 1).padStart(2, '0');
+    const localDay = String(now.getDate()).padStart(2, '0');
+    const todayLocal = `${localYear}-${localMonth}-${localDay}`;
+    const isToday = date === todayIso || date === todayLocal;
+    const currentMinutes = now.getHours() * 60 + now.getMinutes();
+
+    const availableSlots = candidateSlots.filter((slot) => {
+      if (bookedTimes.has(slot)) return false;
+
+      // If slot is for today, enforce that past slots and slots within 15 mins are hidden
+      if (isToday) {
+        const [h, m] = slot.split(':').map(Number);
+        const slotMinutes = h * 60 + m;
+        // Only allow booking before 15 mins (slot time - current time >= 15)
+        if (slotMinutes - currentMinutes < 15) {
+          return false;
+        }
+      }
+      return true;
+    });
 
     return {
       date,
-      doctorId,
+      doctorId: doctor.id,
       slots: availableSlots,
     };
   }

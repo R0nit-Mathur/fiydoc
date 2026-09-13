@@ -76,21 +76,45 @@ export class AppointmentsService {
       throw new BadRequestException('Invalid date or start time format. Use YYYY-MM-DD and HH:mm.');
     }
     const now = new Date();
-    // Allow same-day walk-in OPD reservations with a 12-hour grace buffer
-    const sameDayBufferMs = 12 * 60 * 60 * 1000;
-    if (parsedStart.getTime() + sameDayBufferMs < now.getTime()) {
-      throw new BadRequestException('Appointment slot cannot be in the past.');
+    const todayIso = now.toISOString().slice(0, 10);
+    const localYear = now.getFullYear();
+    const localMonth = String(now.getMonth() + 1).padStart(2, '0');
+    const localDay = String(now.getDate()).padStart(2, '0');
+    const todayLocal = `${localYear}-${localMonth}-${localDay}`;
+    const isToday = dto.date === todayIso || dto.date === todayLocal;
+
+    // Reject bookings for past dates
+    if (dto.date < todayLocal && dto.date < todayIso) {
+      throw new BadRequestException('Appointment date cannot be in the past.');
+    }
+
+    // If booking for today, slot timing must be at least 15 minutes in the future
+    if (isToday) {
+      const [startH, startM] = dto.startTime.split(':').map(Number);
+      const slotMinutes = startH * 60 + startM;
+      const currentMinutes = now.getHours() * 60 + now.getMinutes();
+      if (slotMinutes - currentMinutes < 15) {
+        throw new BadRequestException(
+          'This slot is no longer available. Appointments must be booked at least 15 minutes before the slot starts.'
+        );
+      }
     }
 
     return this.prisma.$transaction(async (tx) => {
       // Fetch doctor to authoritatively determine consultation fee and verify existence
-      const doctor = await tx.doctor.findUnique({
-        where: { id: dto.doctorId },
+      const doctor = await tx.doctor.findFirst({
+        where: {
+          OR: [
+            { id: dto.doctorId },
+            { userId: dto.doctorId },
+          ],
+        },
         include: { clinic: true, availabilities: true, verification: true },
       });
       if (!doctor) {
         throw new NotFoundException('Selected doctor does not exist.');
       }
+      dto.doctorId = doctor.id;
 
       // Ensure doctor is verified before accepting patient bookings
       if (doctor.verification?.status !== 'VERIFIED') {
@@ -114,12 +138,18 @@ export class AppointmentsService {
       }
 
       // Verify patient exists
-      const patient = await tx.patient.findUnique({
-        where: { id: dto.patientId },
+      const patient = await tx.patient.findFirst({
+        where: {
+          OR: [
+            { id: dto.patientId },
+            { userId: dto.patientId },
+          ],
+        },
       });
       if (!patient) {
         throw new NotFoundException('Patient record not found.');
       }
+      dto.patientId = patient.id;
 
       // Derive authoritative slot duration and end time
       let slotDuration = 30;
@@ -298,21 +328,31 @@ export class AppointmentsService {
   }
 
   async getDoctorAppointments(doctorId: string, currentUser: any) {
-    const targetDoctorId =
-      doctorId === 'me' || doctorId === currentUser.id || !doctorId
-        ? currentUser.doctor?.id
-        : doctorId;
+    const doctorRecord = currentUser?.doctor || (await this.prisma.doctor.findFirst({
+      where: {
+        OR: [
+          { id: doctorId },
+          { userId: doctorId },
+          ...(currentUser?.id ? [{ userId: currentUser.id }, { id: currentUser.id }] : []),
+        ],
+      },
+    }));
 
-    if (currentUser.role === Role.DOCTOR) {
-      if (currentUser.doctor?.id !== targetDoctorId && currentUser.id !== targetDoctorId) {
-        throw new ForbiddenException('Cannot access another doctor’s queue.');
-      }
-    }
-
-    const queryId = currentUser.doctor?.id || targetDoctorId;
+    const possibleDoctorIds = Array.from(
+      new Set(
+        [
+          doctorId,
+          currentUser?.id,
+          doctorRecord?.id,
+          doctorRecord?.userId,
+        ].filter(Boolean) as string[]
+      )
+    );
 
     const appointments = await this.prisma.appointment.findMany({
-      where: { doctorId: queryId },
+      where: {
+        doctorId: { in: possibleDoctorIds },
+      },
       include: { patient: true, doctor: { include: { clinic: true } }, consultation: true },
       orderBy: [{ date: 'asc' }, { startTime: 'asc' }],
     });
