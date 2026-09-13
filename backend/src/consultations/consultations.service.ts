@@ -41,7 +41,10 @@ export class ConsultationsService {
 
     // Authorization: Only the assigned doctor or an admin can edit consultation records
     const isAssignedDoctor =
-      currentUser.role === Role.DOCTOR && currentUser.doctor?.id === apt.doctorId;
+      currentUser.role === Role.DOCTOR &&
+      (currentUser.doctor?.id === apt.doctorId ||
+        apt.doctor?.userId === currentUser.id ||
+        apt.doctorId === currentUser.id);
     const isAdmin = currentUser.role === Role.ADMIN;
 
     if (!isAssignedDoctor && !isAdmin) {

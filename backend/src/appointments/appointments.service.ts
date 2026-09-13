@@ -1,4 +1,4 @@
-import { Injectable, BadRequestException, ForbiddenException, NotFoundException } from '@nestjs/common';
+import { Injectable, BadRequestException, ForbiddenException, NotFoundException, HttpException } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
 import { AppointmentStatus, ConsultationType, Role } from '@prisma/client';
 
@@ -393,46 +393,29 @@ export class AppointmentsService {
   }
 
   async cancelAppointment(id: string, currentUser: any) {
-    return this.prisma.$transaction(async (tx) => {
-      const apt = await tx.appointment.findUnique({
+    try {
+      const apt = await this.prisma.appointment.findUnique({
         where: { id },
-        include: { doctor: { include: { clinic: true } }, patient: true },
+        include: { doctor: { include: { clinic: true } }, patient: true, consultation: true },
       });
       if (!apt) throw new NotFoundException('Appointment not found.');
 
       this.checkAppointmentActorAccess(apt, currentUser);
 
       // Validate state transition for cancellation
-      const cancellableStatuses: AppointmentStatus[] = [
-        AppointmentStatus.PENDING,
-        AppointmentStatus.CONFIRMED,
-      ];
-      if (!cancellableStatuses.includes(apt.status)) {
+      const cancellableStatuses: string[] = ['PENDING', 'CONFIRMED'];
+      if (!cancellableStatuses.includes(String(apt.status).toUpperCase())) {
         throw new BadRequestException(
           `Cannot cancel appointment in '${apt.status}' state. Only pending or confirmed appointments can be cancelled.`
         );
       }
 
-      // Atomic conditional update to prevent race conditions
-      const updateResult = await tx.appointment.updateMany({
-        where: {
-          id,
-          status: { in: cancellableStatuses },
-        },
-        data: { status: AppointmentStatus.CANCELLED },
-      });
-
-      if (updateResult.count === 0) {
-        throw new BadRequestException('Appointment state changed concurrently. Cancellation aborted.');
-      }
-
-      const updated = await tx.appointment.findUnique({
+      const updated = await this.prisma.appointment.update({
         where: { id },
-        include: { doctor: { include: { clinic: true } }, patient: true },
+        data: { status: AppointmentStatus.CANCELLED },
+        include: { doctor: { include: { clinic: true } }, patient: true, consultation: true },
       });
 
-      return { updated, previousStatus: apt.status, doctorUser: apt.doctor, patientUser: apt.patient, aptDate: apt.date, aptStart: apt.startTime };
-    }).then(async ({ updated, previousStatus, doctorUser, patientUser, aptDate, aptStart }) => {
       // Audit log entry (non-fatal)
       if (currentUser?.id) {
         try {
@@ -443,7 +426,7 @@ export class AppointmentsService {
               targetType: 'APPOINTMENT',
               targetId: id,
               metadata: {
-                previousStatus,
+                previousStatus: apt.status,
                 newStatus: AppointmentStatus.CANCELLED,
               },
             },
@@ -455,9 +438,11 @@ export class AppointmentsService {
 
       // Notify the other party (non-fatal)
       try {
-        const isCancelledByPatient = currentUser.patient?.id === updated.patientId;
-        const recipientUserId = isCancelledByPatient ? doctorUser?.userId : patientUser?.userId;
-        const cancelledByName = isCancelledByPatient ? patientUser?.fullName || 'Patient' : `Dr. ${doctorUser?.fullName || 'Doctor'}`;
+        const isCancelledByPatient =
+          (currentUser.patient && currentUser.patient.id === updated.patientId) ||
+          (updated.patient && updated.patient.userId === currentUser.id);
+        const recipientUserId = isCancelledByPatient ? updated.doctor?.userId : updated.patient?.userId;
+        const cancelledByName = isCancelledByPatient ? updated.patient?.fullName || 'Patient' : `Dr. ${updated.doctor?.fullName || 'Doctor'}`;
 
         if (recipientUserId) {
           await this.prisma.notification.create({
@@ -465,7 +450,7 @@ export class AppointmentsService {
               userId: recipientUserId,
               type: 'APPOINTMENT_CANCELLED',
               title: 'Appointment Cancelled',
-              message: `The appointment for ${aptDate} at ${aptStart} was cancelled by ${cancelledByName}.`,
+              message: `The appointment for ${updated.date} at ${updated.startTime} was cancelled by ${cancelledByName}.`,
             },
           });
         }
@@ -474,41 +459,44 @@ export class AppointmentsService {
       }
 
       return this.formatAppointment(updated);
-    });
+    } catch (err: any) {
+      if (err instanceof HttpException) throw err;
+      console.error('[appointments] cancelAppointment unhandled error:', err);
+      throw new BadRequestException(err?.message || 'Failed to cancel appointment');
+    }
   }
 
-  async updateAppointmentStatus(id: string, targetStatus: AppointmentStatus, currentUser: any) {
-    return this.prisma.$transaction(async (tx) => {
-      const apt = await tx.appointment.findUnique({
+  async updateAppointmentStatus(id: string, targetStatus: AppointmentStatus | string, currentUser: any) {
+    try {
+      const normalizedStatus = String(targetStatus).toUpperCase() as AppointmentStatus;
+
+      const apt = await this.prisma.appointment.findUnique({
         where: { id },
-        include: { doctor: { include: { clinic: true } }, patient: true },
+        include: { doctor: { include: { clinic: true } }, patient: true, consultation: true },
       });
       if (!apt) throw new NotFoundException('Appointment not found.');
 
       this.checkAppointmentActorAccess(apt, currentUser);
 
       // State machine validation
-      const allowedTransitions: Record<AppointmentStatus, AppointmentStatus[]> = {
-        [AppointmentStatus.PENDING]: [AppointmentStatus.CONFIRMED, AppointmentStatus.CANCELLED],
-        [AppointmentStatus.CONFIRMED]: [
-          AppointmentStatus.COMPLETED,
-          AppointmentStatus.CANCELLED,
-          AppointmentStatus.NO_SHOW,
-        ],
-        [AppointmentStatus.COMPLETED]: [],
-        [AppointmentStatus.CANCELLED]: [],
-        [AppointmentStatus.NO_SHOW]: [],
+      const allowedTransitions: Record<string, string[]> = {
+        PENDING: ['CONFIRMED', 'CANCELLED'],
+        CONFIRMED: ['COMPLETED', 'CANCELLED', 'NO_SHOW'],
+        COMPLETED: [],
+        CANCELLED: [],
+        NO_SHOW: [],
       };
 
-      const validNextStates = allowedTransitions[apt.status] || [];
-      if (!validNextStates.includes(targetStatus)) {
+      const currentStatusStr = String(apt.status).toUpperCase();
+      const validNextStates = allowedTransitions[currentStatusStr] || [];
+      if (!validNextStates.includes(normalizedStatus)) {
         throw new BadRequestException(
-          `Invalid status transition from '${apt.status}' to '${targetStatus}'.`
+          `Invalid status transition from '${apt.status}' to '${normalizedStatus}'.`
         );
       }
 
       // Role-specific constraints on transitions
-      if (targetStatus === AppointmentStatus.CONFIRMED) {
+      if (normalizedStatus === AppointmentStatus.CONFIRMED || normalizedStatus === AppointmentStatus.COMPLETED || normalizedStatus === AppointmentStatus.NO_SHOW) {
         const isDoctor =
           currentUser.role === Role.DOCTOR &&
           ((currentUser.doctor && currentUser.doctor.id === apt.doctorId) ||
@@ -516,42 +504,16 @@ export class AppointmentsService {
             apt.doctorId === currentUser.id);
         const isAdmin = currentUser.role === Role.ADMIN;
         if (!isDoctor && !isAdmin) {
-          throw new ForbiddenException('Only the assigned doctor or admin can confirm/approve an appointment.');
+          throw new ForbiddenException('Only the assigned doctor or admin can modify this appointment status.');
         }
       }
 
-      if (targetStatus === AppointmentStatus.COMPLETED || targetStatus === AppointmentStatus.NO_SHOW) {
-        const isDoctor =
-          currentUser.role === Role.DOCTOR &&
-          ((currentUser.doctor && currentUser.doctor.id === apt.doctorId) ||
-            apt.doctor?.userId === currentUser.id ||
-            apt.doctorId === currentUser.id);
-        const isAdmin = currentUser.role === Role.ADMIN;
-        if (!isDoctor && !isAdmin) {
-          throw new ForbiddenException('Only the assigned doctor or admin can complete or mark no-show for an appointment.');
-        }
-      }
-
-      // Atomic conditional update
-      const updateResult = await tx.appointment.updateMany({
-        where: {
-          id,
-          status: apt.status,
-        },
-        data: { status: targetStatus },
-      });
-
-      if (updateResult.count === 0) {
-        throw new BadRequestException('Appointment state changed concurrently. Update aborted.');
-      }
-
-      const updated = await tx.appointment.findUnique({
+      const updated = await this.prisma.appointment.update({
         where: { id },
+        data: { status: normalizedStatus },
         include: { doctor: { include: { clinic: true } }, patient: true, consultation: true },
       });
 
-      return { updated, previousStatus: apt.status, doctorUser: apt.doctor, patientUser: apt.patient, aptDate: apt.date, aptStart: apt.startTime };
-    }).then(async ({ updated, previousStatus, doctorUser, patientUser, aptDate, aptStart }) => {
       // Audit log entry (non-fatal)
       if (currentUser?.id) {
         try {
@@ -562,8 +524,8 @@ export class AppointmentsService {
               targetType: 'APPOINTMENT',
               targetId: id,
               metadata: {
-                previousStatus,
-                newStatus: targetStatus,
+                previousStatus: apt.status,
+                newStatus: normalizedStatus,
               },
             },
           });
@@ -573,14 +535,14 @@ export class AppointmentsService {
       }
 
       // Notify patient on confirmation (non-fatal)
-      if (targetStatus === AppointmentStatus.CONFIRMED && patientUser?.userId) {
+      if (normalizedStatus === AppointmentStatus.CONFIRMED && updated.patient?.userId) {
         try {
           await this.prisma.notification.create({
             data: {
-              userId: patientUser.userId,
+              userId: updated.patient.userId,
               type: 'APPOINTMENT_APPROVED',
               title: 'Appointment Approved by Doctor',
-              message: `Dr. ${doctorUser?.fullName || 'Doctor'} approved your appointment for ${aptDate} at ${aptStart}.`,
+              message: `Dr. ${updated.doctor?.fullName || 'Doctor'} approved your appointment for ${updated.date} at ${updated.startTime}.`,
             },
           });
         } catch (notifErr: any) {
@@ -589,7 +551,11 @@ export class AppointmentsService {
       }
 
       return this.formatAppointment(updated);
-    });
+    } catch (err: any) {
+      if (err instanceof HttpException) throw err;
+      console.error('[appointments] updateAppointmentStatus unhandled error:', err);
+      throw new BadRequestException(err?.message || 'Failed to update appointment status');
+    }
   }
 
   private checkAppointmentActorAccess(apt: any, currentUser: any) {

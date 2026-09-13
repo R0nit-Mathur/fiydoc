@@ -85,15 +85,20 @@ export class PrescriptionsService {
     }
 
     // Doctor must be verified by clinical authority to write prescriptions
+    let docRecord: any = null;
     if (currentUser.role === Role.DOCTOR) {
-      const docId = currentUser.doctor?.id;
-      if (!docId) {
-        throw new ForbiddenException('Doctor profile not found.');
+      if (currentUser.doctor?.id) {
+        docRecord = await this.prisma.doctor.findUnique({
+          where: { id: currentUser.doctor.id },
+          include: { verification: true },
+        });
       }
-      const docRecord = await this.prisma.doctor.findUnique({
-        where: { id: docId },
-        include: { verification: true },
-      });
+      if (!docRecord && currentUser.id) {
+        docRecord = await this.prisma.doctor.findFirst({
+          where: { userId: currentUser.id },
+          include: { verification: true },
+        });
+      }
       if (!docRecord) {
         throw new ForbiddenException('Doctor profile not found.');
       }
@@ -131,7 +136,12 @@ export class PrescriptionsService {
     }
 
     // Authenticated doctor must match the assigned consultation doctor
-    if (currentUser.role === Role.DOCTOR && consultation.doctorId !== currentUser.doctor?.id) {
+    const isAssignedDoctor =
+      consultation.doctorId === currentUser.doctor?.id ||
+      consultation.doctorId === docRecord?.id ||
+      consultation.doctor?.userId === currentUser.id ||
+      consultation.doctorId === currentUser.id;
+    if (currentUser.role === Role.DOCTOR && !isAssignedDoctor) {
       throw new ForbiddenException('You cannot issue a prescription for another doctor’s patient encounter.');
     }
 
