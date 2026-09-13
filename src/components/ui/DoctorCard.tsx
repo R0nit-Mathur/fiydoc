@@ -55,7 +55,7 @@ export function DoctorCard({
     <Pressable
       onPress={onPress}
       style={({ pressed }) => [styles.card, pressed && styles.cardPressed]}
-      accessibilityRole="button"
+      accessibilityRole={Platform.OS === 'web' ? undefined : 'button'}
       accessibilityLabel={`View ${doctor.name} profile`}
     >
       {/* Top Meta Row: Verified & Distance */}
