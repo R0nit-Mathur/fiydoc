@@ -19,6 +19,7 @@ import {
   RefreshControl,
   StyleSheet,
   Platform,
+  Alert,
 } from 'react-native';
 import { useRouter } from 'expo-router';
 import { SafeAreaView } from 'react-native-safe-area-context';
@@ -48,7 +49,12 @@ import { Pill } from '@/components/ui/Pill';
 import { Avatar } from '@/components/ui/Avatar';
 import { StitchCard } from '@/components/ui/StitchCard';
 import { EmptyState } from '@/components/ui/EmptyState';
-import { useAppointmentsQuery } from '@/hooks/queries/useAppointmentsQuery';
+import {
+  useAppointmentsQuery,
+  useApproveAppointmentMutation,
+  useCancelAppointmentMutation,
+  useUpdateAppointmentStatusMutation,
+} from '@/hooks/queries/useAppointmentsQuery';
 import { useAuthStore } from '@/store/useAuthStore';
 import { useNotificationStore } from '@/store/useNotificationStore';
 import { useAppointmentStore } from '@/store/useAppointmentStore';
@@ -325,6 +331,10 @@ export default function DoctorAppointmentsScreen() {
   const [activeFilter, setActiveFilter] = useState<FilterKey>('today');
   const [refreshing, setRefreshing] = useState(false);
 
+  const approveMutation = useApproveAppointmentMutation();
+  const cancelMutation = useCancelAppointmentMutation();
+  const updateStatusMutation = useUpdateAppointmentStatusMutation();
+
   const handleRefresh = useCallback(async () => {
     setRefreshing(true);
     try {
@@ -374,65 +384,80 @@ export default function DoctorAppointmentsScreen() {
     return appointments.filter((a) => a.status === 'completed');
   }, [appointments, activeFilter]);
 
-  const handleApprove = (apt: any) => {
+  const handleApprove = async (apt: any) => {
     if (Platform.OS !== 'web') {
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
     }
-    useNotificationStore.getState().addNotification({
-      recipientId: apt.patientId,
-      recipientRole: 'patient',
-      title: 'Slot Approved',
-      message: `Dr. ${user?.name || 'Doctor'} has approved your appointment slot.`,
-      type: 'appointment',
-      link: '/(patient)/appointments',
-    });
+    try {
+      await approveMutation.mutateAsync(apt.id);
+      useNotificationStore.getState().addNotification({
+        recipientId: apt.patientId,
+        recipientRole: 'patient',
+        title: 'Slot Approved',
+        message: `Dr. ${user?.name || 'Doctor'} has approved your appointment slot.`,
+        type: 'appointment',
+        link: '/(patient)/appointments',
+      });
+    } catch (err: any) {
+      Alert.alert('Approval Failed', err?.message || 'Could not approve appointment on server.');
+    }
   };
 
-  const handlePostpone = (apt: any) => {
+  const handlePostpone = async (apt: any) => {
     if (Platform.OS !== 'web') {
       Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
     }
-    useNotificationStore.getState().addNotification({
-      recipientId: apt.patientId,
-      recipientRole: 'patient',
-      title: '📅 Appointment Rescheduled',
-      message: `Dr. ${user?.name || 'Doctor'} has postponed your appointment. Please check for the new available slot.`,
-      type: 'appointment',
-      link: '/(patient)/(tabs)/appointments',
-    });
+    try {
+      await updateStatusMutation.mutateAsync({ id: apt.id, status: 'PENDING' });
+      useNotificationStore.getState().addNotification({
+        recipientId: apt.patientId,
+        recipientRole: 'patient',
+        title: '📅 Appointment Rescheduled',
+        message: `Dr. ${user?.name || 'Doctor'} has postponed your appointment. Please check for the new available slot.`,
+        type: 'appointment',
+        link: '/(patient)/(tabs)/appointments',
+      });
+    } catch (err: any) {
+      Alert.alert('Update Failed', err?.message || 'Could not postpone appointment on server.');
+    }
   };
 
-  const handleCancel = (apt: any) => {
+  const handleCancel = async (apt: any) => {
     if (Platform.OS !== 'web') {
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error);
     }
-    // Update local store to cancelled
-    useAppointmentStore.getState().cancelAppointment(apt.id);
-    // Notify patient with refund message
-    useNotificationStore.getState().addNotification({
-      recipientId: apt.patientId,
-      recipientRole: 'patient',
-      title: '❌ Appointment Cancelled',
-      message: `Dr. ${user?.name || 'Doctor'} has cancelled your appointment on ${apt.date} at ${apt.time}. A full refund will be processed to your original payment method within 3–5 business days.`,
-      type: 'appointment',
-      link: '/(patient)/(tabs)/appointments',
-    });
+    try {
+      await cancelMutation.mutateAsync(apt.id);
+      useNotificationStore.getState().addNotification({
+        recipientId: apt.patientId,
+        recipientRole: 'patient',
+        title: '❌ Appointment Cancelled',
+        message: `Dr. ${user?.name || 'Doctor'} has cancelled your appointment on ${apt.date} at ${apt.time}. A full refund will be processed to your original payment method within 3–5 business days.`,
+        type: 'appointment',
+        link: '/(patient)/(tabs)/appointments',
+      });
+    } catch (err: any) {
+      Alert.alert('Cancellation Failed', err?.message || 'Could not cancel appointment on server.');
+    }
   };
 
-  const handleConfirmArrival = (apt: any) => {
+  const handleConfirmArrival = async (apt: any) => {
     if (Platform.OS !== 'web') {
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
     }
-    // Update status to checked_in
-    useAppointmentStore.getState().updateAppointment(apt.id, { status: 'checked_in' });
-    useNotificationStore.getState().addNotification({
-      recipientId: apt.patientId,
-      recipientRole: 'patient',
-      title: '✅ Arrival Confirmed',
-      message: `Dr. ${user?.name || 'Doctor'} confirmed your arrival. Please proceed to the consultation room.`,
-      type: 'appointment',
-      link: '/(patient)/(tabs)/appointments',
-    });
+    try {
+      await updateStatusMutation.mutateAsync({ id: apt.id, status: 'CHECKED_IN' });
+      useNotificationStore.getState().addNotification({
+        recipientId: apt.patientId,
+        recipientRole: 'patient',
+        title: '✅ Arrival Confirmed',
+        message: `Dr. ${user?.name || 'Doctor'} confirmed your arrival. Please proceed to the consultation room.`,
+        type: 'appointment',
+        link: '/(patient)/(tabs)/appointments',
+      });
+    } catch (err: any) {
+      Alert.alert('Status Update Failed', err?.message || 'Could not confirm arrival on server.');
+    }
   };
 
   return (

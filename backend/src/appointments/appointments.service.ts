@@ -8,6 +8,9 @@ export class AppointmentsService {
 
   private formatAppointment(apt: any) {
     if (!apt) return null;
+    const tokenMatch = apt.notes?.match(/\[(Token\s*#\d+)\]/) || apt.notes?.match(/(Token\s*#\d+)/);
+    const tokenNumber = tokenMatch ? tokenMatch[1] : (apt.tokenNumber || 'Token #01');
+
     return {
       ...apt,
       id: apt.id,
@@ -22,6 +25,7 @@ export class AppointmentsService {
       location: apt.doctor?.clinic?.address || 'Medical Enclave, Mumbai',
       date: apt.date,
       time: apt.startTime,
+      tokenNumber,
       status: (apt.status || 'CONFIRMED').toLowerCase(),
       mode: 'clinic',
       fee: apt.fee,
@@ -56,6 +60,17 @@ export class AppointmentsService {
         throw new BadRequestException('This slot is already booked. Please choose another time.');
       }
 
+      const dayAppointmentsCount = await tx.appointment.count({
+        where: {
+          doctorId: dto.doctorId,
+          date: dto.date,
+        },
+      });
+      const allocatedToken = `Token #${String(dayAppointmentsCount + 1).padStart(2, '0')}`;
+      const canonicalNotes = dto.notes
+        ? `${dto.notes.trim()} [${allocatedToken}]`
+        : `[${allocatedToken}]`;
+
       const appointment = await tx.appointment.create({
         data: {
           patientId: dto.patientId,
@@ -66,7 +81,7 @@ export class AppointmentsService {
           consultationType: ConsultationType.CLINIC,
           fee: dto.fee,
           symptoms: dto.symptoms || [],
-          notes: dto.notes,
+          notes: canonicalNotes,
           status: AppointmentStatus.PENDING,
         },
         include: {

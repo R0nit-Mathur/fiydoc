@@ -119,8 +119,7 @@ export const useHealthStore = create<HealthState>()(
           if (patientName && r.patientName && r.patientName.trim().toLowerCase() === patientName.trim().toLowerCase()) {
             return true;
           }
-          // Default fallbacks for patient portal view
-          return r.patientId === 'patient_default';
+          return false;
         });
       },
     }),

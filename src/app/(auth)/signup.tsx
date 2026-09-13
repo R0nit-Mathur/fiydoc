@@ -55,8 +55,8 @@ export default function SignUpScreen() {
       return;
     }
 
-    if (password.length < 6) {
-      setError('Password must be at least 6 characters long.');
+    if (password.length < 8) {
+      setError('Password must be at least 8 characters long.');
       return;
     }
 
@@ -69,7 +69,7 @@ export default function SignUpScreen() {
       const session = await authService.registerWithEmail(
         contactInfo.trim(),
         password,
-        'patient',
+        role,
         fullName.trim()
       );
 
@@ -77,7 +77,11 @@ export default function SignUpScreen() {
       setSession(session);
 
       setTimeout(() => {
-        router.replace('/(patient)/(tabs)/home');
+        if (role === 'doctor') {
+          router.replace('/(onboarding)/doctor-setup');
+        } else {
+          router.replace('/(patient)/(tabs)/home');
+        }
       }, 1000);
     } catch (err: any) {
       setError(err.message || 'Registration failed. Please try again.');
@@ -187,15 +191,15 @@ export default function SignUpScreen() {
                   </View>
                 </View>
 
-                {/* Mobile Number or Email */}
+                {/* Email Address */}
                 <View style={styles.inputGroup}>
-                  <Text style={styles.inputLabel}>Mobile Number or Email</Text>
+                  <Text style={styles.inputLabel}>Email Address</Text>
                   <View style={styles.inputWrapper}>
                     <Mail size={20} color="#737783" style={styles.inputIcon} />
                     <TextInput
                       value={contactInfo}
                       onChangeText={setContactInfo}
-                      placeholder="name@domain.com or phone"
+                      placeholder="name@domain.com"
                       placeholderTextColor="#737783"
                       style={styles.textInput}
                       keyboardType="email-address"

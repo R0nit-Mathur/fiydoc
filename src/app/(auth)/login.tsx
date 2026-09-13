@@ -171,9 +171,9 @@ export default function LoginScreen() {
 
             {/* Auth Form */}
             <View style={styles.formContainer}>
-              {/* Identity Field (Email or Mobile) */}
+              {/* Identity Field (Email) */}
               <View style={styles.inputGroup}>
-                <Text style={styles.inputLabel}>Email or Mobile Number</Text>
+                <Text style={styles.inputLabel}>Email Address</Text>
                 <View style={styles.inputWrapper}>
                   <Mail size={19} color="#737783" style={styles.inputIcon} />
                   <TextInput

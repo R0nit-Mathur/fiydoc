@@ -43,9 +43,11 @@ import {
   ArrowRight,
   MapPin,
 } from 'lucide-react-native';
+import { useQuery } from '@tanstack/react-query';
 import { StitchColors, DEFAULT_DOCTOR_AVATAR } from '@/constants/theme';
 import { getSpecialtyConfig } from '@/constants/specialties';
 import { useDoctorsQuery } from '@/hooks/queries/useDoctorsQuery';
+import { doctorService } from '@/services/doctorService';
 
 const DEFAULT_DOCTOR_IMAGE = DEFAULT_DOCTOR_AVATAR;
 
@@ -71,7 +73,7 @@ const generateDynamicDates = () => {
       day: dayName,
       date: dateNum,
       month: `${monthName}, ${days[d.getDay()]}`,
-      slots: isSunday ? 'On Leave' : `${5 + (i % 4)} slots left`,
+      slots: isSunday ? 'On Leave' : 'Live Availability',
       isLeave: isSunday,
       isoDate: d.toISOString().slice(0, 10),
     });
@@ -81,34 +83,32 @@ const generateDynamicDates = () => {
 
 const DATES = generateDynamicDates();
 
-const MORNING_SLOTS = [
-  { time: '10:30 AM', token: '04' },
-  { time: '11:15 AM', token: '06' },
-];
-
-const EVENING_SLOTS = [
-  { time: '04:15 PM', token: '12' },
-  { time: '04:30 PM', token: '13' },
-  { time: '04:45 PM', token: '14' },
-  { time: '05:15 PM', token: '16' },
-];
-
 export default function DoctorProfileScreen() {
   const router = useRouter();
   const insets = useSafeAreaInsets();
   const { id } = useLocalSearchParams<{ id?: string }>();
   const { data: doctors, isLoading } = useDoctorsQuery();
 
-  const doctor = doctors?.find((d) => d.id === id) || (doctors && doctors.length > 0 ? doctors[0] : null);
+  // Strict lookup: NEVER fallback to doctors[0] if doctor is not found
+  const doctor = doctors?.find((d) => d.id === id) || null;
 
   const [isFavorite, setIsFavorite] = useState(false);
   const [selectedDateIndex, setSelectedDateIndex] = useState(0);
   const [selectedSession, setSelectedSession] = useState<'morning' | 'evening'>('evening');
   const [selectedSlotIndex, setSelectedSlotIndex] = useState(0);
 
-  const currentSlots = selectedSession === 'morning' ? MORNING_SLOTS : EVENING_SLOTS;
-  const currentSlot = currentSlots[selectedSlotIndex] || currentSlots[0];
-  const currentDate = DATES[selectedDateIndex];
+  const currentDate = DATES[selectedDateIndex] || DATES[0];
+
+  const { data: serverSlots = [], isLoading: isLoadingSlots } = useQuery({
+    queryKey: ['doctor-slots', doctor?.id, currentDate?.isoDate],
+    queryFn: () => (doctor?.id && currentDate?.isoDate ? doctorService.getAvailableSlots(doctor.id, currentDate.isoDate) : Promise.resolve([])),
+    enabled: Boolean(doctor?.id && currentDate?.isoDate),
+  });
+
+  const morningSlots = (serverSlots || []).filter((s) => s.includes('AM') || s.startsWith('09:') || s.startsWith('10:') || s.startsWith('11:'));
+  const eveningSlots = (serverSlots || []).filter((s) => !morningSlots.includes(s));
+  const currentSlots = selectedSession === 'morning' ? morningSlots : eveningSlots;
+  const currentSlotTime = currentSlots[selectedSlotIndex] || currentSlots[0] || serverSlots[0] || '10:30 AM';
 
   const toggleFavorite = () => {
     if (Platform.OS !== 'web') {
@@ -139,8 +139,7 @@ export default function DoctorProfileScreen() {
         doctorId: doctor.id,
         doctorName: doctor.name,
         doctorSpecialty: doctor.specialty,
-        slotTime: currentSlot.time,
-        tokenNumber: currentSlot.token,
+        slotTime: currentSlotTime,
         date: currentDate.isoDate,
         dateLabel: `${currentDate.day}, ${currentDate.date} ${currentDate.month}`,
         fee: doctor.consultationFee.toString(),
@@ -148,11 +147,31 @@ export default function DoctorProfileScreen() {
     });
   };
 
-  if (isLoading || !doctor) {
+  if (isLoading) {
     return (
       <SafeAreaView style={[styles.safeArea, { alignItems: 'center', justifyContent: 'center' }]} edges={['top']}>
         <Text style={{ fontSize: 16, fontWeight: '600', color: StitchColors.onSurface, marginBottom: 16 }}>Loading Doctor Profile...</Text>
         <ActivityIndicator size="large" color={StitchColors.primary} />
+      </SafeAreaView>
+    );
+  }
+
+  if (!doctor) {
+    return (
+      <SafeAreaView style={[styles.safeArea, { alignItems: 'center', justifyContent: 'center', padding: 24 }]} edges={['top']}>
+        <Building2 size={52} color={StitchColors.outline} style={{ marginBottom: 16 }} />
+        <Text style={{ fontSize: 20, fontWeight: '700', color: StitchColors.onSurface, marginBottom: 8, textAlign: 'center' }}>
+          Doctor Not Found
+        </Text>
+        <Text style={{ fontSize: 14, color: StitchColors.outline, textAlign: 'center', marginBottom: 24, lineHeight: 20 }}>
+          This doctor profile is unavailable or no longer in service. Please return to the directory to find an available doctor.
+        </Text>
+        <Pressable
+          style={{ backgroundColor: StitchColors.primary, paddingHorizontal: 24, paddingVertical: 12, borderRadius: 12 }}
+          onPress={() => router.replace('/(patient)/(tabs)/discovery')}
+        >
+          <Text style={{ color: '#ffffff', fontWeight: '600', fontSize: 15 }}>Return to Search</Text>
+        </Pressable>
       </SafeAreaView>
     );
   }
@@ -428,7 +447,7 @@ export default function DoctorProfileScreen() {
                     selectedSession === 'morning' && styles.sessionTabTextActive,
                   ]}
                 >
-                  Morning (2)
+                  Morning ({morningSlots.length})
                 </Text>
               </Pressable>
 
@@ -452,7 +471,7 @@ export default function DoctorProfileScreen() {
                     selectedSession === 'evening' && styles.sessionTabTextActive,
                   ]}
                 >
-                  Evening (5)
+                  Evening ({eveningSlots.length})
                 </Text>
               </Pressable>
             </View>
@@ -465,55 +484,63 @@ export default function DoctorProfileScreen() {
                   {selectedSession === 'morning' ? 'Morning OPD Consultation' : 'Evening OPD Consultation'}
                 </Text>
               </View>
-              <Text style={styles.slotGroupWait}>Estimated wait: ~10 mins</Text>
+              <Text style={styles.slotGroupWait}>Live OPD schedule</Text>
             </View>
 
             {/* Slots Grid */}
-            <View style={styles.slotsGrid}>
-              {currentSlots.map((slot, idx) => {
-                const isSelected = selectedSlotIndex === idx;
-                return (
-                  <Pressable
-                    key={slot.time}
-                    onPress={() => {
-                      if (Platform.OS !== 'web') {
-                        Haptics.selectionAsync();
-                      }
-                      setSelectedSlotIndex(idx);
-                    }}
-                    style={[
-                      styles.slotPill,
-                      isSelected ? styles.slotPillActive : styles.slotPillInactive,
-                    ]}
-                  >
-                    <View>
-                      <Text
-                        style={[
-                          styles.slotTimeText,
-                          isSelected ? styles.slotTimeTextActive : styles.slotTimeTextInactive,
-                        ]}
-                      >
-                        {slot.time}
-                      </Text>
-                      <Text
-                        style={[
-                          styles.slotTokenText,
-                          isSelected ? styles.slotTokenTextActive : styles.slotTokenTextInactive,
-                        ]}
-                      >
-                        Token #{slot.token}
-                      </Text>
-                    </View>
+            {currentSlots.length === 0 ? (
+              <View style={{ padding: 20, alignItems: 'center' }}>
+                <Text style={{ fontSize: 14, color: StitchColors.outline }}>
+                  {isLoadingSlots ? 'Checking slot availability...' : 'No available slots for this session.'}
+                </Text>
+              </View>
+            ) : (
+              <View style={styles.slotsGrid}>
+                {currentSlots.map((slotTimeStr, idx) => {
+                  const isSelected = selectedSlotIndex === idx;
+                  return (
+                    <Pressable
+                      key={slotTimeStr}
+                      onPress={() => {
+                        if (Platform.OS !== 'web') {
+                          Haptics.selectionAsync();
+                        }
+                        setSelectedSlotIndex(idx);
+                      }}
+                      style={[
+                        styles.slotPill,
+                        isSelected ? styles.slotPillActive : styles.slotPillInactive,
+                      ]}
+                    >
+                      <View>
+                        <Text
+                          style={[
+                            styles.slotTimeText,
+                            isSelected ? styles.slotTimeTextActive : styles.slotTimeTextInactive,
+                          ]}
+                        >
+                          {slotTimeStr}
+                        </Text>
+                        <Text
+                          style={[
+                            styles.slotTokenText,
+                            isSelected ? styles.slotTokenTextActive : styles.slotTokenTextInactive,
+                          ]}
+                        >
+                          Available Slot
+                        </Text>
+                      </View>
 
-                    {isSelected ? (
-                      <CheckCircle2 size={19} color="#ffffff" />
-                    ) : (
-                      <Circle size={19} color="#cbd5e1" />
-                    )}
-                  </Pressable>
-                );
-              })}
-            </View>
+                      {isSelected ? (
+                        <CheckCircle2 size={19} color="#ffffff" />
+                      ) : (
+                        <Circle size={19} color="#cbd5e1" />
+                      )}
+                    </Pressable>
+                  );
+                })}
+              </View>
+            )}
 
             {/* Cancellation Guarantee Reassurance */}
             <View style={styles.cancellationReassurance}>
@@ -547,7 +574,7 @@ export default function DoctorProfileScreen() {
             onPress={handleBookContinue}
           >
             <Text style={styles.bookCtaText} numberOfLines={1}>
-              Book {currentSlot.time} • Token #{currentSlot.token}
+              Book {currentSlotTime}
             </Text>
             <ArrowRight size={17} color="#ffffff" />
           </Pressable>

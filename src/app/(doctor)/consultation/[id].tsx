@@ -29,6 +29,7 @@ import {
   Image,
   Platform,
   Modal,
+  Alert,
 } from 'react-native';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { SafeAreaView } from 'react-native-safe-area-context';
@@ -70,6 +71,9 @@ import { useAppointmentStore } from '@/store/useAppointmentStore';
 import { useAuthStore } from '@/store/useAuthStore';
 import { useHealthStore } from '@/store/useHealthStore';
 import { useNotificationStore } from '@/store/useNotificationStore';
+import { useAppointmentDetailQuery } from '@/hooks/queries/useAppointmentsQuery';
+import { healthService } from '@/services/healthService';
+import { appointmentService } from '@/services/appointmentService';
 import { BorderRadius, Shadows, Spacing, StitchColors, DEFAULT_DOCTOR_AVATAR, DEFAULT_PATIENT_AVATAR } from '@/constants/theme';
 import {
   MEDICAL_DIAGNOSES,
@@ -100,10 +104,11 @@ export default function DoctorConsultationScreen() {
   const params = useLocalSearchParams<{ id?: string }>();
   const { colors, isDark } = useAppTheme();
 
-  const appointmentId = params.id || 'apt_1';
+  const appointmentId = params.id || '';
   const { appointments, updateAppointmentStatus } = useAppointmentStore();
   const { user } = useAuthStore();
-  const currentApt = appointments.find((a) => a.id === appointmentId);
+  const { data: remoteApt, isLoading: isAptLoading } = useAppointmentDetailQuery(appointmentId);
+  const currentApt = remoteApt || appointments.find((a) => a.id === appointmentId);
 
   // Determine next patient in today's queue (same doctor, confirmed/checked_in, future in the list)
   const nextPatient = (() => {
@@ -139,15 +144,15 @@ export default function DoctorConsultationScreen() {
     setSessionSeconds(0);
   };
 
-  // 2. EDITABLE VITALS
+  // 2. EDITABLE VITALS — Clean baseline
   const [vitals, setVitals] = useState({
-    bpSystolic: '120',
-    bpDiastolic: '80',
-    pulse: '72',
-    temp: '98.4',
-    spO2: '98',
-    respRate: '18',
-    weight: '74',
+    bpSystolic: '',
+    bpDiastolic: '',
+    pulse: '',
+    temp: '',
+    spO2: '',
+    respRate: '',
+    weight: '',
   });
   const [showVitalsModal, setShowVitalsModal] = useState(false);
   const [tempVitals, setTempVitals] = useState(vitals);
@@ -165,54 +170,37 @@ export default function DoctorConsultationScreen() {
     }
   };
 
-  // 3. EDITABLE CHIEF COMPLAINT & OBSERVATIONS
+  // 3. EDITABLE CHIEF COMPLAINT & OBSERVATIONS — Clean baseline initialized from patient symptoms
   const [chiefComplaint, setChiefComplaint] = useState(
-    'Persistent dry cough & mild chest tightness for 4 days. No fever recorded.'
+    currentApt?.symptoms?.length ? currentApt.symptoms.join(', ') : (currentApt?.notes || '')
   );
-  const [physicalObservation, setPhysicalObservation] = useState(
-    'Clear bilateral vesicular sounds, mild bronchial wheeze heard on forced expiration. S1, S2 audible, no heart murmurs.'
-  );
+  const [physicalObservation, setPhysicalObservation] = useState('');
 
-  // Attached Clinical Examination Images (Lesions, Throat, Radiographs)
+  // Attached Clinical Examination Images (Lesions, Throat, Radiographs) — clean by default
   const [clinicalImages, setClinicalImages] = useState<
     Array<{ id: string; title: string; uri: string; date: string }>
-  >([
-    {
-      id: 'img_1',
-      title: 'Pharyngeal Examination View',
-      uri: 'https://images.unsplash.com/photo-1584515979956-d9f6e5d09982?w=600&auto=format&fit=crop&q=80',
-      date: 'Today, 10:32 AM',
-    },
-  ]);
+  >([]);
   const [showAddImageModal, setShowAddImageModal] = useState(false);
   const [selectedPreviewImage, setSelectedPreviewImage] = useState<{ title: string; uri: string } | null>(null);
   const [customImageTitle, setCustomImageTitle] = useState('');
   const [customImageUri, setCustomImageUri] = useState('');
 
-  // Dedicated Patient Clinical History (past surgeries, hospitalizations, illnesses — not family)
-  const [patientClinicalHistory, setPatientClinicalHistory] = useState(
-    'Past Hospitalizations: None\nPrevious Surgeries: Appendectomy (2018, laparoscopic, uncomplicated)\nPast Illnesses: COVID-19 pneumonitis (2021, resolved without long-term sequelae)\nChronic Management: Mild dyslipidemia on lifestyle modification'
-  );
+  // Dedicated Patient Clinical History — clean by default
+  const [patientClinicalHistory, setPatientClinicalHistory] = useState('');
 
-  // Allergies
-  const [allergies, setAllergies] = useState([
-    { id: 'a1', name: 'Penicillin (Severe)', isSevere: true },
-    { id: 'a2', name: 'Shellfish', isSevere: false },
-  ]);
+  // Allergies — clean by default (no pre-seeded severe Penicillin)
+  const [allergies, setAllergies] = useState<Array<{ id: string; name: string; isSevere: boolean }>>([]);
   const [newAllergyInput, setNewAllergyInput] = useState('');
   const [showAddAllergy, setShowAddAllergy] = useState(false);
 
-  // Chronic conditions
-  const [chronicConditions, setChronicConditions] = useState([
-    { id: 'c1', name: 'Mild Essential Hypertension', detail: 'Telmisartan 40mg (OD) • Diagnosed 2021', status: 'Controlled' },
-    { id: 'c2', name: 'Seasonal Allergic Bronchitis', detail: 'Recurrent during seasonal shifts', status: 'Mild' },
-  ]);
+  // Chronic conditions — clean by default
+  const [chronicConditions, setChronicConditions] = useState<
+    Array<{ id: string; name: string; detail: string; status: string }>
+  >([]);
 
   // Consultation Tabs
   const [activeTab, setActiveTab] = useState<'today' | 'history' | 'labs'>('today');
 
-  // Audio dictation
-  const [isRecording, setIsRecording] = useState(false);
 
   // Freehand Drawing Notepad Modal
   const [showDrawingModal, setShowDrawingModal] = useState(false);
@@ -222,53 +210,19 @@ export default function DoctorConsultationScreen() {
   const [rxPadVisible, setRxPadVisible] = useState(false);
   const [rxStep, setRxStep] = useState<1 | 2 | 3 | 4 | 5>(1);
 
-  // Clinical diagnoses
-  const [diagnoses, setDiagnoses] = useState([
-    { code: 'J20.9', name: 'Acute Bronchitis', priority: 'Primary' },
-    { code: 'J02.9', name: 'Mild Pharyngitis', priority: 'Secondary' },
-  ]);
+  // Clinical diagnoses — clean by default
+  const [diagnoses, setDiagnoses] = useState<Array<{ code: string; name: string; priority: string }>>([]);
   const [diagSearch, setDiagSearch] = useState('');
   const [selectedDiagCategory, setSelectedDiagCategory] = useState<string>('All');
 
-  // Medications
-  const [medications, setMedications] = useState<PrescriptionItem[]>([
-    {
-      id: 'm1',
-      name: 'Augmentin 625mg',
-      generic: 'Amoxicillin (500mg) + Clavulanic Acid (125mg)',
-      dosage: '1 - 0 - 1',
-      frequency: 'Twice daily',
-      duration: '5 Days',
-      timing: 'After meals',
-      instructions: 'Complete full course',
-    },
-    {
-      id: 'm2',
-      name: 'Ascoril D Plus Syrup',
-      generic: 'Dextromethorphan + Phenylephrine + CPM',
-      dosage: '10 ml',
-      frequency: 'Thrice daily',
-      duration: '3 Days',
-      timing: 'After meals',
-      instructions: 'For dry cough relief',
-    },
-    {
-      id: 'm3',
-      name: 'Pantocid 40mg',
-      generic: 'Pantoprazole Gastro-resistant',
-      dosage: '1 - 0 - 0',
-      frequency: 'Once daily',
-      duration: '5 Days',
-      timing: 'Before breakfast',
-      instructions: 'Antacid coverage',
-    },
-  ]);
+  // Medications — clean by default (no pre-loaded Augmentin)
+  const [medications, setMedications] = useState<PrescriptionItem[]>([]);
   const [medSearch, setMedSearch] = useState('');
   const [editingMed, setEditingMed] = useState<PrescriptionItem | null>(null);
   const [showMedModal, setShowMedModal] = useState(false);
 
-  // Lab Tests
-  const [labTests, setLabTests] = useState(['Chest X-Ray (PA View)', 'CBC with ESR']);
+  // Lab Tests — clean by default
+  const [labTests, setLabTests] = useState<string[]>([]);
   const [testSearch, setTestSearch] = useState('');
   const [customTestInput, setCustomTestInput] = useState('');
 
@@ -292,12 +246,6 @@ export default function DoctorConsultationScreen() {
   const [isSigning, setIsSigning] = useState(false);
   const [signSuccess, setSignSuccess] = useState(false);
 
-  const toggleDictation = () => {
-    if (Platform.OS !== 'web') {
-      Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
-    }
-    setIsRecording(!isRecording);
-  };
 
   const handleAddCustomDiagnosis = (name: string, code = 'Unspecified') => {
     if (!name.trim()) return;
@@ -350,13 +298,32 @@ export default function DoctorConsultationScreen() {
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
     }
 
-    await new Promise((resolve) => setTimeout(resolve, 1000));
-
     const doctorName = user?.name ? `Dr. ${user.name}` : (currentApt?.doctorName || 'Doctor');
-    const doctorSpecialty = currentApt?.doctorSpecialty || 'Specialist';
-    const clinicName = currentApt?.hospital || 'FiYDoc Clinic';
+    const doctorSpecialty = currentApt?.doctorSpecialty || user?.specialization || 'Specialist';
+    const clinicName = currentApt?.hospital || user?.clinicName || 'FiYDoc Clinic';
 
-    const rxId = `rx_${Date.now()}`;
+    let serverRx: any = null;
+    try {
+      serverRx = await healthService.createPrescription({
+        consultationId: appointmentId,
+        patientId: currentApt?.patientId,
+        doctorId: user?.id || currentApt?.doctorId,
+        doctorNotes: `Diagnosis: ${diagnoses.map((d) => `${d.name} (${d.code})`).join(', ') || 'Clinical Evaluation'}. ${chiefComplaint}`,
+        followUpInstructions: `Review after ${followUpDays} in clinic. ${emergencyWarning}`,
+        medicines: medications.map((m) => ({
+          name: m.name,
+          dosage: m.dosage,
+          frequency: m.frequency,
+          durationDays: parseInt(m.duration?.replace(/\D/g, '') || '5', 10) || 5,
+          instructions: `${m.timing} • ${m.instructions}`,
+        })),
+        tests: labTests.map((t) => ({ name: t, category: 'Diagnostic' })),
+      });
+    } catch (err: any) {
+      console.warn('[DoctorConsultation] Remote prescription creation failed/warn:', err?.message);
+    }
+
+    const rxId = serverRx?.id || `rx_${Date.now()}`;
     const newPrescription = {
       id: rxId,
       consultationId: appointmentId,
@@ -378,7 +345,7 @@ export default function DoctorConsultationScreen() {
         height: '176',
         spO2: vitals.spO2,
       },
-      verificationCode: `FYD-RX-${Math.floor(100000 + Math.random() * 900000)}-MH`,
+      verificationCode: serverRx?.verificationCode || `FYD-RX-${Math.floor(100000 + Math.random() * 900000)}-MH`,
       createdAt: new Date().toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' }),
       signedAt: new Date().toISOString(),
       medicines: medications.map((m) => ({
@@ -386,7 +353,7 @@ export default function DoctorConsultationScreen() {
         name: m.name,
         dosage: m.dosage,
         frequency: m.frequency,
-        durationDays: 5,
+        durationDays: parseInt(m.duration?.replace(/\D/g, '') || '5', 10) || 5,
         instructions: `${m.timing} • ${m.instructions}`,
       })),
       tests: labTests.map((t, idx) => ({ id: `test_${idx}`, name: t, category: 'Diagnostic' })),
@@ -394,6 +361,7 @@ export default function DoctorConsultationScreen() {
 
     useHealthStore.getState().addPrescription(newPrescription);
     // Mark current appointment as completed — removes from queue
+    await appointmentService.updateAppointmentStatus(appointmentId, 'COMPLETED').catch(() => {});
     updateAppointmentStatus(appointmentId, 'completed');
 
     // Notify patient — prescription dispatched
@@ -440,6 +408,26 @@ export default function DoctorConsultationScreen() {
   const filteredTests = LAB_TESTS_CATALOG.filter((t) =>
     testSearch ? t.name.toLowerCase().includes(testSearch.toLowerCase()) : true
   );
+
+  if (!isAptLoading && !currentApt) {
+    return (
+      <SafeAreaView style={[styles.safeArea, { alignItems: 'center', justifyContent: 'center', padding: 24 }]} edges={['top']}>
+        <Stethoscope size={48} color={StitchColors.outline} style={{ marginBottom: 16 }} />
+        <Text style={{ fontSize: 20, fontWeight: '700', color: colors.text, marginBottom: 8, textAlign: 'center' }}>
+          Appointment Not Found
+        </Text>
+        <Text style={{ fontSize: 14, color: colors.textSecondary, textAlign: 'center', marginBottom: 24, lineHeight: 20 }}>
+          This consultation record is not active or could not be loaded from the patient queue.
+        </Text>
+        <Pressable
+          style={{ backgroundColor: StitchColors.primaryContainer, paddingHorizontal: 24, paddingVertical: 12, borderRadius: 12 }}
+          onPress={() => router.replace('/(doctor)/(tabs)/appointments')}
+        >
+          <Text style={{ color: '#ffffff', fontWeight: '600', fontSize: 15 }}>Return to Appointments Queue</Text>
+        </Pressable>
+      </SafeAreaView>
+    );
+  }
 
   return (
     <SafeAreaView style={[styles.safeArea, { backgroundColor: colors.background }]} edges={['top']}>
@@ -925,18 +913,6 @@ export default function DoctorConsultationScreen() {
 
       {/* 4. Bottom Action Bar: Audio Dictation, MS Paint Style Drawing Notepad, Proceed to Rx */}
       <View style={[styles.bottomBar, { borderTopColor: colors.border, backgroundColor: colors.card }]}>
-        {/* Voice Dictation */}
-        <Pressable
-          onPress={toggleDictation}
-          style={[
-            styles.bottomToolBtn,
-            { backgroundColor: colors.backgroundElement, borderColor: colors.border },
-            isRecording && { backgroundColor: '#FEE2E2', borderColor: '#FCA5A5' },
-          ]}
-          accessibilityLabel="Audio Dictation"
-        >
-          {isRecording ? <MicOff size={20} color={StitchColors.error} /> : <Mic size={20} color={colors.text} />}
-        </Pressable>
 
         {/* Freehand MS Paint Style Drawing & Notepad Canvas Button */}
         <Pressable
@@ -1376,25 +1352,7 @@ export default function DoctorConsultationScreen() {
                     ))}
                   </View>
 
-                  {/* Quick Combos */}
-                  <View style={styles.combosRow}>
-                    <Text style={[styles.combosLabel, { color: colors.textSecondary }]}>Quick Combos:</Text>
-                    <Pressable
-                      onPress={() => {
-                        handleAddMedicationFromCatalog(MEDICATIONS_CATALOG[0]); // Augmentin
-                        handleAddMedicationFromCatalog(MEDICATIONS_CATALOG[5]); // Dolo
-                      }}
-                      style={[styles.comboChip, { backgroundColor: colors.backgroundElement }]}
-                    >
-                      <Text style={[styles.comboChipText, { color: StitchColors.primaryContainer }]}>+ Antibiotic Pack</Text>
-                    </Pressable>
-                    <Pressable
-                      onPress={() => handleAddMedicationFromCatalog(MEDICATIONS_CATALOG[9])} // Pantocid
-                      style={[styles.comboChip, { backgroundColor: colors.backgroundElement }]}
-                    >
-                      <Text style={[styles.comboChipText, { color: StitchColors.primaryContainer }]}>+ Antacid Coverage</Text>
-                    </Pressable>
-                  </View>
+
 
                   {/* Add Custom Medicine Button */}
                   <Pressable

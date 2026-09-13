@@ -45,9 +45,11 @@ interface TabConfig {
   badge?: string;
 }
 
-const TABS: TabConfig[] = [
+import { useAppointmentStore } from '@/store/useAppointmentStore';
+
+const BASE_TABS: TabConfig[] = [
   { key: 'home', label: 'Explore', icon: Compass },
-  { key: 'appointments', label: 'Visits', icon: CalendarDays, badge: '1' },
+  { key: 'appointments', label: 'Visits', icon: CalendarDays },
   { key: 'health', label: 'Records', icon: FileText },
 ];
 
@@ -60,9 +62,25 @@ function PillTabBar({ state, navigation }: any) {
   const bottomInset = Math.max(insets.bottom, Platform.OS === 'ios' ? 14 : 20);
   const [barWidth, setBarWidth] = React.useState(320);
 
+  const appointments = useAppointmentStore((s) => s.appointments);
+  const activeVisitsCount = React.useMemo(() => {
+    return appointments.filter((a) =>
+      ['confirmed', 'upcoming', 'checked_in', 'in_progress', 'pending'].includes(a.status)
+    ).length;
+  }, [appointments]);
+
+  const tabs: TabConfig[] = React.useMemo(() => {
+    return BASE_TABS.map((tab) => {
+      if (tab.key === 'appointments' && activeVisitsCount > 0) {
+        return { ...tab, badge: String(activeVisitsCount) };
+      }
+      return tab;
+    });
+  }, [activeVisitsCount]);
+
   // Map route name to primary tab index (or fallback to -1 if on auxiliary screen)
   const currentRouteName = state.routes[state.index]?.name;
-  const activeTabIndex = TABS.findIndex((t) => t.key === currentRouteName);
+  const activeTabIndex = tabs.findIndex((t) => t.key === currentRouteName);
   const pillIndex = activeTabIndex >= 0 ? activeTabIndex : (currentRouteName === 'discovery' ? 0 : 0);
 
   const pillX = useSharedValue(pillIndex);
@@ -73,7 +91,7 @@ function PillTabBar({ state, navigation }: any) {
     opacity.value = withTiming(1, { duration: 300 });
   }, [pillIndex, pillX, opacity]);
 
-  const singleTabWidth = barWidth / TABS.length;
+  const singleTabWidth = barWidth / tabs.length;
   const pillPadding = 4;
   const pillWidth = Math.max(0, singleTabWidth - pillPadding * 2);
 
@@ -127,7 +145,7 @@ function PillTabBar({ state, navigation }: any) {
           ]}
         />
 
-        {TABS.map((tab, index) => {
+        {tabs.map((tab, index) => {
           const isActive = activeTabIndex === index;
           const Icon = tab.icon;
           return (

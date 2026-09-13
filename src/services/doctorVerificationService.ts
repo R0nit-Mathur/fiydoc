@@ -31,8 +31,9 @@ export const doctorVerificationService = {
       councilName: council.name,
       state: council.state,
       sampleFormat: council.sampleFormat,
-      badgeText: `${council.code} VERIFIED PRACTITIONER`,
-      certificateId: `NMC-IN-${cleanNum.replace(/[^A-Z0-9]/g, '')}`,
+      status: isValidFormat ? 'DOCUMENTS_SUBMITTED' : 'FORMAT_INVALID',
+      statusText: isValidFormat ? 'Format Validated • Pending Medical Council Registry Verification' : 'Invalid License Format',
+      badgeText: isValidFormat ? `${council.code} Registration Submitted` : 'Unverified License',
     };
   },
 };

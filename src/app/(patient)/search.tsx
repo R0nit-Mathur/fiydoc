@@ -53,13 +53,7 @@ import { LocationPermissionModal } from '@/components/location/LocationPermissio
 import { BorderRadius, Shadows, Spacing, StitchColors, Palette } from '@/constants/theme';
 import { Doctor } from '@/types/index';
 
-const RECENT_SEARCHES = [
-  'Cardiologist',
-  'Chest Pain',
-  'General Physician',
-  'Dentist',
-  'Skin Specialist',
-];
+const RECENT_SEARCHES: string[] = [];
 
 const SYMPTOM_TAGS = [
   { label: 'Chest Discomfort', icon: HeartPulse, color: '#EF4444', bg: '#FEE2E2', query: 'Cardiologist' },
@@ -67,12 +61,6 @@ const SYMPTOM_TAGS = [
   { label: 'Skin Rash & Acne', icon: Sparkles, color: '#10B981', bg: '#D1FAE5', query: 'Dermatologist' },
   { label: 'Joint & Back Pain', icon: Bone, color: '#8B5CF6', bg: '#EDE9FE', query: 'Orthopedic' },
   { label: 'Dental & Toothache', icon: Smile, color: '#0891b2', bg: '#ECFEFF', query: 'Dentist' },
-];
-
-const POPULAR_CLINICS = [
-  { name: 'City Hospital OPD', area: 'Healthcare Enclave', distance: '0.8 km', tokenWait: '15m wait' },
-  { name: 'Max Super Speciality', area: 'Medical District', distance: '1.4 km', tokenWait: '20m wait' },
-  { name: 'Apollo Spectra Clinic', area: 'Central OPD Block', distance: '2.3 km', tokenWait: 'No wait' },
 ];
 
 const FILTER_PILLS = [
@@ -99,7 +87,7 @@ export default function SearchScreen() {
 
   const { data: doctors = [], isLoading } = useDoctorsQuery();
 
-  const displayLocation = formattedAddress || (area ? `${area}, ${city}` : city) || 'Bandra West, Mumbai';
+  const displayLocation = formattedAddress || (area ? `${area}, ${city}` : city) || 'Location not set';
 
   const handleSelectRecent = (term: string) => {
     if (Platform.OS !== 'web') {
@@ -313,34 +301,7 @@ export default function SearchScreen() {
               </View>
             </Animated.View>
 
-            {/* Popular Clinics Nearby */}
-            <Animated.View entering={FadeInUp.delay(100).duration(300)} style={styles.sectionBlock}>
-              <View style={styles.sectionTitleRow}>
-                <Building2 size={15} color={colors.textMuted} />
-                <Text style={[styles.sectionTitle, { color: colors.textMuted }]}>POPULAR CLINICS & OPDS</Text>
-              </View>
-
-              <View style={styles.clinicsList}>
-                {POPULAR_CLINICS.map((clinic) => (
-                  <Pressable
-                    key={clinic.name}
-                    onPress={() => handleSelectRecent(clinic.name.split(' ')[0])}
-                    style={[styles.clinicRow, { backgroundColor: colors.card, borderColor: colors.border }]}
-                  >
-                    <View style={[styles.clinicIconBox, { backgroundColor: '#E0F2FE' }]}>
-                      <Building2 size={18} color={StitchColors.primaryContainer} />
-                    </View>
-                    <View style={{ flex: 1, marginLeft: 12 }}>
-                      <Text style={[styles.clinicName, { color: colors.text }]}>{clinic.name}</Text>
-                      <Text style={[styles.clinicArea, { color: colors.textSecondary }]}>{clinic.area} • {clinic.distance}</Text>
-                    </View>
-                    <View style={styles.tokenWaitPill}>
-                      <Text style={styles.tokenWaitText}>{clinic.tokenWait}</Text>
-                    </View>
-                  </Pressable>
-                ))}
-              </View>
-            </Animated.View>
+            <View style={{ height: 8 }} />
           </>
         )}
 
@@ -377,8 +338,7 @@ export default function SearchScreen() {
                   doctor={doc}
                   onPress={() => router.push(`/(patient)/doctor/${doc.id}`)}
                   onBookPress={() => router.push(`/(patient)/doctor/${doc.id}`)}
-                  tokenNumber={`Token #${10 + idx}`}
-                  nextSlot="Today, 04:15 PM"
+                  nextSlot={doc.nextAvailableSlot || 'Next Available Slot'}
                 />
               </Animated.View>
             ))}

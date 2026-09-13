@@ -59,8 +59,8 @@ const REASONS = [
   'Lab Review',
 ];
 
-const INITIAL_ALLERGIES = ['Sulfa Drugs', 'Dust / Pollen', 'Food Allergies'];
-const INITIAL_CONDITIONS = ['Diabetes Type 2', 'Thyroid (Hypo)', 'Asthma'];
+const INITIAL_ALLERGIES: string[] = [];
+const INITIAL_CONDITIONS: string[] = [];
 
 export default function MedicalIntakeScreen() {
   const router = useRouter();
@@ -80,10 +80,10 @@ export default function MedicalIntakeScreen() {
     fee?: string;
   }>();
 
-  const doctorName = params.doctorName || 'Dr. Rajesh Sharma';
-  const slotTime = params.slotTime || '04:15 PM';
-  const tokenNumber = params.tokenNumber || '12';
-  const dateLabel = params.dateLabel || 'Today, 18 Oct';
+  const doctorName = params.doctorName || 'Doctor';
+  const slotTime = params.slotTime || '10:30 AM';
+  const tokenNumber = params.tokenNumber || null;
+  const dateLabel = params.dateLabel || 'Today';
   const fee = params.fee || '800';
 
   const userFirstName = user?.name ? user.name.split(' ')[0] : 'Me';
@@ -99,15 +99,19 @@ export default function MedicalIntakeScreen() {
   const [familyMemberRelation, setFamilyMemberRelation] = useState('Parent');
   const [familyMemberPhone, setFamilyMemberPhone] = useState('');
 
-  const [selectedReason, setSelectedReason] = useState('Chest Discomfort');
+  const [selectedReason, setSelectedReason] = useState('Routine Checkup');
   const [customReasons, setCustomReasons] = useState<string[]>([]);
   const [symptomNotes, setSymptomNotes] = useState('');
 
-  // Allergies & Conditions state
-  const [severeAllergies, setSevereAllergies] = useState<string[]>(['Penicillin']);
-  const [allergies, setAllergies] = useState<string[]>(INITIAL_ALLERGIES);
-  const [activeConditions, setActiveConditions] = useState<string[]>(['Hypertension']);
-  const [conditions, setConditions] = useState<string[]>(INITIAL_CONDITIONS);
+  // Allergies & Conditions state — clean by default unless patient has real saved history
+  const [severeAllergies, setSevereAllergies] = useState<string[]>([]);
+  const [allergies, setAllergies] = useState<string[]>(
+    user?.allergies ? user.allergies.split(',').map((s) => s.trim()).filter(Boolean) : []
+  );
+  const [activeConditions, setActiveConditions] = useState<string[]>(
+    user?.chronicConditions ? user.chronicConditions.split(',').map((s) => s.trim()).filter(Boolean) : []
+  );
+  const [conditions, setConditions] = useState<string[]>([]);
 
   // File upload state
   const [attachedFile, setAttachedFile] = useState<string | null>(null);
@@ -205,31 +209,32 @@ export default function MedicalIntakeScreen() {
     }
     const cleanFee = parseInt(fee.replace(/[^0-9]/g, ''), 10) || 800;
     useAppointmentStore.getState().setBookingDoctor({
-      id: params.doctorId || 'doc-1',
+      id: params.doctorId || '',
       fullName: doctorName,
-      specialization: params.doctorSpecialty || 'Cardiologist',
+      name: doctorName,
+      specialization: params.doctorSpecialty || 'Specialist',
+      specialty: params.doctorSpecialty || 'Specialist',
       consultationFee: cleanFee,
-      clinicAddress: 'Fortis OPD • Sector 44, Gurugram',
-      rating: 4.9,
-      experienceYears: 12,
+      clinicAddress: 'In-Clinic OPD',
     } as any);
     useAppointmentStore.getState().setBookingSlot(params.date || new Date().toISOString().slice(0, 10), slotTime);
     if (selectedReason) {
-      useAppointmentStore.getState().setBookingSymptoms([selectedReason]);
+      useAppointmentStore.getState().setBookingSymptoms([selectedReason], symptomNotes);
     }
     router.push({
       pathname: '/(patient)/booking/confirm',
       params: {
-        doctorId: params.doctorId || 'doc-1',
+        doctorId: params.doctorId || '',
         doctorName,
-        doctorSpecialty: params.doctorSpecialty || 'Cardiologist',
+        doctorSpecialty: params.doctorSpecialty || 'Specialist',
         slotTime,
-        tokenNumber,
         date: params.date || new Date().toISOString().slice(0, 10),
         dateLabel,
         fee,
         reason: selectedReason,
         patientName: finalPatientName,
+        patientRelation: patientType === 'family' ? familyMemberRelation : 'Self',
+        notes: symptomNotes,
       },
     });
   };
@@ -307,7 +312,7 @@ export default function MedicalIntakeScreen() {
             onPress={() => {
               Alert.alert(
                 'Medical Intake Info',
-                `Your intake card details help ${doctorName} pre-assess your cardiology token #${tokenNumber} before you arrive at the Fortis OPD desk.`
+                `Your intake card details help ${doctorName} pre-assess your medical history before your OPD consultation.`
               );
             }}
           >
@@ -332,9 +337,11 @@ export default function MedicalIntakeScreen() {
                 style={styles.miniAvatar}
                 contentFit="cover"
               />
-              <View style={styles.tokenMiniBadge}>
-                <Text style={styles.tokenMiniText}>Token #{tokenNumber}</Text>
-              </View>
+              {tokenNumber && (
+                <View style={styles.tokenMiniBadge}>
+                  <Text style={styles.tokenMiniText}>Token #{tokenNumber}</Text>
+                </View>
+              )}
             </View>
 
             <View style={styles.miniInfo}>
@@ -641,7 +648,7 @@ export default function MedicalIntakeScreen() {
               <View style={styles.tipBox}>
                 <Check size={16} color={StitchColors.secondary} />
                 <Text style={styles.tipText}>
-                  Your selection helps prioritize cardiology triage slot #{tokenNumber}.
+                  Your clinical notes will be shared securely with your doctor ahead of consultation.
                 </Text>
               </View>
             </View>
@@ -919,7 +926,7 @@ export default function MedicalIntakeScreen() {
               </Text>
               <View style={styles.actionBadge}>
                 <Text style={styles.actionBadgeText}>
-                  {currentStep === 2 ? `Token #${tokenNumber}` : `Step ${currentStep + 1}/3`}
+                  {currentStep === 2 ? 'Review' : `Step ${currentStep + 1}/3`}
                 </Text>
               </View>
             </Pressable>

@@ -81,15 +81,42 @@ export function useApproveAppointmentMutation() {
 
   return useMutation({
     mutationFn: async (id: string) => {
-      try {
-        return await appointmentService.approveAppointment(id);
-      } catch (err) {
-        console.warn('[useApproveAppointmentMutation] Remote approve failed, falling back to local:', err);
-        return { id, status: 'confirmed' } as any;
-      }
+      return await appointmentService.approveAppointment(id);
     },
     onSuccess: (_, id) => {
       updateAppointmentStatus(id, 'confirmed');
+      queryClient.invalidateQueries({ queryKey: ['appointments'] });
+      queryClient.invalidateQueries({ queryKey: ['appointment', id] });
+    },
+  });
+}
+
+export function useCancelAppointmentMutation() {
+  const queryClient = useQueryClient();
+  const cancelAppointment = useAppointmentStore((s) => s.cancelAppointment);
+
+  return useMutation({
+    mutationFn: async (id: string) => {
+      return await appointmentService.cancelAppointment(id);
+    },
+    onSuccess: (_, id) => {
+      cancelAppointment(id);
+      queryClient.invalidateQueries({ queryKey: ['appointments'] });
+      queryClient.invalidateQueries({ queryKey: ['appointment', id] });
+    },
+  });
+}
+
+export function useUpdateAppointmentStatusMutation() {
+  const queryClient = useQueryClient();
+  const updateAppointmentStatus = useAppointmentStore((s) => s.updateAppointmentStatus);
+
+  return useMutation({
+    mutationFn: async ({ id, status }: { id: string; status: any }) => {
+      return await appointmentService.updateAppointmentStatus(id, status);
+    },
+    onSuccess: (_, { id, status }) => {
+      updateAppointmentStatus(id, status.toLowerCase());
       queryClient.invalidateQueries({ queryKey: ['appointments'] });
       queryClient.invalidateQueries({ queryKey: ['appointment', id] });
     },

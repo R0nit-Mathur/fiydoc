@@ -241,12 +241,12 @@ export default function DoctorHomeScreen() {
               <Text style={[styles.metricLabel, { color: colors.textSecondary }]}>OPD Window</Text>
               <Clock size={16} color={StitchColors.primaryContainer} />
             </View>
-            <Text style={[styles.metricWindowTime, { color: colors.text }]}>10:30 - 1:30</Text>
-            <Text style={[styles.metricWindowSub, { color: colors.textSecondary }]}>Morning Session</Text>
+            <Text style={[styles.metricWindowTime, { color: colors.text }]}>{user?.clinicTimings || '09:00 - 17:00'}</Text>
+            <Text style={[styles.metricWindowSub, { color: colors.textSecondary }]}>Clinical Hours</Text>
           </View>
         </Animated.View>
 
-        {/* 5. Four Quick Action Buttons (Grid of 4) */}
+        {/* 5. Quick Action Buttons (Grid of 3) */}
         <Animated.View entering={FadeInUp.delay(140).duration(350)} style={styles.actionsGrid}>
           <Pressable
             onPress={() => router.push('/(doctor)/(tabs)/schedule')}
@@ -269,13 +269,13 @@ export default function DoctorHomeScreen() {
           </Pressable>
 
           <Pressable
-            onPress={() => handleStartConsultation('apt_1')}
+            onPress={() => router.push('/(doctor)/(tabs)/appointments')}
             style={[styles.actionBtn, { backgroundColor: colors.card, borderColor: colors.border }]}
           >
             <View style={[styles.actionIconBox, { backgroundColor: '#EFF6FF' }]}>
               <FileText size={20} color={StitchColors.primaryContainer} />
             </View>
-            <Text style={[styles.actionBtnLabel, { color: colors.text }]}>Rx Pad</Text>
+            <Text style={[styles.actionBtnLabel, { color: colors.text }]}>Queue</Text>
           </Pressable>
 
           <Pressable

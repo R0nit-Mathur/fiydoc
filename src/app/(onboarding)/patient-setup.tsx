@@ -73,7 +73,8 @@ export default function PatientSetupScreen() {
           gender,
           bloodGroup,
           allergies,
-          phone: emergencyContact || user.phone,
+          phone: user.phone,
+          emergencyContact: emergencyContact.trim() || undefined,
         } as any);
       } else {
         setOnboardingCompleted(true);

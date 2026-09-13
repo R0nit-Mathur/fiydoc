@@ -118,11 +118,17 @@ export default function PatientHomeScreen() {
     }
   }, [permissionStatus, locationModalVisible, user?.dob, user?.bloodGroup, user?.address]);
 
-  // Find nearest upcoming confirmed/valid appointment from store
+  // Find nearest upcoming confirmed/valid appointment from store chronologically
   const upcomingAppointment = useMemo(() => {
-    return appointments.find(
-      (a) => ['confirmed', 'upcoming', 'checked_in', 'in_progress', 'pending'].includes(a.status)
-    ) || null;
+    const valid = appointments.filter((a) =>
+      ['confirmed', 'upcoming', 'checked_in', 'in_progress', 'pending'].includes(a.status)
+    );
+    if (valid.length === 0) return null;
+    return valid.sort((a, b) => {
+      const timeA = new Date(`${a.date}T${a.time?.split(' - ')[0] || '00:00'}`).getTime();
+      const timeB = new Date(`${b.date}T${b.time?.split(' - ')[0] || '00:00'}`).getTime();
+      return (isNaN(timeA) ? 0 : timeA) - (isNaN(timeB) ? 0 : timeB);
+    })[0];
   }, [appointments]);
 
   const greetingName = user?.name
@@ -140,7 +146,7 @@ export default function PatientHomeScreen() {
     router.push('/(patient)/search');
   };
 
-  const displayLocation = formattedAddress || (area ? `${area}, ${city}` : city) || 'Bandra West, Mumbai';
+  const displayLocation = formattedAddress || (area ? `${area}, ${city}` : city) || 'Location not set';
 
   return (
     <SafeAreaView style={[styles.safeArea, { backgroundColor: StitchColors.surface }]} edges={['top']}>

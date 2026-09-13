@@ -85,7 +85,9 @@ export default function BookingConfirmScreen() {
     dateLabel?: string;
     fee?: string;
     reason?: string;
+    notes?: string;
     patientName?: string;
+    patientPhone?: string;
   }>();
   const { colors, isDark } = useAppTheme();
   const insets = useSafeAreaInsets();
@@ -192,18 +194,22 @@ export default function BookingConfirmScreen() {
       return;
     }
     setIsProcessingPayment(true);
-    setProcessingStatus(`Authorizing ${methodName}...`);
+    setProcessingStatus(`Reserving OPD slot via ${methodName}...`);
 
     try {
       if (Platform.OS !== 'web') {
         Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
       }
 
-      await new Promise((resolve) => setTimeout(resolve, 800));
-      setProcessingStatus('Securing OPD slot...');
-      await new Promise((resolve) => setTimeout(resolve, 600));
-
       if (!user?.id) throw new Error('Please sign in to request an appointment.');
+
+      const patientInfoNotes = [
+        patientName !== user?.name ? `Patient Name: ${patientName}` : null,
+        patientPhone !== user?.phone ? `Contact Phone: ${patientPhone}` : null,
+        bookingDraft.patientNotes || params.notes || null,
+        `Payment Mode: ${methodName}`,
+      ].filter(Boolean).join(' • ');
+
       const bookedAppointment = await bookMutation.mutateAsync({
         patientId: user.id,
         doctorId: doctor.id,
@@ -211,8 +217,8 @@ export default function BookingConfirmScreen() {
         time: slot,
         mode: 'clinic',
         fee: totalPayable,
-        symptoms: bookingDraft.symptoms.length > 0 ? bookingDraft.symptoms : ['Routine OPD Consultation'],
-        notes: bookingDraft.patientNotes || undefined,
+        symptoms: bookingDraft.symptoms.length > 0 ? bookingDraft.symptoms : (params.reason ? [params.reason] : ['Routine OPD Consultation']),
+        notes: patientInfoNotes,
       });
 
       resetBookingDraft();
@@ -220,17 +226,20 @@ export default function BookingConfirmScreen() {
       setPaymentSheetVisible(false);
       setIsProcessingPayment(false);
 
-      // Navigate to success confirmation with token
+      const allocatedToken = (bookedAppointment as any)?.tokenNumber || 'Token #01';
+
+      // Navigate to success confirmation with server-generated token
       router.replace({
         pathname: '/(patient)/booking/success',
         params: {
           appointmentId: bookedAppointment.id,
-          tokenNumber: tokenNumber,
+          tokenNumber: allocatedToken,
+          patientName: patientName,
         },
       });
     } catch (err: any) {
       setIsProcessingPayment(false);
-      setErrorMessage(err?.message || 'Payment confirmation failed. Please try again.');
+      setErrorMessage(err?.message || 'Booking confirmation failed. Please try again.');
     }
   };
 
@@ -496,10 +505,10 @@ export default function BookingConfirmScreen() {
           onPress={handleStartPayment}
           style={[styles.payButton, { backgroundColor: StitchColors.primaryContainer }]}
           accessibilityRole="button"
-          accessibilityLabel={`Proceed to Pay ${formatCurrency(totalPayable)}`}
+          accessibilityLabel={`Reserve OPD Token • ${formatCurrency(totalPayable)}`}
         >
           <ShieldCheck size={18} color="#fff" />
-          <Text style={styles.payButtonText}>Proceed to Pay {formatCurrency(totalPayable)}</Text>
+          <Text style={styles.payButtonText}>Reserve OPD Token • {formatCurrency(totalPayable)}</Text>
         </Pressable>
       </View>
 
@@ -558,93 +567,15 @@ export default function BookingConfirmScreen() {
               </View>
             ) : (
               <ScrollView showsVerticalScrollIndicator={false} style={{ maxHeight: 460 }}>
-                {/* 1. UPI Fast Pay Grid */}
-                <Text style={[styles.paymentSectionTitle, { color: colors.textMuted }]}>RECOMMENDED UPI APPS</Text>
-                <View style={styles.upiGrid}>
-                  {UPI_APPS.map((app) => (
-                    <Pressable
-                      key={app.id}
-                      onPress={() => executeBooking(app.name)}
-                      style={[
-                        styles.upiAppCard,
-                        { backgroundColor: colors.backgroundElement, borderColor: colors.border },
-                      ]}
-                    >
-                      <View style={styles.upiIconContainer}>
-                        <Wallet size={20} color={StitchColors.primaryContainer} />
-                      </View>
-                      <Text style={[styles.upiAppName, { color: colors.text }]}>{app.name}</Text>
-                      <Text style={styles.upiFastText}>Instant Pay</Text>
-                    </Pressable>
-                  ))}
-                </View>
-
-                {/* 2. Custom UPI ID Input */}
-                <View style={[styles.upiInputCard, { backgroundColor: colors.backgroundElement, borderColor: colors.border }]}>
-                  <View style={{ flex: 1 }}>
-                    <Text style={[styles.upiInputLabel, { color: colors.textMuted }]}>OR ENTER UPI ID / VPA</Text>
-                    <TextInput
-                      placeholder="e.g. yourname@oksbi"
-                      placeholderTextColor={colors.textMuted}
-                      value={customUpiId}
-                      onChangeText={setCustomUpiId}
-                      autoCapitalize="none"
-                      style={[styles.upiTextInput, { color: colors.text }]}
-                    />
-                  </View>
-                  <Pressable
-                    onPress={() => executeBooking(customUpiId || 'UPI VPA')}
-                    disabled={!customUpiId.trim()}
-                    style={[
-                      styles.verifyPayBtn,
-                      { backgroundColor: customUpiId.trim() ? StitchColors.primaryContainer : colors.border },
-                    ]}
-                  >
-                    <Text style={styles.verifyPayBtnText}>Pay</Text>
-                  </Pressable>
-                </View>
-
-                {/* 3. Cards & Net Banking Options */}
-                <Text style={[styles.paymentSectionTitle, { color: colors.textMuted, marginTop: 16 }]}>OTHER PAYMENT METHODS</Text>
-
-                {/* Credit / Debit Card */}
-                <Pressable
-                  onPress={() => executeBooking('Credit/Debit Card')}
-                  style={[styles.methodRow, { backgroundColor: colors.backgroundElement, borderColor: colors.border }]}
-                >
-                  <View style={styles.methodIconWrap}>
-                    <CreditCard size={18} color={StitchColors.primaryContainer} />
-                  </View>
-                  <View style={{ flex: 1, marginLeft: 12 }}>
-                    <Text style={[styles.methodTitle, { color: colors.text }]}>Credit / Debit Cards</Text>
-                    <Text style={[styles.methodSub, { color: colors.textSecondary }]}>Visa, Mastercard, RuPay, Maestro</Text>
-                  </View>
-                  <ChevronRight size={18} color={colors.textMuted} />
-                </Pressable>
-
-                {/* Net Banking */}
-                <Pressable
-                  onPress={() => executeBooking('Net Banking (HDFC/ICICI)')}
-                  style={[styles.methodRow, { backgroundColor: colors.backgroundElement, borderColor: colors.border }]}
-                >
-                  <View style={styles.methodIconWrap}>
-                    <Building size={18} color={StitchColors.primaryContainer} />
-                  </View>
-                  <View style={{ flex: 1, marginLeft: 12 }}>
-                    <Text style={[styles.methodTitle, { color: colors.text }]}>Net Banking</Text>
-                    <Text style={[styles.methodSub, { color: colors.textSecondary }]}>HDFC, ICICI, SBI, Axis & all major banks</Text>
-                  </View>
-                  <ChevronRight size={18} color={colors.textMuted} />
-                </Pressable>
-
                 {/* Pay at Hospital Desk */}
                 <Pressable
-                  onPress={() => executeBooking('Pay at Clinic Desk')}
+                  onPress={() => executeBooking('Pay at Clinic Reception')}
                   style={[
                     styles.methodRow,
                     {
                       backgroundColor: isDark ? 'rgba(0,102,153,0.15)' : '#F0FDF4',
                       borderColor: isDark ? 'rgba(0,102,153,0.4)' : '#BBF7D0',
+                      marginTop: 8,
                     },
                   ]}
                 >
@@ -653,17 +584,26 @@ export default function BookingConfirmScreen() {
                   </View>
                   <View style={{ flex: 1, marginLeft: 12 }}>
                     <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
-                      <Text style={[styles.methodTitle, { color: colors.text }]}>Pay at Hospital Desk</Text>
+                      <Text style={[styles.methodTitle, { color: colors.text }]}>Pay at Clinic Reception</Text>
                       <View style={[styles.popularTag, { backgroundColor: '#BBF7D0' }]}>
                         <Text style={[styles.popularTagText, { color: '#15803D' }]}>CASH / UPI ON ARRIVAL</Text>
                       </View>
                     </View>
                     <Text style={[styles.methodSub, { color: colors.textSecondary }]}>
-                      Reserve token now, pay cash/UPI directly at the clinic counter
+                      Reserve verified token now. Pay {formatCurrency(totalPayable)} directly at the OPD desk when arriving.
                     </Text>
                   </View>
                   <ChevronRight size={18} color={colors.textMuted} />
                 </Pressable>
+
+                <View style={[styles.guaranteeBox, { backgroundColor: colors.backgroundElement, borderColor: colors.border, marginTop: 16 }]}>
+                  <Info size={18} color={colors.textSecondary} />
+                  <View style={{ flex: 1, marginLeft: 10 }}>
+                    <Text style={[styles.guaranteeBody, { color: colors.textSecondary }]}>
+                      Online gateway integration is pending bank reconciliation approval. OPD slot tokens can be reserved without advance online deductions.
+                    </Text>
+                  </View>
+                </View>
               </ScrollView>
             )}
           </View>

@@ -28,8 +28,8 @@ export function DoctorCard({
   doctor,
   onPress,
   onBookPress,
-  tokenNumber = 'Token #14',
-  nextSlot = 'Today, 4:15 PM',
+  tokenNumber,
+  nextSlot = 'Next Available Slot',
 }: DoctorCardProps) {
   const [isFavorite, setIsFavorite] = useState(false);
 
@@ -64,12 +64,14 @@ export function DoctorCard({
           <Text style={styles.verifiedText}>Verified</Text>
         </View>
 
-        <View style={styles.distanceRow}>
-          <Footprints size={14} color={StitchColors.outline} />
-          <Text style={styles.distanceText}>
-            {doctor.distanceKm ? `${doctor.distanceKm.toFixed(1)} km` : '1.4 km'}
-          </Text>
-        </View>
+        {doctor.distanceKm != null && (
+          <View style={styles.distanceRow}>
+            <Footprints size={14} color={StitchColors.outline} />
+            <Text style={styles.distanceText}>
+              {`${doctor.distanceKm.toFixed(1)} km`}
+            </Text>
+          </View>
+        )}
       </View>
 
       {/* Middle Row: Avatar & Doctor Info */}
@@ -110,26 +112,34 @@ export function DoctorCard({
                   <SpecialtyIcon size={12} color={specialtyConfig.color} strokeWidth={2.2} />
                 </View>
                 <Text style={styles.specialtyText} numberOfLines={1}>
-                  {doctor.specialty} • {doctor.experienceYears || 12} yrs exp
+                  {doctor.specialty} • {doctor.experienceYears || 1} yrs exp
                 </Text>
               </View>
             );
           })()}
 
-          <Text style={styles.hospitalText} numberOfLines={1}>
-            {doctor.hospital || 'Fortis Hospital & Associate OPD'}
-          </Text>
+          {doctor.hospital ? (
+            <Text style={styles.hospitalText} numberOfLines={1}>
+              {doctor.hospital}
+            </Text>
+          ) : null}
 
           <View style={styles.ratingRow}>
-            <View style={styles.ratingPill}>
-              <Star size={11} color="#b45309" fill="#b45309" />
-              <Text style={styles.ratingText}>
-                {doctor.rating ? doctor.rating.toFixed(1) : '4.9'}
+            {doctor.rating != null ? (
+              <View style={styles.ratingPill}>
+                <Star size={11} color="#b45309" fill="#b45309" />
+                <Text style={styles.ratingText}>
+                  {doctor.rating.toFixed(1)}
+                </Text>
+              </View>
+            ) : (
+              <Text style={styles.reviewCountText}>New on FiYDOC</Text>
+            )}
+            {doctor.reviewCount ? (
+              <Text style={styles.reviewCountText}>
+                ({doctor.reviewCount} reviews)
               </Text>
-            </View>
-            <Text style={styles.reviewCountText}>
-              ({doctor.reviewCount || 342} reviews)
-            </Text>
+            ) : null}
           </View>
         </View>
       </View>
@@ -137,13 +147,15 @@ export function DoctorCard({
       {/* Token and Fee Strip */}
       <View style={styles.slotFeeStrip}>
         <View style={styles.slotDetails}>
-          <View style={styles.tokenPill}>
-            <Text style={styles.tokenText}>{tokenNumber}</Text>
-          </View>
+          {tokenNumber ? (
+            <View style={styles.tokenPill}>
+              <Text style={styles.tokenText}>{tokenNumber}</Text>
+            </View>
+          ) : null}
           <Text style={styles.slotTimeText}>{nextSlot}</Text>
         </View>
         <Text style={styles.feeText}>
-          {formatCurrency(doctor.consultationFee || 800)}
+          {formatCurrency(doctor.consultationFee || 0)}
         </Text>
       </View>
 

@@ -57,7 +57,7 @@ export default function DoctorDiscoveryScreen() {
   
   const [searchQuery, setSearchQuery] = useState(params.query || '');
   const [selectedSpecialty, setSelectedSpecialty] = useState(params.specialty || 'All');
-  const [activeFilters, setActiveFilters] = useState<string[]>(['available_today']);
+  const [activeFilters, setActiveFilters] = useState<string[]>([]);
   const [refreshing, setRefreshing] = useState(false);
 
   useEffect(() => {
@@ -107,7 +107,11 @@ export default function DoctorDiscoveryScreen() {
     }
 
     if (activeFilters.includes('fee_1000')) {
-      list = list.filter((doc) => (doc.consultationFee || 800) < 1000);
+      list = list.filter((doc) => (doc.consultationFee || 0) < 1000);
+    }
+
+    if (activeFilters.includes('rating_48')) {
+      list = list.filter((doc) => (doc.rating || 0) >= 4.8);
     }
 
     // Helper to extract numeric distance
@@ -261,15 +265,6 @@ export default function DoctorDiscoveryScreen() {
             })}
           </ScrollView>
 
-          {/* Telemetry & Ambient Context Notice */}
-          <View style={styles.telemetryNotice}>
-            <Text style={styles.telemetryLeft}>Showing nearest slots with live tokens</Text>
-            <View style={styles.telemetryRight}>
-              <View style={styles.pulseLiveDot} />
-              <Text style={styles.telemetryRightText}>OPD Active Now</Text>
-            </View>
-          </View>
-
           {/* Doctor Cards Stream */}
           <View style={styles.doctorCardsList}>
             {isLoading ? (
@@ -279,12 +274,11 @@ export default function DoctorDiscoveryScreen() {
                 <DoctorCardSkeleton />
               </>
             ) : filteredDoctors.length > 0 ? (
-              filteredDoctors.map((doc, idx) => (
+              filteredDoctors.map((doc) => (
                 <DoctorCard
                   key={doc.id}
                   doctor={doc}
-                  tokenNumber={idx === 0 ? 'Token #14' : idx === 1 ? 'Token #08' : 'Next Slot'}
-                  nextSlot={idx === 0 ? 'Today, 4:15 PM' : idx === 1 ? 'Today, 5:45 PM' : 'Tomorrow, 10:30 AM'}
+                  nextSlot={doc.nextAvailableSlot || 'Next Available Slot'}
                   onPress={() => {
                     router.push({
                       pathname: '/(patient)/doctor/[id]',
