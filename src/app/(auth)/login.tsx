@@ -19,7 +19,6 @@ import {
   Eye,
   EyeOff,
   ArrowRight,
-  Check,
 } from 'lucide-react-native';
 import { UniversalTopBar } from '@/components/ui/UniversalTopBar';
 import { GoogleLogo } from '@/components/ui/GoogleLogo';
@@ -36,7 +35,6 @@ export default function LoginScreen() {
   const [identity, setIdentity] = useState('');
   const [password, setPassword] = useState('');
   const [showPassword, setShowPassword] = useState(false);
-  const [rememberDevice, setRememberDevice] = useState(true);
   const [loading, setLoading] = useState(false);
   const [googleLoading, setGoogleLoading] = useState(false);
   const [error, setError] = useState('');
@@ -224,22 +222,6 @@ export default function LoginScreen() {
                   </Pressable>
                 </View>
               </View>
-
-              {/* Preferences & Session row */}
-              <Pressable
-                onPress={() => setRememberDevice(!rememberDevice)}
-                style={styles.rememberRow}
-              >
-                <View
-                  style={[
-                    styles.checkbox,
-                    rememberDevice && styles.checkboxChecked,
-                  ]}
-                >
-                  {rememberDevice && <Check size={13} color="#ffffff" strokeWidth={3} />}
-                </View>
-                <Text style={styles.rememberText}>Remember this device</Text>
-              </Pressable>
 
               {/* Action Button */}
               <Pressable

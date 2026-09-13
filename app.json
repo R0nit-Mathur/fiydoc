@@ -38,7 +38,7 @@
     },
     "updates": {
       "url": "https://u.expo.dev/24aa4a10-9492-4cf0-842b-efdd9d32804d",
-      "checkAutomatically": "ON_LOAD",
+      "checkAutomatically": "MANUAL",
       "fallbackToCacheTimeout": 0
     },
     "runtimeVersion": "1.0.0",

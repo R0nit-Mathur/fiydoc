@@ -7,27 +7,25 @@ import { PrismaService } from '../prisma/prisma.service';
 @Injectable()
 export class JwtStrategy extends PassportStrategy(Strategy) {
   constructor(private prisma: PrismaService, private configService: ConfigService) {
+    const jwtSecret = configService.get<string>('JWT_SECRET') || process.env.JWT_SECRET;
+    if (!jwtSecret) {
+      throw new Error('FATAL: JWT_SECRET environment variable is missing.');
+    }
     super({
       jwtFromRequest: ExtractJwt.fromAuthHeaderAsBearerToken(),
       ignoreExpiration: false,
-      secretOrKey:
-        configService.get<string>('JWT_SECRET') ||
-        process.env.JWT_SECRET ||
-        'fiydoc_production_jwt_secret_key_98472019842',
+      secretOrKey: jwtSecret,
     });
   }
 
   async validate(payload: { sub: string; email: string; role: string }) {
-    console.log('⚡ [JwtStrategy] Validating token payload:', payload);
     const user = await this.prisma.user.findUnique({
       where: { id: payload.sub },
       include: { patient: true, doctor: true },
     });
     if (!user) {
-      console.error('❌ [JwtStrategy] User not found for id:', payload.sub);
       throw new UnauthorizedException('Invalid user token');
     }
-    console.log('✅ [JwtStrategy] User validated successfully:', user.email);
     return user;
   }
 }

@@ -91,7 +91,8 @@ export const googleAuthService = {
               profile.name || 'Google User',
               profile.sub,
               profile.picture,
-              requestedRole
+              requestedRole,
+              accessToken
             );
           }
         }

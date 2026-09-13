@@ -14,6 +14,7 @@ async function bootstrap() {
     })
   );
 
+  const isProduction = process.env.NODE_ENV === 'production';
   const allowedOrigins = process.env.ALLOWED_ORIGINS
     ? process.env.ALLOWED_ORIGINS.split(',').map((s) => s.trim())
     : [
@@ -26,15 +27,20 @@ async function bootstrap() {
 
   app.enableCors({
     origin: (origin, callback) => {
-      // Allow mobile apps, native requests, and local development
-      if (
-        !origin ||
-        origin.startsWith('http://localhost:') ||
-        origin.startsWith('http://127.0.0.1:') ||
-        origin.startsWith('exp://') ||
-        /^https?:\/\/(192\.168|10\.|172\.(1[6-9]|2[0-9]|3[0-1]))\./.test(origin)
-      ) {
+      // Allow requests with no origin (e.g. mobile app native HTTP clients, curl)
+      if (!origin) {
         return callback(null, true);
+      }
+      // Allow local development and Expo dev servers in non-production environments
+      if (!isProduction) {
+        if (
+          origin.startsWith('http://localhost:') ||
+          origin.startsWith('http://127.0.0.1:') ||
+          origin.startsWith('exp://') ||
+          /^https?:\/\/(192\.168|10\.|172\.(1[6-9]|2[0-9]|3[0-1]))\./.test(origin)
+        ) {
+          return callback(null, true);
+        }
       }
       const isAllowed = allowedOrigins.includes(origin);
       if (isAllowed) {
@@ -48,19 +54,23 @@ async function bootstrap() {
     allowedHeaders: ['Content-Type', 'Authorization', 'X-Requested-With'],
   });
 
-  const config = new DocumentBuilder()
-    .setTitle('FiYDoc API Documentation')
-    .setDescription('Authoritative REST API specification for FiYDoc Healthcare Platform')
-    .setVersion('1.0')
-    .addBearerAuth()
-    .build();
-  const document = SwaggerModule.createDocument(app, config);
-  SwaggerModule.setup('api/docs', app, document);
+  if (!isProduction) {
+    const config = new DocumentBuilder()
+      .setTitle('FiYDoc API Documentation')
+      .setDescription('Authoritative REST API specification for FiYDoc Healthcare Platform')
+      .setVersion('1.0')
+      .addBearerAuth()
+      .build();
+    const document = SwaggerModule.createDocument(app, config);
+    SwaggerModule.setup('api/docs', app, document);
+  }
 
   const port = process.env.PORT || 3000;
   await app.listen(port, '0.0.0.0');
   console.log(`🚀 FiYDoc NestJS Backend running on http://localhost:${port}`);
-  console.log(`📚 Swagger API Docs available at http://localhost:${port}/api/docs`);
+  if (!isProduction) {
+    console.log(`📚 Swagger API Docs available at http://localhost:${port}/api/docs`);
+  }
 }
 bootstrap();
 

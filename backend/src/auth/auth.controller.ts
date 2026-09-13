@@ -52,13 +52,14 @@ export class AuthController {
       <!DOCTYPE html>
       <html>
         <head>
-          <title>FiYDoc - Authentication Complete</title>
+          <title>FiYDoc - Redirecting to Application</title>
           <meta name="viewport" content="width=device-width, initial-scale=1">
           <style>
             body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; display: flex; align-items: center; justify-content: center; min-height: 100vh; margin: 0; background: #0f172a; color: white; text-align: center; }
             .card { background: #1e293b; padding: 2.5rem; border-radius: 1rem; box-shadow: 0 10px 25px rgba(0,0,0,0.5); max-width: 400px; width: 90%; }
             .btn { display: inline-block; margin-top: 1.5rem; padding: 0.75rem 1.5rem; background: #0284c7; color: white; border-radius: 0.5rem; text-decoration: none; font-weight: 600; }
-            .icon { font-size: 3rem; margin-bottom: 1rem; color: #10b981; }
+            .spinner { border: 3px solid rgba(255,255,255,0.1); border-radius: 50%; border-top: 3px solid #0284c7; width: 36px; height: 36px; animation: spin 1s linear infinite; margin: 0 auto 1.5rem auto; }
+            @keyframes spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }
           </style>
           <script>
             window.location.href = "${redirectTarget}";
@@ -66,9 +67,9 @@ export class AuthController {
         </head>
         <body>
           <div class="card">
-            <div class="icon">✓</div>
-            <h2>Google Sign-In Verified</h2>
-            <p style="color: #94a3b8; font-size: 0.95rem;">You are signed in! If you are not redirected automatically, tap the button below to return to FiYDoc.</p>
+            <div class="spinner"></div>
+            <h2>Connecting to FiYDoc</h2>
+            <p style="color: #94a3b8; font-size: 0.95rem;">Redirecting authentication response to the app. If you are not redirected automatically, tap below.</p>
             <a href="${redirectTarget}" class="btn">Open FiYDoc App</a>
           </div>
         </body>

@@ -17,4 +17,13 @@ export class GoogleAuthDto {
   @IsOptional()
   @IsEnum(Role, { message: 'Role must be PATIENT, DOCTOR, or ADMIN.' })
   role?: Role;
+
+  @IsOptional()
+  @IsString()
+  idToken?: string;
+
+  @IsOptional()
+  @IsString()
+  token?: string;
 }
+

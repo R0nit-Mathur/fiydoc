@@ -88,15 +88,15 @@ export class AuthService {
               address: clinicAddress,
               latitude: clinicLatitude,
               longitude: clinicLongitude,
-              timings: '09:00 AM - 05:00 PM',
+              timings: null,
             },
           },
           qualifications: dto.qualifications
             ? {
                 create: {
                   degree: Array.isArray(dto.qualifications) ? dto.qualifications.join(', ') : String(dto.qualifications).trim(),
-                  institution: 'Medical University / Institute',
-                  year: new Date().getFullYear() - 5,
+                  institution: 'Institution Pending Verification',
+                  year: new Date().getFullYear(),
                 },
               }
             : undefined,
@@ -159,7 +159,34 @@ export class AuthService {
     return this.generateTokenResponse(user);
   }
 
-  async googleOAuthLogin(googleUser: { googleId: string; email: string; name: string; role?: Role }) {
+  async googleOAuthLogin(googleUser: {
+    googleId: string;
+    email: string;
+    name: string;
+    role?: Role;
+    idToken?: string;
+    token?: string;
+  }) {
+    const cleanEmail = googleUser.email.trim().toLowerCase();
+    const cleanGoogleId = googleUser.googleId.trim();
+
+    // Verify token if provided
+    const tokenToVerify = googleUser.idToken || googleUser.token;
+    if (tokenToVerify) {
+      try {
+        const verifyRes = await fetch(`https://oauth2.googleapis.com/tokeninfo?id_token=${tokenToVerify}`);
+        if (verifyRes.ok) {
+          const verifiedData = await verifyRes.json();
+          if (verifiedData.email && verifiedData.email.toLowerCase() !== cleanEmail) {
+            throw new UnauthorizedException('Google token email does not match provided email.');
+          }
+        }
+      } catch (err: any) {
+        if (err instanceof UnauthorizedException) throw err;
+        // If token was not an id_token or network issue, proceed with standard checks
+      }
+    }
+
     const includeRelations = {
       patient: true,
       doctor: {
@@ -170,53 +197,33 @@ export class AuthService {
     let user = await this.prisma.user.findFirst({
       where: {
         OR: [
-          { googleId: googleUser.googleId },
-          { email: googleUser.email },
+          { googleId: cleanGoogleId },
+          { email: cleanEmail },
         ],
       },
       include: includeRelations,
     });
 
     if (!user) {
-      const userRole = googleUser.role || Role.PATIENT;
+      // Healthcare security rule: Google sign-in new accounts are created as PATIENT.
+      // Medical practitioner accounts require verified credential onboarding with formal license submission.
       user = await this.prisma.user.create({
         data: {
-          email: googleUser.email,
-          googleId: googleUser.googleId,
-          role: userRole,
-          patient: userRole === Role.PATIENT ? {
+          email: cleanEmail,
+          googleId: cleanGoogleId,
+          role: Role.PATIENT,
+          patient: {
             create: {
-              fullName: googleUser.name,
+              fullName: googleUser.name?.trim() || 'Patient User',
             },
-          } : undefined,
-          doctor: userRole === Role.DOCTOR ? {
-            create: {
-              fullName: googleUser.name,
-              specialization: 'General Practitioner',
-              consultationFee: 800,
-              clinic: {
-                create: {
-                  name: `${googleUser.name}'s Practice`,
-                  address: 'Clinical Practice Address Pending',
-                  timings: '09:00 AM - 05:00 PM',
-                },
-              },
-              verification: {
-                create: {
-                  registrationNumber: `GOOGLE-${Date.now()}`,
-                  registrationAuthority: 'National Medical Commission / State Council',
-                  status: VerificationStatus.PENDING,
-                },
-              },
-            },
-          } : undefined,
+          },
         },
         include: includeRelations,
       });
     } else if (!user.googleId) {
       user = await this.prisma.user.update({
         where: { id: user.id },
-        data: { googleId: googleUser.googleId },
+        data: { googleId: cleanGoogleId },
         include: includeRelations,
       });
     }
@@ -226,13 +233,9 @@ export class AuthService {
 
   async forgotPassword(email: string) {
     const cleanEmail = email.trim().toLowerCase();
-    const user = await this.prisma.user.findUnique({
+    await this.prisma.user.findUnique({
       where: { email: cleanEmail },
     });
-
-    if (user) {
-      console.log(`[AuthService] Password recovery token dispatched for: ${cleanEmail}`);
-    }
 
     return {
       success: true,

@@ -186,20 +186,26 @@ export const authService = {
     customName: string,
     customGoogleId?: string,
     avatarUrl?: string,
-    requestedRole?: 'patient' | 'doctor'
+    requestedRole?: 'patient' | 'doctor',
+    tokenProof?: string
   ): Promise<UserSession> {
     const email = customEmail.trim();
     const name = customName.trim();
-    const googleId = customGoogleId || 'google_' + email.replace(/[^a-zA-Z0-9]/g, '_');
+    const googleId = customGoogleId?.trim();
+
+    if (!googleId && !tokenProof) {
+      throw new Error('[Google Sign-In] Authentication failed: Missing verified Google identifier or token.');
+    }
 
     try {
       const response = await apiClient<{ accessToken?: string; access_token?: string; user: any }>('/auth/google', {
         method: 'POST',
         body: JSON.stringify({
-          googleId,
+          googleId: googleId || `sub_${tokenProof?.slice(-16)}`,
           email,
           name,
           ...(requestedRole ? { role: requestedRole.toUpperCase() } : {}),
+          ...(tokenProof ? { token: tokenProof } : {}),
         }),
       });
 

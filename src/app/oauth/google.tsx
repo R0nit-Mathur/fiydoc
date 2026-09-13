@@ -123,7 +123,8 @@ export default function GoogleOAuthCallback() {
               profile.name || 'Google User',
               profile.sub,
               profile.picture,
-              role
+              role,
+              token
             );
             useAuthStore.getState().setSession(session);
 
