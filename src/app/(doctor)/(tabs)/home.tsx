@@ -67,6 +67,7 @@ export default function DoctorHomeScreen() {
   const { colors, isDark } = useAppTheme();
   const { user } = useAuthStore();
   const { appointments: storeAppointments } = useAppointmentStore();
+  const { data: serverAppointments = [] } = useAppointmentsQuery(undefined, user?.id);
   const queryClient = useQueryClient();
   const [drawerOpen, setDrawerOpen] = useState(false);
   const [updateModalVisible, setUpdateModalVisible] = useState(false);
@@ -87,16 +88,16 @@ export default function DoctorHomeScreen() {
 
   // Combine server queue with local appointments, honoring completed status
   const combinedAppointments = useMemo(() => {
-    const storeMap = new Map(storeAppointments.map((a) => [a.id, a]));
-    const mergedServer = serverAppointments.map((sa) => {
+    const storeMap = new Map((storeAppointments as any[]).map((a: any) => [a.id, a]));
+    const mergedServer = (serverAppointments as any[]).map((sa: any) => {
       const la = storeMap.get(sa.id);
       if (la && la.status === 'completed' && sa.status !== 'completed') {
         return { ...sa, status: 'completed' };
       }
       return sa;
     });
-    const serverIds = new Set(mergedServer.map((a) => a.id));
-    const localRemaining = storeAppointments.filter((a) => !serverIds.has(a.id));
+    const serverIds = new Set(mergedServer.map((a: any) => a.id));
+    const localRemaining = (storeAppointments as any[]).filter((a: any) => !serverIds.has(a.id));
     return [...mergedServer, ...localRemaining];
   }, [serverAppointments, storeAppointments]);
 

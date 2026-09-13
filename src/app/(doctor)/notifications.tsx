@@ -286,7 +286,7 @@ export default function DoctorNotificationsScreen() {
                         <Badge label="RX ISSUED" variant="teal" size="sm" />
                       )}
                       {isAppointment && (
-                        <Badge label="CLINIC" variant="primary" size="sm" />
+                        <Badge label="CLINIC" variant="blue" size="sm" />
                       )}
                       {!item.read && <View style={styles.unreadDot} />}
                     </View>

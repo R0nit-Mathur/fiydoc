@@ -182,7 +182,7 @@ export default function HealthHubScreen() {
         {activeTab === 'PRESCRIPTIONS' ? (
           <PrescriptionsTab prescriptions={patientPrescriptions} />
         ) : (
-          <HealthHistoryTab records={records} prescriptions={prescriptions} />
+          <HealthHistoryTab records={records} prescriptions={patientPrescriptions} />
         )}
         <View style={{ height: 110 }} />
       </ScrollView>

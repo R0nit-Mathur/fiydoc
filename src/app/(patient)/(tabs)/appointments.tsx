@@ -181,7 +181,7 @@ export default function PatientAppointmentsScreen() {
     // 2. Try match by doctorId and patientId
     // 3. Fallback to latest available prescription for this patient
     const rx =
-      allPrescriptions.find((p) => p.consultationId === apt.id || p.id === apt.consultationId) ||
+      allPrescriptions.find((p) => p.consultationId === apt.id || p.id === (apt as any).consultationId) ||
       allPrescriptions.find((p) => p.doctorId === apt.doctorId && p.patientId === apt.patientId) ||
       allPrescriptions.find((p) => p.patientId === apt.patientId) ||
       allPrescriptions[0];
