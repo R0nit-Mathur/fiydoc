@@ -60,6 +60,7 @@ import { doctorService } from '@/services/doctorService';
 import { BorderRadius, Shadows, StitchColors, DEFAULT_DOCTOR_AVATAR } from '@/constants/theme';
 import UndoToast from '@/components/ui/UndoToast';
 import { Avatar } from '@/components/ui/Avatar';
+import { toLocalDateString } from '@/utils/formatters';
 
 const DOCTOR_AVATAR = DEFAULT_DOCTOR_AVATAR;
 
@@ -142,7 +143,7 @@ export default function DoctorScheduleScreen() {
   const queryClient = useQueryClient();
 
   const [weekDays, setWeekDays] = useState(DYNAMIC_WEEK_DAYS);
-  const [selectedDay, setSelectedDay] = useState(DYNAMIC_WEEK_DAYS[0]?.key || new Date().toISOString().slice(0, 10));
+  const [selectedDay, setSelectedDay] = useState(DYNAMIC_WEEK_DAYS[0]?.key || toLocalDateString(new Date()));
   const [selectedSession, setSelectedSession] = useState<'morning' | 'evening'>('morning');
   const [leaveDates, setLeaveDates] = useState<string[]>([]);
   const [activeDelayMinutes, setActiveDelayMinutes] = useState<number>(0);
@@ -151,26 +152,39 @@ export default function DoctorScheduleScreen() {
   const [leaveReasonText, setLeaveReasonText] = useState<string | null>(null);
   const [refreshing, setRefreshing] = useState(false);
 
-  // Sync server schedule status for the selected day
+  // Sync server schedule status for the entire week and the selected day
   const syncScheduleStatus = useCallback(async (dayKey: string) => {
     const docId = user?.doctorId || user?.id;
     if (!docId || !dayKey) return;
     try {
-      const status = await doctorService.getScheduleStatus(docId, dayKey);
-      setActiveDelayMinutes(status.delayMinutes || 0);
-      setActiveDelayReason(status.delayReason || null);
-      setIsDayOnLeave(Boolean(status.isOnLeave));
-      setLeaveReasonText(status.leaveReason || null);
+      const startKey = weekDays[0]?.key || dayKey;
+      const endKey = weekDays[weekDays.length - 1]?.key || dayKey;
 
-      if (status.isOnLeave) {
-        setLeaveDates((prev) => (prev.includes(dayKey) ? prev : [...prev, dayKey]));
-      } else {
-        setLeaveDates((prev) => prev.filter((d) => d !== dayKey));
+      const [weekMap, singleStatus] = await Promise.all([
+        doctorService.getScheduleWeek(docId, startKey, endKey).catch(() => ({} as Record<string, any>)),
+        doctorService.getScheduleStatus(docId, dayKey).catch(() => null),
+      ]);
+
+      const serverLeaveDays = new Set<string>();
+      if (weekMap) {
+        for (const [dKey, ov] of Object.entries(weekMap)) {
+          if (ov?.isOnLeave) serverLeaveDays.add(dKey);
+        }
       }
+      if (singleStatus?.isOnLeave) {
+        serverLeaveDays.add(dayKey);
+      }
+      setLeaveDates(Array.from(serverLeaveDays));
+
+      const activeStatus = singleStatus || weekMap?.[dayKey] || { delayMinutes: 0, isOnLeave: false };
+      setActiveDelayMinutes(activeStatus.delayMinutes || 0);
+      setActiveDelayReason(activeStatus.delayReason || null);
+      setIsDayOnLeave(Boolean(activeStatus.isOnLeave));
+      setLeaveReasonText(activeStatus.leaveReason || null);
     } catch (err) {
       console.warn('[schedule] Failed to sync schedule status:', err);
     }
-  }, [user?.doctorId, user?.id]);
+  }, [user?.doctorId, user?.id, weekDays]);
 
   useEffect(() => {
     syncScheduleStatus(selectedDay);
@@ -183,6 +197,7 @@ export default function DoctorScheduleScreen() {
         syncScheduleStatus(selectedDay),
         queryClient.invalidateQueries({ queryKey: ['appointments'] }),
         queryClient.invalidateQueries({ queryKey: ['doctor-slots'] }),
+        queryClient.invalidateQueries({ queryKey: ['doctor-schedule-week'] }),
       ]);
     } finally {
       setRefreshing(false);
@@ -475,9 +490,11 @@ const [undoDelayMins, setUndoDelayMins] = useState<number>(15);
         delayMinutes: newDelay,
         reason: 'OPD Clinical Delay / Emergency',
       })
-      .then(() => {
+      .then(async () => {
+        await syncScheduleStatus(selectedDay);
         queryClient.invalidateQueries({ queryKey: ['appointments'] });
         queryClient.invalidateQueries({ queryKey: ['doctor-slots'] });
+        queryClient.invalidateQueries({ queryKey: ['doctor-schedule-week'] });
       })
       .catch((err) => {
         console.warn('[schedule] Server delay sync notice:', err?.message);
@@ -515,9 +532,11 @@ const [undoDelayMins, setUndoDelayMins] = useState<number>(15);
         date: selectedDay,
         reason: leaveReason,
       })
-      .then(() => {
+      .then(async () => {
+        await syncScheduleStatus(selectedDay);
         queryClient.invalidateQueries({ queryKey: ['appointments'] });
         queryClient.invalidateQueries({ queryKey: ['doctor-slots'] });
+        queryClient.invalidateQueries({ queryKey: ['doctor-schedule-week'] });
       })
       .catch((err) => {
         console.warn('[schedule] Server leave sync notice:', err?.message);
@@ -599,9 +618,11 @@ const [undoDelayMins, setUndoDelayMins] = useState<number>(15);
         date: lastUndo.day,
         action,
       })
-      .then(() => {
+      .then(async () => {
+        await syncScheduleStatus(selectedDay);
         queryClient.invalidateQueries({ queryKey: ['appointments'] });
         queryClient.invalidateQueries({ queryKey: ['doctor-slots'] });
+        queryClient.invalidateQueries({ queryKey: ['doctor-schedule-week'] });
       })
       .catch((err) => {
         console.warn('[schedule] Server undo notice:', err?.message);
@@ -667,8 +688,10 @@ const [undoDelayMins, setUndoDelayMins] = useState<number>(15);
                 await doctorService.undoScheduleOverride({ doctorId: docId, date: selectedDay, action: 'delay' });
                 setActiveDelayMinutes(0);
                 setActiveDelayReason(null);
+                await syncScheduleStatus(selectedDay);
                 queryClient.invalidateQueries({ queryKey: ['appointments'] });
                 queryClient.invalidateQueries({ queryKey: ['doctor-slots'] });
+                queryClient.invalidateQueries({ queryKey: ['doctor-schedule-week'] });
               }}
             >
               <RotateCcw size={12} color="#B45309" />
@@ -694,8 +717,10 @@ const [undoDelayMins, setUndoDelayMins] = useState<number>(15);
                 await doctorService.undoScheduleOverride({ doctorId: docId, date: selectedDay, action: 'leave' });
                 setIsDayOnLeave(false);
                 setLeaveDates((prev) => prev.filter((d) => d !== selectedDay));
+                await syncScheduleStatus(selectedDay);
                 queryClient.invalidateQueries({ queryKey: ['appointments'] });
                 queryClient.invalidateQueries({ queryKey: ['doctor-slots'] });
+                queryClient.invalidateQueries({ queryKey: ['doctor-schedule-week'] });
               }}
             >
               <RotateCcw size={12} color="#B91C1C" />
@@ -738,7 +763,7 @@ const [undoDelayMins, setUndoDelayMins] = useState<number>(15);
                 setCurrentMonth(firstOfMonth);
                 const todayWeek = generateDynamicWeek();
                 setWeekDays(todayWeek);
-                setSelectedDay(todayWeek[0]?.date || today.getDate().toString());
+                setSelectedDay(todayWeek[0]?.key || toLocalDateString(today));
               }}
               style={[styles.todayBtn, { backgroundColor: colors.backgroundElement }]}
             >
@@ -826,21 +851,39 @@ const [undoDelayMins, setUndoDelayMins] = useState<number>(15);
         {/* 4. Upcoming Holiday Notice Pill */}
         <Pressable
           onPress={() => setLeaveModalVisible(true)}
-          style={[styles.holidayCard, { backgroundColor: colors.backgroundElement, borderColor: colors.border }]}
+          style={[
+            styles.holidayCard,
+            {
+              backgroundColor: isDayOnLeave || leaveDates.includes(selectedDay) ? '#FEF2F2' : colors.backgroundElement,
+              borderColor: isDayOnLeave || leaveDates.includes(selectedDay) ? '#FCA5A5' : colors.border,
+            },
+          ]}
         >
-          <View style={[styles.holidayIconWrap, { backgroundColor: '#CCFBF1' }]}>
-            <Umbrella size={16} color={StitchColors.secondary} />
+          <View style={[styles.holidayIconWrap, { backgroundColor: isDayOnLeave || leaveDates.includes(selectedDay) ? '#FEE2E2' : '#CCFBF1' }]}>
+            <Umbrella size={16} color={isDayOnLeave || leaveDates.includes(selectedDay) ? StitchColors.error : StitchColors.secondary} />
           </View>
 
           <View style={{ flex: 1, marginLeft: 10 }}>
             <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
-              <Text style={[styles.holidayTitle, { color: colors.text }]}>{leaveReason}</Text>
-              <View style={[styles.holidayBadge, { backgroundColor: colors.card }]}>
-                <Text style={[styles.holidayBadgeText, { color: colors.textSecondary }]}>{leaveDays}</Text>
+              <Text style={[styles.holidayTitle, { color: isDayOnLeave || leaveDates.includes(selectedDay) ? '#991B1B' : colors.text }]}>
+                {isDayOnLeave || leaveDates.includes(selectedDay)
+                  ? (leaveReasonText || 'OPD Closed — Doctor on Leave')
+                  : leaveDates.length > 0
+                  ? `Scheduled Leave (${leaveDates.length} day${leaveDates.length > 1 ? 's' : ''} this week)`
+                  : 'Doctor Holiday & Leave Scheduler'}
+              </Text>
+              <View style={[styles.holidayBadge, { backgroundColor: isDayOnLeave || leaveDates.includes(selectedDay) ? '#FEE2E2' : colors.card }]}>
+                <Text style={[styles.holidayBadgeText, { color: isDayOnLeave || leaveDates.includes(selectedDay) ? '#DC2626' : colors.textSecondary }]}>
+                  {isDayOnLeave || leaveDates.includes(selectedDay) ? 'Active Leave' : leaveDates.length > 0 ? `${leaveDates.length} Days` : '+ Schedule'}
+                </Text>
               </View>
             </View>
-            <Text style={[styles.holidayDesc, { color: colors.textSecondary }]}>
-              OPD Closed • Online reservations halted
+            <Text style={[styles.holidayDesc, { color: isDayOnLeave || leaveDates.includes(selectedDay) ? '#B91C1C' : colors.textSecondary }]}>
+              {isDayOnLeave || leaveDates.includes(selectedDay)
+                ? 'OPD Closed • Online reservations halted for this date'
+                : leaveDates.length > 0
+                ? `Upcoming leaves on: ${leaveDates.join(', ')}`
+                : 'Manage doctor holidays, leave days, or conference absences'}
             </Text>
           </View>
 
@@ -933,23 +976,30 @@ const [undoDelayMins, setUndoDelayMins] = useState<number>(15);
           </View>
 
           {/* DOCTOR ON LEAVE BANNER IF DATE IS MARKED */}
-          {leaveDates.includes(selectedDay) ? (
+          {isDayOnLeave || leaveDates.includes(selectedDay) ? (
             <View style={[styles.onLeaveTimelineCard, { backgroundColor: colors.card, borderColor: '#FCA5A5' }]}>
               <View style={[styles.onLeaveIconCircle, { backgroundColor: '#FEE2E2' }]}>
                 <Umbrella size={24} color={StitchColors.error} />
               </View>
               <Text style={[styles.onLeaveTitle, { color: colors.text }]}>Doctor Is On Scheduled Leave</Text>
               <Text style={[styles.onLeaveReason, { color: StitchColors.error }]}>
-                {leaveReason || 'Clinic OPD Suspended'}
+                {leaveReasonText || leaveReason || 'Clinic OPD Suspended'}
               </Text>
               <Text style={[styles.onLeaveDesc, { color: colors.textSecondary }]}>
                 OPD sessions, walk-ins, and online bookings are suspended for this day. Scheduled patients have been automatically queued for rescheduling.
               </Text>
               <Pressable
-                onPress={() => {
+                onPress={async () => {
+                  const docId = user?.doctorId || user?.id;
+                  await doctorService.undoScheduleOverride({ doctorId: docId, date: selectedDay, action: 'leave' });
+                  setIsDayOnLeave(false);
                   setLeaveDates(leaveDates.filter((d) => d !== selectedDay));
+                  await syncScheduleStatus(selectedDay);
+                  queryClient.invalidateQueries({ queryKey: ['appointments'] });
+                  queryClient.invalidateQueries({ queryKey: ['doctor-slots'] });
+                  queryClient.invalidateQueries({ queryKey: ['doctor-schedule-week'] });
                   if (Platform.OS !== 'web') Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
-                  setDelayNotice(`Leave cancelled for ${selectedDay}. OPD reopened.`);
+                  setDelayNotice(`Leave cancelled on server for ${selectedDay}. OPD reopened.`);
                   setTimeout(() => setDelayNotice(null), 3000);
                 }}
                 style={[styles.resumeOpdBtn, { backgroundColor: StitchColors.primaryContainer }]}

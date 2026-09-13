@@ -131,6 +131,17 @@ export default function DoctorProfileScreen() {
 
   const currentDate = DATES[selectedDateIndex] || DATES[0];
 
+  const { data: weekOverrides = {} } = useQuery({
+    queryKey: ['doctor-schedule-week', doctor?.id],
+    queryFn: () =>
+      doctor?.id
+        ? doctorService.getScheduleWeek(doctor.id, DATES[0]?.isoDate, DATES[DATES.length - 1]?.isoDate)
+        : Promise.resolve({} as Record<string, any>),
+    enabled: Boolean(doctor?.id),
+    staleTime: 0,
+    refetchOnMount: 'always',
+  });
+
   const { data: slotData, isLoading: isLoadingSlots, refetch: refetchSlots } = useQuery({
     queryKey: ['doctor-slots', doctor?.id, currentDate?.isoDate],
     queryFn: () =>
@@ -142,10 +153,11 @@ export default function DoctorProfileScreen() {
     refetchOnMount: 'always',
   });
 
-  const isOnLeave = Boolean(slotData?.isOnLeave);
-  const leaveReason = slotData?.leaveReason || 'Doctor is on leave on this date';
-  const delayMinutes = slotData?.delayMinutes || 0;
-  const delayReason = slotData?.delayReason || 'Clinical delay';
+  const currentOverride = weekOverrides[currentDate?.isoDate || ''];
+  const isOnLeave = Boolean(slotData?.isOnLeave) || Boolean(currentOverride?.isOnLeave);
+  const leaveReason = slotData?.leaveReason || currentOverride?.leaveReason || 'Doctor is on leave on this date';
+  const delayMinutes = slotData?.delayMinutes ?? (currentOverride?.delayMinutes || 0);
+  const delayReason = slotData?.delayReason || currentOverride?.delayReason || 'Clinical delay';
 
   const serverSlots = slotData?.slots || [];
 
@@ -187,11 +199,46 @@ export default function DoctorProfileScreen() {
   const fallbackMorning = ['09:30 AM', '10:00 AM', '10:30 AM', '11:00 AM', '11:30 AM', '12:00 PM', '12:30 PM'];
   const fallbackEvening = ['05:00 PM', '05:30 PM', '06:00 PM', '06:30 PM', '07:00 PM', '07:30 PM', '08:00 PM'];
 
+  const shiftTimeString = (timeStr: string, shiftMins: number): string => {
+    const match = timeStr.trim().match(/^(\d{1,2}):(\d{2})\s*(AM|PM)?$/i);
+    if (!match) return timeStr;
+    let h = parseInt(match[1], 10);
+    const m = match[2];
+    const meridiem = match[3]?.toUpperCase();
+    if (meridiem === 'PM' && h !== 12) h += 12;
+    if (meridiem === 'AM' && h === 12) h = 0;
+    const total = (h * 60 + parseInt(m, 10) + shiftMins) % 1440;
+    let newH = Math.floor(total / 60);
+    const newM = total % 60;
+    const newMeridiem = newH >= 12 ? 'PM' : 'AM';
+    if (newH > 12) newH -= 12;
+    if (newH === 0) newH = 12;
+    return `${String(newH).padStart(2, '0')}:${String(newM).padStart(2, '0')} ${newMeridiem}`;
+  };
+
   const rawCandidateSlots = isOnLeave
     ? []
     : formattedServerSlots.length > 0
     ? formattedServerSlots
+    : delayMinutes > 0
+    ? [...fallbackMorning, ...fallbackEvening].map((s) => shiftTimeString(s, delayMinutes))
     : [...fallbackMorning, ...fallbackEvening];
+
+  const dynamicDates = useMemo(() => {
+    return DATES.map((item) => {
+      const ov = weekOverrides[item.isoDate];
+      const isDateOnLeave = item.isLeave || Boolean(ov?.isOnLeave) || (item.isoDate === currentDate?.isoDate && isOnLeave);
+      const isDelayed = (ov?.delayMinutes || 0) > 0 || (item.isoDate === currentDate?.isoDate && delayMinutes > 0);
+      const dateDelayMins = ov?.delayMinutes || (item.isoDate === currentDate?.isoDate ? delayMinutes : 0);
+      return {
+        ...item,
+        isLeave: isDateOnLeave,
+        isDelayed,
+        delayMins: dateDelayMins,
+        leaveReason: ov?.leaveReason || (item.isoDate === currentDate?.isoDate ? leaveReason : undefined),
+      };
+    });
+  }, [DATES, weekOverrides, currentDate?.isoDate, isOnLeave, delayMinutes, leaveReason]);
 
   const now = new Date();
   const todayIso = now.toISOString().slice(0, 10);
@@ -500,7 +547,7 @@ export default function DoctorProfileScreen() {
               showsHorizontalScrollIndicator={false}
               contentContainerStyle={styles.dateSelectorScroll}
             >
-              {DATES.map((item, idx) => {
+              {dynamicDates.map((item, idx) => {
                 const isSelected = selectedDateIndex === idx;
                 return (
                   <Pressable
@@ -514,14 +561,14 @@ export default function DoctorProfileScreen() {
                     style={[
                       styles.dateBtn,
                       isSelected ? styles.dateBtnActive : styles.dateBtnInactive,
-                      item.isLeave && { borderColor: '#FCA5A5', backgroundColor: '#FEF2F2' },
+                      item.isLeave && !isSelected && { borderColor: '#FCA5A5', backgroundColor: '#FEF2F2' },
                     ]}
                   >
                     <Text
                       style={[
                         styles.dateBtnDay,
                         isSelected ? styles.dateBtnDayActive : styles.dateBtnDayInactive,
-                        item.isLeave && { color: '#DC2626' },
+                        item.isLeave && !isSelected && { color: '#DC2626' },
                       ]}
                     >
                       {item.day}
@@ -530,7 +577,7 @@ export default function DoctorProfileScreen() {
                       style={[
                         styles.dateBtnDate,
                         isSelected ? styles.dateBtnDateActive : styles.dateBtnDateInactive,
-                        item.isLeave && { color: '#DC2626' },
+                        item.isLeave && !isSelected && { color: '#DC2626' },
                       ]}
                     >
                       {item.date}
@@ -539,10 +586,11 @@ export default function DoctorProfileScreen() {
                       style={[
                         styles.dateBtnMonth,
                         isSelected ? styles.dateBtnMonthActive : styles.dateBtnMonthInactive,
-                        item.isLeave && { color: '#EF4444' },
+                        item.isLeave && !isSelected && { color: '#EF4444' },
+                        item.isDelayed && !item.isLeave && !isSelected && { color: '#D97706', fontWeight: '700' },
                       ]}
                     >
-                      {item.isLeave ? 'Leave' : item.month}
+                      {item.isLeave ? 'Leave' : item.isDelayed ? `+${item.delayMins}m` : item.month}
                     </Text>
                   </Pressable>
                 );

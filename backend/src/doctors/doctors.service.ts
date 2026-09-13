@@ -17,7 +17,7 @@ export class DoctorsService {
     return Math.round(R * c * 10) / 10;
   }
 
-  private formatDoctor(doc: any, userLat?: number, userLng?: number) {
+  private formatDoctor(doc: any, userLat?: number, userLng?: number, override?: any) {
     if (!doc) return null;
     const qualificationText = doc.qualifications?.length > 0
       ? doc.qualifications.map((q: any) => q.degree).join(', ')
@@ -48,6 +48,10 @@ export class DoctorsService {
       latitude: clinicLat,
       longitude: clinicLng,
       distanceKm,
+      delayMinutes: override?.delayMinutes || 0,
+      delayReason: override?.reason || null,
+      isOnLeave: Boolean(override?.isOnLeave),
+      leaveReason: override?.isOnLeave ? (override?.reason || 'Doctor on leave') : null,
       clinic: doc.clinic
         ? {
             id: doc.clinic.id,
@@ -112,7 +116,27 @@ export class DoctorsService {
       },
     });
 
-    const formatted = doctors.map((d) => this.formatDoctor(d, lat, lng));
+    const today = new Date();
+    const todayKey = `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, '0')}-${String(today.getDate()).padStart(2, '0')}`;
+    let todayOverrides: any[] = [];
+    try {
+      todayOverrides = await (this.prisma as any).doctorScheduleOverride?.findMany({
+        where: {
+          doctorId: { in: doctors.map((d) => d.id) },
+          date: todayKey,
+        },
+      }) || [];
+    } catch {
+      try {
+        todayOverrides = await this.prisma.$queryRawUnsafe(`
+          SELECT * FROM "DoctorScheduleOverride"
+          WHERE "doctorId" = ANY($1::text[]) AND "date" = $2
+        `, doctors.map((d) => d.id), todayKey) as any[] || [];
+      } catch {}
+    }
+    const overrideMap = new Map((todayOverrides || []).map((o: any) => [o.doctorId, o]));
+
+    const formatted = doctors.map((d) => this.formatDoctor(d, lat, lng, overrideMap.get(d.id)));
     if (lat != null && lng != null) {
       return formatted.sort((a, b) => {
         if (a.distanceKm != null && b.distanceKm != null) return a.distanceKm - b.distanceKm;
@@ -137,7 +161,20 @@ export class DoctorsService {
     if (!doctor || doctor.verification?.status !== VerificationStatus.VERIFIED) {
       throw new NotFoundException('Doctor not found or pending verification.');
     }
-    return this.formatDoctor(doctor);
+
+    const today = new Date();
+    const todayKey = `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, '0')}-${String(today.getDate()).padStart(2, '0')}`;
+    let todayOverride: any = null;
+    try {
+      todayOverride = await (this.prisma as any).doctorScheduleOverride?.findFirst({
+        where: {
+          doctorId: { in: [doctor.id, doctor.userId] },
+          date: todayKey,
+        },
+      });
+    } catch {}
+
+    return this.formatDoctor(doctor, undefined, undefined, todayOverride);
   }
 
   async updateDoctorProfile(userId: string, dto: {
@@ -772,4 +809,64 @@ export class DoctorsService {
       leaveReason: override?.isOnLeave ? (override?.reason || 'Doctor on leave') : null,
     };
   }
+
+  async getScheduleOverrides(doctorId: string, startDate?: string, endDate?: string) {
+    const doctor = await this.prisma.doctor.findFirst({
+      where: {
+        OR: [
+          { id: doctorId },
+          { userId: doctorId },
+        ],
+      },
+    });
+    if (!doctor) throw new NotFoundException('Doctor not found.');
+
+    const cleanStart = startDate ? startDate.split('T')[0] : new Date().toISOString().split('T')[0];
+    let overrides: any[] = [];
+    try {
+      overrides = await (this.prisma as any).doctorScheduleOverride?.findMany({
+        where: {
+          doctorId: { in: [doctor.id, doctor.userId] },
+          ...(endDate
+            ? { date: { gte: cleanStart, lte: endDate.split('T')[0] } }
+            : { date: { gte: cleanStart } }),
+        },
+        orderBy: { date: 'asc' },
+      });
+    } catch {
+      try {
+        const rows: any = await this.prisma.$queryRawUnsafe(`
+          SELECT * FROM "DoctorScheduleOverride"
+          WHERE ("doctorId" = $1 OR "doctorId" = $2)
+          ORDER BY "date" ASC
+        `, doctor.id, doctor.userId);
+        overrides = rows || [];
+      } catch (sqlErr: any) {
+        console.warn('[doctors] Raw SQL getScheduleOverrides lookup failed:', sqlErr?.message);
+      }
+    }
+
+    const map: Record<string, {
+      doctorId: string;
+      date: string;
+      delayMinutes: number;
+      delayReason: string | null;
+      isOnLeave: boolean;
+      leaveReason: string | null;
+    }> = {};
+
+    for (const ov of overrides || []) {
+      map[ov.date] = {
+        doctorId: doctor.id,
+        date: ov.date,
+        delayMinutes: ov.delayMinutes || 0,
+        delayReason: ov.reason || null,
+        isOnLeave: Boolean(ov.isOnLeave),
+        leaveReason: ov.isOnLeave ? (ov.reason || 'Doctor on leave') : null,
+      };
+    }
+
+    return map;
+  }
 }
+

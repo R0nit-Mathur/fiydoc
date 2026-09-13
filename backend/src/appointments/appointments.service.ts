@@ -21,18 +21,32 @@ export class AppointmentsService {
     return `${String(displayH).padStart(2, '0')}:${String(newM).padStart(2, '0')} ${meridian}`;
   }
 
-  private formatAppointment(apt: any) {
+  private formatAppointment(apt: any, overrideMap?: Map<string, any>) {
     if (!apt) return null;
     const tokenMatch = apt.notes?.match(/\[(Token\s*#\d+)\]/) || apt.notes?.match(/(Token\s*#\d+)/);
     const tokenNumber = tokenMatch ? tokenMatch[1] : (apt.tokenNumber || null);
 
+    // 1. Authoritative lookup from DoctorScheduleOverride
+    const override = overrideMap?.get(`${apt.doctorId}_${apt.date}`) ||
+      overrideMap?.get(`${apt.doctor?.id}_${apt.date}`) ||
+      overrideMap?.get(`${apt.doctor?.userId}_${apt.date}`);
+
+    // 2. Fallback to notes tags if overrideMap not provided
     const delayMatch = apt.notes?.match(/\[(?:Delayed|Postponed):\s*\+?(\d+)m?(?:\.\s*Reason:\s*([^\]]+))?\]/i);
-    const delayMinutes = delayMatch ? parseInt(delayMatch[1], 10) : 0;
-    const delayReason = delayMatch && delayMatch[2] ? delayMatch[2].trim() : null;
+    const delayMinutes = override
+      ? (override.delayMinutes || 0)
+      : (delayMatch ? parseInt(delayMatch[1], 10) : 0);
+    const delayReason = override
+      ? (override.reason || null)
+      : (delayMatch && delayMatch[2] ? delayMatch[2].trim() : null);
 
     const leaveMatch = apt.notes?.match(/\[Cancelled:\s*Doctor on leave(?:\s*-\s*([^\]]+))?\]/i);
-    const isDoctorOnLeave = Boolean(leaveMatch);
-    const leaveReason = leaveMatch && leaveMatch[1] ? leaveMatch[1].trim() : null;
+    const isDoctorOnLeave = override
+      ? Boolean(override.isOnLeave)
+      : Boolean(leaveMatch);
+    const leaveReason = override && override.isOnLeave
+      ? (override.reason || 'Doctor on leave')
+      : (leaveMatch && leaveMatch[1] ? leaveMatch[1].trim() : null);
 
     const expectedTime = delayMinutes > 0 ? this.calculateShiftedTime(apt.startTime, delayMinutes) : apt.startTime;
 
@@ -344,6 +358,44 @@ export class AppointmentsService {
     return this.formatAppointment(createdApt);
   }
 
+  private async getOverridesForAppointments(appointments: any[]): Promise<Map<string, any>> {
+    const overrideMap = new Map<string, any>();
+    if (!appointments || appointments.length === 0) return overrideMap;
+
+    const doctorIds = Array.from(new Set(appointments.map((a) => a.doctorId).filter(Boolean)));
+    const dates = Array.from(new Set(appointments.map((a) => a.date).filter(Boolean)));
+    if (doctorIds.length === 0 || dates.length === 0) return overrideMap;
+
+    try {
+      const overrides = await (this.prisma as any).doctorScheduleOverride?.findMany({
+        where: {
+          doctorId: { in: doctorIds },
+          date: { in: dates },
+        },
+      });
+      if (overrides) {
+        for (const ov of overrides) {
+          overrideMap.set(`${ov.doctorId}_${ov.date}`, ov);
+        }
+      }
+    } catch {
+      try {
+        const rows: any = await this.prisma.$queryRawUnsafe(`
+          SELECT * FROM "DoctorScheduleOverride"
+          WHERE "doctorId" = ANY($1::text[]) AND "date" = ANY($2::text[])
+        `, doctorIds, dates);
+        if (rows) {
+          for (const ov of rows) {
+            overrideMap.set(`${ov.doctorId}_${ov.date}`, ov);
+          }
+        }
+      } catch (sqlErr: any) {
+        console.warn('[appointments] Batch override lookup fallback failed:', sqlErr?.message);
+      }
+    }
+    return overrideMap;
+  }
+
   async getPatientAppointments(patientId: string, currentUser: any) {
     // Resolve the canonical Patient.id to query with
     // patientId from client = User.id (auth user UUID), not Patient row UUID
@@ -374,7 +426,8 @@ export class AppointmentsService {
       orderBy: [{ date: 'asc' }, { startTime: 'asc' }],
     });
 
-    return appointments.map((a) => this.formatAppointment(a));
+    const overrideMap = await this.getOverridesForAppointments(appointments);
+    return appointments.map((a) => this.formatAppointment(a, overrideMap));
   }
 
   async getDoctorAppointments(doctorId: string, currentUser: any) {
@@ -407,7 +460,8 @@ export class AppointmentsService {
       orderBy: [{ date: 'asc' }, { startTime: 'asc' }],
     });
 
-    return appointments.map((a) => this.formatAppointment(a));
+    const overrideMap = await this.getOverridesForAppointments(appointments);
+    return appointments.map((a) => this.formatAppointment(a, overrideMap));
   }
 
   async getAppointmentById(id: string, currentUser: any) {
@@ -419,7 +473,8 @@ export class AppointmentsService {
 
     this.checkAppointmentActorAccess(apt, currentUser);
 
-    return this.formatAppointment(apt);
+    const overrideMap = await this.getOverridesForAppointments([apt]);
+    return this.formatAppointment(apt, overrideMap);
   }
 
   async cancelAppointment(id: string, currentUser: any) {

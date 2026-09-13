@@ -51,6 +51,24 @@ export class DoctorsController {
     return this.doctorsService.undoScheduleOverride(body.doctorId, body.date, body.action, req.user);
   }
 
+  @Get(':id/schedule/overrides')
+  async getScheduleOverrides(
+    @Param('id') id: string,
+    @Query('startDate') startDate?: string,
+    @Query('endDate') endDate?: string
+  ) {
+    return this.doctorsService.getScheduleOverrides(id, startDate, endDate);
+  }
+
+  @Get(':id/schedule/week')
+  async getScheduleWeek(
+    @Param('id') id: string,
+    @Query('startDate') startDate?: string,
+    @Query('endDate') endDate?: string
+  ) {
+    return this.doctorsService.getScheduleOverrides(id, startDate, endDate);
+  }
+
   @Get(':id/schedule/status')
   async getScheduleStatus(@Param('id') id: string, @Query('date') date: string) {
     return this.doctorsService.getScheduleStatus(id, date || new Date().toISOString().split('T')[0]);

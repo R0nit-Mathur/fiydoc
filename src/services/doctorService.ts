@@ -81,8 +81,23 @@ export const doctorService = {
   },
 
   getScheduleStatus: async (doctorId: string, date?: string): Promise<SlotDetails> => {
-    const d = date || new Date().toISOString().split('T')[0];
+    const now = new Date();
+    const localDate = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}`;
+    const d = date || localDate;
     return apiClient<SlotDetails>(`/doctors/${doctorId}/schedule/status?date=${d}`);
   },
+
+  getScheduleWeek: async (
+    doctorId: string,
+    startDate?: string,
+    endDate?: string
+  ): Promise<Record<string, SlotDetails>> => {
+    const params = new URLSearchParams();
+    if (startDate) params.append('startDate', startDate);
+    if (endDate) params.append('endDate', endDate);
+    const qs = params.toString() ? `?${params.toString()}` : '';
+    return apiClient<Record<string, SlotDetails>>(`/doctors/${doctorId}/schedule/week${qs}`);
+  },
 };
+
 

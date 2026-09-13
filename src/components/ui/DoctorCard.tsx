@@ -60,9 +60,22 @@ export function DoctorCard({
     >
       {/* Top Meta Row: Verified & Distance */}
       <View style={styles.metaRow}>
-        <View style={styles.verifiedBadge}>
-          <ShieldCheck size={14} color="#2563eb" />
-          <Text style={styles.verifiedText}>Verified</Text>
+        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+          <View style={styles.verifiedBadge}>
+            <ShieldCheck size={14} color="#2563eb" />
+            <Text style={styles.verifiedText}>Verified</Text>
+          </View>
+
+          {doctor.isOnLeave ? (
+            <View style={[styles.verifiedBadge, { backgroundColor: '#FEE2E2', borderColor: '#FCA5A5', borderWidth: 1 }]}>
+              <Text style={[styles.verifiedText, { color: '#DC2626' }]}>On Leave Today</Text>
+            </View>
+          ) : doctor.delayMinutes && doctor.delayMinutes > 0 ? (
+            <View style={[styles.verifiedBadge, { backgroundColor: '#FEF3C7', borderColor: '#FCD34D', borderWidth: 1 }]}>
+              <Clock size={11} color="#D97706" />
+              <Text style={[styles.verifiedText, { color: '#92400E' }]}>+{doctor.delayMinutes}m Delay</Text>
+            </View>
+          ) : null}
         </View>
 
         {doctor.distanceKm != null && (

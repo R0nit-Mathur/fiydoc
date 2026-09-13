@@ -57,6 +57,10 @@ export interface Doctor {
   nextAvailableSlot?: string;
   modes?: ('video' | 'clinic' | 'in_person')[];
   timings?: string;
+  delayMinutes?: number;
+  delayReason?: string | null;
+  isOnLeave?: boolean;
+  leaveReason?: string | null;
   latitude?: number;
   longitude?: number;
   city?: string;
