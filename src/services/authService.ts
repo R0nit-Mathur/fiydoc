@@ -7,6 +7,7 @@ import { Platform } from 'react-native';
 
 export interface UserSession {
   id: string;
+  doctorId?: string;
   name: string;
   email: string;
   role: 'patient' | 'doctor' | 'admin';
@@ -73,6 +74,7 @@ export const authService = {
 
       return {
         id: response.user.id,
+        doctorId: doc?.id,
         name: pat?.fullName || doc?.fullName || 'User',
         email: response.user.email,
         role,
@@ -150,6 +152,7 @@ export const authService = {
 
       return {
         id: response.user.id,
+        doctorId: doc?.id,
         name: pat?.fullName || doc?.fullName || fullName,
         email: response.user.email,
         role: userRole,
@@ -222,6 +225,7 @@ export const authService = {
 
       return {
         id: response.user.id,
+        doctorId: doc?.id,
         name: pat?.fullName || doc?.fullName || name,
         email: response.user.email,
         role: userRole,

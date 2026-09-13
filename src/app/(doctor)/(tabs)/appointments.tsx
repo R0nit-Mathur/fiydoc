@@ -144,6 +144,26 @@ function AppointmentCard({
           />
         </View>
 
+        {/* Delay indicator badge */}
+        {item.delayMinutes > 0 && item.status !== 'cancelled' && (
+          <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, backgroundColor: '#FFFBEB', borderColor: '#FDE68A', borderWidth: 1, borderRadius: 8, paddingHorizontal: 10, paddingVertical: 5, marginHorizontal: 16, marginTop: 8 }}>
+            <Clock3 size={13} color="#D97706" />
+            <Text style={{ fontSize: 11.5, color: '#B45309', fontWeight: '700' }}>
+              Schedule Delayed (+{item.delayMinutes}m) · Expected: {item.expectedTime || item.time}
+            </Text>
+          </View>
+        )}
+
+        {/* Doctor on leave notice */}
+        {item.isDoctorOnLeave && (
+          <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, backgroundColor: '#FEF2F2', borderColor: '#FECACA', borderWidth: 1, borderRadius: 8, paddingHorizontal: 10, paddingVertical: 5, marginHorizontal: 16, marginTop: 8 }}>
+            <AlertCircle size={13} color="#DC2626" />
+            <Text style={{ fontSize: 11.5, color: '#B91C1C', fontWeight: '700' }}>
+              Cancelled (Doctor On Leave)
+            </Text>
+          </View>
+        )}
+
         <View style={styles.patientRow}>
           <Avatar uri={item.patientAvatar} name={item.patientName} size="md" />
           <View style={styles.patientDetails}>

@@ -86,7 +86,7 @@ const generateDynamicDates = () => {
       month: `${monthName}, ${days[d.getDay()]}`,
       slots: slotStatus,
       isLeave: isSunday,
-      isoDate: d.toISOString().slice(0, 10),
+      isoDate: `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`,
     });
   }
   return result;
@@ -131,13 +131,15 @@ export default function DoctorProfileScreen() {
 
   const currentDate = DATES[selectedDateIndex] || DATES[0];
 
-  const { data: slotData, isLoading: isLoadingSlots } = useQuery({
+  const { data: slotData, isLoading: isLoadingSlots, refetch: refetchSlots } = useQuery({
     queryKey: ['doctor-slots', doctor?.id, currentDate?.isoDate],
     queryFn: () =>
       doctor?.id && currentDate?.isoDate
         ? doctorService.getAvailableSlotsDetailed(doctor.id, currentDate.isoDate)
         : Promise.resolve({ slots: [], isOnLeave: false, delayMinutes: 0 }),
     enabled: Boolean(doctor?.id && currentDate?.isoDate),
+    staleTime: 0,
+    refetchOnMount: 'always',
   });
 
   const isOnLeave = Boolean(slotData?.isOnLeave);

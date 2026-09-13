@@ -80,8 +80,9 @@ export const doctorService = {
     });
   },
 
-  getScheduleStatus: async (doctorId: string, date: string): Promise<SlotDetails> => {
-    return apiClient<SlotDetails>(`/doctors/${doctorId}/schedule/status?date=${date}`);
+  getScheduleStatus: async (doctorId: string, date?: string): Promise<SlotDetails> => {
+    const d = date || new Date().toISOString().split('T')[0];
+    return apiClient<SlotDetails>(`/doctors/${doctorId}/schedule/status?date=${d}`);
   },
 };
 

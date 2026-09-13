@@ -10,7 +10,7 @@
  * - Session Operations: Emergency Delay (+15m / +30m), Modify Capacity modal, Interactive Leave manager
  */
 
-import React, { useState, useEffect, useMemo } from 'react';
+import React, { useState, useEffect, useMemo, useCallback } from 'react';
 import {
   View,
   Text,
@@ -21,6 +21,7 @@ import {
   Platform,
   Modal,
   TextInput,
+  RefreshControl,
 } from 'react-native';
 import { useRouter } from 'expo-router';
 import { SafeAreaView } from 'react-native-safe-area-context';
@@ -144,20 +145,49 @@ export default function DoctorScheduleScreen() {
   const [selectedDay, setSelectedDay] = useState(DYNAMIC_WEEK_DAYS[0]?.key || new Date().toISOString().slice(0, 10));
   const [selectedSession, setSelectedSession] = useState<'morning' | 'evening'>('morning');
   const [leaveDates, setLeaveDates] = useState<string[]>([]);
+  const [activeDelayMinutes, setActiveDelayMinutes] = useState<number>(0);
+  const [activeDelayReason, setActiveDelayReason] = useState<string | null>(null);
+  const [isDayOnLeave, setIsDayOnLeave] = useState<boolean>(false);
+  const [leaveReasonText, setLeaveReasonText] = useState<string | null>(null);
+  const [refreshing, setRefreshing] = useState(false);
 
   // Sync server schedule status for the selected day
-  useEffect(() => {
-    if (user?.id && selectedDay) {
-      doctorService
-        .getScheduleStatus(user.id, selectedDay)
-        .then((status) => {
-          if (status.isOnLeave) {
-            setLeaveDates((prev) => (prev.includes(selectedDay) ? prev : [...prev, selectedDay]));
-          }
-        })
-        .catch(() => {});
+  const syncScheduleStatus = useCallback(async (dayKey: string) => {
+    const docId = user?.doctorId || user?.id;
+    if (!docId || !dayKey) return;
+    try {
+      const status = await doctorService.getScheduleStatus(docId, dayKey);
+      setActiveDelayMinutes(status.delayMinutes || 0);
+      setActiveDelayReason(status.delayReason || null);
+      setIsDayOnLeave(Boolean(status.isOnLeave));
+      setLeaveReasonText(status.leaveReason || null);
+
+      if (status.isOnLeave) {
+        setLeaveDates((prev) => (prev.includes(dayKey) ? prev : [...prev, dayKey]));
+      } else {
+        setLeaveDates((prev) => prev.filter((d) => d !== dayKey));
+      }
+    } catch (err) {
+      console.warn('[schedule] Failed to sync schedule status:', err);
     }
-  }, [user?.id, selectedDay]);
+  }, [user?.doctorId, user?.id]);
+
+  useEffect(() => {
+    syncScheduleStatus(selectedDay);
+  }, [selectedDay, syncScheduleStatus]);
+
+  const handleRefresh = async () => {
+    setRefreshing(true);
+    try {
+      await Promise.all([
+        syncScheduleStatus(selectedDay),
+        queryClient.invalidateQueries({ queryKey: ['appointments'] }),
+        queryClient.invalidateQueries({ queryKey: ['doctor-slots'] }),
+      ]);
+    } finally {
+      setRefreshing(false);
+    }
+  };
   const [currentMonth, setCurrentMonth] = useState(() => {
     const d = new Date();
     d.setDate(1);
@@ -295,38 +325,60 @@ export default function DoctorScheduleScreen() {
   const selectedMorningSlots = useMemo(() => {
     const dayApts = allAppointments.filter((a) => a.date?.slice(0, 10) === selectedDay);
     return rawMorningSlots.map((slot) => {
-      const match = dayApts.find((a) => normalizeTimeForMatch(a.time) === normalizeTimeForMatch(slot.time));
+      const displaySlot = activeDelayMinutes > 0
+        ? {
+            ...slot,
+            ...shiftTime(slot.time, slot.meridiem, activeDelayMinutes),
+            delayMins: activeDelayMinutes,
+          }
+        : slot;
+
+      const match = dayApts.find((a) =>
+        normalizeTimeForMatch(a.time) === normalizeTimeForMatch(slot.time) ||
+        normalizeTimeForMatch(a.time) === normalizeTimeForMatch(displaySlot.time)
+      );
       if (match) {
         return {
-          ...slot,
+          ...displaySlot,
           status: 'booked' as const,
           patientId: match.patientId,
           patientName: match.patientName,
-          token: match.tokenNumber ? String(match.tokenNumber).replace(/^Token\s*/i, '') : slot.token,
+          token: match.tokenNumber ? String(match.tokenNumber).replace(/^Token\s*/i, '') : displaySlot.token,
           reason: match.symptoms?.join(', ') || match.notes || 'OPD Consultation',
         };
       }
-      return slot;
+      return displaySlot;
     });
-  }, [rawMorningSlots, allAppointments, selectedDay]);
+  }, [rawMorningSlots, allAppointments, selectedDay, activeDelayMinutes]);
 
   const selectedEveningSlots = useMemo(() => {
     const dayApts = allAppointments.filter((a) => a.date?.slice(0, 10) === selectedDay);
     return rawEveningSlots.map((slot) => {
-      const match = dayApts.find((a) => normalizeTimeForMatch(a.time) === normalizeTimeForMatch(slot.time));
+      const displaySlot = activeDelayMinutes > 0
+        ? {
+            ...slot,
+            ...shiftTime(slot.time, slot.meridiem, activeDelayMinutes),
+            delayMins: activeDelayMinutes,
+          }
+        : slot;
+
+      const match = dayApts.find((a) =>
+        normalizeTimeForMatch(a.time) === normalizeTimeForMatch(slot.time) ||
+        normalizeTimeForMatch(a.time) === normalizeTimeForMatch(displaySlot.time)
+      );
       if (match) {
         return {
-          ...slot,
+          ...displaySlot,
           status: 'booked' as const,
           patientId: match.patientId,
           patientName: match.patientName,
-          token: match.tokenNumber ? String(match.tokenNumber).replace(/^Token\s*/i, '') : slot.token,
+          token: match.tokenNumber ? String(match.tokenNumber).replace(/^Token\s*/i, '') : displaySlot.token,
           reason: match.symptoms?.join(', ') || match.notes || 'OPD Consultation',
         };
       }
-      return slot;
+      return displaySlot;
     });
-  }, [rawEveningSlots, allAppointments, selectedDay]);
+  }, [rawEveningSlots, allAppointments, selectedDay, activeDelayMinutes]);
   const updateSelectedSessionSlots = (session: 'morning' | 'evening', updater: (slots: ScheduleSlot[]) => ScheduleSlot[]) => {
     setSlotsByDate((previous) => {
       const current = previous[selectedDay] || {
@@ -402,6 +454,11 @@ const [undoDelayMins, setUndoDelayMins] = useState<number>(15);
       updateSelectedSessionSlots('evening', updater);
     }
 
+    const docId = user?.doctorId || user?.id;
+    const newDelay = activeDelayMinutes + mins;
+    setActiveDelayMinutes(newDelay);
+    setActiveDelayReason('OPD Clinical Delay / Emergency');
+
     const selectedDayLabel = weekDays.find((day) => day.key === selectedDay)?.fullDate || selectedDay;
     useNotificationStore.getState().addNotification({
       title: `OPD Emergency Delay (+${mins}m)`,
@@ -413,9 +470,9 @@ const [undoDelayMins, setUndoDelayMins] = useState<number>(15);
     // Sync delay to server and broadcast
     doctorService
       .applyScheduleDelay({
-        doctorId: user?.id,
+        doctorId: docId,
         date: selectedDay,
-        delayMinutes: mins,
+        delayMinutes: newDelay,
         reason: 'OPD Clinical Delay / Emergency',
       })
       .then(() => {
@@ -437,6 +494,8 @@ const [undoDelayMins, setUndoDelayMins] = useState<number>(15);
       setLeaveDates([...leaveDates, selectedDay]);
       setLastUndo({ kind: 'leave', day: selectedDay, label: 'Undo leave' });
     }
+    setIsDayOnLeave(true);
+    setLeaveReasonText(leaveReason);
 
     const selectedDayObj = weekDays.find((w) => w.key === selectedDay);
     const dayLabel = selectedDayObj ? selectedDayObj.fullDate : selectedDay;
@@ -448,10 +507,11 @@ const [undoDelayMins, setUndoDelayMins] = useState<number>(15);
       recipientRole: 'patient',
     });
 
+    const docId = user?.doctorId || user?.id;
     // Sync leave to server: cancels active bookings on that date and disables new slots
     doctorService
       .applyScheduleLeave({
-        doctorId: user?.id,
+        doctorId: docId,
         date: selectedDay,
         reason: leaveReason,
       })
@@ -515,10 +575,14 @@ const [undoDelayMins, setUndoDelayMins] = useState<number>(15);
   const handleUndoScheduleChange = () => {
     if (!lastUndo) return;
     const action = lastUndo.kind === 'leave' ? 'leave' : 'delay';
+    const docId = user?.doctorId || user?.id;
 
     if (lastUndo.kind === 'leave') {
+      setIsDayOnLeave(false);
       setLeaveDates((dates) => dates.filter((date) => date !== lastUndo.day));
     } else {
+      setActiveDelayMinutes(0);
+      setActiveDelayReason(null);
       setSlotsByDate((previous) => {
         const current = previous[lastUndo.day] || {
           morning: morningSlots.map((slot) => ({ ...slot })),
@@ -531,7 +595,7 @@ const [undoDelayMins, setUndoDelayMins] = useState<number>(15);
     // Sync undo to server
     doctorService
       .undoScheduleOverride({
-        doctorId: user?.id,
+        doctorId: docId,
         date: lastUndo.day,
         action,
       })
@@ -575,7 +639,70 @@ const [undoDelayMins, setUndoDelayMins] = useState<number>(15);
       <ScrollView
         contentContainerStyle={styles.scrollContent}
         showsVerticalScrollIndicator={false}
+        refreshControl={
+          <RefreshControl
+            refreshing={refreshing}
+            onRefresh={handleRefresh}
+            colors={[StitchColors.primaryContainer]}
+            tintColor={StitchColors.primaryContainer}
+          />
+        }
       >
+        {/* Active Delay Banner (persistent across refresh) */}
+        {activeDelayMinutes > 0 && !isDayOnLeave && (
+          <View style={styles.serverDelayCard}>
+            <Clock size={16} color="#D97706" />
+            <View style={{ flex: 1 }}>
+              <Text style={styles.serverDelayTitle}>
+                OPD Running +{activeDelayMinutes}m Behind Schedule
+              </Text>
+              <Text style={styles.serverDelaySubtitle}>
+                Slots shifted on server · {activeDelayReason || 'Clinical Delay'}
+              </Text>
+            </View>
+            <Pressable
+              style={styles.serverResetBtn}
+              onPress={async () => {
+                const docId = user?.doctorId || user?.id;
+                await doctorService.undoScheduleOverride({ doctorId: docId, date: selectedDay, action: 'delay' });
+                setActiveDelayMinutes(0);
+                setActiveDelayReason(null);
+                queryClient.invalidateQueries({ queryKey: ['appointments'] });
+                queryClient.invalidateQueries({ queryKey: ['doctor-slots'] });
+              }}
+            >
+              <RotateCcw size={12} color="#B45309" />
+              <Text style={styles.serverResetBtnText}>Reset</Text>
+            </Pressable>
+          </View>
+        )}
+
+        {/* Active Leave Banner (persistent across refresh) */}
+        {isDayOnLeave && (
+          <View style={styles.serverLeaveCard}>
+            <CalendarX size={16} color="#DC2626" />
+            <View style={{ flex: 1 }}>
+              <Text style={styles.serverLeaveTitle}>On Leave — OPD Closed for this Date</Text>
+              <Text style={styles.serverLeaveSubtitle}>
+                Bookings cancelled & prospective slots disabled · {leaveReasonText || 'Leave'}
+              </Text>
+            </View>
+            <Pressable
+              style={styles.serverCancelLeaveBtn}
+              onPress={async () => {
+                const docId = user?.doctorId || user?.id;
+                await doctorService.undoScheduleOverride({ doctorId: docId, date: selectedDay, action: 'leave' });
+                setIsDayOnLeave(false);
+                setLeaveDates((prev) => prev.filter((d) => d !== selectedDay));
+                queryClient.invalidateQueries({ queryKey: ['appointments'] });
+                queryClient.invalidateQueries({ queryKey: ['doctor-slots'] });
+              }}
+            >
+              <RotateCcw size={12} color="#B91C1C" />
+              <Text style={styles.serverCancelLeaveBtnText}>Resume OPD</Text>
+            </Pressable>
+          </View>
+        )}
         {/* Delay Toast Notification */}
         {delayNotice && (
           <View style={[styles.delayBanner, { backgroundColor: '#FEF3C7', borderColor: '#FCD34D' }]}>
@@ -2069,5 +2196,81 @@ const styles = StyleSheet.create({
     paddingHorizontal: 12,
     fontSize: 14,
     fontWeight: '600',
+  },
+  serverDelayCard: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 10,
+    backgroundColor: '#FEF3C7',
+    borderWidth: 1,
+    borderColor: '#FCD34D',
+    borderRadius: 14,
+    padding: 12,
+    marginHorizontal: 16,
+    marginBottom: 12,
+  },
+  serverDelayTitle: {
+    fontSize: 13,
+    fontWeight: '700',
+    color: '#92400E',
+  },
+  serverDelaySubtitle: {
+    fontSize: 11,
+    color: '#B45309',
+    marginTop: 1,
+  },
+  serverResetBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    backgroundColor: '#FFFFFF',
+    borderWidth: 1,
+    borderColor: '#FCD34D',
+    paddingHorizontal: 10,
+    paddingVertical: 6,
+    borderRadius: 10,
+  },
+  serverResetBtnText: {
+    fontSize: 11.5,
+    fontWeight: '700',
+    color: '#B45309',
+  },
+  serverLeaveCard: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 10,
+    backgroundColor: '#FEF2F2',
+    borderWidth: 1,
+    borderColor: '#FCA5A5',
+    borderRadius: 14,
+    padding: 12,
+    marginHorizontal: 16,
+    marginBottom: 12,
+  },
+  serverLeaveTitle: {
+    fontSize: 13,
+    fontWeight: '700',
+    color: '#B91C1C',
+  },
+  serverLeaveSubtitle: {
+    fontSize: 11,
+    color: '#DC2626',
+    marginTop: 1,
+  },
+  serverCancelLeaveBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    backgroundColor: '#FFFFFF',
+    borderWidth: 1,
+    borderColor: '#FCA5A5',
+    paddingHorizontal: 10,
+    paddingVertical: 6,
+    borderRadius: 10,
+  },
+  serverCancelLeaveBtnText: {
+    fontSize: 11.5,
+    fontWeight: '700',
+    color: '#B91C1C',
   },
 });

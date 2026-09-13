@@ -332,23 +332,31 @@ export class DoctorsService {
     }
 
     // Check for schedule override (delay / leave)
+    const cleanDate = (date ? String(date).split('T')[0] : new Date().toISOString().split('T')[0]).trim();
     let override: any = null;
     try {
-      override = await (this.prisma as any).doctorScheduleOverride?.findUnique({
+      override = await (this.prisma as any).doctorScheduleOverride?.findFirst({
         where: {
-          doctorId_date: {
-            doctorId: doctor.id,
-            date,
-          },
+          doctorId: { in: [doctor.id, doctor.userId] },
+          date: cleanDate,
         },
       });
-    } catch (err: any) {
-      console.warn('[doctors] doctorScheduleOverride query failed (fallback):', err?.message);
+    } catch {
+      try {
+        const rows: any = await this.prisma.$queryRawUnsafe(`
+          SELECT * FROM "DoctorScheduleOverride"
+          WHERE ("doctorId" = $1 OR "doctorId" = $2) AND "date" = $3
+          ORDER BY "updatedAt" DESC LIMIT 1
+        `, doctor.id, doctor.userId, cleanDate);
+        override = rows?.[0] || null;
+      } catch (sqlErr: any) {
+        console.warn('[doctors] raw SQL slot override lookup failed:', sqlErr?.message);
+      }
     }
 
     if (override?.isOnLeave) {
       return {
-        date,
+        date: cleanDate,
         doctorId: doctor.id,
         slots: [],
         isOnLeave: true,
@@ -364,7 +372,7 @@ export class DoctorsService {
     const bookedAppointments = await this.prisma.appointment.findMany({
       where: {
         doctorId: { in: [doctor.id, doctor.userId] },
-        date,
+        date: cleanDate,
         status: { in: ['CONFIRMED', 'PENDING'] },
       },
       select: { startTime: true },
@@ -378,7 +386,7 @@ export class DoctorsService {
     const localMonth = String(now.getMonth() + 1).padStart(2, '0');
     const localDay = String(now.getDate()).padStart(2, '0');
     const todayLocal = `${localYear}-${localMonth}-${localDay}`;
-    const isToday = date === todayIso || date === todayLocal;
+    const isToday = cleanDate === todayIso || cleanDate === todayLocal;
     const currentMinutes = now.getHours() * 60 + now.getMinutes();
 
     const availableSlots = candidateSlots.filter((slot) => {
@@ -397,7 +405,7 @@ export class DoctorsService {
     });
 
     return {
-      date,
+      date: cleanDate,
       doctorId: doctor.id,
       slots: availableSlots,
       delayMinutes,
@@ -435,18 +443,21 @@ export class DoctorsService {
     if (!doctor) throw new NotFoundException('Doctor not found.');
 
     const cleanReason = reason?.trim() || 'Clinical emergency / OPD delay';
+    const cleanDate = (date ? String(date).split('T')[0] : new Date().toISOString().split('T')[0]).trim();
+    const id = (require('crypto').randomUUID ? require('crypto').randomUUID() : `dso_${Date.now()}`);
 
     try {
       await (this.prisma as any).doctorScheduleOverride?.upsert({
         where: {
           doctorId_date: {
             doctorId: doctor.id,
-            date,
+            date: cleanDate,
           },
         },
         create: {
+          id,
           doctorId: doctor.id,
-          date,
+          date: cleanDate,
           delayMinutes,
           isOnLeave: false,
           reason: cleanReason,
@@ -458,14 +469,24 @@ export class DoctorsService {
         },
       });
     } catch (err: any) {
-      console.warn('[doctors] Failed to upsert doctorScheduleOverride:', err?.message);
+      console.warn('[doctors] Prisma delay upsert failed, attempting raw SQL:', err?.message);
+      try {
+        await this.prisma.$executeRawUnsafe(`
+          INSERT INTO "DoctorScheduleOverride" ("id", "doctorId", "date", "delayMinutes", "isOnLeave", "reason", "updatedAt", "createdAt")
+          VALUES ($1, $2, $3, $4, false, $5, NOW(), NOW())
+          ON CONFLICT ("doctorId", "date")
+          DO UPDATE SET "delayMinutes" = $4, "isOnLeave" = false, "reason" = $5, "updatedAt" = NOW()
+        `, id, doctor.id, cleanDate, delayMinutes, cleanReason);
+      } catch (sqlErr: any) {
+        console.error('[doctors] Raw SQL delay upsert also failed:', sqlErr?.message);
+      }
     }
 
     // Update existing active appointments with delay tag
     const appointments = await this.prisma.appointment.findMany({
       where: {
         doctorId: { in: [doctor.id, doctor.userId] },
-        date,
+        date: cleanDate,
         status: { in: ['PENDING', 'CONFIRMED'] },
       },
       include: { patient: true },
@@ -491,7 +512,7 @@ export class DoctorsService {
               userId: apt.patient.userId,
               type: 'SCHEDULE_DELAY',
               title: `⚠️ OPD Delay (+${delayMinutes}m)`,
-              message: `Dr. ${doctor.fullName} is delayed by ~${delayMinutes} mins on ${date}. Your updated appointment time is approximately ${shiftedTime}. Reason: ${cleanReason}.`,
+              message: `Dr. ${doctor.fullName} is delayed by ~${delayMinutes} mins on ${cleanDate}. Your updated appointment time is approximately ${shiftedTime}. Reason: ${cleanReason}.`,
             },
           });
         } catch (notifErr: any) {
@@ -503,7 +524,7 @@ export class DoctorsService {
     return {
       success: true,
       doctorId: doctor.id,
-      date,
+      date: cleanDate,
       delayMinutes,
       reason: cleanReason,
       affectedAppointments: appointments.length,
@@ -527,18 +548,21 @@ export class DoctorsService {
     if (!doctor) throw new NotFoundException('Doctor not found.');
 
     const cleanReason = reason?.trim() || 'Personal / Medical leave';
+    const cleanDate = (date ? String(date).split('T')[0] : new Date().toISOString().split('T')[0]).trim();
+    const id = (require('crypto').randomUUID ? require('crypto').randomUUID() : `dso_${Date.now()}`);
 
     try {
       await (this.prisma as any).doctorScheduleOverride?.upsert({
         where: {
           doctorId_date: {
             doctorId: doctor.id,
-            date,
+            date: cleanDate,
           },
         },
         create: {
+          id,
           doctorId: doctor.id,
-          date,
+          date: cleanDate,
           delayMinutes: 0,
           isOnLeave: true,
           reason: cleanReason,
@@ -550,14 +574,24 @@ export class DoctorsService {
         },
       });
     } catch (err: any) {
-      console.warn('[doctors] Failed to upsert doctorScheduleOverride leave:', err?.message);
+      console.warn('[doctors] Prisma leave upsert failed, attempting raw SQL:', err?.message);
+      try {
+        await this.prisma.$executeRawUnsafe(`
+          INSERT INTO "DoctorScheduleOverride" ("id", "doctorId", "date", "delayMinutes", "isOnLeave", "reason", "updatedAt", "createdAt")
+          VALUES ($1, $2, $3, 0, true, $4, NOW(), NOW())
+          ON CONFLICT ("doctorId", "date")
+          DO UPDATE SET "delayMinutes" = 0, "isOnLeave" = true, "reason" = $4, "updatedAt" = NOW()
+        `, id, doctor.id, cleanDate, cleanReason);
+      } catch (sqlErr: any) {
+        console.error('[doctors] Raw SQL leave upsert also failed:', sqlErr?.message);
+      }
     }
 
     // Cancel all active appointments for this date
     const appointments = await this.prisma.appointment.findMany({
       where: {
         doctorId: { in: [doctor.id, doctor.userId] },
-        date,
+        date: cleanDate,
         status: { in: ['PENDING', 'CONFIRMED'] },
       },
       include: { patient: true },
@@ -584,7 +618,7 @@ export class DoctorsService {
               userId: apt.patient.userId,
               type: 'SCHEDULE_LEAVE',
               title: '❌ Appointment Cancelled — Doctor on Leave',
-              message: `Dr. ${doctor.fullName} will be on leave on ${date} (${cleanReason}). Your appointment has been cancelled. Full refund/rescheduling is enabled in the app.`,
+              message: `Dr. ${doctor.fullName} will be on leave on ${cleanDate} (${cleanReason}). Your appointment has been cancelled. Full refund/rescheduling is enabled in the app.`,
             },
           });
         } catch (notifErr: any) {
@@ -596,7 +630,7 @@ export class DoctorsService {
     return {
       success: true,
       doctorId: doctor.id,
-      date,
+      date: cleanDate,
       isOnLeave: true,
       reason: cleanReason,
       cancelledAppointments: appointments.length,
@@ -619,17 +653,20 @@ export class DoctorsService {
     });
     if (!doctor) throw new NotFoundException('Doctor not found.');
 
+    const cleanDate = (date ? String(date).split('T')[0] : new Date().toISOString().split('T')[0]).trim();
+    const id = (require('crypto').randomUUID ? require('crypto').randomUUID() : `dso_${Date.now()}`);
+
     try {
       if (action === 'delay') {
         await (this.prisma as any).doctorScheduleOverride?.upsert({
-          where: { doctorId_date: { doctorId: doctor.id, date } },
-          create: { doctorId: doctor.id, date, delayMinutes: 0 },
+          where: { doctorId_date: { doctorId: doctor.id, date: cleanDate } },
+          create: { id, doctorId: doctor.id, date: cleanDate, delayMinutes: 0, isOnLeave: false },
           update: { delayMinutes: 0, reason: null },
         });
 
         // Clean delay note tag from appointments
         const appointments = await this.prisma.appointment.findMany({
-          where: { doctorId: { in: [doctor.id, doctor.userId] }, date },
+          where: { doctorId: { in: [doctor.id, doctor.userId] }, date: cleanDate },
           include: { patient: true },
         });
         for (const apt of appointments) {
@@ -655,19 +692,38 @@ export class DoctorsService {
         }
       } else {
         await (this.prisma as any).doctorScheduleOverride?.upsert({
-          where: { doctorId_date: { doctorId: doctor.id, date } },
-          create: { doctorId: doctor.id, date, isOnLeave: false },
+          where: { doctorId_date: { doctorId: doctor.id, date: cleanDate } },
+          create: { id, doctorId: doctor.id, date: cleanDate, delayMinutes: 0, isOnLeave: false },
           update: { isOnLeave: false, reason: null },
         });
       }
     } catch (err: any) {
-      console.warn('[doctors] Failed to undo schedule override:', err?.message);
+      console.warn('[doctors] Prisma undo failed, attempting raw SQL:', err?.message);
+      try {
+        if (action === 'delay') {
+          await this.prisma.$executeRawUnsafe(`
+            INSERT INTO "DoctorScheduleOverride" ("id", "doctorId", "date", "delayMinutes", "isOnLeave", "reason", "updatedAt", "createdAt")
+            VALUES ($1, $2, $3, 0, false, NULL, NOW(), NOW())
+            ON CONFLICT ("doctorId", "date")
+            DO UPDATE SET "delayMinutes" = 0, "reason" = NULL, "updatedAt" = NOW()
+          `, id, doctor.id, cleanDate);
+        } else {
+          await this.prisma.$executeRawUnsafe(`
+            INSERT INTO "DoctorScheduleOverride" ("id", "doctorId", "date", "delayMinutes", "isOnLeave", "reason", "updatedAt", "createdAt")
+            VALUES ($1, $2, $3, 0, false, NULL, NOW(), NOW())
+            ON CONFLICT ("doctorId", "date")
+            DO UPDATE SET "isOnLeave" = false, "reason" = NULL, "updatedAt" = NOW()
+          `, id, doctor.id, cleanDate);
+        }
+      } catch (sqlErr: any) {
+        console.error('[doctors] Raw SQL undo also failed:', sqlErr?.message);
+      }
     }
 
     return {
       success: true,
       doctorId: doctor.id,
-      date,
+      date: cleanDate,
       action,
       reverted: true,
     };
@@ -684,19 +740,35 @@ export class DoctorsService {
     });
     if (!doctor) throw new NotFoundException('Doctor not found.');
 
+    const cleanDate = (date ? String(date).split('T')[0] : new Date().toISOString().split('T')[0]).trim();
+
     let override: any = null;
     try {
-      override = await (this.prisma as any).doctorScheduleOverride?.findUnique({
-        where: { doctorId_date: { doctorId: doctor.id, date } },
+      override = await (this.prisma as any).doctorScheduleOverride?.findFirst({
+        where: {
+          doctorId: { in: [doctor.id, doctor.userId] },
+          date: cleanDate,
+        },
       });
-    } catch {}
+    } catch {
+      try {
+        const rows: any = await this.prisma.$queryRawUnsafe(`
+          SELECT * FROM "DoctorScheduleOverride"
+          WHERE ("doctorId" = $1 OR "doctorId" = $2) AND "date" = $3
+          ORDER BY "updatedAt" DESC LIMIT 1
+        `, doctor.id, doctor.userId, cleanDate);
+        override = rows?.[0] || null;
+      } catch (sqlErr: any) {
+        console.warn('[doctors] Raw SQL getScheduleStatus lookup failed:', sqlErr?.message);
+      }
+    }
 
     return {
       doctorId: doctor.id,
-      date,
+      date: cleanDate,
       delayMinutes: override?.delayMinutes || 0,
       delayReason: override?.reason || null,
-      isOnLeave: override?.isOnLeave || false,
+      isOnLeave: Boolean(override?.isOnLeave),
       leaveReason: override?.isOnLeave ? (override?.reason || 'Doctor on leave') : null,
     };
   }
