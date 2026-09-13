@@ -51,6 +51,7 @@ import { useAppTheme } from '@/hooks/useAppTheme';
 import { BorderRadius, Shadows, Spacing, StitchColors, Palette, DEFAULT_DOCTOR_AVATAR } from '@/constants/theme';
 import { useAuthStore } from '@/store/useAuthStore';
 import { useAppointmentsQuery } from '@/hooks/queries/useAppointmentsQuery';
+import { Avatar } from '@/components/ui/Avatar';
 
 const DOCTOR_AVATAR = DEFAULT_DOCTOR_AVATAR;
 
@@ -89,6 +90,8 @@ export default function DoctorPatientsScreen() {
 
   const [activeFilter, setActiveFilter] = useState('all');
   const [searchQuery, setSearchQuery] = useState('');
+  const [selectedDateFilter, setSelectedDateFilter] = useState<string | null>(null);
+  const [showCalendarPicker, setShowCalendarPicker] = useState(false);
   const [historyPatient, setHistoryPatient] = useState<PatientRecord | null>(null);
   const [historyDate, setHistoryDate] = useState<string | null>(null);
 
@@ -136,6 +139,18 @@ export default function DoctorPatientsScreen() {
   const seenToday = appointments.filter((apt) => apt.date === today && ['completed', 'in_progress'].includes(apt.status)).length;
   const pendingPatients = appointments.filter((apt) => apt.status === 'pending').length;
 
+  const availableVisitDates = useMemo(() => {
+    const map = new Map<string, number>();
+    appointments.forEach((apt) => {
+      if (apt.date) {
+        map.set(apt.date, (map.get(apt.date) || 0) + 1);
+      }
+    });
+    return Array.from(map.entries())
+      .sort((a, b) => b[0].localeCompare(a[0]))
+      .map(([date, count]) => ({ date, count }));
+  }, [appointments]);
+
   const filteredPatients = useMemo(() => {
     return patientRoster.filter((p) => {
       const q = searchQuery.toLowerCase().trim();
@@ -147,9 +162,12 @@ export default function DoctorPatientsScreen() {
 
       const matchFilter = activeFilter === 'all' || p.category === activeFilter;
 
-      return matchSearch && matchFilter;
+      const matchDate =
+        !selectedDateFilter || p.visits.some((v) => v.date === selectedDateFilter);
+
+      return matchSearch && matchFilter && matchDate;
     });
-  }, [patientRoster, activeFilter, searchQuery]);
+  }, [patientRoster, activeFilter, searchQuery, selectedDateFilter]);
 
   const handlePatientAction = (patientId: string) => {
     if (Platform.OS !== 'web') {
@@ -180,7 +198,7 @@ export default function DoctorPatientsScreen() {
             onPress={() => router.push('/(doctor)/(tabs)/profile')}
             style={styles.avatarButton}
           >
-            <Image source={{ uri: DOCTOR_AVATAR }} style={styles.avatarImg} />
+            <Avatar uri={user?.avatar || null} name={user?.name || 'Doctor'} size="sm" />
           </Pressable>
         </View>
       </View>
@@ -263,7 +281,38 @@ export default function DoctorPatientsScreen() {
               </Pressable>
             )}
           </View>
+
+          <Pressable
+            onPress={() => setShowCalendarPicker(true)}
+            style={[
+              styles.calendarFilterBtn,
+              {
+                backgroundColor: selectedDateFilter ? StitchColors.primaryContainer : colors.card,
+                borderColor: selectedDateFilter ? StitchColors.primaryContainer : colors.border,
+              },
+            ]}
+            hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+            accessibilityRole="button"
+            accessibilityLabel="Filter patient history by date"
+          >
+            <Calendar size={18} color={selectedDateFilter ? '#FFFFFF' : colors.text} />
+          </Pressable>
         </View>
+
+        {/* Active Date Filter Tag */}
+        {selectedDateFilter ? (
+          <View style={styles.activeDateBadgeRow}>
+            <View style={[styles.activeDateBadge, { backgroundColor: StitchColors.primaryContainer + '15', borderColor: StitchColors.primaryContainer + '30' }]}>
+              <Calendar size={13} color={StitchColors.primaryContainer} />
+              <Text style={[styles.activeDateBadgeText, { color: StitchColors.primaryContainer }]}>
+                Visits on: {new Date(`${selectedDateFilter}T00:00:00`).toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' })}
+              </Text>
+              <Pressable onPress={() => setSelectedDateFilter(null)} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}>
+                <X size={14} color={StitchColors.primaryContainer} />
+              </Pressable>
+            </View>
+          </View>
+        ) : null}
 
         {/* 5. Quick Stats Row (2 minimalist cards) */}
         <View style={styles.statsRow}>
@@ -492,6 +541,158 @@ export default function DoctorPatientsScreen() {
           </View>
         </View>
       </Modal>
+
+      {/* Calendar History Filter Modal */}
+      <Modal
+        visible={showCalendarPicker}
+        transparent
+        animationType="slide"
+        onRequestClose={() => setShowCalendarPicker(false)}
+      >
+        <View style={styles.historyOverlay}>
+          <View style={[styles.historySheet, { backgroundColor: colors.card }]}>
+            <View style={styles.historyHeader}>
+              <View>
+                <Text style={[styles.historyTitle, { color: colors.text }]}>Search by Date History</Text>
+                <Text style={[styles.historySub, { color: colors.textSecondary }]}>Filter roster by specific consultation date</Text>
+              </View>
+              <Pressable onPress={() => setShowCalendarPicker(false)} hitSlop={10}>
+                <X size={20} color={colors.text} />
+              </Pressable>
+            </View>
+
+            {/* Quick date presets */}
+            <View style={{ flexDirection: 'row', gap: 8, marginVertical: 4 }}>
+              <Pressable
+                onPress={() => {
+                  setSelectedDateFilter(null);
+                  setShowCalendarPicker(false);
+                }}
+                style={[
+                  styles.presetChip,
+                  {
+                    backgroundColor: !selectedDateFilter ? StitchColors.primaryContainer : colors.backgroundElement,
+                    borderColor: !selectedDateFilter ? StitchColors.primaryContainer : colors.border,
+                  },
+                ]}
+              >
+                <Text style={[styles.presetChipText, { color: !selectedDateFilter ? '#FFFFFF' : colors.text }]}>
+                  All Dates
+                </Text>
+              </Pressable>
+
+              <Pressable
+                onPress={() => {
+                  setSelectedDateFilter(today);
+                  setShowCalendarPicker(false);
+                }}
+                style={[
+                  styles.presetChip,
+                  {
+                    backgroundColor: selectedDateFilter === today ? StitchColors.primaryContainer : colors.backgroundElement,
+                    borderColor: selectedDateFilter === today ? StitchColors.primaryContainer : colors.border,
+                  },
+                ]}
+              >
+                <Text style={[styles.presetChipText, { color: selectedDateFilter === today ? '#FFFFFF' : colors.text }]}>
+                  Today
+                </Text>
+              </Pressable>
+
+              <Pressable
+                onPress={() => {
+                  const y = new Date();
+                  y.setDate(y.getDate() - 1);
+                  const yStr = y.toISOString().slice(0, 10);
+                  setSelectedDateFilter(yStr);
+                  setShowCalendarPicker(false);
+                }}
+                style={[
+                  styles.presetChip,
+                  {
+                    backgroundColor: colors.backgroundElement,
+                    borderColor: colors.border,
+                  },
+                ]}
+              >
+                <Text style={[styles.presetChipText, { color: colors.text }]}>
+                  Yesterday
+                </Text>
+              </Pressable>
+            </View>
+
+            <Text style={{ fontSize: 12, fontWeight: '700', color: colors.textSecondary, marginTop: 8, marginBottom: 4, textTransform: 'uppercase', letterSpacing: 0.5 }}>
+              Available Consultation Dates
+            </Text>
+
+            <ScrollView style={{ maxHeight: 260 }} contentContainerStyle={{ gap: 8 }}>
+              {availableVisitDates.length === 0 ? (
+                <View style={{ padding: 20, alignItems: 'center' }}>
+                  <Text style={{ fontSize: 13, color: colors.textSecondary }}>No appointment history records found.</Text>
+                </View>
+              ) : (
+                availableVisitDates.map(({ date, count }) => {
+                  const isSelected = selectedDateFilter === date;
+                  const dateObj = new Date(`${date}T00:00:00`);
+                  const formatted = dateObj.toLocaleDateString('en-IN', {
+                    weekday: 'short',
+                    day: '2-digit',
+                    month: 'short',
+                    year: 'numeric',
+                  });
+
+                  return (
+                    <Pressable
+                      key={date}
+                      onPress={() => {
+                        setSelectedDateFilter(date);
+                        setShowCalendarPicker(false);
+                      }}
+                      style={[
+                        styles.dateListItem,
+                        {
+                          backgroundColor: isSelected ? StitchColors.primaryContainer + '15' : colors.backgroundElement,
+                          borderColor: isSelected ? StitchColors.primaryContainer : colors.border,
+                        },
+                      ]}
+                    >
+                      <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10 }}>
+                        <Calendar size={16} color={isSelected ? StitchColors.primaryContainer : colors.textMuted} />
+                        <View>
+                          <Text style={[styles.dateListTitle, { color: isSelected ? StitchColors.primaryContainer : colors.text }]}>
+                            {formatted}
+                          </Text>
+                          <Text style={[styles.dateListCount, { color: colors.textSecondary }]}>
+                            {count} {count === 1 ? 'patient visit' : 'patient visits'}
+                          </Text>
+                        </View>
+                      </View>
+
+                      {isSelected ? (
+                        <CheckCircle2 size={18} color={StitchColors.primaryContainer} />
+                      ) : (
+                        <ChevronRight size={16} color={colors.textMuted} />
+                      )}
+                    </Pressable>
+                  );
+                })
+              )}
+            </ScrollView>
+
+            {selectedDateFilter ? (
+              <Pressable
+                onPress={() => {
+                  setSelectedDateFilter(null);
+                  setShowCalendarPicker(false);
+                }}
+                style={[styles.clearDateBtn, { borderColor: StitchColors.error }]}
+              >
+                <Text style={{ color: StitchColors.error, fontWeight: '700', fontSize: 13 }}>Clear Date Filter</Text>
+              </Pressable>
+            ) : null}
+          </View>
+        </View>
+      </Modal>
     </SafeAreaView>
   );
 }
@@ -538,9 +739,9 @@ const styles = StyleSheet.create({
     borderWidth: 1,
   },
   avatarButton: {
-    width: 34,
-    height: 34,
-    borderRadius: 17,
+    width: 36,
+    height: 36,
+    borderRadius: 12,
     overflow: 'hidden',
   },
   avatarImg: {
@@ -811,5 +1012,67 @@ const styles = StyleSheet.create({
     fontSize: 11,
     fontWeight: '700',
     color: '#FFFFFF',
+  },
+  calendarFilterBtn: {
+    width: 42,
+    height: 42,
+    borderRadius: 14,
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderWidth: 1,
+    ...Shadows.subtle,
+  },
+  activeDateBadgeRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
+  activeDateBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderRadius: BorderRadius.full,
+    borderWidth: 1,
+  },
+  activeDateBadgeText: {
+    fontSize: 12,
+    fontWeight: '600',
+  },
+  presetChip: {
+    flex: 1,
+    paddingVertical: 8,
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderRadius: BorderRadius.lg,
+    borderWidth: 1,
+  },
+  presetChipText: {
+    fontSize: 12,
+    fontWeight: '700',
+  },
+  dateListItem: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    padding: 12,
+    borderRadius: BorderRadius.lg,
+    borderWidth: 1,
+  },
+  dateListTitle: {
+    fontSize: 13,
+    fontWeight: '700',
+  },
+  dateListCount: {
+    fontSize: 11,
+    marginTop: 2,
+  },
+  clearDateBtn: {
+    marginTop: 10,
+    paddingVertical: 10,
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderRadius: BorderRadius.lg,
+    borderWidth: 1,
   },
 });

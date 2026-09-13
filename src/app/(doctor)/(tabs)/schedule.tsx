@@ -53,6 +53,8 @@ import { useAppTheme } from '@/hooks/useAppTheme';
 import { useAuthStore } from '@/store/useAuthStore';
 import { useNotificationStore } from '@/store/useNotificationStore';
 import { BorderRadius, Shadows, StitchColors, DEFAULT_DOCTOR_AVATAR } from '@/constants/theme';
+import UndoToast from '@/components/ui/UndoToast';
+import { Avatar } from '@/components/ui/Avatar';
 
 const DOCTOR_AVATAR = DEFAULT_DOCTOR_AVATAR;
 
@@ -290,6 +292,7 @@ export default function DoctorScheduleScreen() {
   const [maxPatients, setMaxPatients] = useState(12);
   const [delayNotice, setDelayNotice] = useState<string | null>(null);
   const [lastUndo, setLastUndo] = useState<ScheduleUndo | null>(null);
+const [undoDelayMins, setUndoDelayMins] = useState<number>(15);
 
   // Leave Form
   const [leaveReason, setLeaveReason] = useState('Personal / Medical Leave');
@@ -445,7 +448,7 @@ export default function DoctorScheduleScreen() {
           </Pressable>
 
           <Pressable onPress={() => router.push('/(doctor)/(tabs)/profile')} style={styles.avatarBtn}>
-            <Image source={{ uri: DOCTOR_AVATAR }} style={styles.avatarImg} />
+            <Avatar uri={user?.avatar || null} name={user?.name || 'Doctor'} size="sm" />
           </Pressable>
         </View>
       </View>
@@ -879,6 +882,17 @@ export default function DoctorScheduleScreen() {
             </View>
 
             <View style={styles.delayBtnGroup}>
+              {lastUndo && lastUndo.kind === 'slots' && (
+                <Pressable
+                  onPress={handleUndoScheduleChange}
+                  style={[styles.delayBtn, { backgroundColor: '#FEE2E2', borderColor: '#F87171', borderWidth: 1 }]}
+                  accessibilityRole="button"
+                  accessibilityLabel="Undo last delay"
+                >
+                  <RotateCcw size={13} color="#DC2626" />
+                  <Text style={[styles.delayBtnText, { color: '#DC2626', fontWeight: '700' }]}>Undo</Text>
+                </Pressable>
+              )}
               <Pressable
                 onPress={() => handleEmergencyDelay(15)}
                 style={[styles.delayBtn, { backgroundColor: colors.backgroundElement }]}
@@ -1225,6 +1239,14 @@ export default function DoctorScheduleScreen() {
           </View>
         </Modal>
       )}
+
+      <UndoToast
+        visible={Boolean(lastUndo && lastUndo.kind === 'slots')}
+        message={delayNotice || (lastUndo ? `${lastUndo.label.replace('Undo ', '')} applied.` : '')}
+        onUndo={handleUndoScheduleChange}
+        onDismiss={() => setLastUndo(null)}
+        durationMs={12000}
+      />
     </SafeAreaView>
   );
 }

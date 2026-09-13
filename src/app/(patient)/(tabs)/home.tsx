@@ -42,6 +42,7 @@ import { useHealthStore } from '@/store/useHealthStore';
 import { WelcomeGuideModal } from '@/components/ui/WelcomeGuideModal';
 import { LocationPermissionModal } from '@/components/location/LocationPermissionModal';
 import { DoctorCard } from '@/components/ui/DoctorCard';
+import { Avatar } from '@/components/ui/Avatar';
 import { signOutAll } from '@/services/authService';
 import { BorderRadius, Spacing, StitchColors, Shadows, Palette } from '@/constants/theme';
 import {
@@ -174,18 +175,27 @@ export default function PatientHomeScreen() {
           >
             <FiYLogo size="md" />
           </Pressable>
-          <Pressable
-            onPress={() => router.push('/(patient)/notifications')}
-            hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
-            style={({ pressed }) => [
-              styles.headerIconButton,
-              pressed && styles.headerIconPressed,
-            ]}
-            accessibilityLabel="Notifications"
-          >
-            <Bell size={21} color={StitchColors.onSurface} />
-            <View style={styles.notifDot} />
-          </Pressable>
+          <View style={styles.headerRightRow}>
+            <Pressable
+              onPress={() => router.push('/(patient)/notifications')}
+              hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+              style={({ pressed }) => [
+                styles.headerIconButton,
+                pressed && styles.headerIconPressed,
+              ]}
+              accessibilityLabel="Notifications"
+            >
+              <Bell size={20} color={StitchColors.onSurface} />
+              <View style={styles.notifDot} />
+            </Pressable>
+            <Pressable
+              onPress={() => router.push('/(patient)/(tabs)/profile')}
+              style={styles.avatarButton}
+              accessibilityLabel="Profile"
+            >
+              <Avatar uri={user?.avatar || null} name={user?.name || 'Patient'} size="sm" />
+            </Pressable>
+          </View>
         </View>
       </View>
 
@@ -728,6 +738,17 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'space-between',
     paddingHorizontal: 16,
+  },
+  headerRightRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+  },
+  avatarButton: {
+    width: 38,
+    height: 38,
+    alignItems: 'center',
+    justifyContent: 'center',
   },
   headerIconButton: {
     width: 40,

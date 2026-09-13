@@ -84,7 +84,7 @@ export default function VerifyOtpScreen() {
     setVerifying(false);
 
     if (from === 'reset') {
-      router.replace({ pathname: '/(auth)/reset-password', params: { email, code } });
+      router.replace({ pathname: '/(auth)/reset-password' as any, params: { email, code } });
     } else {
       router.replace('/(onboarding)/role-select');
     }

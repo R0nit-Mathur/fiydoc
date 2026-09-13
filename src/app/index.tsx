@@ -20,6 +20,8 @@ export default function Index() {
         router.replace('/(auth)/welcome');
       } else if (!onboardingCompleted) {
         router.replace('/(onboarding)/role-select');
+      } else if (role === 'admin') {
+        router.replace('/(admin)/dashboard' as any);
       } else if (role === 'doctor') {
         router.replace('/(doctor)/(tabs)/home');
       } else {

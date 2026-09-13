@@ -7,6 +7,7 @@ import {
   ActivityIndicator,
   StyleSheet,
   Platform,
+  ScrollView,
 } from 'react-native';
 import { useRouter } from 'expo-router';
 import * as Haptics from 'expo-haptics';
@@ -24,7 +25,11 @@ import {
   Clock,
   Shield,
   Lock,
+  ChevronDown,
+  Edit2,
+  X,
 } from 'lucide-react-native';
+import { Modal } from 'react-native';
 import { StepProgressTracker } from '@/components/ui/StepProgressTracker';
 import { CardCarouselTabs, CarouselDots } from '@/components/ui/CardCarouselTabs';
 import { FileUploadCard } from '@/components/ui/FileUploadCard';
@@ -33,6 +38,7 @@ import { useAuthStore } from '@/store/useAuthStore';
 import { authService } from '@/services/authService';
 import { StitchColors } from '@/constants/theme';
 import { pickClinicalDocument } from '@/utils/mediaPicker';
+import locationsData from '@/constants/locations.json';
 
 export interface DoctorRegistrationViewProps {
   onSwitchToPatient?: () => void;
@@ -136,8 +142,21 @@ export function DoctorRegistrationView({
 
   // Slide 3: OPD Timings & Consultation Fee
   const [consultationFee, setConsultationFee] = useState('800');
-  const [slotDuration, setSlotDuration] = useState('15 Mins / Patient');
+  const [slotDurationMins, setSlotDurationMins] = useState('15');
   const [selectedDays, setSelectedDays] = useState<string[]>(['M', 'T', 'W', 'T2', 'F', 'S']);
+  const [morningShiftTime, setMorningShiftTime] = useState('10:30 AM – 01:30 PM');
+  const [eveningShiftTime, setEveningShiftTime] = useState('05:00 PM – 08:00 PM');
+  const [morningTokens, setMorningTokens] = useState('12');
+  const [eveningTokens, setEveningTokens] = useState('12');
+  const [showTimingModal, setShowTimingModal] = useState(false);
+  const [tempMorningTime, setTempMorningTime] = useState('10:30 AM – 01:30 PM');
+  const [tempEveningTime, setTempEveningTime] = useState('05:00 PM – 08:00 PM');
+  const [tempMorningTokens, setTempMorningTokens] = useState('12');
+  const [tempEveningTokens, setTempEveningTokens] = useState('12');
+
+  // Autocomplete Dropdown State
+  const [activeDropdown, setActiveDropdown] = useState<'city' | 'college' | 'hospital' | null>(null);
+
   const [finalSubmitting, setFinalSubmitting] = useState(false);
   const [error, setError] = useState('');
 
@@ -623,18 +642,54 @@ export function DoctorRegistrationView({
                 </View>
               </View>
 
-              {/* Medical College */}
               <View style={styles.inputGroup}>
-                <Text style={styles.inputLabel}>Medical College / Institution</Text>
+                <View style={styles.dropdownHeaderRow}>
+                  <Text style={styles.inputLabel}>Medical College / Institution</Text>
+                  <Pressable
+                    onPress={() => setActiveDropdown(activeDropdown === 'college' ? null : 'college')}
+                    hitSlop={8}
+                    style={styles.dropdownToggleBtn}
+                  >
+                    <Text style={styles.dropdownToggleText}>Browse Colleges</Text>
+                    <ChevronDown size={14} color={StitchColors.primary} />
+                  </Pressable>
+                </View>
                 <View style={styles.inputWrapper}>
                   <TextInput
                     value={ugCollege}
-                    onChangeText={setUgCollege}
+                    onChangeText={(val) => {
+                      setUgCollege(val);
+                      if (val.trim().length > 1) setActiveDropdown('college');
+                    }}
+                    onFocus={() => setActiveDropdown('college')}
                     placeholder="e.g. Seth GS Medical College & KEM Hospital"
                     placeholderTextColor="#737783"
                     style={styles.textInput}
                   />
                 </View>
+                {activeDropdown === 'college' && (
+                  <View style={styles.autocompleteCard}>
+                    <ScrollView style={{ maxHeight: 180 }} keyboardShouldPersistTaps="handled" nestedScrollEnabled>
+                      {locationsData.colleges
+                        .filter((c) => !ugCollege.trim() || c.toLowerCase().includes(ugCollege.toLowerCase().trim()))
+                        .slice(0, 8)
+                        .map((college) => (
+                          <Pressable
+                            key={college}
+                            onPress={() => {
+                              setUgCollege(college);
+                              setActiveDropdown(null);
+                            }}
+                            style={styles.autocompleteItem}
+                          >
+                            <Text style={styles.autocompleteItemText} numberOfLines={1}>
+                              {college}
+                            </Text>
+                          </Pressable>
+                        ))}
+                    </ScrollView>
+                  </View>
+                )}
               </View>
 
               {/* State of College & Graduation Year */}
@@ -1208,16 +1263,51 @@ export function DoctorRegistrationView({
               {/* City & PIN */}
               <View style={styles.rowTwoCols}>
                 <View style={[styles.inputGroup, { flex: 2 }]}>
-                  <Text style={styles.inputLabel}>City / Region</Text>
+                  <View style={styles.dropdownHeaderRow}>
+                    <Text style={styles.inputLabel}>City / Region</Text>
+                    <Pressable
+                      onPress={() => setActiveDropdown(activeDropdown === 'city' ? null : 'city')}
+                      hitSlop={8}
+                      style={styles.dropdownToggleBtn}
+                    >
+                      <Text style={styles.dropdownToggleText}>Browse</Text>
+                      <ChevronDown size={12} color={StitchColors.primary} />
+                    </Pressable>
+                  </View>
                   <View style={styles.inputWrapper}>
                     <TextInput
                       value={clinicCity}
-                      onChangeText={setClinicCity}
+                      onChangeText={(val) => {
+                        setClinicCity(val);
+                        if (val.trim().length > 0) setActiveDropdown('city');
+                      }}
+                      onFocus={() => setActiveDropdown('city')}
                       placeholder="e.g. Bengaluru, Mumbai, Delhi"
                       placeholderTextColor="#737783"
                       style={styles.textInput}
                     />
                   </View>
+                  {activeDropdown === 'city' && (
+                    <View style={styles.autocompleteCard}>
+                      <ScrollView style={{ maxHeight: 160 }} keyboardShouldPersistTaps="handled" nestedScrollEnabled>
+                        {locationsData.cities
+                          .filter((c) => !clinicCity.trim() || c.toLowerCase().includes(clinicCity.toLowerCase().trim()))
+                          .slice(0, 8)
+                          .map((city) => (
+                            <Pressable
+                              key={city}
+                              onPress={() => {
+                                setClinicCity(city);
+                                setActiveDropdown(null);
+                              }}
+                              style={styles.autocompleteItem}
+                            >
+                              <Text style={styles.autocompleteItemText}>{city}</Text>
+                            </Pressable>
+                          ))}
+                      </ScrollView>
+                    </View>
+                  )}
                 </View>
                 <View style={[styles.inputGroup, { flex: 1 }]}>
                   <Text style={styles.inputLabel}>PIN Code</Text>
@@ -1291,16 +1381,53 @@ export function DoctorRegistrationView({
 
               {/* Primary Hospital Name */}
               <View style={styles.inputGroup}>
-                <Text style={styles.inputLabel}>Primary Hospital Name</Text>
+                <View style={styles.dropdownHeaderRow}>
+                  <Text style={styles.inputLabel}>Primary Hospital Name</Text>
+                  <Pressable
+                    onPress={() => setActiveDropdown(activeDropdown === 'hospital' ? null : 'hospital')}
+                    hitSlop={8}
+                    style={styles.dropdownToggleBtn}
+                  >
+                    <Text style={styles.dropdownToggleText}>Browse Hospitals</Text>
+                    <ChevronDown size={14} color={StitchColors.primary} />
+                  </Pressable>
+                </View>
                 <View style={styles.inputWrapper}>
                   <Building2 size={18} color="#737783" style={styles.inputIcon} />
                   <TextInput
                     value={hospitalName}
-                    onChangeText={setHospitalName}
+                    onChangeText={(val) => {
+                      setHospitalName(val);
+                      if (val.trim().length > 1) setActiveDropdown('hospital');
+                    }}
+                    onFocus={() => setActiveDropdown('hospital')}
                     style={styles.textInput}
                     placeholder="Apollo Hospitals, Bannerghatta Road"
                   />
                 </View>
+                {activeDropdown === 'hospital' && (
+                  <View style={styles.autocompleteCard}>
+                    <ScrollView style={{ maxHeight: 180 }} keyboardShouldPersistTaps="handled" nestedScrollEnabled>
+                      {locationsData.hospitals
+                        .filter((h) => !hospitalName.trim() || h.toLowerCase().includes(hospitalName.toLowerCase().trim()))
+                        .slice(0, 8)
+                        .map((hospital) => (
+                          <Pressable
+                            key={hospital}
+                            onPress={() => {
+                              setHospitalName(hospital);
+                              setActiveDropdown(null);
+                            }}
+                            style={styles.autocompleteItem}
+                          >
+                            <Text style={styles.autocompleteItemText} numberOfLines={1}>
+                              {hospital}
+                            </Text>
+                          </Pressable>
+                        ))}
+                    </ScrollView>
+                  </View>
+                )}
               </View>
 
               {/* Department & Designation */}
@@ -1433,15 +1560,18 @@ export function DoctorRegistrationView({
                 </View>
                 <View style={[styles.inputGroup, { flex: 1 }]}>
                   <Text style={styles.inputLabel}>Slot Duration</Text>
-                  <View style={styles.inputWrapper}>
+                  <View style={[styles.inputWrapper, { paddingRight: 8 }]}>
                     <Clock size={16} color="#737783" style={styles.inputIcon} />
                     <TextInput
-                      value={slotDuration}
-                      onChangeText={setSlotDuration}
-                      placeholder="15 Mins / Patient"
+                      value={slotDurationMins}
+                      onChangeText={(val) => setSlotDurationMins(val.replace(/[^0-9]/g, ''))}
+                      placeholder="15"
                       placeholderTextColor="#737783"
-                      style={styles.textInput}
+                      style={[styles.textInput, { fontWeight: '700', flex: 0, minWidth: 28, textAlign: 'center' }]}
+                      keyboardType="number-pad"
+                      maxLength={3}
                     />
+                    <Text style={styles.unitSuffixText}>min / patient</Text>
                   </View>
                 </View>
               </View>
@@ -1483,30 +1613,140 @@ export function DoctorRegistrationView({
                 </View>
               </View>
 
-              {/* Shift Timings */}
+              {/* Shift Timings with Edit Popup Button */}
               <View style={styles.inputGroup}>
-                <Text style={styles.inputLabel}>Daily OPD Shift Timings</Text>
+                <View style={styles.shiftHeaderRow}>
+                  <Text style={styles.inputLabel}>Daily OPD Shift Timings</Text>
+                  <Pressable
+                    onPress={() => {
+                      setTempMorningTime(morningShiftTime);
+                      setTempEveningTime(eveningShiftTime);
+                      setTempMorningTokens(morningTokens);
+                      setTempEveningTokens(eveningTokens);
+                      setShowTimingModal(true);
+                    }}
+                    hitSlop={8}
+                    style={styles.editTimingBtn}
+                  >
+                    <Edit2 size={13} color={StitchColors.primary} />
+                    <Text style={styles.editTimingText}>Edit Timings</Text>
+                  </Pressable>
+                </View>
+
                 <View style={styles.shiftCard}>
                   <View style={styles.shiftRow}>
                     <View style={styles.shiftGreenDot} />
                     <Text style={styles.shiftName}>Morning Shift:</Text>
-                    <Text style={styles.shiftTime}>10:30 AM – 01:30 PM</Text>
+                    <Text style={styles.shiftTime}>{morningShiftTime}</Text>
                   </View>
                   <View style={styles.tokenBadge}>
-                    <Text style={styles.tokenBadgeText}>12 Tokens</Text>
+                    <Text style={styles.tokenBadgeText}>{morningTokens} Tokens</Text>
                   </View>
                 </View>
+
                 <View style={styles.shiftCard}>
                   <View style={styles.shiftRow}>
                     <View style={styles.shiftGreenDot} />
                     <Text style={styles.shiftName}>Evening Shift:</Text>
-                    <Text style={styles.shiftTime}>05:00 PM – 08:00 PM</Text>
+                    <Text style={styles.shiftTime}>{eveningShiftTime}</Text>
                   </View>
                   <View style={styles.tokenBadge}>
-                    <Text style={styles.tokenBadgeText}>12 Tokens</Text>
+                    <Text style={styles.tokenBadgeText}>{eveningTokens} Tokens</Text>
                   </View>
                 </View>
               </View>
+
+              {/* Timing Modal Popup */}
+              <Modal visible={showTimingModal} transparent animationType="fade">
+                <View style={styles.modalOverlay}>
+                  <View style={styles.modalContentCard}>
+                    <View style={styles.modalHeaderRow}>
+                      <Text style={styles.modalTitleText}>Edit OPD Shift Timings</Text>
+                      <Pressable onPress={() => setShowTimingModal(false)} hitSlop={10}>
+                        <X size={18} color="#64748b" />
+                      </Pressable>
+                    </View>
+
+                    <View style={styles.modalBody}>
+                      <View style={styles.inputGroup}>
+                        <Text style={styles.inputLabel}>Morning Shift Hours</Text>
+                        <View style={styles.inputWrapper}>
+                          <TextInput
+                            value={tempMorningTime}
+                            onChangeText={setTempMorningTime}
+                            placeholder="10:30 AM – 01:30 PM"
+                            placeholderTextColor="#737783"
+                            style={styles.textInput}
+                          />
+                        </View>
+                      </View>
+
+                      <View style={styles.inputGroup}>
+                        <Text style={styles.inputLabel}>Morning Shift Capacity (Tokens)</Text>
+                        <View style={styles.inputWrapper}>
+                          <TextInput
+                            value={tempMorningTokens}
+                            onChangeText={(t) => setTempMorningTokens(t.replace(/[^0-9]/g, ''))}
+                            placeholder="12"
+                            placeholderTextColor="#737783"
+                            keyboardType="number-pad"
+                            style={styles.textInput}
+                          />
+                        </View>
+                      </View>
+
+                      <View style={styles.inputGroup}>
+                        <Text style={styles.inputLabel}>Evening Shift Hours</Text>
+                        <View style={styles.inputWrapper}>
+                          <TextInput
+                            value={tempEveningTime}
+                            onChangeText={setTempEveningTime}
+                            placeholder="05:00 PM – 08:00 PM"
+                            placeholderTextColor="#737783"
+                            style={styles.textInput}
+                          />
+                        </View>
+                      </View>
+
+                      <View style={styles.inputGroup}>
+                        <Text style={styles.inputLabel}>Evening Shift Capacity (Tokens)</Text>
+                        <View style={styles.inputWrapper}>
+                          <TextInput
+                            value={tempEveningTokens}
+                            onChangeText={(t) => setTempEveningTokens(t.replace(/[^0-9]/g, ''))}
+                            placeholder="12"
+                            placeholderTextColor="#737783"
+                            keyboardType="number-pad"
+                            style={styles.textInput}
+                          />
+                        </View>
+                      </View>
+                    </View>
+
+                    <View style={styles.modalBtnRow}>
+                      <Pressable
+                        onPress={() => setShowTimingModal(false)}
+                        style={styles.modalCancelBtn}
+                      >
+                        <Text style={styles.modalCancelText}>Cancel</Text>
+                      </Pressable>
+                      <Pressable
+                        onPress={() => {
+                          setMorningShiftTime(tempMorningTime.trim() || '10:30 AM – 01:30 PM');
+                          setEveningShiftTime(tempEveningTime.trim() || '05:00 PM – 08:00 PM');
+                          setMorningTokens(tempMorningTokens.trim() || '12');
+                          setEveningTokens(tempEveningTokens.trim() || '12');
+                          setShowTimingModal(false);
+                          if (Platform.OS !== 'web') Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+                        }}
+                        style={styles.modalSaveBtn}
+                      >
+                        <Text style={styles.modalSaveText}>Save Timings</Text>
+                      </Pressable>
+                    </View>
+                  </View>
+                </View>
+              </Modal>
 
               {/* Digital Seal Notice */}
               <View style={styles.sealNoticeCard}>
@@ -2267,5 +2507,148 @@ const styles = StyleSheet.create({
     color: '#1e40af',
     marginTop: 2,
     lineHeight: 14,
+  },
+  unitSuffixText: {
+    fontSize: 12,
+    fontWeight: '600',
+    color: '#64748b',
+    marginLeft: 4,
+  },
+  dropdownHeaderRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    marginBottom: 4,
+  },
+  dropdownToggleBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+  },
+  dropdownToggleText: {
+    fontSize: 11.5,
+    fontWeight: '600',
+    color: StitchColors.primary,
+  },
+  autocompleteCard: {
+    backgroundColor: '#ffffff',
+    borderWidth: 1,
+    borderColor: '#cbd5e1',
+    borderRadius: 12,
+    marginTop: 6,
+    overflow: 'hidden',
+    ...Platform.select({
+      ios: {
+        shadowColor: '#000',
+        shadowOffset: { width: 0, height: 2 },
+        shadowOpacity: 0.1,
+        shadowRadius: 4,
+      },
+      android: {
+        elevation: 3,
+      },
+    }),
+  },
+  autocompleteItem: {
+    paddingHorizontal: 12,
+    paddingVertical: 10,
+    borderBottomWidth: StyleSheet.hairlineWidth,
+    borderBottomColor: '#f1f5f9',
+  },
+  autocompleteItemText: {
+    fontSize: 13,
+    color: '#1e293b',
+    fontWeight: '500',
+  },
+  shiftHeaderRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    marginBottom: 4,
+  },
+  editTimingBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    backgroundColor: '#eff6ff',
+    paddingHorizontal: 8,
+    paddingVertical: 3,
+    borderRadius: 6,
+  },
+  editTimingText: {
+    fontSize: 11,
+    fontWeight: '700',
+    color: StitchColors.primary,
+  },
+  modalOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(15, 23, 42, 0.65)',
+    alignItems: 'center',
+    justifyContent: 'center',
+    padding: 20,
+  },
+  modalContentCard: {
+    width: '100%',
+    maxWidth: 380,
+    backgroundColor: '#ffffff',
+    borderRadius: 20,
+    padding: 18,
+    ...Platform.select({
+      ios: {
+        shadowColor: '#000',
+        shadowOffset: { width: 0, height: 4 },
+        shadowOpacity: 0.15,
+        shadowRadius: 10,
+      },
+      android: {
+        elevation: 6,
+      },
+    }),
+  },
+  modalHeaderRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    marginBottom: 16,
+    borderBottomWidth: 1,
+    borderBottomColor: '#f1f5f9',
+    paddingBottom: 10,
+  },
+  modalTitleText: {
+    fontSize: 16,
+    fontWeight: '700',
+    color: '#0f172a',
+  },
+  modalBody: {
+    gap: 12,
+  },
+  modalBtnRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'flex-end',
+    gap: 10,
+    marginTop: 18,
+  },
+  modalCancelBtn: {
+    paddingVertical: 9,
+    paddingHorizontal: 14,
+    borderRadius: 8,
+    backgroundColor: '#f1f5f9',
+  },
+  modalCancelText: {
+    fontSize: 13,
+    fontWeight: '600',
+    color: '#475569',
+  },
+  modalSaveBtn: {
+    paddingVertical: 9,
+    paddingHorizontal: 16,
+    borderRadius: 8,
+    backgroundColor: StitchColors.primary,
+  },
+  modalSaveText: {
+    fontSize: 13,
+    fontWeight: '600',
+    color: '#ffffff',
   },
 });

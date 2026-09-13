@@ -1,4 +1,4 @@
-import { Controller, Get, Post, Body, Query, UseGuards, Request } from '@nestjs/common';
+import { Controller, Get, Post, Body, Query, Param, UseGuards, Request } from '@nestjs/common';
 import { AdminService } from './admin.service';
 import { JwtAuthGuard } from '../auth/jwt-auth.guard';
 import { RolesGuard, Roles } from '../auth/roles.guard';
@@ -9,6 +9,24 @@ import { Role } from '@prisma/client';
 @Roles(Role.ADMIN)
 export class AdminController {
   constructor(private adminService: AdminService) {}
+
+  @Get('stats')
+  async getStats() {
+    return this.adminService.getSystemStats();
+  }
+
+  @Get('doctors')
+  async getDoctors(
+    @Query('status') status?: string,
+    @Query('search') search?: string,
+  ) {
+    return this.adminService.getAllDoctors({ status, search });
+  }
+
+  @Get('doctors/:id')
+  async getDoctorDetail(@Param('id') id: string) {
+    return this.adminService.getDoctorDetail(id);
+  }
 
   @Get('verifications')
   async getVerificationQueue() {
@@ -21,6 +39,11 @@ export class AdminController {
       ...body,
       adminUserId: req.user.id,
     });
+  }
+
+  @Get('audit-logs')
+  async getAuditLogs(@Query('take') take?: string) {
+    return this.adminService.getAuditLogs(take ? parseInt(take, 10) : 50);
   }
 
   @Get('users')

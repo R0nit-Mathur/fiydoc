@@ -20,10 +20,67 @@ export class AdminService {
     });
   }
 
+  async getAllDoctors(filter?: { status?: string; search?: string }) {
+    const where: any = {};
+    if (filter?.status) {
+      where.verification = { status: filter.status as VerificationStatus };
+    }
+    if (filter?.search) {
+      const q = filter.search.trim();
+      where.OR = [
+        { fullName: { contains: q, mode: 'insensitive' } },
+        { specialization: { contains: q, mode: 'insensitive' } },
+        { verification: { is: { registrationNumber: { contains: q, mode: 'insensitive' } } } },
+        { clinic: { is: { name: { contains: q, mode: 'insensitive' } } } },
+        { clinic: { is: { address: { contains: q, mode: 'insensitive' } } } },
+      ];
+    }
+
+    return this.prisma.doctor.findMany({
+      where,
+      include: {
+        user: { select: { id: true, email: true, phone: true, status: true, createdAt: true } },
+        clinic: true,
+        qualifications: true,
+        verification: {
+          include: {
+            reviewedBy: { select: { id: true, email: true } },
+          },
+        },
+      },
+      orderBy: { fullName: 'asc' },
+    });
+  }
+
+  async getDoctorDetail(doctorId: string) {
+    const doctor = await this.prisma.doctor.findUnique({
+      where: { id: doctorId },
+      include: {
+        user: true,
+        clinic: true,
+        qualifications: true,
+        availabilities: true,
+        verification: {
+          include: {
+            reviewedBy: { select: { id: true, email: true } },
+          },
+        },
+        appointments: {
+          take: 10,
+          orderBy: { createdAt: 'desc' },
+          include: { patient: true },
+        },
+      },
+    });
+
+    if (!doctor) throw new NotFoundException('Doctor record not found.');
+    return doctor;
+  }
+
   async reviewVerification(dto: {
     verificationId: string;
     adminUserId: string;
-    action: 'APPROVE' | 'REJECT' | 'REQUEST_INFO';
+    action: 'APPROVE' | 'REJECT' | 'REQUEST_INFO' | 'SUSPEND';
     rejectionReason?: string;
   }) {
     const existing = await this.prisma.doctorVerification.findUnique({
@@ -36,6 +93,7 @@ export class AdminService {
     let newStatus: VerificationStatus = VerificationStatus.VERIFIED;
     if (dto.action === 'REJECT') newStatus = VerificationStatus.REJECTED;
     if (dto.action === 'REQUEST_INFO') newStatus = VerificationStatus.INFO_REQUIRED;
+    if (dto.action === 'SUSPEND') newStatus = VerificationStatus.REJECTED;
 
     const updated = await this.prisma.doctorVerification.update({
       where: { id: dto.verificationId },
@@ -47,6 +105,14 @@ export class AdminService {
       },
     });
 
+    // If suspended or revoked, update User status
+    if (dto.action === 'SUSPEND') {
+      await this.prisma.user.update({
+        where: { id: existing.doctor.userId },
+        data: { status: 'SUSPENDED' },
+      });
+    }
+
     // Notify doctor
     await this.prisma.notification.create({
       data: {
@@ -55,8 +121,8 @@ export class AdminService {
         title: `Doctor Verification Update: ${newStatus}`,
         message:
           newStatus === VerificationStatus.VERIFIED
-            ? 'Congratulations! Your medical credentials have been verified.'
-            : `Status: ${newStatus}. ${dto.rejectionReason || 'Please review your documents.'}`,
+            ? 'Congratulations! Your medical credentials have been verified by administration. You are now discoverable to patients.'
+            : `Status: ${newStatus}. ${dto.rejectionReason || 'Please review your uploaded documents.'}`,
       },
     });
 
@@ -67,7 +133,7 @@ export class AdminService {
         action: `VERIFICATION_${dto.action}`,
         targetType: 'DoctorVerification',
         targetId: dto.verificationId,
-        metadata: { status: newStatus, reason: dto.rejectionReason },
+        metadata: { status: newStatus, reason: dto.rejectionReason, doctorId: existing.doctorId },
       },
     });
 
@@ -87,5 +153,36 @@ export class AdminService {
       include: { patient: true, doctor: true },
       orderBy: { createdAt: 'desc' },
     });
+  }
+
+  async getAuditLogs(take = 50) {
+    return this.prisma.auditLog.findMany({
+      take,
+      orderBy: { timestamp: 'desc' },
+      include: {
+        actor: { select: { id: true, email: true, role: true } },
+      },
+    });
+  }
+
+  async getSystemStats() {
+    const [totalDoctors, verifiedDoctors, pendingVerifications, totalPatients, totalAppointments] =
+      await Promise.all([
+        this.prisma.doctor.count(),
+        this.prisma.doctorVerification.count({ where: { status: VerificationStatus.VERIFIED } }),
+        this.prisma.doctorVerification.count({
+          where: { status: { in: [VerificationStatus.PENDING, VerificationStatus.INFO_REQUIRED, VerificationStatus.REGISTERED] } },
+        }),
+        this.prisma.patient.count(),
+        this.prisma.appointment.count(),
+      ]);
+
+    return {
+      totalDoctors,
+      verifiedDoctors,
+      pendingVerifications,
+      totalPatients,
+      totalAppointments,
+    };
   }
 }

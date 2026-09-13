@@ -55,8 +55,12 @@ import {
   RefreshCw,
 } from 'lucide-react-native';
 import { AppUpdateModal } from '@/components/ui/AppUpdateModal';
-import { calculateAgeFromDOB, formatHumanDate } from '@/utils/formatters';
 import { StitchColors, BorderRadius, Shadows, Spacing, Palette } from '@/constants/theme';
+const AVATAR_PRESETS: string[] = [];
+
+// ... existing imports remain
+
+import { calculateAgeFromDOB, formatHumanDate } from '@/utils/formatters';
 
 
 
@@ -503,7 +507,7 @@ export default function PatientProfileScreen() {
                 style={[
                   styles.avatarPickItem,
                   {
-                    borderColor: editAvatar && !AVATAR_PRESETS.includes(editAvatar) ? StitchColors.secondaryContainer : colors.border,
+                    borderColor: (!editAvatar || !AVATAR_PRESETS.includes(editAvatar)) ? StitchColors.secondaryContainer : colors.border,
                     borderStyle: 'dashed',
                     alignItems: 'center',
                     justifyContent: 'center',

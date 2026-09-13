@@ -62,7 +62,9 @@ export default function LoginScreen() {
       const session = await authService.loginWithEmail(identity.trim(), password);
       setSession(session);
 
-      if (session.role === 'doctor') {
+      if (session.role === 'admin') {
+        router.replace('/(admin)/dashboard' as any);
+      } else if (session.role === 'doctor') {
         router.replace('/(doctor)/(tabs)/home');
       } else {
         router.replace('/(patient)/(tabs)/home');

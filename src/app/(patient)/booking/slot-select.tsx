@@ -46,6 +46,7 @@ import {
   Check,
 } from 'lucide-react-native';
 import { StitchColors, DEFAULT_DOCTOR_AVATAR } from '@/constants/theme';
+import { Avatar } from '@/components/ui/Avatar';
 import { useAppointmentStore } from '@/store/useAppointmentStore';
 import { useAuthStore } from '@/store/useAuthStore';
 
@@ -323,10 +324,11 @@ export default function MedicalIntakeScreen() {
           {/* Doctor Summary Mini-Banner */}
           <View style={styles.miniBanner}>
             <View style={styles.miniAvatarWrap}>
-              <Image
-                source={{ uri: DEFAULT_DOC_IMG }}
+              <Avatar
+                uri={null}
+                name={doctorName || 'Doctor'}
+                size="md"
                 style={styles.miniAvatar}
-                contentFit="cover"
               />
               {tokenNumber && (
                 <View style={styles.tokenMiniBadge}>

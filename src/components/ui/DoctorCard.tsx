@@ -13,6 +13,7 @@ import {
 } from 'lucide-react-native';
 import * as Haptics from 'expo-haptics';
 import { StitchColors, DEFAULT_DOCTOR_AVATAR } from '@/constants/theme';
+import { Avatar } from '@/components/ui/Avatar';
 import { formatCurrency } from '@/utils/formatters';
 import { getSpecialtyConfig } from '@/constants/specialties';
 
@@ -76,14 +77,11 @@ export function DoctorCard({
 
       {/* Middle Row: Avatar & Doctor Info */}
       <View style={styles.infoRow}>
-        <Image
-          source={{
-            uri:
-              doctor.avatar ||
-              DEFAULT_DOCTOR_AVATAR,
-          }}
+        <Avatar
+          uri={doctor.avatar}
+          name={doctor.name}
+          size="md"
           style={styles.avatar}
-          contentFit="cover"
         />
 
         <View style={styles.textContainer}>
