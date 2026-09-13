@@ -32,7 +32,7 @@ export class PrescriptionsService {
       pdf.fillColor('#172033').fontSize(11)
         .text(`Doctor: ${prescription.doctor?.fullName || 'Licensed Practitioner'}`)
         .text(`Patient: ${prescription.patient?.fullName || 'Patient'}`)
-        .text(`Issued: ${new Date(prescription.issuedAt || prescription.createdAt || Date.now()).toLocaleString('en-IN')}`);
+        .text(`Issued: ${new Date((prescription as any).issuedAt || (prescription as any).signedAt || prescription.createdAt || Date.now()).toLocaleString('en-IN')}`);
       pdf.moveDown().fontSize(13).fillColor('#3055A8').text('Medicines');
       pdf.moveDown(0.4).fontSize(10).fillColor('#172033');
       if (!prescription.medicines || prescription.medicines.length === 0) {
@@ -115,7 +115,7 @@ export class PrescriptionsService {
     if (existingRx) {
       return {
         ...existingRx,
-        issuedAt: existingRx.issuedAt || existingRx.createdAt,
+        issuedAt: (existingRx as any).issuedAt || (existingRx as any).signedAt || existingRx.createdAt,
       };
     }
 
@@ -172,25 +172,28 @@ export class PrescriptionsService {
 
     // Core transaction: Only prescription and its medicines
     const createdPrescription = await this.prisma.$transaction(async (tx) => {
-      return tx.prescription.create({
-        data: {
-          consultationId: consultation.id,
-          patientId: consultation.patientId,
-          doctorId: consultation.doctorId,
-          doctorNotes: dto.doctorNotes,
-          followUpInstructions: dto.followUpInstructions,
-          verificationCode,
-          issuedAt: issuedTimestamp,
-          medicines: {
-            create: dto.medicines.map((m) => ({
-              name: m.name.trim(),
-              dosage: m.dosage.trim(),
-              frequency: m.frequency.trim(),
-              durationDays: Number(m.durationDays),
-              instructions: m.instructions?.trim() || '',
-            })),
-          },
+      const rxData: any = {
+        consultationId: consultation.id,
+        patientId: consultation.patientId,
+        doctorId: consultation.doctorId,
+        doctorNotes: dto.doctorNotes,
+        followUpInstructions: dto.followUpInstructions,
+        verificationCode,
+        issuedAt: issuedTimestamp,
+        signedAt: issuedTimestamp,
+        medicines: {
+          create: dto.medicines.map((m) => ({
+            name: m.name.trim(),
+            dosage: m.dosage.trim(),
+            frequency: m.frequency.trim(),
+            durationDays: Number(m.durationDays),
+            instructions: m.instructions?.trim() || '',
+          })),
         },
+      };
+
+      return tx.prescription.create({
+        data: rxData,
         include: { medicines: true, doctor: true, patient: true },
       });
     });
@@ -282,7 +285,7 @@ export class PrescriptionsService {
 
     return {
       ...createdPrescription,
-      issuedAt: createdPrescription.issuedAt || createdPrescription.createdAt,
+      issuedAt: (createdPrescription as any).issuedAt || (createdPrescription as any).signedAt || createdPrescription.createdAt,
       pdfUrl: documentUrl || storagePath,
     };
   }
@@ -327,7 +330,7 @@ export class PrescriptionsService {
       verified: true,
       doctorName: rx.doctor.fullName,
       specialization: rx.doctor.specialization,
-      issuedAt: rx.issuedAt || rx.createdAt,
+      issuedAt: (rx as any).issuedAt || (rx as any).signedAt || rx.createdAt,
       medicineCount: rx.medicines.length,
       verificationCode: rx.verificationCode,
     };
