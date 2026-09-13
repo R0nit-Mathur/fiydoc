@@ -20,7 +20,11 @@ export class AdminController {
     @Query('status') status?: string,
     @Query('search') search?: string,
   ) {
-    return this.adminService.getAllDoctors({ status, search });
+    const doctors = await this.adminService.getAllDoctors({ status, search });
+    return {
+      doctors,
+      total: doctors.length,
+    };
   }
 
   @Get('doctors/:id')

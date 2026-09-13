@@ -78,15 +78,25 @@ export class AdminService {
   }
 
   async reviewVerification(dto: {
-    verificationId: string;
+    verificationId?: string;
+    doctorId?: string;
     adminUserId: string;
     action: 'APPROVE' | 'REJECT' | 'REQUEST_INFO' | 'SUSPEND';
     rejectionReason?: string;
   }) {
-    const existing = await this.prisma.doctorVerification.findUnique({
-      where: { id: dto.verificationId },
-      include: { doctor: { include: { user: true } } },
-    });
+    let existing = dto.verificationId
+      ? await this.prisma.doctorVerification.findUnique({
+          where: { id: dto.verificationId },
+          include: { doctor: { include: { user: true } } },
+        })
+      : null;
+
+    if (!existing && dto.doctorId) {
+      existing = await this.prisma.doctorVerification.findFirst({
+        where: { doctorId: dto.doctorId },
+        include: { doctor: { include: { user: true } } },
+      });
+    }
 
     if (!existing) throw new NotFoundException('Verification request not found.');
 
@@ -96,7 +106,7 @@ export class AdminService {
     if (dto.action === 'SUSPEND') newStatus = VerificationStatus.REJECTED;
 
     const updated = await this.prisma.doctorVerification.update({
-      where: { id: dto.verificationId },
+      where: { id: existing.id },
       data: {
         status: newStatus,
         reviewedByUserId: dto.adminUserId,
@@ -132,7 +142,7 @@ export class AdminService {
         actorUserId: dto.adminUserId,
         action: `VERIFICATION_${dto.action}`,
         targetType: 'DoctorVerification',
-        targetId: dto.verificationId,
+        targetId: existing.id,
         metadata: { status: newStatus, reason: dto.rejectionReason, doctorId: existing.doctorId },
       },
     });
@@ -166,7 +176,8 @@ export class AdminService {
   }
 
   async getSystemStats() {
-    const [totalDoctors, verifiedDoctors, pendingVerifications, totalPatients, totalAppointments] =
+    const today = new Date().toISOString().slice(0, 10);
+    const [totalDoctors, verifiedDoctors, pendingVerifications, totalPatients, totalAppointments, todayAppointments, recentAudits] =
       await Promise.all([
         this.prisma.doctor.count(),
         this.prisma.doctorVerification.count({ where: { status: VerificationStatus.VERIFIED } }),
@@ -175,14 +186,20 @@ export class AdminService {
         }),
         this.prisma.patient.count(),
         this.prisma.appointment.count(),
+        this.prisma.appointment.count({ where: { date: today } }),
+        this.prisma.auditLog.count(),
       ]);
 
     return {
+      totalUsers: totalDoctors + totalPatients,
       totalDoctors,
       verifiedDoctors,
+      pendingDoctors: pendingVerifications,
       pendingVerifications,
       totalPatients,
       totalAppointments,
+      todayAppointments,
+      recentAudits,
     };
   }
 }

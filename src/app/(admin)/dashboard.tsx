@@ -152,6 +152,7 @@ export default function AdminDashboardScreen() {
 
       await adminService.reviewVerification({
         doctorId: selectedDoctor.id,
+        verificationId: selectedDoctor.verificationId,
         action: actionType,
         rejectionReason: actionType === 'REJECT' ? actionNotes.trim() : undefined,
         notes: actionNotes.trim() || undefined,
@@ -235,7 +236,7 @@ export default function AdminDashboardScreen() {
               </View>
             </View>
             <Text style={[styles.kpiValue, { color: '#D97706' }]}>
-              {stats ? stats.pendingDoctors : '...'}
+              {stats ? (stats.pendingDoctors ?? stats.pendingVerifications ?? 0) : '...'}
             </Text>
             <Text style={[styles.kpiSub, { color: colors.textSecondary }]}>requires medical review</Text>
           </View>
@@ -277,7 +278,7 @@ export default function AdminDashboardScreen() {
               {stats ? stats.totalAppointments : '...'}
             </Text>
             <Text style={[styles.kpiSub, { color: colors.textSecondary }]}>
-              {stats ? `${stats.todayAppointments} today` : 'booked total'}
+              {stats ? `${stats.todayAppointments ?? 0} today` : 'booked total'}
             </Text>
           </View>
         </View>
@@ -292,7 +293,7 @@ export default function AdminDashboardScreen() {
             ]}
           >
             <Text style={[styles.tabBtnText, { color: activeTab === 'verifications' ? '#FFFFFF' : colors.textSecondary }]}>
-              Verification Queue ({stats?.pendingDoctors || 0})
+              Verification Queue ({stats ? (stats.pendingDoctors ?? stats.pendingVerifications ?? 0) : 0})
             </Text>
           </Pressable>
 
