@@ -35,6 +35,7 @@ import { StitchColors } from '@/constants/theme';
 import { useAppointmentStore } from '@/store/useAppointmentStore';
 import { useAuthStore } from '@/store/useAuthStore';
 import { useHealthStore } from '@/store/useHealthStore';
+import { useAppointmentsQuery } from '@/hooks/queries/useAppointmentsQuery';
 import { Appointment } from '@/types/index';
 
 function AppointmentCard({ apt, onViewPass, onViewRx }: { apt: Appointment; onViewPass?: () => void; onViewRx?: () => void }) {
@@ -124,6 +125,7 @@ export default function PatientAppointmentsScreen() {
   const { appointments } = useAppointmentStore();
   const { user } = useAuthStore();
   const { prescriptions } = useHealthStore();
+  const { data: serverAppointments = [] } = useAppointmentsQuery();
   const [activeTab, setActiveTab] = useState<'upcoming' | 'completed' | 'cancelled'>('upcoming');
   const [visitPassVisible, setVisitPassVisible] = useState(false);
   const [selectedApt, setSelectedApt] = useState<Appointment | null>(null);
@@ -152,13 +154,18 @@ export default function PatientAppointmentsScreen() {
     }
   };
 
+  // Merge server (authoritative) + local-only store appointments, deduped by id
   const patientApts = useMemo(() => {
-    return appointments.filter((a) => {
-      if (!user) return false;
-      return a.patientId === user.id ||
-        (a.patientName && user.name && a.patientName.toLowerCase() === user.name.toLowerCase());
-    });
-  }, [appointments, user]);
+    const serverIds = new Set(serverAppointments.map((a) => a.id));
+    const localOnly = appointments.filter((a) => !serverIds.has(a.id));
+    const all = [...serverAppointments, ...localOnly];
+    if (!user) return serverAppointments; // show server data even if user briefly null
+    return all.filter((a) =>
+      a.patientId === user.id ||
+      a.patientId === 'patient-user' ||
+      (a.patientName && user.name && a.patientName.toLowerCase() === user.name.toLowerCase())
+    );
+  }, [serverAppointments, appointments, user]);
 
   const upcoming = useMemo(() =>
     patientApts.filter((a) => ['confirmed', 'checked_in', 'upcoming', 'in_progress', 'pending'].includes(a.status))

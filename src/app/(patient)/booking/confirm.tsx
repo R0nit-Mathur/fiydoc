@@ -53,6 +53,7 @@ import {
 import { useAppointmentStore } from '@/store/useAppointmentStore';
 import { useAuthStore } from '@/store/useAuthStore';
 import { useBookAppointmentMutation } from '@/hooks/queries/useAppointmentsQuery';
+import { useQueryClient } from '@tanstack/react-query';
 import { Appointment } from '@/types/index';
 import { BorderRadius, Shadows, Spacing, StitchColors, Palette } from '@/constants/theme';
 import { useAppTheme } from '@/hooks/useAppTheme';
@@ -96,6 +97,7 @@ export default function BookingConfirmScreen() {
   const { user } = useAuthStore();
   const { bookingDraft, resetBookingDraft } = useAppointmentStore();
   const bookMutation = useBookAppointmentMutation();
+  const queryClient = useQueryClient();
 
   const doctor = bookingDraft.doctor || (params.doctorName ? {
     id: params.doctorId || 'doc-1',
@@ -198,6 +200,10 @@ export default function BookingConfirmScreen() {
 
     try {
       if (user?.id) {
+        // Guard: doctor.id must be a real UUID, not empty or the placeholder
+        if (!doctor.id || doctor.id === 'doc-1') {
+          throw new Error('Doctor ID is missing — booking saved to device.');
+        }
         const bookedAppointment = await bookMutation.mutateAsync({
           patientId: user.id,
           doctorId: doctor.id,
@@ -244,6 +250,8 @@ export default function BookingConfirmScreen() {
         notes: patientInfoNotes,
       };
       useAppointmentStore.getState().addAppointment(localAppointment);
+      // Invalidate so home.tsx / appointments.tsx re-fetch fresh data from server
+      queryClient.invalidateQueries({ queryKey: ['appointments'] });
     }
 
     resetBookingDraft();

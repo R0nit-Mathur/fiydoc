@@ -35,6 +35,7 @@ import * as Haptics from 'expo-haptics';
 
 import { useAppTheme } from '@/hooks/useAppTheme';
 import { useDoctorsQuery } from '@/hooks/queries/useDoctorsQuery';
+import { useAppointmentsQuery } from '@/hooks/queries/useAppointmentsQuery';
 import { useLocationStore } from '@/store/useLocationStore';
 import { useAuthStore } from '@/store/useAuthStore';
 import { useAppointmentStore } from '@/store/useAppointmentStore';
@@ -117,9 +118,18 @@ export default function PatientHomeScreen() {
     }
   }, [permissionStatus, locationModalVisible, user?.dob, user?.bloodGroup, user?.address]);
 
-  // Find nearest upcoming confirmed/valid appointment from store chronologically
+  const { data: serverAppointments = [] } = useAppointmentsQuery();
+
+  // Merge server (authoritative) + local-only store appointments (dedup by id)
+  const combinedAppointments = useMemo(() => {
+    const serverIds = new Set(serverAppointments.map((a) => a.id));
+    const localOnly = appointments.filter((a) => !serverIds.has(a.id));
+    return [...serverAppointments, ...localOnly];
+  }, [serverAppointments, appointments]);
+
+  // Find nearest upcoming confirmed/valid appointment from combined sources
   const upcomingAppointment = useMemo(() => {
-    const valid = appointments.filter((a) =>
+    const valid = combinedAppointments.filter((a) =>
       ['confirmed', 'upcoming', 'checked_in', 'in_progress', 'pending'].includes(a.status)
     );
     if (valid.length === 0) return null;
@@ -128,7 +138,7 @@ export default function PatientHomeScreen() {
       const timeB = new Date(`${b.date}T${b.time?.split(' - ')[0] || '00:00'}`).getTime();
       return (isNaN(timeA) ? 0 : timeA) - (isNaN(timeB) ? 0 : timeB);
     })[0];
-  }, [appointments]);
+  }, [combinedAppointments]);
 
   const greetingName = user?.name
     ? user.name.split(' ')[0]
