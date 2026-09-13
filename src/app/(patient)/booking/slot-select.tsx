@@ -66,8 +66,6 @@ export default function MedicalIntakeScreen() {
   const router = useRouter();
   const insets = useSafeAreaInsets();
   const user = useAuthStore((state) => state.user);
-  const familyMembers = useAuthStore((state) => state.familyMembers || []);
-  const addFamilyMember = useAuthStore((state) => state.addFamilyMember);
 
   const params = useLocalSearchParams<{
     doctorId?: string;
@@ -94,7 +92,6 @@ export default function MedicalIntakeScreen() {
 
   const [currentStep, setCurrentStep] = useState<0 | 1 | 2>(0);
   const [patientType, setPatientType] = useState<'self' | 'family'>('self');
-  const [selectedFamilyId, setSelectedFamilyId] = useState<string | null>(null);
   const [familyMemberName, setFamilyMemberName] = useState('');
   const [familyMemberRelation, setFamilyMemberRelation] = useState('Parent');
   const [familyMemberPhone, setFamilyMemberPhone] = useState('');
@@ -196,12 +193,6 @@ export default function MedicalIntakeScreen() {
         );
         return;
       }
-      // Save family member into persisted store for future one-tap reuse
-      addFamilyMember({
-        name: finalPatientName,
-        relation: familyMemberRelation.trim() || 'Family',
-        phone: familyMemberPhone.trim() || undefined,
-      });
     }
 
     if (Platform.OS !== 'web') {
@@ -500,53 +491,11 @@ export default function MedicalIntakeScreen() {
               ) : (
                 /* Family Member Input Card */
                 <View style={styles.familyCard}>
-                  {familyMembers.length > 0 ? (
-                    <View style={styles.savedFamilySection}>
-                      <Text style={styles.familyInputLabel}>Select Saved Family Member:</Text>
-                      <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.savedFamilyList}>
-                        {familyMembers.map((member) => {
-                          const isSelected = selectedFamilyId === member.id;
-                          return (
-                            <Pressable
-                              key={member.id}
-                              onPress={() => {
-                                if (isSelected) {
-                                  setSelectedFamilyId(null);
-                                } else {
-                                  setSelectedFamilyId(member.id);
-                                  setFamilyMemberName(member.name);
-                                  if (member.relation) setFamilyMemberRelation(member.relation);
-                                  if (member.phone) setFamilyMemberPhone(member.phone);
-                                }
-                              }}
-                              style={[
-                                styles.savedFamilyChip,
-                                isSelected && styles.savedFamilyChipActive,
-                              ]}
-                            >
-                              <Text
-                                style={[
-                                  styles.savedFamilyChipText,
-                                  isSelected && styles.savedFamilyChipTextActive,
-                                ]}
-                              >
-                                {member.name} ({member.relation})
-                              </Text>
-                            </Pressable>
-                          );
-                        })}
-                      </ScrollView>
-                    </View>
-                  ) : null}
-
                   <View style={styles.familyInputRow}>
                     <Text style={styles.familyInputLabel}>Family Member's Full Name *</Text>
                     <TextInput
                       value={familyMemberName}
-                      onChangeText={(val) => {
-                        setFamilyMemberName(val);
-                        if (selectedFamilyId) setSelectedFamilyId(null);
-                      }}
+                      onChangeText={setFamilyMemberName}
                       placeholder="e.g. Meera Sharma"
                       placeholderTextColor={StitchColors.outline}
                       style={styles.familyTextInput}

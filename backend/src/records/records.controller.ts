@@ -11,10 +11,6 @@ export class RecordsController {
   async getTimeline(@Param('patientId') patientId: string, @Request() req: any) {
     return this.recordsService.getPatientTimeline(patientId, req.user);
   }
-
-  @Post('upload')
-  async upload(@Request() req: any, @Body() body: any) {
-    return this.recordsService.uploadRecord(body, req.user);
-  }
 }
+
 

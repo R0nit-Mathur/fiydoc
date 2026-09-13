@@ -259,3 +259,15 @@ model AuditLog {
   metadata    Json?
   timestamp   DateTime @default(now())
 }
+
+model DailyDoctorToken {
+  id        String   @id @default(uuid())
+  doctorId  String
+  date      String   // YYYY-MM-DD
+  lastToken Int      @default(0)
+  updatedAt DateTime @updatedAt
+
+  @@unique([doctorId, date])
+  @@index([doctorId, date])
+}
+

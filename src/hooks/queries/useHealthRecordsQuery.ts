@@ -12,27 +12,3 @@ export function useHealthRecordsQuery(patientId: string) {
   });
 }
 
-export function useUploadDocumentMutation() {
-  const queryClient = useQueryClient();
-  const addRecord = useHealthStore((s) => s.addRecord);
-
-  return useMutation({
-    mutationFn: ({
-      patientId,
-      title,
-      documentUrl,
-      summary,
-      tags,
-    }: {
-      patientId: string;
-      title: string;
-      documentUrl: string;
-      summary?: string;
-      tags?: string[];
-    }) => healthService.uploadRecord({ patientId, title, documentUrl, summary, tags }),
-    onSuccess: (record) => {
-      addRecord(record);
-      queryClient.invalidateQueries({ queryKey: ['health-records'] });
-    },
-  });
-}

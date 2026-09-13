@@ -9,19 +9,19 @@ export class AppointmentsService {
   private formatAppointment(apt: any) {
     if (!apt) return null;
     const tokenMatch = apt.notes?.match(/\[(Token\s*#\d+)\]/) || apt.notes?.match(/(Token\s*#\d+)/);
-    const tokenNumber = tokenMatch ? tokenMatch[1] : (apt.tokenNumber || 'Token #01');
+    const tokenNumber = tokenMatch ? tokenMatch[1] : (apt.tokenNumber || null);
 
     return {
       id: apt.id,
       patientId: apt.patientId,
-      patientName: apt.patient?.fullName || 'Patient',
-      patientAvatar: apt.patient?.profilePhoto || 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=400&q=80',
+      patientName: apt.patient?.fullName || null,
+      patientAvatar: apt.patient?.profilePhoto || null,
       doctorId: apt.doctorId,
-      doctorName: apt.doctor?.fullName || 'Dr. Specialist',
-      doctorSpecialty: apt.doctor?.specialization || 'Consultant',
-      doctorAvatar: apt.doctor?.profilePhoto || 'https://images.unsplash.com/photo-1559839734-2b71ea197ec2?w=400&q=80',
-      hospital: apt.doctor?.clinic?.name || 'FiYDoc Healthcare Clinic',
-      location: apt.doctor?.clinic?.address || 'Medical Enclave, Mumbai',
+      doctorName: apt.doctor?.fullName || null,
+      doctorSpecialty: apt.doctor?.specialization || null,
+      doctorAvatar: apt.doctor?.profilePhoto || null,
+      hospital: apt.doctor?.clinic?.name || null,
+      location: apt.doctor?.clinic?.address || null,
       date: apt.date,
       time: apt.startTime,
       startTime: apt.startTime,
@@ -113,27 +113,31 @@ export class AppointmentsService {
           (a) => a.dayOfWeek === appointmentDayOfWeek
         );
 
-        if (matchingDayAvailabilities.length > 0) {
-          const slotStartNorm = dto.startTime.slice(0, 5);
-          const matchedSlot = matchingDayAvailabilities.find((avail) => {
-            const availStartNorm = avail.startTime.slice(0, 5);
-            const availEndNorm = avail.endTime.slice(0, 5);
-            if (slotStartNorm < availStartNorm || slotStartNorm >= availEndNorm) {
-              return false;
-            }
-            // Check alignment with slotDurationMinutes
-            const slotDuration = avail.slotDurationMinutes || 30;
-            const [startH, startM] = availStartNorm.split(':').map(Number);
-            const [reqH, reqM] = slotStartNorm.split(':').map(Number);
-            const diffMinutes = (reqH * 60 + reqM) - (startH * 60 + startM);
-            return diffMinutes % slotDuration === 0;
-          });
+        if (matchingDayAvailabilities.length === 0) {
+          throw new BadRequestException(
+            `Doctor does not have scheduled availability for the selected day of week.`
+          );
+        }
 
-          if (!matchedSlot) {
-            throw new BadRequestException(
-              `The requested time ${dto.startTime} is outside the doctor's scheduled availability intervals for this day.`
-            );
+        const slotStartNorm = dto.startTime.slice(0, 5);
+        const matchedSlot = matchingDayAvailabilities.find((avail) => {
+          const availStartNorm = avail.startTime.slice(0, 5);
+          const availEndNorm = avail.endTime.slice(0, 5);
+          if (slotStartNorm < availStartNorm || slotStartNorm >= availEndNorm) {
+            return false;
           }
+          // Check alignment with slotDurationMinutes
+          const slotDuration = avail.slotDurationMinutes || 30;
+          const [startH, startM] = availStartNorm.split(':').map(Number);
+          const [reqH, reqM] = slotStartNorm.split(':').map(Number);
+          const diffMinutes = (reqH * 60 + reqM) - (startH * 60 + startM);
+          return diffMinutes % slotDuration === 0;
+        });
+
+        if (!matchedSlot) {
+          throw new BadRequestException(
+            `The requested time ${dto.startTime} is outside the doctor's scheduled availability intervals for this day.`
+          );
         }
       }
 
@@ -151,28 +155,25 @@ export class AppointmentsService {
         throw new BadRequestException('This slot is already booked. Please choose another time.');
       }
 
-      // Derive highest existing token sequence for this doctor and date
-      const dayAppointments = await tx.appointment.findMany({
+      // Concurrency-safe atomic token sequence allocation via DailyDoctorToken
+      const tokenRecord = await tx.dailyDoctorToken.upsert({
         where: {
+          doctorId_date: {
+            doctorId: dto.doctorId,
+            date: dto.date,
+          },
+        },
+        create: {
           doctorId: dto.doctorId,
           date: dto.date,
+          lastToken: 1,
         },
-        select: { notes: true },
+        update: {
+          lastToken: { increment: 1 },
+        },
       });
 
-      let maxTokenNum = 0;
-      for (const apt of dayAppointments) {
-        const match = apt.notes?.match(/Token\s*#(\d+)/i);
-        if (match && match[1]) {
-          const num = parseInt(match[1], 10);
-          if (num > maxTokenNum) maxTokenNum = num;
-        }
-      }
-      if (maxTokenNum === 0) {
-        maxTokenNum = dayAppointments.length;
-      }
-
-      const nextTokenNum = maxTokenNum + 1;
+      const nextTokenNum = tokenRecord.lastToken;
       const allocatedToken = `Token #${String(nextTokenNum).padStart(2, '0')}`;
       const canonicalNotes = dto.notes
         ? `${dto.notes.trim()} [${allocatedToken}]`

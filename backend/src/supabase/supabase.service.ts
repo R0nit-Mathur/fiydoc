@@ -57,24 +57,5 @@ export class SupabaseService {
 
     return data.signedUrl;
   }
-
-  async uploadFile(bucket: string, path: string, fileBuffer: Buffer, contentType: string): Promise<string> {
-    if (!this.supabase) {
-      throw new ServiceUnavailableException('Supabase Storage is not configured. File was not saved.');
-    }
-
-    const { data, error } = await this.supabase.storage.from(bucket).upload(path, fileBuffer, {
-      contentType,
-      upsert: true,
-    });
-
-    if (error) {
-      this.logger.error(`Supabase Storage upload error: ${error.message}`);
-      throw error;
-    }
-
-    const { data: publicUrlData } = this.supabase.storage.from(bucket).getPublicUrl(data.path);
-    return publicUrlData.publicUrl;
-  }
 }
 

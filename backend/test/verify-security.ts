@@ -49,6 +49,13 @@ const mockPrisma: any = {
     create: async (args: any) => ({ id: 'notif_123', ...args.data }),
     createMany: async () => ({ count: 2 }),
   },
+  dailyDoctorToken: {
+    upsert: async (args: any) => ({ lastToken: 1 }),
+  },
+  user: {
+    findUnique: async () => null,
+    create: async (args: any) => ({ id: 'u_123', ...args.data }),
+  },
   $transaction: async (cb: any) => cb(mockPrisma),
 };
 
@@ -60,6 +67,8 @@ import { AuthService } from '../src/auth/auth.service';
 import { NotificationsService } from '../src/notifications/notifications.service';
 import { PublicRegisterRole } from '../src/auth/dto/register.dto';
 
+import { DoctorsService } from '../src/doctors/doctors.service';
+
 const appointmentsService = new AppointmentsService(mockPrisma);
 const prescriptionsService = new PrescriptionsService(mockPrisma, mockSupabase);
 const consultationsService = new ConsultationsService(mockPrisma);
@@ -67,6 +76,7 @@ const recordsService = new RecordsService(mockPrisma);
 const patientsService = new PatientsService(mockPrisma);
 const authService = new AuthService(mockPrisma, { sign: () => 'mock_token' } as any);
 const notificationsService = new NotificationsService(mockPrisma);
+const doctorsService = new DoctorsService(mockPrisma);
 
 async function runTests() {
   let passed = 0;
@@ -407,6 +417,107 @@ async function runTests() {
     assert.strictEqual(threw, true, 'Should reject prescription for uncompleted consultation');
   });
 
+  // Test 13: Doctor without schedule returns empty slots (no fake fallback)
+  await test('generateAvailableSlots returns empty array when doctor has no schedule for day', async () => {
+    mockPrisma.doctor.findUnique = async () => ({
+      id: 'doc_nosched',
+      availabilities: [],
+    });
+    mockPrisma.appointment.findMany = async () => [];
+
+    const res = await doctorsService.generateAvailableSlots('doc_nosched', '2026-09-15');
+    assert.deepStrictEqual(res.slots, [], 'Slots must be empty array, never hardcoded fallbacks');
+  });
+
+  // Test 14: Prescriptions require explicit medicine dosage, frequency, and duration
+  await test('Prescription rejects medicine missing dosage, frequency, or durationDays', async () => {
+    mockPrisma.doctor.findUnique = async () => ({
+      id: 'doc_1',
+      verification: { status: VerificationStatus.VERIFIED },
+    });
+    mockPrisma.consultation.findUnique = async () => ({
+      id: 'c_complete',
+      doctorId: 'doc_1',
+      patientId: 'pat_1',
+      completedAt: new Date(),
+      appointment: { status: AppointmentStatus.COMPLETED },
+    });
+
+    const verifiedDoc = {
+      id: 'u_doc',
+      role: Role.DOCTOR,
+      doctor: { id: 'doc_1' },
+    };
+
+    let threw = false;
+    try {
+      await prescriptionsService.createPrescription(
+        {
+          consultationId: 'c_complete',
+          medicines: [{ name: 'Amoxicillin', dosage: '', frequency: 'TID', durationDays: 5 }],
+        },
+        verifiedDoc
+      );
+    } catch (e: any) {
+      if (e instanceof BadRequestException && e.message.includes('Dosage is required')) {
+        threw = true;
+      }
+    }
+    assert.strictEqual(threw, true, 'Should reject missing dosage');
+  });
+
+  // Test 15: Doctor registration rejects missing specialization or invalid fee
+  await test('Doctor registration strictly requires specialization and valid consultation fee', async () => {
+    let threw = false;
+    try {
+      await authService.register({
+        email: 'doc@example.com',
+        password: 'password123',
+        role: PublicRegisterRole.DOCTOR,
+        fullName: 'Dr. John Doe',
+        licenseNumber: 'NMC-12345',
+        clinicName: 'Health Clinic',
+        // missing specialization and consultationFee
+      } as any);
+    } catch (e: any) {
+      if (e instanceof BadRequestException && e.message.includes('Specialization is required')) {
+        threw = true;
+      }
+    }
+    assert.strictEqual(threw, true, 'Should require specialization');
+  });
+
+  // Test 16: Appointment creation rejects booking if doctor has availabilities and none on requested day
+  await test('Appointment creation rejects booking if doctor has availabilities and none on requested day', async () => {
+    mockPrisma.doctor.findUnique = async () => ({
+      id: 'doc_1',
+      consultationFee: 500,
+      consultationModes: ['CLINIC'],
+      verification: { status: VerificationStatus.VERIFIED },
+      // Availabilities on Monday only (dayOfWeek 1)
+      availabilities: [
+        { dayOfWeek: 1, startTime: '09:00', endTime: '12:00', slotDurationMinutes: 30 },
+      ],
+    });
+    mockPrisma.patient.findUnique = async () => ({ id: 'pat_1' });
+
+    let threw = false;
+    try {
+      await appointmentsService.createAppointment({
+        patientId: 'pat_1',
+        doctorId: 'doc_1',
+        date: '2029-01-02', // Tuesday (dayOfWeek 2)
+        startTime: '10:00',
+        endTime: '10:30',
+      });
+    } catch (e: any) {
+      if (e instanceof BadRequestException && e.message.includes('does not have scheduled availability for the selected day')) {
+        threw = true;
+      }
+    }
+    assert.strictEqual(threw, true, 'Should reject booking when doctor not available on day of week');
+  });
+
   console.log(`\nResults: ${passed} passed, ${failed} failed.`);
   if (failed > 0) {
     process.exit(1);
@@ -414,3 +525,4 @@ async function runTests() {
 }
 
 runTests();
+

@@ -6,20 +6,8 @@ export const healthService = {
     return apiClient<MedicalRecord[]>(`/records/patient/${patientId}`);
   },
 
-  async uploadRecord(payload: {
-    patientId: string;
-    title: string;
-    documentUrl: string;
-    summary?: string;
-    tags?: string[];
-  }): Promise<MedicalRecord> {
-    return apiClient<MedicalRecord>('/records/upload', {
-      method: 'POST',
-      body: JSON.stringify(payload),
-    });
-  },
-
   async createPrescription(payload: {
+
     consultationId?: string;
     patientId?: string;
     doctorId?: string;

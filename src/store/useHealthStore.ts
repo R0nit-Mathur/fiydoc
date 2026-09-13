@@ -42,50 +42,14 @@ export const useHealthStore = create<HealthState>()(
         })),
 
       addLabReport: (report) =>
-        set((state) => {
-          const recordItem: MedicalRecord = {
-            id: `rec_${report.id}`,
-            patientId: report.patientId,
-            title: `Lab Test: ${report.testName} • ${report.labName}`,
-            type: 'Lab Report',
-            sourceId: report.id,
-            createdAt: 'Just now',
-            doctorName: report.doctorReferred,
-            summary: report.summary || `Verified diagnostic results from ${report.labName}.`,
-            tags: ['DIAGNOSTIC_LAB', report.category.toUpperCase()],
-          };
-          return {
-            labReports: [report, ...state.labReports.filter((r) => r.id !== report.id)],
-            records: [recordItem, ...state.records.filter((r) => r.sourceId !== report.id)],
-          };
-        }),
+        set((state) => ({
+          labReports: [report, ...state.labReports.filter((r) => r.id !== report.id)],
+        })),
 
       addPrescription: (prescription) =>
-        set((state) => {
-          // Also automatically add a timeline MedicalRecord for this prescription
-          const recordItem: MedicalRecord = {
-            id: `rec_${prescription.id}`,
-            patientId: prescription.patientId,
-            title: `Digital Prescription (Rx) • ${prescription.doctorName || 'Specialist Doctor'}`,
-            type: 'Prescription',
-            sourceId: prescription.id,
-            createdAt: 'Just now',
-            doctorName: prescription.doctorName,
-            summary: prescription.diagnosis
-              ? prescription.medicines && prescription.medicines.length > 0
-                ? `Diagnosis: ${prescription.diagnosis}. Prescribed ${prescription.medicines.length} medication(s).`
-                : `Diagnosis: ${prescription.diagnosis}. Clinical Assessment & Advice (No medications required).`
-              : prescription.medicines && prescription.medicines.length > 0
-                ? `Official prescription with ${prescription.medicines.length} medication(s).`
-                : `Official clinical assessment & consultation advice.`,
-            tags: ['DIGITAL_RX', 'CLINICAL_PRESCRIPTION'],
-          };
-
-          return {
-            prescriptions: [prescription, ...state.prescriptions.filter((p) => p.id !== prescription.id)],
-            records: [recordItem, ...state.records.filter((r) => r.sourceId !== prescription.id)],
-          };
-        }),
+        set((state) => ({
+          prescriptions: [prescription, ...state.prescriptions.filter((p) => p.id !== prescription.id)],
+        })),
 
       setActiveFilter: (activeFilter) => set({ activeFilter }),
 

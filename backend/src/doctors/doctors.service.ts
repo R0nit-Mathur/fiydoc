@@ -19,7 +19,9 @@ export class DoctorsService {
 
   private formatDoctor(doc: any, userLat?: number, userLng?: number) {
     if (!doc) return null;
-    const qualificationText = doc.qualifications?.map((q: any) => q.degree).join(', ') || 'MBBS, MD Specialist';
+    const qualificationText = doc.qualifications?.length > 0
+      ? doc.qualifications.map((q: any) => q.degree).join(', ')
+      : null;
     const clinicLat = doc.clinic?.latitude ?? null;
     const clinicLng = doc.clinic?.longitude ?? null;
 
@@ -36,13 +38,13 @@ export class DoctorsService {
       fullName: doc.fullName,
       specialty: doc.specialization,
       specialization: doc.specialization,
-      avatar: doc.profilePhoto || 'https://images.unsplash.com/photo-1559839734-2b71ea197ec2?w=400&q=80',
-      profilePhoto: doc.profilePhoto,
+      avatar: doc.profilePhoto || null,
+      profilePhoto: doc.profilePhoto || null,
       consultationFee: doc.consultationFee,
       consultationModes: doc.consultationModes || ['CLINIC'],
       qualification: qualificationText,
-      hospital: doc.clinic?.name || 'In-Clinic Practice',
-      location: doc.clinic?.address || 'Medical Practice Clinic',
+      hospital: doc.clinic?.name || null,
+      location: doc.clinic?.address || null,
       latitude: clinicLat,
       longitude: clinicLng,
       distanceKm,
@@ -56,7 +58,7 @@ export class DoctorsService {
             timings: doc.clinic.timings,
           }
         : null,
-      timings: doc.clinic?.timings || '09:00 AM - 05:00 PM',
+      timings: doc.clinic?.timings || null,
       rating: null,
       reviewCount: 0,
       experienceYears: doc.experienceYears || 0,
@@ -208,8 +210,8 @@ export class DoctorsService {
         }
       }
     } else {
-      // Fallback: if no specific availabilities configured, standard business hours
-      candidateSlots = ['09:30', '10:30', '11:30', '14:00', '15:30', '17:00'];
+      // If doctor has no schedule configured for this day, return no slots
+      candidateSlots = [];
     }
 
     const bookedAppointments = await this.prisma.appointment.findMany({

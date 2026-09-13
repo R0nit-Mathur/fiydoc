@@ -120,22 +120,31 @@ export class PrescriptionsService {
     }
 
     // Validate medicine items
-    if (dto.medicines) {
-      for (const m of dto.medicines) {
-        if (!m.name || m.name.trim().length === 0) {
-          throw new BadRequestException('Every prescribed medicine must have a valid name.');
-        }
-        if (m.durationDays !== undefined && m.durationDays <= 0) {
-          throw new BadRequestException('Prescription medicine duration must be at least 1 day.');
-        }
+    if (!dto.medicines || dto.medicines.length === 0) {
+      throw new BadRequestException('Prescription must include at least one medication.');
+    }
+
+    for (const m of dto.medicines) {
+      if (!m.name || m.name.trim().length === 0) {
+        throw new BadRequestException('Every prescribed medicine must have a valid medication name.');
+      }
+      if (!m.dosage || m.dosage.trim().length === 0) {
+        throw new BadRequestException(`Dosage is required for medicine '${m.name}'.`);
+      }
+      if (!m.frequency || m.frequency.trim().length === 0) {
+        throw new BadRequestException(`Frequency is required for medicine '${m.name}'.`);
+      }
+      if (m.durationDays === undefined || m.durationDays === null || Number(m.durationDays) <= 0) {
+        throw new BadRequestException(`Duration in days (> 0) is required for medicine '${m.name}'.`);
       }
     }
 
     // Cryptographically secure verification code
     const randomSuffix = crypto.randomBytes(3).toString('hex').toUpperCase();
     const verificationCode = `FYD-RX-${Date.now().toString().slice(-6)}-${randomSuffix}`;
+    const issuedTimestamp = new Date();
 
-    return this.prisma.$transaction(async (tx) => {
+    const createdPrescription = await this.prisma.$transaction(async (tx) => {
       const prescription = await tx.prescription.create({
         data: {
           consultationId: consultation.id,
@@ -144,41 +153,19 @@ export class PrescriptionsService {
           doctorNotes: dto.doctorNotes,
           followUpInstructions: dto.followUpInstructions,
           verificationCode,
-          signedAt: new Date(),
+          signedAt: issuedTimestamp,
           medicines: {
-            create: (dto.medicines || []).map((m) => ({
+            create: dto.medicines.map((m) => ({
               name: m.name.trim(),
-              dosage: m.dosage?.trim() || 'As directed',
-              frequency: m.frequency?.trim() || 'Once daily',
-              durationDays: m.durationDays || 5,
+              dosage: m.dosage.trim(),
+              frequency: m.frequency.trim(),
+              durationDays: Number(m.durationDays),
               instructions: m.instructions?.trim() || '',
             })),
           },
         },
         include: { medicines: true, doctor: true, patient: true },
       });
-
-      let storagePath: string | null = null;
-      let documentUrl: string | null = null;
-      if (this.supabase.isConfigured()) {
-        try {
-          const bucket = process.env.SUPABASE_STORAGE_BUCKET || 'fiydoc-medical-docs';
-          storagePath = `prescriptions/${consultation.patientId}/${prescription.id}.pdf`;
-          await this.supabase.uploadPrivateFile(
-            bucket,
-            storagePath,
-            await this.buildPrescriptionDocument(prescription),
-            'application/pdf',
-          );
-          await tx.prescription.update({
-            where: { id: prescription.id },
-            data: { pdfUrl: storagePath },
-          });
-          documentUrl = await this.supabase.createSignedUrl(bucket, storagePath, 3600).catch(() => null);
-        } catch (storageErr) {
-          // Keep prescription record even if PDF upload deferred
-        }
-      }
 
       // Auto-create timeline MedicalRecord entry
       await tx.medicalRecord.create({
@@ -187,8 +174,7 @@ export class PrescriptionsService {
           title: `Prescription from ${consultation.doctor.fullName}`,
           type: 'PRESCRIPTION',
           sourceId: prescription.id,
-          documentUrl: storagePath || undefined,
-          summary: `Prescribed ${(dto.medicines || []).length} medicine(s)`,
+          summary: `Prescribed ${dto.medicines.length} medicine(s)`,
           tags: ['DIGITAL_RX', 'OFFICIAL_PRESCRIPTION'],
         },
       });
@@ -203,7 +189,7 @@ export class PrescriptionsService {
           metadata: {
             consultationId: consultation.id,
             patientId: consultation.patientId,
-            medicineCount: (dto.medicines || []).length,
+            medicineCount: dto.medicines.length,
           },
         },
       });
@@ -220,8 +206,46 @@ export class PrescriptionsService {
         });
       }
 
-      return { ...prescription, pdfUrl: documentUrl || storagePath };
+      return prescription;
     });
+
+    // Generate PDF and upload to Supabase Storage OUTSIDE the database transaction
+    let storagePath: string | null = null;
+    let documentUrl: string | null = null;
+
+    if (this.supabase.isConfigured()) {
+      try {
+        const bucket = process.env.SUPABASE_STORAGE_BUCKET || 'fiydoc-medical-docs';
+        storagePath = `prescriptions/${consultation.patientId}/${createdPrescription.id}.pdf`;
+        const pdfBuffer = await this.buildPrescriptionDocument(createdPrescription);
+        await this.supabase.uploadPrivateFile(
+          bucket,
+          storagePath,
+          pdfBuffer,
+          'application/pdf',
+        );
+
+        await this.prisma.prescription.update({
+          where: { id: createdPrescription.id },
+          data: { pdfUrl: storagePath },
+        });
+
+        await this.prisma.medicalRecord.updateMany({
+          where: { sourceId: createdPrescription.id, type: 'PRESCRIPTION' },
+          data: { documentUrl: storagePath },
+        });
+
+        documentUrl = await this.supabase.createSignedUrl(bucket, storagePath, 3600).catch(() => null);
+      } catch (storageErr) {
+        // Log error but preserve committed prescription record
+      }
+    }
+
+    return {
+      ...createdPrescription,
+      issuedAt: createdPrescription.signedAt || createdPrescription.createdAt,
+      pdfUrl: documentUrl || storagePath,
+    };
   }
 
   async getPrescriptionById(id: string, currentUser: any) {

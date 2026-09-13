@@ -73,51 +73,6 @@ export class RecordsService {
       orderBy: { createdAt: 'desc' },
     });
   }
-
-  async uploadRecord(
-    dto: {
-      patientId: string;
-      title: string;
-      documentUrl: string;
-      summary?: string;
-      tags?: string[];
-    },
-    currentUser: any,
-  ) {
-    if (!currentUser) {
-      throw new ForbiddenException('Authentication required.');
-    }
-
-    if (!dto.documentUrl || dto.documentUrl.trim().length === 0) {
-      throw new BadRequestException('A valid uploaded documentUrl is strictly required.');
-    }
-
-    if (!dto.title || dto.title.trim().length === 0) {
-      throw new BadRequestException('Record title is required.');
-    }
-
-    const resolvedId = await this.resolvePatientId(dto.patientId, currentUser);
-
-    // Patients can only upload to their own timeline
-    if (currentUser.role === Role.PATIENT) {
-      const userPatient = await this.prisma.patient.findUnique({
-        where: { userId: currentUser.id },
-      });
-      if (!userPatient || userPatient.id !== resolvedId) {
-        throw new ForbiddenException('You cannot upload records to another patient’s profile.');
-      }
-    }
-
-    return this.prisma.medicalRecord.create({
-      data: {
-        patientId: resolvedId,
-        title: dto.title.trim(),
-        type: 'UPLOADED_DOCUMENT',
-        documentUrl: dto.documentUrl.trim(),
-        summary: dto.summary?.trim() || `Uploaded document: ${dto.title.trim()}`,
-        tags: dto.tags || ['UPLOADED_DOCUMENT'],
-      },
-    });
-  }
 }
+
 

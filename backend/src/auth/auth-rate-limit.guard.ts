@@ -38,6 +38,13 @@ export class AuthRateLimitGuard implements CanActivate {
 
     if (record.count >= this.limit) {
       const retryAfter = Math.ceil((record.resetTime - now) / 1000);
+      const response = context.switchToHttp().getResponse();
+      if (response && response.setHeader) {
+        response.setHeader('Retry-After', retryAfter.toString());
+        response.setHeader('X-RateLimit-Limit', this.limit.toString());
+        response.setHeader('X-RateLimit-Remaining', '0');
+        response.setHeader('X-RateLimit-Reset', Math.ceil(record.resetTime / 1000).toString());
+      }
       throw new HttpException(
         {
           statusCode: HttpStatus.TOO_MANY_REQUESTS,
@@ -49,6 +56,12 @@ export class AuthRateLimitGuard implements CanActivate {
     }
 
     record.count += 1;
+    const response = context.switchToHttp().getResponse();
+    if (response && response.setHeader) {
+      response.setHeader('X-RateLimit-Limit', this.limit.toString());
+      response.setHeader('X-RateLimit-Remaining', (this.limit - record.count).toString());
+      response.setHeader('X-RateLimit-Reset', Math.ceil(record.resetTime / 1000).toString());
+    }
     return true;
   }
 }

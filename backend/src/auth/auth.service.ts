@@ -72,13 +72,19 @@ export class AuthService {
       if (!dto.fullName?.trim()) {
         throw new BadRequestException('Doctor full name is required for registration.');
       }
+      if (!dto.specialization?.trim()) {
+        throw new BadRequestException('Specialization is required for doctor registration.');
+      }
+      if (dto.consultationFee === undefined || dto.consultationFee === null || Number(dto.consultationFee) < 0) {
+        throw new BadRequestException('A valid consultation fee (>= 0) is required for doctor registration.');
+      }
 
       const registrationNumber = dto.licenseNumber.trim();
       const registrationAuthority = dto.registrationAuthority?.trim() || 'National Medical Commission / State Council';
-      const specialization = dto.specialization?.trim() || 'General Medicine';
-      const fee = Number(dto.consultationFee) || 800;
+      const specialization = dto.specialization.trim();
+      const fee = Number(dto.consultationFee);
       const clinicName = dto.clinicName.trim();
-      const clinicAddress = dto.clinicAddress?.trim() || 'Clinical Practice Address Pending';
+      const clinicAddress = dto.clinicAddress?.trim() || null;
       const clinicLatitude = dto.clinicLatitude !== undefined && dto.clinicLatitude !== null ? Number(dto.clinicLatitude) : null;
       const clinicLongitude = dto.clinicLongitude !== undefined && dto.clinicLongitude !== null ? Number(dto.clinicLongitude) : null;
 
@@ -88,20 +94,22 @@ export class AuthService {
           fullName: dto.fullName.trim(),
           specialization,
           consultationFee: fee,
-          clinic: {
-            create: {
-              name: clinicName,
-              address: clinicAddress,
-              latitude: clinicLatitude,
-              longitude: clinicLongitude,
-              timings: null,
-            },
-          },
-          qualifications: dto.qualifications
+          clinic: clinicAddress
+            ? {
+                create: {
+                  name: clinicName,
+                  address: clinicAddress,
+                  latitude: clinicLatitude,
+                  longitude: clinicLongitude,
+                  timings: null,
+                },
+              }
+            : undefined,
+          qualifications: dto.qualifications && dto.qualifications.length > 0
             ? {
                 create: {
                   degree: Array.isArray(dto.qualifications) ? dto.qualifications.join(', ') : String(dto.qualifications).trim(),
-                  institution: 'Institution Pending Verification',
+                  institution: 'Medical University',
                   year: new Date().getFullYear(),
                 },
               }
@@ -110,8 +118,6 @@ export class AuthService {
             create: {
               registrationNumber,
               registrationAuthority,
-              // Registration data is not proof of medical credentials. An admin
-              // review is required before the practitioner is represented as verified.
               status: VerificationStatus.PENDING,
             },
           },
@@ -175,8 +181,7 @@ export class AuthService {
     let verifiedGoogleSub: string;
     let verifiedName: string;
 
-    // 1. First attempt: Verify using official Google OAuth2Client
-    let verified = false;
+    // Cryptographically verify ID token using official Google OAuth2Client
     const clientId = process.env.GOOGLE_CLIENT_ID;
 
     try {
@@ -186,69 +191,18 @@ export class AuthService {
         audience: clientId || undefined,
       });
       const payload = ticket.getPayload();
-      if (payload && payload.email && payload.sub) {
-        if (!payload.email_verified) {
-          throw new UnauthorizedException('Google email address has not been verified by Google.');
-        }
-        verifiedEmail = payload.email.trim().toLowerCase();
-        verifiedGoogleSub = payload.sub.trim();
-        verifiedName = payload.name?.trim() || payload.email.split('@')[0];
-        verified = true;
+      if (!payload || !payload.email || !payload.sub) {
+        throw new UnauthorizedException('Invalid Google ID token payload.');
       }
+      if (!payload.email_verified) {
+        throw new UnauthorizedException('Google email address has not been verified by Google.');
+      }
+      verifiedEmail = payload.email.trim().toLowerCase();
+      verifiedGoogleSub = payload.sub.trim();
+      verifiedName = payload.name?.trim() || payload.email.split('@')[0];
     } catch (err: any) {
       if (err instanceof UnauthorizedException) throw err;
-      // If verifyIdToken failed (e.g. token is an OAuth2 userinfo access token or tokeninfo)
-    }
-
-    // 2. Second attempt: Check Google TokenInfo API if not verified by client
-    if (!verified) {
-      try {
-        const tokenInfoRes = await fetch(`https://oauth2.googleapis.com/tokeninfo?id_token=${encodeURIComponent(credential)}`);
-        if (tokenInfoRes.ok) {
-          const data: any = await tokenInfoRes.json();
-          if (data.email && data.sub) {
-            if (data.email_verified === 'false' || data.email_verified === false) {
-              throw new UnauthorizedException('Google email address is not verified.');
-            }
-            if (clientId && data.aud && data.aud !== clientId) {
-              throw new UnauthorizedException('Google token audience does not match application client ID.');
-            }
-            verifiedEmail = data.email.trim().toLowerCase();
-            verifiedGoogleSub = data.sub.trim();
-            verifiedName = data.name?.trim() || data.email.split('@')[0];
-            verified = true;
-          }
-        }
-      } catch (err: any) {
-        if (err instanceof UnauthorizedException) throw err;
-      }
-    }
-
-    // 3. Third attempt: Google UserInfo API (in case an OAuth2 access_token was passed)
-    if (!verified) {
-      try {
-        const userinfoRes = await fetch('https://www.googleapis.com/oauth2/v3/userinfo', {
-          headers: { Authorization: `Bearer ${credential}` },
-        });
-        if (userinfoRes.ok) {
-          const data: any = await userinfoRes.json();
-          if (data.email && data.sub) {
-            if (data.email_verified === false) {
-              throw new UnauthorizedException('Google email address is not verified.');
-            }
-            verifiedEmail = data.email.trim().toLowerCase();
-            verifiedGoogleSub = data.sub.trim();
-            verifiedName = data.name?.trim() || data.email.split('@')[0];
-            verified = true;
-          }
-        }
-      } catch (err: any) {
-        if (err instanceof UnauthorizedException) throw err;
-      }
-    }
-
-    if (!verified || !verifiedEmail! || !verifiedGoogleSub!) {
-      throw new UnauthorizedException('Cryptographic verification of Google credential failed. Access denied.');
+      throw new UnauthorizedException(`Cryptographic verification of Google ID token failed: ${err.message || 'Access denied'}`);
     }
 
     const includeRelations = {
@@ -305,18 +259,12 @@ export class AuthService {
                   doctor: {
                     create: {
                       fullName: verifiedName,
-                      specialization: 'General Medicine',
-                      consultationFee: 500,
-                      clinic: {
-                        create: {
-                          name: `${verifiedName}'s Clinic`,
-                          address: 'Address Pending Verification',
-                        },
-                      },
+                      specialization: 'Pending Onboarding',
+                      consultationFee: 0,
                       verification: {
                         create: {
-                          registrationNumber: `PENDING-${verifiedGoogleSub.slice(-6)}`,
-                          registrationAuthority: 'National Medical Commission',
+                          registrationNumber: 'PENDING_ONBOARDING',
+                          registrationAuthority: 'Pending Onboarding',
                           status: VerificationStatus.PENDING,
                         },
                       },

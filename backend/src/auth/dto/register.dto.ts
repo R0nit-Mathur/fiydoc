@@ -62,6 +62,7 @@ export class RegisterDto {
   clinicLongitude?: number;
 
   @IsOptional()
+  @IsNumber({}, { message: 'Consultation fee must be a valid number.' })
   consultationFee?: number;
 
   @IsOptional()
