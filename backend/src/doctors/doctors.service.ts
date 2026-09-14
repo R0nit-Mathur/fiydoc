@@ -209,17 +209,15 @@ export class DoctorsService {
       doctor.availabilities?.[0]?.slotDurationMinutes ||
       30;
 
-    const updated = await this.prisma.doctor.update({
+    const updated: any = await this.prisma.doctor.update({
       where: { userId },
       data: {
         fullName: dto.fullName?.trim() || undefined,
         specialization: dto.specialization?.trim() || undefined,
         profilePhoto: dto.profilePhoto === null ? null : dto.profilePhoto?.trim() || undefined,
         consultationFee: dto.consultationFee && dto.consultationFee > 0 ? dto.consultationFee : undefined,
-        experienceYears: dto.experienceYears && dto.experienceYears >= 0 ? dto.experienceYears : undefined,
-        ...(dto.patientsPerSlot && dto.patientsPerSlot > 0
-          ? { patientsPerSlot: dto.patientsPerSlot }
-          : {}),
+        experienceYears: dto.experienceYears != null && dto.experienceYears >= 0 ? dto.experienceYears : undefined,
+        patientsPerSlot: dto.patientsPerSlot && dto.patientsPerSlot > 0 ? dto.patientsPerSlot : undefined,
         ...(shouldResetVerification
           ? {
               verification: {
@@ -248,7 +246,7 @@ export class DoctorsService {
               },
             }
           : {}),
-      },
+      } as any,
       include: { qualifications: true, clinic: true, verification: true, availabilities: true },
     });
 
@@ -302,7 +300,7 @@ export class DoctorsService {
     if (dto.patientsPerSlot && dto.patientsPerSlot > 0) {
       await this.prisma.doctor.update({
         where: { id: doctor.id },
-        data: { patientsPerSlot: dto.patientsPerSlot },
+        data: { patientsPerSlot: dto.patientsPerSlot } as any,
       });
     }
 
