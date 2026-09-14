@@ -64,6 +64,48 @@ export class PrismaService extends PrismaClient implements OnModuleInit, OnModul
       `);
       this.logger.log('✅ DoctorScheduleOverride schema verified in PostgreSQL.');
 
+      // Ensure Prescription.issuedAt column exists (missing from older DB migrations)
+      await this.$executeRawUnsafe(`
+        ALTER TABLE "Prescription" ADD COLUMN IF NOT EXISTS "issuedAt" TIMESTAMP(3);
+      `);
+
+      // Ensure Prescription.pdfUrl column exists
+      await this.$executeRawUnsafe(`
+        ALTER TABLE "Prescription" ADD COLUMN IF NOT EXISTS "pdfUrl" TEXT;
+      `);
+
+      // Ensure Prescription.verificationCode has a default if null
+      await this.$executeRawUnsafe(`
+        ALTER TABLE "Prescription" ALTER COLUMN "verificationCode" SET DEFAULT gen_random_uuid()::text;
+      `);
+
+      this.logger.log('✅ Prescription schema columns verified.');
+
+      // Ensure Consultation.completedAt exists (may be missing in older migrations)
+      await this.$executeRawUnsafe(`
+        ALTER TABLE "Consultation" ADD COLUMN IF NOT EXISTS "completedAt" TIMESTAMP(3);
+      `);
+      // Ensure Consultation.diagnosis, treatmentPlan columns exist
+      await this.$executeRawUnsafe(`
+        ALTER TABLE "Consultation" ADD COLUMN IF NOT EXISTS "diagnosis" TEXT;
+      `);
+      await this.$executeRawUnsafe(`
+        ALTER TABLE "Consultation" ADD COLUMN IF NOT EXISTS "treatmentPlan" TEXT;
+      `);
+
+      // Ensure MedicalRecord.documentUrl exists
+      await this.$executeRawUnsafe(`
+        ALTER TABLE "MedicalRecord" ADD COLUMN IF NOT EXISTS "documentUrl" TEXT;
+      `);
+      await this.$executeRawUnsafe(`
+        ALTER TABLE "MedicalRecord" ADD COLUMN IF NOT EXISTS "tags" TEXT[] DEFAULT '{}';
+      `);
+
+      this.logger.log('✅ Consultation and MedicalRecord schema columns verified.');
+
+
+
+
       // Seed default admin user if none exists
       await this.seedAdminUser();
 
