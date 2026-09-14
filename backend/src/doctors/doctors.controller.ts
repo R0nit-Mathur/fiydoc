@@ -1,4 +1,4 @@
-import { Controller, Get, Post, Query, Param, Patch, Body, Request, UseGuards } from '@nestjs/common';
+import { Controller, Get, Post, Query, Param, Patch, Body, Request, UseGuards, Delete } from '@nestjs/common';
 import { DoctorsService } from './doctors.service';
 import { JwtAuthGuard } from '../auth/jwt-auth.guard';
 
@@ -22,6 +22,12 @@ export class DoctorsController {
   @UseGuards(JwtAuthGuard)
   async updateMyProfile(@Request() req: any, @Body() body: any) {
     return this.doctorsService.updateDoctorProfile(req.user.id, body);
+  }
+
+  @Patch('me/availability')
+  @UseGuards(JwtAuthGuard)
+  async updateMyAvailability(@Request() req: any, @Body() body: any) {
+    return this.doctorsService.updateAvailability(req.user.id, body);
   }
 
   @Post('schedule/delay')
@@ -74,14 +80,13 @@ export class DoctorsController {
     return this.doctorsService.getScheduleStatus(id, date || new Date().toISOString().split('T')[0]);
   }
 
-  @Get(':id')
-  async getOne(@Param('id') id: string) {
-    return this.doctorsService.getDoctorById(id);
-  }
-
   @Get(':id/slots')
   async getSlots(@Param('id') id: string, @Query('date') date: string) {
     return this.doctorsService.generateAvailableSlots(id, date || new Date().toISOString().split('T')[0]);
   }
-}
 
+  @Get(':id')
+  async getOne(@Param('id') id: string) {
+    return this.doctorsService.getDoctorById(id);
+  }
+}

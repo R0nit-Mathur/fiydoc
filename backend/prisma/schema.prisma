@@ -104,6 +104,8 @@ model Doctor {
   languages         String[]           @default([])
   consultationFee   Decimal            @db.Decimal(10, 2)
   consultationModes ConsultationType[] @default([CLINIC, VIDEO])
+  patientsPerSlot   Int                @default(1)
+  experienceYears   Int                @default(0)
 
   qualifications DoctorQualification[]
   clinic         Clinic?

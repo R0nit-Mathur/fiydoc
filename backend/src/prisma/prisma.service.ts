@@ -1,5 +1,6 @@
 import { Injectable, OnModuleInit, OnModuleDestroy, Logger } from '@nestjs/common';
 import { PrismaClient } from '@prisma/client';
+import * as bcrypt from 'bcryptjs';
 
 @Injectable()
 export class PrismaService extends PrismaClient implements OnModuleInit, OnModuleDestroy {
@@ -28,7 +29,17 @@ export class PrismaService extends PrismaClient implements OnModuleInit, OnModul
         ALTER TABLE "Patient" ADD COLUMN IF NOT EXISTS "address" TEXT;
       `);
 
-      this.logger.log('✅ User schema migration verified (UserStatus enum + status column).');
+      // Ensure Doctor.patientsPerSlot column exists (allows concurrent patients per time slot)
+      await this.$executeRawUnsafe(`
+        ALTER TABLE "Doctor" ADD COLUMN IF NOT EXISTS "patientsPerSlot" INTEGER NOT NULL DEFAULT 1;
+      `);
+
+      // Ensure Doctor.experienceYears column exists
+      await this.$executeRawUnsafe(`
+        ALTER TABLE "Doctor" ADD COLUMN IF NOT EXISTS "experienceYears" INTEGER NOT NULL DEFAULT 0;
+      `);
+
+      this.logger.log('✅ Schema migrations verified (UserStatus, patientsPerSlot, experienceYears).');
 
       // Ensure DoctorScheduleOverride table and indexes exist in PostgreSQL
       await this.$executeRawUnsafe(`
@@ -52,8 +63,36 @@ export class PrismaService extends PrismaClient implements OnModuleInit, OnModul
         ON "DoctorScheduleOverride"("doctorId", "date");
       `);
       this.logger.log('✅ DoctorScheduleOverride schema verified in PostgreSQL.');
+
+      // Seed default admin user if none exists
+      await this.seedAdminUser();
+
     } catch (err: any) {
       this.logger.warn(`⚠️ Prisma connection or schema warning: ${err?.message || err}`);
+    }
+  }
+
+  private async seedAdminUser() {
+    try {
+      const existing = await this.user.findFirst({
+        where: { role: 'ADMIN' },
+      });
+      if (!existing) {
+        const ADMIN_EMAIL = process.env.ADMIN_EMAIL || 'admin@fiydoc.com';
+        const ADMIN_PASSWORD = process.env.ADMIN_PASSWORD || 'FiYDoc@Admin2026!';
+        const passwordHash = await bcrypt.hash(ADMIN_PASSWORD, 10);
+        await this.user.create({
+          data: {
+            email: ADMIN_EMAIL,
+            passwordHash,
+            role: 'ADMIN',
+            status: 'ACTIVE',
+          },
+        });
+        this.logger.log(`✅ Default admin user seeded: ${ADMIN_EMAIL}`);
+      }
+    } catch (err: any) {
+      this.logger.warn(`⚠️ Admin seed skipped: ${err?.message || err}`);
     }
   }
 

@@ -41,6 +41,7 @@ export class DoctorsService {
       avatar: doc.profilePhoto || null,
       profilePhoto: doc.profilePhoto || null,
       consultationFee: doc.consultationFee,
+      patientsPerSlot: doc.patientsPerSlot || 1,
       consultationModes: doc.consultationModes || ['CLINIC'],
       qualification: qualificationText,
       hospital: doc.clinic?.name || null,
@@ -182,13 +183,16 @@ export class DoctorsService {
     specialization?: string;
     profilePhoto?: string | null;
     consultationFee?: number;
+    patientsPerSlot?: number;
     clinicName?: string;
     clinicAddress?: string;
     clinicTimings?: string;
+    slotDurationMinutes?: number;
+    experienceYears?: number;
   }) {
     const doctor = await this.prisma.doctor.findUnique({
       where: { userId },
-      include: { verification: true },
+      include: { verification: true, availabilities: true },
     });
     if (!doctor) throw new ForbiddenException('Only doctors can update a practice profile.');
 
@@ -199,6 +203,12 @@ export class DoctorsService {
     // If a verified doctor alters their clinical name or specialty, require re-verification.
     const shouldResetVerification = (nameChanged || specChanged) && doctor.verification?.status === VerificationStatus.VERIFIED;
 
+    // Resolve slot duration: use DTO value, or existing availability's value, or default 30
+    const resolvedSlotDuration =
+      (dto.slotDurationMinutes && dto.slotDurationMinutes > 0 ? dto.slotDurationMinutes : null) ||
+      doctor.availabilities?.[0]?.slotDurationMinutes ||
+      30;
+
     const updated = await this.prisma.doctor.update({
       where: { userId },
       data: {
@@ -206,6 +216,10 @@ export class DoctorsService {
         specialization: dto.specialization?.trim() || undefined,
         profilePhoto: dto.profilePhoto === null ? null : dto.profilePhoto?.trim() || undefined,
         consultationFee: dto.consultationFee && dto.consultationFee > 0 ? dto.consultationFee : undefined,
+        experienceYears: dto.experienceYears && dto.experienceYears >= 0 ? dto.experienceYears : undefined,
+        ...(dto.patientsPerSlot && dto.patientsPerSlot > 0
+          ? { patientsPerSlot: dto.patientsPerSlot }
+          : {}),
         ...(shouldResetVerification
           ? {
               verification: {
@@ -238,10 +252,11 @@ export class DoctorsService {
       include: { qualifications: true, clinic: true, verification: true, availabilities: true },
     });
 
-    // If clinicTimings was provided, sync doctor's availabilities for Mon-Sat
-    if (dto.clinicTimings?.trim()) {
+    // If clinicTimings OR slotDurationMinutes was provided, rebuild availabilities for Mon-Sat
+    if (dto.clinicTimings?.trim() || dto.slotDurationMinutes) {
       try {
-        const parsedIntervals = this.parseTimingsToIntervals(dto.clinicTimings.trim());
+        const timingStr = dto.clinicTimings?.trim() || updated.clinic?.timings || '09:00 - 13:00, 17:00 - 20:00';
+        const parsedIntervals = this.parseTimingsToIntervals(timingStr);
         if (parsedIntervals.length > 0) {
           await this.prisma.availability.deleteMany({ where: { doctorId: doctor.id } });
           const newAvailabilities: { doctorId: string; dayOfWeek: number; startTime: string; endTime: string; slotDurationMinutes: number }[] = [];
@@ -252,11 +267,17 @@ export class DoctorsService {
                 dayOfWeek: day,
                 startTime: interval.startTime,
                 endTime: interval.endTime,
-                slotDurationMinutes: 30,
+                slotDurationMinutes: resolvedSlotDuration,
               });
             }
           }
           await this.prisma.availability.createMany({ data: newAvailabilities });
+        } else if (dto.slotDurationMinutes && dto.slotDurationMinutes > 0) {
+          // No new timing string but slot duration changed — update existing availabilities in-place
+          await this.prisma.availability.updateMany({
+            where: { doctorId: doctor.id },
+            data: { slotDurationMinutes: resolvedSlotDuration },
+          });
         }
       } catch (err) {
         // Continue if sync encounters an error
@@ -266,6 +287,51 @@ export class DoctorsService {
     return this.formatDoctor(updated);
   }
 
+  async updateAvailability(userId: string, dto: {
+    slotDurationMinutes?: number;
+    patientsPerSlot?: number;
+    availabilities?: { dayOfWeek: number; startTime: string; endTime: string; slotDurationMinutes?: number }[];
+  }) {
+    const doctor = await this.prisma.doctor.findFirst({
+      where: { OR: [{ userId }, { id: userId }] },
+      include: { availabilities: true, clinic: true, verification: true },
+    });
+    if (!doctor) throw new ForbiddenException('Doctor profile not found.');
+
+    // Update patientsPerSlot on doctor directly
+    if (dto.patientsPerSlot && dto.patientsPerSlot > 0) {
+      await this.prisma.doctor.update({
+        where: { id: doctor.id },
+        data: { patientsPerSlot: dto.patientsPerSlot },
+      });
+    }
+
+    if (dto.availabilities && dto.availabilities.length > 0) {
+      // Full replace with provided schedule
+      await this.prisma.availability.deleteMany({ where: { doctorId: doctor.id } });
+      await this.prisma.availability.createMany({
+        data: dto.availabilities.map((a) => ({
+          doctorId: doctor.id,
+          dayOfWeek: a.dayOfWeek,
+          startTime: a.startTime,
+          endTime: a.endTime,
+          slotDurationMinutes: a.slotDurationMinutes || dto.slotDurationMinutes || 30,
+        })),
+      });
+    } else if (dto.slotDurationMinutes && dto.slotDurationMinutes > 0) {
+      // Just update slot duration on all existing availabilities
+      await this.prisma.availability.updateMany({
+        where: { doctorId: doctor.id },
+        data: { slotDurationMinutes: dto.slotDurationMinutes },
+      });
+    }
+
+    const refreshed = await this.prisma.doctor.findUnique({
+      where: { id: doctor.id },
+      include: { qualifications: true, clinic: true, verification: true, availabilities: true },
+    });
+    return this.formatDoctor(refreshed);
+  }
   private parseTimingsToIntervals(timings: string): { startTime: string; endTime: string }[] {
     const intervals: { startTime: string; endTime: string }[] = [];
     const parts = timings.split(/[,;•|]|\band\b/i);
@@ -415,7 +481,13 @@ export class DoctorsService {
       select: { startTime: true },
     });
 
-    const bookedTimes = new Set(bookedAppointments.map((a) => a.startTime.slice(0, 5)));
+    // Count bookings per time slot to support patientsPerSlot
+    const patientsPerSlot = (doctor as any).patientsPerSlot || 1;
+    const bookedCountByTime = new Map<string, number>();
+    for (const apt of bookedAppointments) {
+      const slotKey = apt.startTime.slice(0, 5);
+      bookedCountByTime.set(slotKey, (bookedCountByTime.get(slotKey) || 0) + 1);
+    }
 
     const now = new Date();
     const todayIso = now.toISOString().slice(0, 10);
@@ -427,7 +499,9 @@ export class DoctorsService {
     const currentMinutes = now.getHours() * 60 + now.getMinutes();
 
     const availableSlots = candidateSlots.filter((slot) => {
-      if (bookedTimes.has(slot)) return false;
+      // Check if slot is still under patient capacity
+      const bookedCount = bookedCountByTime.get(slot) || 0;
+      if (bookedCount >= patientsPerSlot) return false;
 
       // If slot is for today, enforce that past slots and slots within 15 mins are hidden
       if (isToday) {
@@ -444,6 +518,7 @@ export class DoctorsService {
     return {
       date: cleanDate,
       doctorId: doctor.id,
+      patientsPerSlot,
       slots: availableSlots,
       delayMinutes,
       delayReason: override?.reason || null,
