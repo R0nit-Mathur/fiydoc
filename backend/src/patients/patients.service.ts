@@ -72,6 +72,18 @@ export class PatientsService {
     }
 
     try {
+      if (dto.phone !== undefined || dto.email !== undefined) {
+        const updateUserData: any = {};
+        if (dto.phone !== undefined) updateUserData.phone = dto.phone ? dto.phone.trim() : null;
+        if (dto.email !== undefined) updateUserData.email = dto.email ? dto.email.trim().toLowerCase() : null;
+        if (Object.keys(updateUserData).length > 0) {
+          await this.prisma.user.update({
+            where: { id: existing.userId },
+            data: updateUserData,
+          });
+        }
+      }
+
       return await this.prisma.patient.update({
         where: { id: existing.id },
         data: {
@@ -81,7 +93,14 @@ export class PatientsService {
           gender: dto.gender !== undefined ? dto.gender : undefined,
           profilePhoto: dto.profilePhoto !== undefined ? dto.profilePhoto : undefined,
           bloodGroup: dto.bloodGroup !== undefined ? dto.bloodGroup : undefined,
-          allergies: dto.allergies !== undefined ? dto.allergies : undefined,
+          allergies: dto.allergies !== undefined
+            ? dto.allergies
+                .map((a: string) => a.trim())
+                .filter((a: string) => {
+                  const clean = a.toLowerCase().replace(/[^a-z0-9/]/g, ' ').replace(/\s+/g, ' ').trim();
+                  return Boolean(clean) && !['none', 'no', 'na', 'n/a', 'nil', 'nothing', 'no allergy', 'no allergies', 'none known', 'no known allergy', 'no known allergies', 'nkda', 'nka', 'null', 'not applicable', 'zero', '0', '-'].includes(clean);
+                })
+            : undefined,
           conditions: dto.conditions !== undefined ? dto.conditions : undefined,
           medications: dto.medications !== undefined ? dto.medications : undefined,
           emergencyContact: dto.emergencyContact !== undefined ? dto.emergencyContact : undefined,

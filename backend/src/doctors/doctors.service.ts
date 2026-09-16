@@ -1,4 +1,4 @@
-import { ForbiddenException, Injectable, NotFoundException } from '@nestjs/common';
+import { ForbiddenException, Injectable, NotFoundException, UnauthorizedException } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
 import { VerificationStatus } from '@prisma/client';
 
@@ -81,7 +81,20 @@ export class DoctorsService {
     };
   }
 
-  async searchDoctors(query?: string, specialty?: string, lat?: number, lng?: number) {
+  async searchDoctors(
+    query?: string,
+    specialty?: string,
+    lat?: number,
+    lng?: number,
+    filters?: {
+      minFee?: number;
+      maxFee?: number;
+      mode?: string;
+      limit?: number;
+      offset?: number;
+      sortBy?: string;
+    }
+  ) {
     const whereClause: any = {
       verification: {
         status: VerificationStatus.VERIFIED,
@@ -89,8 +102,6 @@ export class DoctorsService {
     };
 
     if (specialty && specialty !== 'All') {
-      // Search categories are human labels (e.g. "Cardiology") while database
-      // specializations may be "Interventional Cardiologist". Exact equality hid valid doctors.
       whereClause.specialization = { contains: specialty, mode: 'insensitive' };
     }
 
@@ -107,6 +118,19 @@ export class DoctorsService {
       ];
     }
 
+    if (filters?.minFee !== undefined || filters?.maxFee !== undefined) {
+      whereClause.consultationFee = {};
+      if (filters.minFee !== undefined) whereClause.consultationFee.gte = filters.minFee;
+      if (filters.maxFee !== undefined) whereClause.consultationFee.lte = filters.maxFee;
+    }
+
+    if (filters?.mode) {
+      const upperMode = filters.mode.toUpperCase() as any;
+      if (upperMode === 'CLINIC' || upperMode === 'VIDEO') {
+        whereClause.consultationModes = { has: upperMode };
+      }
+    }
+
     const doctors = await this.prisma.doctor.findMany({
       where: whereClause,
       include: {
@@ -115,6 +139,8 @@ export class DoctorsService {
         verification: true,
         availabilities: true,
       },
+      take: filters?.limit ? Number(filters.limit) : undefined,
+      skip: filters?.offset ? Number(filters.offset) : undefined,
     });
 
     const today = new Date();
@@ -149,17 +175,110 @@ export class DoctorsService {
     return formatted;
   }
 
-  async getDoctorById(id: string) {
-    const doctor = await this.prisma.doctor.findUnique({
-      where: { id },
-      include: {
-        qualifications: true,
-        clinic: true,
-        verification: true,
-        availabilities: true,
-      },
+  async getMyDoctorProfile(currentUser: any) {
+    if (!currentUser?.id) throw new UnauthorizedException('Authentication required.');
+    const doctor =
+      (await this.prisma.doctor.findFirst({
+        where: {
+          OR: [
+            { userId: currentUser.id },
+            ...(currentUser.doctor?.id ? [{ id: currentUser.doctor.id }] : []),
+          ],
+        },
+        include: {
+          qualifications: true,
+          clinic: true,
+          verification: true,
+          availabilities: true,
+        },
+      })) ||
+      (currentUser.doctor?.id
+        ? await this.prisma.doctor.findUnique({
+            where: { id: currentUser.doctor.id },
+            include: { qualifications: true, clinic: true, verification: true, availabilities: true },
+          })
+        : null);
+
+    if (!doctor) throw new NotFoundException('Doctor profile not found for this account.');
+    return this.formatDoctor(doctor);
+  }
+
+  async updateDoctorAvailability(
+    currentUser: any,
+    availabilities: { dayOfWeek: number; startTime: string; endTime: string; slotDurationMinutes?: number }[]
+  ) {
+    if (!currentUser?.id) throw new UnauthorizedException('Authentication required.');
+    const doctor =
+      (await this.prisma.doctor.findFirst({
+        where: {
+          OR: [
+            { userId: currentUser.id },
+            ...(currentUser.doctor?.id ? [{ id: currentUser.doctor.id }] : []),
+          ],
+        },
+      })) ||
+      (currentUser.doctor?.id
+        ? await this.prisma.doctor.findUnique({
+            where: { id: currentUser.doctor.id },
+          })
+        : null);
+
+    if (!doctor) throw new NotFoundException('Doctor profile not found.');
+
+    await this.prisma.availability.deleteMany({
+      where: { doctorId: doctor.id },
     });
-    if (!doctor || doctor.verification?.status !== VerificationStatus.VERIFIED) {
+
+    if (availabilities && availabilities.length > 0) {
+      await this.prisma.availability.createMany({
+        data: availabilities.map((a) => ({
+          doctorId: doctor.id,
+          dayOfWeek: Number(a.dayOfWeek),
+          startTime: a.startTime.trim().slice(0, 5),
+          endTime: a.endTime.trim().slice(0, 5),
+          slotDurationMinutes: Number(a.slotDurationMinutes) || 30,
+        })),
+      });
+    }
+
+    return this.getMyDoctorProfile(currentUser);
+  }
+
+  async getDoctorById(id: string, currentUser?: any) {
+    if (id === 'me' && currentUser) {
+      return this.getMyDoctorProfile(currentUser);
+    }
+
+    const doctor =
+      (await this.prisma.doctor.findUnique({
+        where: { id },
+        include: {
+          qualifications: true,
+          clinic: true,
+          verification: true,
+          availabilities: true,
+        },
+      })) ||
+      (await this.prisma.doctor.findFirst({
+        where: {
+          OR: [{ id }, { userId: id }],
+        },
+        include: {
+          qualifications: true,
+          clinic: true,
+          verification: true,
+          availabilities: true,
+        },
+      }));
+
+    if (!doctor) {
+      throw new NotFoundException('Doctor not found or pending verification.');
+    }
+
+    const isOwner = currentUser && (currentUser.id === doctor.userId || currentUser.doctor?.id === doctor.id);
+    const isAdmin = currentUser?.role === 'ADMIN';
+
+    if (doctor.verification?.status !== VerificationStatus.VERIFIED && !isOwner && !isAdmin) {
       throw new NotFoundException('Doctor not found or pending verification.');
     }
 
@@ -367,15 +486,20 @@ export class DoctorsService {
   }
 
   async generateAvailableSlots(doctorId: string, date: string) {
-    const doctor = await this.prisma.doctor.findFirst({
-      where: {
-        OR: [
-          { id: doctorId },
-          { userId: doctorId },
-        ],
-      },
-      include: { availabilities: true, clinic: true },
-    });
+    const doctor =
+      (await this.prisma.doctor.findFirst({
+        where: {
+          OR: [
+            { id: doctorId },
+            { userId: doctorId },
+          ],
+        },
+        include: { availabilities: true, clinic: true },
+      })) ||
+      (await this.prisma.doctor.findUnique({
+        where: { id: doctorId },
+        include: { availabilities: true, clinic: true },
+      }));
     if (!doctor) throw new NotFoundException('Doctor not found');
 
     const dateObj = new Date(`${date}T00:00:00`);
@@ -407,8 +531,8 @@ export class DoctorsService {
           currentMinutes += slotDuration;
         }
       }
-    } else if (doctor.clinic?.timings) {
-      // Fallback: parse clinic timings string (e.g. "09:00 - 13:00, 17:00 - 20:00")
+    } else if (doctor.clinic?.timings && (!doctor.availabilities || doctor.availabilities.length === 0)) {
+      // Fallback: parse clinic timings string if doctor has no explicit availabilities configured
       const intervals = this.parseTimingsToIntervals(doctor.clinic.timings);
       for (const interval of intervals) {
         const [startH, startM] = interval.startTime.split(':').map(Number);
@@ -422,14 +546,6 @@ export class DoctorsService {
           currentMinutes += 30;
         }
       }
-    }
-
-    // Secondary fallback: standard OPD slots (Morning & Evening) so an approved doctor always has bookable slots
-    if (candidateSlots.length === 0) {
-      candidateSlots = [
-        '09:00', '09:30', '10:00', '10:30', '11:00', '11:30', '12:00', '12:30',
-        '17:00', '17:30', '18:00', '18:30', '19:00', '19:30'
-      ];
     }
 
     // Check for schedule override (delay / leave)
@@ -552,6 +668,14 @@ export class DoctorsService {
     });
     if (!doctor) throw new NotFoundException('Doctor not found.');
 
+    if (currentUser) {
+      const isOwner = currentUser.id === doctor.userId || currentUser.doctor?.id === doctor.id;
+      const isAdmin = currentUser.role === 'ADMIN';
+      if (!isOwner && !isAdmin) {
+        throw new ForbiddenException('You can only modify schedule overrides for your own doctor account.');
+      }
+    }
+
     const cleanReason = reason?.trim() || 'Clinical emergency / OPD delay';
     const cleanDate = (date ? String(date).split('T')[0] : new Date().toISOString().split('T')[0]).trim();
     const id = (require('crypto').randomUUID ? require('crypto').randomUUID() : `dso_${Date.now()}`);
@@ -656,6 +780,14 @@ export class DoctorsService {
       },
     });
     if (!doctor) throw new NotFoundException('Doctor not found.');
+
+    if (currentUser) {
+      const isOwner = currentUser.id === doctor.userId || currentUser.doctor?.id === doctor.id;
+      const isAdmin = currentUser.role === 'ADMIN';
+      if (!isOwner && !isAdmin) {
+        throw new ForbiddenException('You can only modify schedule overrides for your own doctor account.');
+      }
+    }
 
     const cleanReason = reason?.trim() || 'Personal / Medical leave';
     const cleanDate = (date ? String(date).split('T')[0] : new Date().toISOString().split('T')[0]).trim();
@@ -762,6 +894,14 @@ export class DoctorsService {
       },
     });
     if (!doctor) throw new NotFoundException('Doctor not found.');
+
+    if (currentUser) {
+      const isOwner = currentUser.id === doctor.userId || currentUser.doctor?.id === doctor.id;
+      const isAdmin = currentUser.role === 'ADMIN';
+      if (!isOwner && !isAdmin) {
+        throw new ForbiddenException('You can only modify schedule overrides for your own doctor account.');
+      }
+    }
 
     const cleanDate = (date ? String(date).split('T')[0] : new Date().toISOString().split('T')[0]).trim();
     const id = (require('crypto').randomUUID ? require('crypto').randomUUID() : `dso_${Date.now()}`);

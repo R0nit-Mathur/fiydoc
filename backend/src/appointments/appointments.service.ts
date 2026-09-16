@@ -70,6 +70,7 @@ export class AppointmentsService {
       delayReason,
       isDoctorOnLeave,
       cancelReason: isDoctorOnLeave ? `Doctor on leave: ${leaveReason || 'Clinic closed'}` : null,
+      rejectionReason: apt.rejectionReason || null,
       tokenNumber,
       status: (apt.status || 'CONFIRMED').toLowerCase(),
       consultationType: apt.consultationType,
@@ -127,33 +128,37 @@ export class AppointmentsService {
     const todayLocal = `${localYear}-${localMonth}-${localDay}`;
     const isToday = dto.date === todayIso || dto.date === todayLocal;
 
-    // Reject bookings for past dates
+    // Reject bookings for past dates or past times
+    const [startH_check, startM_check] = dto.startTime.split(':').map(Number);
+    const slotTotalMins = startH_check * 60 + startM_check;
+    const currentMinutes = now.getHours() * 60 + now.getMinutes();
+
     if (dto.date < todayLocal && dto.date < todayIso) {
-      throw new BadRequestException('Appointment date cannot be in the past.');
+      throw new BadRequestException('Appointment date/time must be strictly in the future.');
     }
 
     // If booking for today, slot timing must be at least 15 minutes in the future
-    if (isToday) {
-      const [startH, startM] = dto.startTime.split(':').map(Number);
-      const slotMinutes = startH * 60 + startM;
-      const currentMinutes = now.getHours() * 60 + now.getMinutes();
-      if (slotMinutes - currentMinutes < 15) {
-        throw new BadRequestException(
-          'This slot is no longer available. Appointments must be booked at least 15 minutes before the slot starts.'
-        );
-      }
+    if (isToday && slotTotalMins - currentMinutes < 15) {
+      throw new BadRequestException(
+        'Appointment date/time must be strictly in the future. Appointments must be booked at least 15 minutes before the slot starts.'
+      );
     }
 
     // Fetch doctor to authoritatively determine consultation fee and verify existence
-    const doctor = await this.prisma.doctor.findFirst({
-      where: {
-        OR: [
-          { id: dto.doctorId },
-          { userId: dto.doctorId },
-        ],
-      },
-      include: { clinic: true, availabilities: true, verification: true },
-    });
+    const doctor =
+      (await this.prisma.doctor.findFirst({
+        where: {
+          OR: [
+            { id: dto.doctorId },
+            { userId: dto.doctorId },
+          ],
+        },
+        include: { clinic: true, availabilities: true, verification: true },
+      })) ||
+      (await this.prisma.doctor.findUnique({
+        where: { id: dto.doctorId },
+        include: { clinic: true, availabilities: true, verification: true },
+      }));
     if (!doctor) {
       throw new NotFoundException('Selected doctor does not exist.');
     }
@@ -176,15 +181,19 @@ export class AppointmentsService {
     const authoritativeConsultationType = dto.consultationType || ConsultationType.CLINIC;
 
     // Verify patient exists or auto-upsert patient profile for authenticated user
-    let patient = await this.prisma.patient.findFirst({
-      where: {
-        OR: [
-          { id: dto.patientId },
-          { userId: dto.patientId },
-          ...(currentUser?.id ? [{ userId: currentUser.id }, { id: currentUser.id }] : []),
-        ],
-      },
-    });
+    let patient =
+      (await this.prisma.patient.findFirst({
+        where: {
+          OR: [
+            { id: dto.patientId },
+            { userId: dto.patientId },
+            ...(currentUser?.id ? [{ userId: currentUser.id }, { id: currentUser.id }] : []),
+          ],
+        },
+      })) ||
+      (await this.prisma.patient.findUnique({
+        where: { id: dto.patientId },
+      }));
 
     if (!patient && currentUser?.id) {
       // Auto-create patient record for active user
@@ -213,18 +222,22 @@ export class AppointmentsService {
         (a) => a.dayOfWeek === appointmentDayOfWeek
       );
 
-      if (matchingDayAvailabilities.length > 0) {
-        const slotStartNorm = dto.startTime.slice(0, 5);
-        const matchedSlot = matchingDayAvailabilities.find((avail) => {
-          const availStartNorm = avail.startTime.slice(0, 5);
-          const availEndNorm = avail.endTime.slice(0, 5);
-          return slotStartNorm >= availStartNorm && slotStartNorm < availEndNorm;
-        });
-
-        if (matchedSlot) {
-          slotDuration = matchedSlot.slotDurationMinutes || 30;
-        }
+      if (matchingDayAvailabilities.length === 0) {
+        throw new BadRequestException('The doctor does not have scheduled availability for the selected day of the week.');
       }
+
+      const slotStartNorm = dto.startTime.slice(0, 5);
+      const matchedSlot = matchingDayAvailabilities.find((avail) => {
+        const availStartNorm = avail.startTime.slice(0, 5);
+        const availEndNorm = avail.endTime.slice(0, 5);
+        return slotStartNorm >= availStartNorm && slotStartNorm < availEndNorm;
+      });
+
+      if (!matchedSlot) {
+        throw new BadRequestException("Requested slot is outside the doctor's scheduled availability.");
+      }
+
+      slotDuration = matchedSlot.slotDurationMinutes || 30;
     }
 
     // Authoritatively compute endTime from startTime + slotDuration
@@ -300,7 +313,7 @@ export class AppointmentsService {
         });
       });
     } catch (err: any) {
-      if (err?.code === 'P2002') {
+      if (err?.code === 'P2002' || err?.message?.includes('P2002') || err?.message?.includes('Unique constraint')) {
         throw new BadRequestException('This slot is already booked. Please choose another time.');
       }
       throw err;
@@ -565,11 +578,12 @@ export class AppointmentsService {
 
       // State machine validation
       const allowedTransitions: Record<string, string[]> = {
-        PENDING: ['CONFIRMED', 'CANCELLED'],
+        PENDING: ['CONFIRMED', 'CANCELLED', 'REJECTED'],
         CONFIRMED: ['COMPLETED', 'CANCELLED', 'NO_SHOW'],
         COMPLETED: [],
         CANCELLED: [],
         NO_SHOW: [],
+        REJECTED: [],
       };
 
       const currentStatusStr = String(apt.status).toUpperCase();
@@ -581,7 +595,12 @@ export class AppointmentsService {
       }
 
       // Role-specific constraints on transitions
-      if (normalizedStatus === AppointmentStatus.CONFIRMED || normalizedStatus === AppointmentStatus.COMPLETED || normalizedStatus === AppointmentStatus.NO_SHOW) {
+      if (
+        normalizedStatus === AppointmentStatus.CONFIRMED ||
+        normalizedStatus === AppointmentStatus.COMPLETED ||
+        normalizedStatus === AppointmentStatus.NO_SHOW ||
+        normalizedStatus === AppointmentStatus.REJECTED
+      ) {
         const isDoctor =
           currentUser.role === Role.DOCTOR &&
           ((currentUser.doctor && currentUser.doctor.id === apt.doctorId) ||
@@ -641,6 +660,73 @@ export class AppointmentsService {
       console.error('[appointments] updateAppointmentStatus unhandled error:', err);
       throw new BadRequestException(err?.message || 'Failed to update appointment status');
     }
+  }
+
+  async rejectAppointment(id: string, reason?: string, currentUser?: any) {
+    const apt = await this.prisma.appointment.findUnique({
+      where: { id },
+      include: { doctor: { include: { clinic: true } }, patient: true },
+    });
+    if (!apt) throw new NotFoundException('Appointment not found.');
+
+    this.checkAppointmentActorAccess(apt, currentUser);
+
+    const isDoctor =
+      currentUser.role === Role.DOCTOR &&
+      ((currentUser.doctor && currentUser.doctor.id === apt.doctorId) ||
+        apt.doctor?.userId === currentUser.id ||
+        apt.doctorId === currentUser.id);
+    const isAdmin = currentUser.role === Role.ADMIN;
+    if (!isDoctor && !isAdmin) {
+      throw new ForbiddenException('Only the assigned doctor or admin can reject an appointment request.');
+    }
+
+    if (apt.status !== AppointmentStatus.PENDING) {
+      throw new BadRequestException(`Cannot reject appointment with status '${apt.status}'. Only pending requests can be rejected.`);
+    }
+
+    const rejectionReason = reason?.trim() || 'Declined by doctor due to scheduling conflicts';
+
+    const updated = await this.prisma.appointment.update({
+      where: { id },
+      data: {
+        status: AppointmentStatus.REJECTED,
+        rejectionReason,
+        notes: apt.notes ? `${apt.notes} [Rejected: ${rejectionReason}]` : `[Rejected: ${rejectionReason}]`,
+      },
+      include: { doctor: { include: { clinic: true } }, patient: true },
+    });
+
+    if (currentUser?.id) {
+      try {
+        await this.prisma.auditLog.create({
+          data: {
+            actorUserId: currentUser.id,
+            action: 'APPOINTMENT_REJECTED',
+            targetType: 'APPOINTMENT',
+            targetId: id,
+            metadata: {
+              reason: rejectionReason,
+            },
+          },
+        });
+      } catch {}
+    }
+
+    if (updated.patient?.userId) {
+      try {
+        await this.prisma.notification.create({
+          data: {
+            userId: updated.patient.userId,
+            type: 'APPOINTMENT_REJECTED',
+            title: 'Appointment Request Declined',
+            message: `Dr. ${updated.doctor.fullName} was unable to accept your appointment for ${updated.date} at ${updated.startTime}. Reason: ${rejectionReason}.`,
+          },
+        });
+      } catch {}
+    }
+
+    return this.formatAppointment(updated);
   }
 
   private checkAppointmentActorAccess(apt: any, currentUser: any) {

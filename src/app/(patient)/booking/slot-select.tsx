@@ -45,10 +45,11 @@ import {
   ArrowRight,
   Check,
 } from 'lucide-react-native';
-import { StitchColors, DEFAULT_DOCTOR_AVATAR } from '@/constants/theme';
+import { StitchColors, DEFAULT_DOCTOR_AVATAR, BorderRadius, Shadows, Palette } from '@/constants/theme';
 import { Avatar } from '@/components/ui/Avatar';
 import { useAppointmentStore } from '@/store/useAppointmentStore';
 import { useAuthStore } from '@/store/useAuthStore';
+import { normalizeAllergies, isNegationAllergy } from '@/utils/allergyNormalizer';
 
 const DEFAULT_DOC_IMG = DEFAULT_DOCTOR_AVATAR;
 
@@ -104,7 +105,7 @@ export default function MedicalIntakeScreen() {
   // Allergies & Conditions state — clean by default unless patient has real saved history
   const [severeAllergies, setSevereAllergies] = useState<string[]>([]);
   const [allergies, setAllergies] = useState<string[]>(
-    user?.allergies ? user.allergies.split(',').map((s) => s.trim()).filter(Boolean) : []
+    normalizeAllergies(user?.allergies)
   );
   const [activeConditions, setActiveConditions] = useState<string[]>(
     user?.chronicConditions ? user.chronicConditions.split(',').map((s) => s.trim()).filter(Boolean) : []
@@ -239,7 +240,7 @@ export default function MedicalIntakeScreen() {
 
   const handleAddAllergy = () => {
     const val = prompt ? prompt('Add Allergy Name:') : null;
-    if (val && val.trim()) {
+    if (val && val.trim() && !isNegationAllergy(val.trim())) {
       setSevereAllergies([...severeAllergies, val.trim()]);
     }
   };

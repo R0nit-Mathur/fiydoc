@@ -5,6 +5,7 @@ import {
   Body,
   Query,
   Res,
+  Request,
   HttpCode,
   HttpStatus,
   UseGuards,
@@ -14,6 +15,7 @@ import { RegisterDto } from './dto/register.dto';
 import { LoginDto } from './dto/login.dto';
 import { GoogleAuthDto } from './dto/google-auth.dto';
 import { AuthRateLimitGuard } from './auth-rate-limit.guard';
+import { JwtAuthGuard } from './jwt-auth.guard';
 
 @Controller('auth')
 @UseGuards(AuthRateLimitGuard)
@@ -29,6 +31,12 @@ export class AuthController {
   @Post('login')
   async login(@Body() dto: LoginDto) {
     return this.authService.login(dto);
+  }
+
+  @Get('me')
+  @UseGuards(JwtAuthGuard)
+  async getMe(@Request() req: any) {
+    return this.authService.getMe(req.user);
   }
 
   @HttpCode(HttpStatus.OK)

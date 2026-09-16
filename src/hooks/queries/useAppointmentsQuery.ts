@@ -56,12 +56,19 @@ export function useAppointmentsQuery(patientId?: string, doctorId?: string) {
         });
       }
 
-      // Merge: if local store marked an appointment completed, preserve completed status
+      // Merge: Authoritative server state takes priority; update local store if server cancelled/rejected
+      const { updateAppointmentStatus } = useAppointmentStore.getState();
       const storeMap = new Map(relevantStoreAppointments.map((a) => [a.id, a]));
       const mergedFetched = fetched.map((serverApt) => {
         const localApt = storeMap.get(serverApt.id);
-        if (localApt && localApt.status === 'completed' && serverApt.status !== 'completed') {
-          return { ...serverApt, status: 'completed' };
+        if (localApt) {
+          if (serverApt.status === 'cancelled' || serverApt.status === 'rejected') {
+            if (localApt.status !== serverApt.status) {
+              updateAppointmentStatus(serverApt.id, serverApt.status as any);
+            }
+          } else if (localApt.status === 'completed' && serverApt.status !== 'completed') {
+            return { ...serverApt, status: 'completed' };
+          }
         }
         return serverApt;
       });
@@ -80,9 +87,13 @@ export function useAppointmentDetailQuery(id: string) {
   return useQuery({
     queryKey: ['appointment', id],
     queryFn: async () => {
-      const custom = storeAppointments.find((a) => a.id === id);
-      if (custom) return custom;
-      return appointmentService.getAppointmentById(id);
+      try {
+        const serverApt = await appointmentService.getAppointmentById(id);
+        if (serverApt) return serverApt;
+      } catch (err) {
+        console.warn('[useAppointmentDetailQuery] Server fetch failed, falling back to store:', err);
+      }
+      return storeAppointments.find((a) => a.id === id);
     },
     enabled: Boolean(id),
   });
@@ -111,6 +122,22 @@ export function useApproveAppointmentMutation() {
     },
     onSuccess: (_, id) => {
       updateAppointmentStatus(id, 'confirmed');
+      queryClient.invalidateQueries({ queryKey: ['appointments'] });
+      queryClient.invalidateQueries({ queryKey: ['appointment', id] });
+    },
+  });
+}
+
+export function useRejectAppointmentMutation() {
+  const queryClient = useQueryClient();
+  const updateAppointmentStatus = useAppointmentStore((s) => s.updateAppointmentStatus);
+
+  return useMutation({
+    mutationFn: async ({ id, reason }: { id: string; reason?: string }) => {
+      return await appointmentService.rejectAppointment(id, reason);
+    },
+    onSuccess: (_, { id }) => {
+      updateAppointmentStatus(id, 'cancelled');
       queryClient.invalidateQueries({ queryKey: ['appointments'] });
       queryClient.invalidateQueries({ queryKey: ['appointment', id] });
     },

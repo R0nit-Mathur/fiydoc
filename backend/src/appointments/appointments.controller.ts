@@ -58,6 +58,15 @@ export class AppointmentsController {
     return this.appointmentsService.updateAppointmentStatus(id, 'CONFIRMED' as any, req.user);
   }
 
+  @Post(':id/reject')
+  async reject(
+    @Param('id') id: string,
+    @Body() body: { reason?: string },
+    @Request() req
+  ) {
+    return this.appointmentsService.rejectAppointment(id, body?.reason, req.user);
+  }
+
   @Post(':id/status')
   async updateStatus(
     @Param('id') id: string,

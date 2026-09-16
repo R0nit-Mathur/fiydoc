@@ -40,6 +40,7 @@ enum AppointmentStatus {
   COMPLETED
   CANCELLED
   NO_SHOW
+  REJECTED
 }
 
 enum ConsultationType {
@@ -101,6 +102,8 @@ model Doctor {
   fullName          String
   profilePhoto      String?
   specialization    String
+  experienceYears   Int                @default(0)
+  patientsPerSlot   Int                @default(1)
   languages         String[]           @default([])
   consultationFee   Decimal            @db.Decimal(10, 2)
   consultationModes ConsultationType[] @default([CLINIC, VIDEO])
@@ -175,6 +178,8 @@ model Appointment {
   fee              Decimal           @db.Decimal(10, 2)
   symptoms         String[]          @default([])
   notes            String?
+  rejectionReason  String?
+  cancelledBy      String?
   createdAt        DateTime          @default(now())
   updatedAt        DateTime          @updatedAt
 

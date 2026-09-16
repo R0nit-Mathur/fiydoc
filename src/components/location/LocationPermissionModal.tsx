@@ -80,18 +80,15 @@ export function LocationPermissionModal({
       } else {
         if (!canAskAgain && Platform.OS !== 'web') {
           setStatusState('blocked');
-          setErrorMessage('Location permission was denied. Please allow location in your device settings or enter your locality manually.');
-          setShowManualPicker(true);
+          setErrorMessage('Location permission was denied. You must enable Location in Device Settings to proceed.');
         } else {
-          setStatusState('denied');
-          setErrorMessage('Location permission is needed to show nearby verified doctors.');
-          setShowManualPicker(true);
+          setStatusState('blocked');
+          setErrorMessage('Location permission is required to detect your exact clinic distance and nearby verified doctors. Please open Device Settings to enable.');
         }
       }
     } catch (err: any) {
-      setErrorMessage(err?.message || 'Error requesting location permission.');
-      setStatusState('denied');
-      setShowManualPicker(true);
+      setErrorMessage(err?.message || 'Error requesting location permission. Please enable in Settings.');
+      setStatusState('blocked');
     } finally {
       setLoading(false);
     }
@@ -146,25 +143,34 @@ export function LocationPermissionModal({
 
   if (!visible) return null;
 
+  const isLocationResolved = Boolean(useLocationStore.getState().latitude && useLocationStore.getState().longitude && useLocationStore.getState().permissionStatus === 'granted');
+
   return (
     <Modal
       visible={visible}
       transparent
       animationType="fade"
-      onRequestClose={onClose}
+      onRequestClose={() => {
+        // Disallow dismissing without resolving location
+        if (isLocationResolved) {
+          onClose();
+        }
+      }}
     >
       <View style={styles.backdrop}>
         <View style={styles.cardContainer}>
-          {/* Close button */}
-          <TouchableOpacity
-            onPress={onClose}
-            style={styles.closeBtn}
-            activeOpacity={0.7}
-            hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
-            accessibilityLabel="Close location modal"
-          >
-            <X size={18} color={Palette.textPrimary} />
-          </TouchableOpacity>
+          {/* Close button only if location was already resolved */}
+          {isLocationResolved && (
+            <TouchableOpacity
+              onPress={onClose}
+              style={styles.closeBtn}
+              activeOpacity={0.7}
+              hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+              accessibilityLabel="Close location modal"
+            >
+              <X size={18} color={Palette.textPrimary} />
+            </TouchableOpacity>
+          )}
 
           {/* Location Pin Hero Icon */}
           <View style={styles.heroIconBox}>

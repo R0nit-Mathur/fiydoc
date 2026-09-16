@@ -18,6 +18,7 @@ export function AppointmentCard({ appointment, onPress }: AppointmentCardProps) 
     checked_in: { label: 'Checked In', variant: 'teal' as const },
     completed: { label: 'Completed', variant: 'success' as const },
     cancelled: { label: 'Cancelled', variant: 'danger' as const },
+    rejected: { label: 'Rejected', variant: 'danger' as const },
     in_progress: { label: 'In Consultation', variant: 'teal' as const },
     pending: { label: 'Pending', variant: 'warning' as const },
   }[appointment.status] || { label: 'Confirmed', variant: 'teal' as const };

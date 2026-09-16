@@ -54,7 +54,10 @@ export async function apiClient<T>(endpoint: string, options: RequestInit = {}):
       }
 
       const errorData = await response.json().catch(() => ({ message: 'API request failed' }));
-      throw new Error(errorData.message || `HTTP error ${response.status}`);
+      const msg = Array.isArray(errorData.message)
+        ? errorData.message.join('. ')
+        : errorData.message || `HTTP error ${response.status}`;
+      throw new Error(msg);
     }
 
     return response.json();

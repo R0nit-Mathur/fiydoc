@@ -153,18 +153,21 @@ export class AuthService {
     const includeRelations = {
       patient: true,
       doctor: {
-        include: { verification: true, clinic: true },
+        include: { verification: true, clinic: true, qualifications: true },
       },
     };
 
-    if (dto.email) {
+    const normalizedEmail = dto.email ? dto.email.trim().toLowerCase() : undefined;
+    const normalizedPhone = dto.phone ? dto.phone.trim() : undefined;
+
+    if (normalizedEmail) {
       user = await this.prisma.user.findUnique({
-        where: { email: dto.email },
+        where: { email: normalizedEmail },
         include: includeRelations,
       });
-    } else if (dto.phone) {
+    } else if (normalizedPhone) {
       user = await this.prisma.user.findUnique({
-        where: { phone: dto.phone },
+        where: { phone: normalizedPhone },
         include: includeRelations,
       });
     }
@@ -285,6 +288,32 @@ export class AuthService {
     }
 
     return this.generateTokenResponse(user);
+  }
+
+  async getMe(currentUser: any) {
+    if (!currentUser?.id) {
+      throw new UnauthorizedException('Authentication session is required.');
+    }
+    const user = await this.prisma.user.findUnique({
+      where: { id: currentUser.id },
+      include: {
+        patient: true,
+        doctor: {
+          include: { verification: true, clinic: true, qualifications: true, availabilities: true },
+        },
+      },
+    });
+    if (!user || user.status !== 'ACTIVE') {
+      throw new UnauthorizedException('User account not found or suspended.');
+    }
+    return {
+      id: user.id,
+      email: user.email,
+      phone: user.phone,
+      role: user.role,
+      patient: user.patient,
+      doctor: user.doctor,
+    };
   }
 
   private generateTokenResponse(user: any) {

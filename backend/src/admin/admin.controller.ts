@@ -61,8 +61,16 @@ export class AdminController {
   }
 
   @Get('audit-logs')
-  async getAuditLogs(@Query('take') take?: string) {
-    return this.adminService.getAuditLogs(take ? parseInt(take, 10) : 50);
+  async getAuditLogs(
+    @Query('take') take?: string,
+    @Query('limit') limit?: string,
+  ) {
+    const count = parseInt(limit || take || '50', 10);
+    const logs = await this.adminService.getAuditLogs(count);
+    return {
+      logs,
+      total: logs.length,
+    };
   }
 
   @Get('users')

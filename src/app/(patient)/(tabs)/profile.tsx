@@ -35,6 +35,7 @@ import { ConfirmationDialog } from '@/components/ui/ConfirmationDialog';
 import { useAppTheme } from '@/hooks/useAppTheme';
 import { patientService } from '@/services/patientService';
 import { pickImageFromGallery } from '@/utils/mediaPicker';
+import { normalizeAllergies } from '@/utils/allergyNormalizer';
 import {
   LogOut,
   ChevronRight,
@@ -152,7 +153,7 @@ export default function PatientProfileScreen() {
     const dob = editDOB.trim() || undefined;
     const address = editAddress.trim() || undefined;
     const bloodGroup = editBloodGroup.trim() || undefined;
-    const allergies = editAllergies.trim() ? editAllergies.split(',').map((s) => s.trim()).filter(Boolean) : [];
+    const allergies = normalizeAllergies(editAllergies);
     const conditions = editConditions.trim() ? editConditions.split(',').map((s) => s.trim()).filter(Boolean) : [];
     const emergencyPhone = editEmergency.trim() || undefined;
     const age = calculateAgeFromDOB(dob) ?? undefined;
@@ -202,7 +203,8 @@ export default function PatientProfileScreen() {
     router.replace('/(auth)/login');
   };
 
-  const allergiesStr = patientProfile?.allergies?.join(', ') || '';
+  const validAllergies = useMemo(() => normalizeAllergies(patientProfile?.allergies), [patientProfile?.allergies]);
+  const allergiesStr = validAllergies.join(', ');
   const conditionsStr = patientProfile?.conditions?.join(', ') || '';
   const emergencyPhone = patientProfile?.emergencyContact?.phone;
 
@@ -371,7 +373,7 @@ export default function PatientProfileScreen() {
           <View style={[styles.statItem, { backgroundColor: colors.card, borderColor: colors.border }]}>
             <Heart size={18} color={StitchColors.secondaryContainer} />
             <Text style={[styles.statValue, { color: colors.text }]} numberOfLines={1}>
-              {allergiesStr ? `${patientProfile?.allergies?.length} listed` : 'None'}
+              {validAllergies.length > 0 ? `${validAllergies.length} listed` : '0 allergies'}
             </Text>
             <Text style={[styles.statLabel, { color: colors.textMuted }]}>Allergies</Text>
           </View>

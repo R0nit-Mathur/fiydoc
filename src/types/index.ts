@@ -88,7 +88,7 @@ export interface Appointment {
   hospital: string;
   date: string;
   time: string;
-  status: 'upcoming' | 'confirmed' | 'checked_in' | 'completed' | 'cancelled' | 'in_progress' | 'pending';
+  status: 'upcoming' | 'confirmed' | 'checked_in' | 'completed' | 'cancelled' | 'rejected' | 'in_progress' | 'pending';
   mode: 'video' | 'clinic' | 'in_person';
   fee: number;
   symptoms?: string[];

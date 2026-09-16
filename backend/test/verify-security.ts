@@ -673,8 +673,149 @@ async function runTests() {
         .get('/appointments/patient/me');
       assert.strictEqual(aptRes.status, 401, 'Protected appointments route must reject unauthenticated request');
 
+      // 4. Health endpoint reflects database connectivity
+      const healthRes = await request(app.getHttpServer())
+        .get('/health');
+      assert.strictEqual(healthRes.status, 200);
+      assert.strictEqual(healthRes.body.status, 'healthy');
+      assert.strictEqual(healthRes.body.database, 'connected', 'Health endpoint must verify live database connectivity');
+
+      // 5. Auth /auth/me returns 401 unauthenticated
+      const meRes = await request(app.getHttpServer())
+        .get('/auth/me');
+      assert.strictEqual(meRes.status, 401, 'Unauthenticated /auth/me must return 401');
+
     } finally {
       await app.close();
+    }
+  });
+
+  // Test 22: Doctor rejection of pending appointment with reason
+  await test('Doctor can reject pending appointment with explicit reason', async () => {
+    mockPrisma.appointment.findUnique = async () => ({
+      id: 'apt_pending_1',
+      doctorId: 'doc_1',
+      patientId: 'pat_1',
+      status: AppointmentStatus.PENDING,
+      date: '2029-01-01',
+      startTime: '10:00',
+      doctor: { fullName: 'Dr. Specialist', userId: 'u_doc' },
+      patient: { fullName: 'Patient Test', userId: 'u_pat' },
+    });
+
+    let capturedUpdate: any = null;
+    mockPrisma.appointment.update = async (args: any) => {
+      capturedUpdate = args.data;
+      return {
+        id: 'apt_pending_1',
+        doctorId: 'doc_1',
+        patientId: 'pat_1',
+        date: '2029-01-01',
+        startTime: '10:00',
+        doctor: { fullName: 'Dr. Specialist' },
+        patient: { fullName: 'Patient Test' },
+        ...args.data,
+      };
+    };
+
+    const docUser = {
+      id: 'u_doc',
+      role: Role.DOCTOR,
+      doctor: { id: 'doc_1' },
+    };
+
+    const result = await appointmentsService.rejectAppointment(
+      'apt_pending_1',
+      'Surgery schedule conflict',
+      docUser
+    );
+
+    assert.strictEqual(capturedUpdate.status, AppointmentStatus.REJECTED);
+    assert.strictEqual(capturedUpdate.rejectionReason, 'Surgery schedule conflict');
+    assert.strictEqual(result.status, 'rejected');
+    assert.strictEqual(result.rejectionReason, 'Surgery schedule conflict');
+  });
+
+  // Test 23: State machine rejects invalid transitions (e.g. COMPLETED -> PENDING, REJECTED -> CONFIRMED)
+  await test('State machine enforces valid transitions and rejects invalid regressions', async () => {
+    mockPrisma.appointment.findUnique = async () => ({
+      id: 'apt_completed_1',
+      doctorId: 'doc_1',
+      patientId: 'pat_1',
+      status: AppointmentStatus.COMPLETED,
+      doctor: { fullName: 'Dr. Specialist', userId: 'u_doc' },
+      patient: { fullName: 'Patient Test', userId: 'u_pat' },
+    });
+
+    const docUser = {
+      id: 'u_doc',
+      role: Role.DOCTOR,
+      doctor: { id: 'doc_1' },
+    };
+
+    let threw = false;
+    try {
+      await appointmentsService.updateAppointmentStatus('apt_completed_1', 'PENDING' as any, docUser);
+    } catch (e: any) {
+      if (e instanceof BadRequestException && e.message.includes('Invalid status transition')) {
+        threw = true;
+      }
+    }
+    assert.strictEqual(threw, true, 'COMPLETED appointment must not transition back to PENDING');
+  });
+
+  // Test 24: Concurrent booking safety simulation (5 concurrent requests for same slot -> 1 winner)
+  await test('Concurrent booking simulation: 5 simultaneous requests for same slot results in exactly 1 winner', async () => {
+    let slotTaken = false;
+    mockPrisma.doctor.findUnique = async () => ({
+      id: 'doc_1',
+      consultationFee: 500,
+      consultationModes: ['CLINIC'],
+      verification: { status: VerificationStatus.VERIFIED },
+      availabilities: [],
+    });
+    mockPrisma.patient.findUnique = async () => ({ id: 'pat_1' });
+
+    mockPrisma.appointment.findFirst = async () => {
+      if (slotTaken) {
+        return { id: 'existing_apt', status: AppointmentStatus.PENDING };
+      }
+      return null;
+    };
+
+    mockPrisma.appointment.create = async (args: any) => {
+      if (slotTaken) {
+        const p2002Err: any = new Error('Unique constraint failed on the fields: (`doctorId`,`date`,`startTime`)');
+        p2002Err.code = 'P2002';
+        throw p2002Err;
+      }
+      slotTaken = true;
+      return { id: 'apt_winner', ...args.data, doctor: { fullName: 'Dr.' }, patient: { fullName: 'Pat' } };
+    };
+
+    const requests = [1, 2, 3, 4, 5].map(async (i) => {
+      try {
+        const res = await appointmentsService.createAppointment({
+          patientId: `pat_${i}`,
+          doctorId: 'doc_1',
+          date: '2029-01-01',
+          startTime: '10:00',
+          endTime: '10:30',
+        });
+        return { success: true, res };
+      } catch (err: any) {
+        return { success: false, error: err.message };
+      }
+    });
+
+    const results = await Promise.all(requests);
+    const successes = results.filter((r) => r.success);
+    const failures = results.filter((r) => !r.success);
+
+    assert.strictEqual(successes.length, 1, 'Exactly 1 concurrent request must win the slot');
+    assert.strictEqual(failures.length, 4, '4 concurrent requests must be rejected');
+    for (const f of failures) {
+      assert(f.error?.includes('already booked'), 'Rejected requests must receive "slot already booked" error');
     }
   });
 

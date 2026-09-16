@@ -227,49 +227,33 @@ export default function BookingConfirmScreen() {
       } else {
         throw new Error('User not logged in, booking saved to device.');
       }
+
+      resetBookingDraft();
+      setIsProcessing(false);
+
+      if (Platform.OS !== 'web') {
+        Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+      }
+
+      // Direct token & booking confirmation navigation
+      router.replace({
+        pathname: '/(patient)/booking/success',
+        params: {
+          appointmentId: finalAppointmentId,
+          tokenNumber: finalToken,
+          patientName: effectivePatientName,
+        },
+      });
     } catch (err: any) {
-      console.warn('[BookingConfirm] Server booking fallback to local store:', err?.message || err);
-      // Construct fallback local appointment so patient NEVER gets blocked
-      const localAppointment: Appointment = {
-        id: finalAppointmentId,
-        patientId: user?.id || 'patient-user',
-        patientName: effectivePatientName,
-        patientAvatar: user?.avatar,
-        doctorId: doctor.id,
-        doctorName: doctorDisplayName,
-        doctorSpecialty: doctor.specialty || doctor.specialization || 'General Physician',
-        doctorAvatar: doctor.avatar || doctor.profilePhoto || '',
-        hospital: hospitalName,
-        date,
-        time: slot,
-        tokenNumber: finalToken,
-        status: 'confirmed',
-        mode: 'clinic',
-        fee: totalPayable,
-        symptoms: activeSymptoms.length > 0 ? activeSymptoms : ['Routine OPD Consultation'],
-        notes: patientInfoNotes,
-      };
-      useAppointmentStore.getState().addAppointment(localAppointment);
-      // Invalidate so home.tsx / appointments.tsx re-fetch fresh data from server
-      queryClient.invalidateQueries({ queryKey: ['appointments'] });
+      console.error('[BookingConfirm] Server booking failed:', err);
+      setIsProcessing(false);
+      const message = err?.message || 'Could not complete booking. Please choose another slot or try again.';
+      setErrorMessage(message);
+      if (Platform.OS !== 'web') {
+        Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error);
+      }
+      Alert.alert('Booking Failed', message);
     }
-
-    resetBookingDraft();
-    setIsProcessing(false);
-
-    if (Platform.OS !== 'web') {
-      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
-    }
-
-    // Direct token & booking confirmation navigation
-    router.replace({
-      pathname: '/(patient)/booking/success',
-      params: {
-        appointmentId: finalAppointmentId,
-        tokenNumber: finalToken,
-        patientName: effectivePatientName,
-      },
-    });
   };
 
   return (

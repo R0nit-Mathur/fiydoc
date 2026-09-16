@@ -164,14 +164,23 @@ export class PrescriptionsService {
       throw new BadRequestException('Prescription must include at least one medication.');
     }
 
-    const sanitizedMedicines = dto.medicines.map((m) => {
+    const sanitizedMedicines = dto.medicines.map((m: any) => {
       const name = m.name?.trim();
       if (!name) {
         throw new BadRequestException('Every prescribed medicine must have a valid medication name.');
       }
-      const dosage = m.dosage?.trim() || '1 unit';
-      const frequency = m.frequency?.trim() || 'OD';
-      const durationDays = Number(m.durationDays) > 0 ? Number(m.durationDays) : 5;
+      const dosage = m.dosage?.trim();
+      if (!dosage) {
+        throw new BadRequestException('Dosage is required for every prescribed medication.');
+      }
+      const frequency = m.frequency?.trim();
+      if (!frequency) {
+        throw new BadRequestException('Frequency is required for every prescribed medication.');
+      }
+      const durationDays = Number(m.durationDays);
+      if (isNaN(durationDays) || durationDays <= 0) {
+        throw new BadRequestException('Valid duration in days is required for every prescribed medication.');
+      }
       const instructions = m.instructions?.trim() || '';
 
       return {
@@ -350,11 +359,12 @@ export class PrescriptionsService {
   }
 
   async getPrescriptionsForPatient(patientId: string, currentUser: any) {
-    // Step 1: Resolve canonical Patient.id (not User.id)
-    let resolvedPatientRecord: any = null;
+    if (!currentUser) {
+      throw new ForbiddenException('Authentication required.');
+    }
 
-    // Try direct patient lookup by id or userId from the request param
-    resolvedPatientRecord = await this.prisma.patient.findFirst({
+    // Step 1: Resolve canonical Patient record (not User.id)
+    const resolvedPatientRecord = await this.prisma.patient.findFirst({
       where: {
         OR: [
           { id: patientId },
@@ -366,7 +376,6 @@ export class PrescriptionsService {
     });
 
     if (!resolvedPatientRecord) {
-      // No patient record yet — return empty list instead of crashing
       return [];
     }
 
@@ -383,6 +392,7 @@ export class PrescriptionsService {
       }
     }
 
+    // Doctor can only access prescriptions for patients with whom they have an active or completed encounter relationship
     if (currentUser.role === Role.DOCTOR) {
       const docId = currentUser.doctor?.id || (
         await this.prisma.doctor.findFirst({ where: { userId: currentUser.id } })

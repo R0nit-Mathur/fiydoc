@@ -28,6 +28,16 @@ export const doctorService = {
     body: JSON.stringify(profile),
   }),
 
+  updateMyAvailability: async (availabilities: {
+    dayOfWeek: number;
+    startTime: string;
+    endTime: string;
+    slotDurationMinutes?: number;
+  }[]): Promise<{ count: number }> => apiClient<{ count: number }>('/doctors/me/availability', {
+    method: 'PATCH',
+    body: JSON.stringify({ availabilities }),
+  }),
+
   getDoctors: async (filters?: DoctorFilters): Promise<Doctor[]> => {
     const params = new URLSearchParams();
     if (filters?.query) params.append('q', filters.query);

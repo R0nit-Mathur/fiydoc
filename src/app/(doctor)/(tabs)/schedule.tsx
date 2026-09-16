@@ -1358,12 +1358,44 @@ const [undoDelayMins, setUndoDelayMins] = useState<number>(15);
             </View>
 
             <Pressable
-              onPress={() => {
+              onPress={async () => {
                 const totalMins = (parseInt(slotDurationHours, 10) || 0) * 60 + (parseInt(slotDurationMins, 10) || 15);
                 setSlotDuration(totalMins.toString());
                 setCapacityModalVisible(false);
                 if (Platform.OS !== 'web') Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
-                setDelayNotice(`Shifts updated: Morning (${morningStart}-${morningEnd}), Evening (${eveningStart}-${eveningEnd}), ${totalMins}m slot duration.`);
+
+                // Helper to convert time string like "10:30 AM" to "10:30"
+                const to24 = (t: string) => {
+                  const m = t.trim().match(/^(\d{1,2}):(\d{2})\s*(AM|PM)?$/i);
+                  if (!m) return t.trim();
+                  let h = Number(m[1]);
+                  const min = Number(m[2]);
+                  const meri = m[3]?.toUpperCase();
+                  if (meri === 'PM' && h !== 12) h += 12;
+                  if (meri === 'AM' && h === 12) h = 0;
+                  return `${String(h).padStart(2, '0')}:${String(min).padStart(2, '0')}`;
+                };
+
+                // Sync availability to server for standard working days (Mon-Sat, 1-6)
+                try {
+                  const morningStart24 = to24(morningStart);
+                  const morningEnd24 = to24(morningEnd);
+                  const eveningStart24 = to24(eveningStart);
+                  const eveningEnd24 = to24(eveningEnd);
+
+                  const availabilities = [1, 2, 3, 4, 5, 6].flatMap((dayOfWeek) => [
+                    { dayOfWeek, startTime: morningStart24, endTime: morningEnd24, slotDurationMinutes: totalMins },
+                    { dayOfWeek, startTime: eveningStart24, endTime: eveningEnd24, slotDurationMinutes: totalMins },
+                  ]);
+
+                  await doctorService.updateMyAvailability(availabilities);
+                  queryClient.invalidateQueries({ queryKey: ['doctor-slots'] });
+                  queryClient.invalidateQueries({ queryKey: ['doctor-schedule-week'] });
+                  setDelayNotice(`Shifts saved to server: Morning (${morningStart}-${morningEnd}), Evening (${eveningStart}-${eveningEnd}), ${totalMins}m slot duration.`);
+                } catch (err: any) {
+                  console.warn('[schedule] Server availability sync error:', err?.message);
+                  setDelayNotice(`Shifts updated locally: ${totalMins}m slot duration.`);
+                }
                 setTimeout(() => setDelayNotice(null), 3500);
               }}
               style={[styles.applySettingsBtn, { backgroundColor: StitchColors.primaryContainer }]}

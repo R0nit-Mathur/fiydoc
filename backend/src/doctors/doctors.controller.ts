@@ -12,22 +12,44 @@ export class DoctorsController {
     @Query('specialty') specialty?: string,
     @Query('lat') lat?: string,
     @Query('lng') lng?: string,
+    @Query('minFee') minFee?: string,
+    @Query('maxFee') maxFee?: string,
+    @Query('mode') mode?: string,
+    @Query('limit') limit?: string,
+    @Query('offset') offset?: string,
+    @Query('sortBy') sortBy?: string,
   ) {
     const parsedLat = lat ? parseFloat(lat) : undefined;
     const parsedLng = lng ? parseFloat(lng) : undefined;
-    return this.doctorsService.searchDoctors(q, specialty, parsedLat, parsedLng);
+    return this.doctorsService.searchDoctors(q, specialty, parsedLat, parsedLng, {
+      minFee: minFee ? parseFloat(minFee) : undefined,
+      maxFee: maxFee ? parseFloat(maxFee) : undefined,
+      mode,
+      limit: limit ? parseInt(limit, 10) : undefined,
+      offset: offset ? parseInt(offset, 10) : undefined,
+      sortBy,
+    });
+  }
+
+  @Get('me')
+  @UseGuards(JwtAuthGuard)
+  async getMyProfile(@Request() req: any) {
+    return this.doctorsService.getMyDoctorProfile(req.user);
+  }
+
+  @Patch('me/availability')
+  @UseGuards(JwtAuthGuard)
+  async updateMyAvailability(
+    @Request() req: any,
+    @Body() body: { availabilities: { dayOfWeek: number; startTime: string; endTime: string; slotDurationMinutes?: number }[] }
+  ) {
+    return this.doctorsService.updateDoctorAvailability(req.user, body.availabilities);
   }
 
   @Patch('me')
   @UseGuards(JwtAuthGuard)
   async updateMyProfile(@Request() req: any, @Body() body: any) {
     return this.doctorsService.updateDoctorProfile(req.user.id, body);
-  }
-
-  @Patch('me/availability')
-  @UseGuards(JwtAuthGuard)
-  async updateMyAvailability(@Request() req: any, @Body() body: any) {
-    return this.doctorsService.updateAvailability(req.user.id, body);
   }
 
   @Post('schedule/delay')
@@ -86,7 +108,7 @@ export class DoctorsController {
   }
 
   @Get(':id')
-  async getOne(@Param('id') id: string) {
-    return this.doctorsService.getDoctorById(id);
+  async getOne(@Param('id') id: string, @Request() req: any) {
+    return this.doctorsService.getDoctorById(id, req?.user);
   }
 }

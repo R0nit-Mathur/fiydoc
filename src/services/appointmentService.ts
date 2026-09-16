@@ -93,6 +93,13 @@ export const appointmentService = {
     await apiClient(`/appointments/${id}/cancel`, { method: 'POST' });
   },
 
+  rejectAppointment: async (id: string, reason?: string): Promise<Appointment> => {
+    return apiClient<Appointment>(`/appointments/${id}/reject`, {
+      method: 'POST',
+      body: JSON.stringify({ reason }),
+    });
+  },
+
   approveAppointment: async (id: string): Promise<Appointment> => {
     return apiClient<Appointment>(`/appointments/${id}/approve`, { method: 'POST' });
   },

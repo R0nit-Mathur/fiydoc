@@ -52,6 +52,7 @@ import { EmptyState } from '@/components/ui/EmptyState';
 import {
   useAppointmentsQuery,
   useApproveAppointmentMutation,
+  useRejectAppointmentMutation,
   useCancelAppointmentMutation,
   useUpdateAppointmentStatusMutation,
 } from '@/hooks/queries/useAppointmentsQuery';
@@ -82,6 +83,7 @@ function AppointmentCard({
   index,
   onStart,
   onApprove,
+  onReject,
   onPostpone,
   onConfirmArrival,
   onCancel,
@@ -90,6 +92,7 @@ function AppointmentCard({
   index: number;
   onStart: () => void;
   onApprove: () => void;
+  onReject: () => void;
   onPostpone: () => void;
   onConfirmArrival: () => void;
   onCancel: () => void;
@@ -117,6 +120,8 @@ function AppointmentCard({
         return { label: 'Completed', variant: 'default' as const, icon: CheckCircle2, tint: StitchColors.secondary };
       case 'cancelled':
         return { label: 'Cancelled', variant: 'danger' as const, icon: XCircle, tint: StitchColors.error };
+      case 'rejected':
+        return { label: 'Rejected', variant: 'danger' as const, icon: XCircle, tint: StitchColors.error };
       default:
         return { label: item.status, variant: 'default' as const, icon: Clock3, tint: StitchColors.outline };
     }
@@ -217,7 +222,61 @@ function AppointmentCard({
             </Pressable>
 
             <View style={styles.secondaryRow}>
-              {item.status !== 'confirmed' && (
+              {item.status === 'pending' && (
+                <>
+                  <Pressable
+                    onPress={() => {
+                      if (Platform.OS !== 'web') {
+                        Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+                      }
+                      onApprove();
+                    }}
+                    hitSlop={{ top: 6, bottom: 6, left: 6, right: 6 }}
+                    style={({ pressed }) => [
+                      styles.secondaryBtn,
+                      {
+                        backgroundColor: isDark
+                          ? 'rgba(0,168,150,0.16)'
+                          : Palette.healthcareTealLight,
+                        borderColor: Palette.successBorder,
+                        opacity: pressed ? 0.85 : 1,
+                      },
+                    ]}
+                    accessibilityRole="button"
+                  >
+                    <CheckCircle2 size={12} color={StitchColors.secondary} />
+                    <Text style={[styles.secondaryBtnText, { color: StitchColors.secondary }]}>
+                      Approve
+                    </Text>
+                  </Pressable>
+
+                  <Pressable
+                    onPress={() => {
+                      if (Platform.OS !== 'web') {
+                        Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+                      }
+                      onReject();
+                    }}
+                    hitSlop={{ top: 6, bottom: 6, left: 6, right: 6 }}
+                    style={({ pressed }) => [
+                      styles.secondaryBtn,
+                      {
+                        backgroundColor: isDark ? 'rgba(220,38,38,0.14)' : '#FEE2E2',
+                        borderColor: '#FECACA',
+                        opacity: pressed ? 0.85 : 1,
+                      },
+                    ]}
+                    accessibilityRole="button"
+                  >
+                    <XCircle size={12} color="#DC2626" />
+                    <Text style={[styles.secondaryBtnText, { color: '#DC2626' }]}>
+                      Reject
+                    </Text>
+                  </Pressable>
+                </>
+              )}
+
+              {item.status !== 'pending' && item.status !== 'confirmed' && (
                 <Pressable
                   onPress={() => {
                     if (Platform.OS !== 'web') {
@@ -352,6 +411,7 @@ export default function DoctorAppointmentsScreen() {
   const [refreshing, setRefreshing] = useState(false);
 
   const approveMutation = useApproveAppointmentMutation();
+  const rejectMutation = useRejectAppointmentMutation();
   const cancelMutation = useCancelAppointmentMutation();
   const updateStatusMutation = useUpdateAppointmentStatusMutation();
 
@@ -426,6 +486,25 @@ export default function DoctorAppointmentsScreen() {
       });
     } catch (err: any) {
       Alert.alert('Approval Failed', err?.message || 'Could not approve appointment on server.');
+    }
+  };
+
+  const handleReject = async (apt: any) => {
+    if (Platform.OS !== 'web') {
+      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error);
+    }
+    try {
+      await rejectMutation.mutateAsync({ id: apt.id, reason: 'Doctor unavailable for requested slot' });
+      useNotificationStore.getState().addNotification({
+        recipientId: apt.patientId,
+        recipientRole: 'patient',
+        title: '❌ Appointment Rejected',
+        message: `Dr. ${user?.name || 'Doctor'} was unable to accept your appointment on ${apt.date}. Please select another slot.`,
+        type: 'appointment',
+        link: '/(patient)/(tabs)/appointments',
+      });
+    } catch (err: any) {
+      Alert.alert('Rejection Failed', err?.message || 'Could not reject appointment on server.');
     }
   };
 
@@ -596,6 +675,7 @@ export default function DoctorAppointmentsScreen() {
               index={i}
               onStart={() => router.push(`/(doctor)/consultation/${apt.id}`)}
               onApprove={() => handleApprove(apt)}
+              onReject={() => handleReject(apt)}
               onPostpone={() => handlePostpone(apt)}
               onConfirmArrival={() => handleConfirmArrival(apt)}
               onCancel={() => handleCancel(apt)}

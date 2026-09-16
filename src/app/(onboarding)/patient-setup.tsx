@@ -10,6 +10,7 @@ import { Spacing, Typography, BorderRadius, StitchColors } from '@/constants/the
 import { useAppTheme } from '@/hooks/useAppTheme';
 import { AlertCircle, Activity, ChevronLeft, ChevronRight, ShieldCheck, Calendar, MapPin } from 'lucide-react-native';
 import { calculateAgeFromDOB } from '@/utils/formatters';
+import { normalizeAllergies } from '@/utils/allergyNormalizer';
 
 const STEPS = ['Basic Info', 'Health Details'];
 const TOTAL_STEPS = 2;
@@ -52,13 +53,14 @@ export default function PatientSetupScreen() {
     setLoading(true);
     try {
       const computedAge = calculatedAge ?? (age ? parseInt(age, 10) : undefined);
+      const cleanAllergies = normalizeAllergies(allergies);
       if (user?.id) {
         await patientService.updateProfile(user.id, {
           dob: dob.trim() || (age ? `${age} years` : undefined),
           address: address.trim() || undefined,
           gender: gender.toUpperCase() as any,
           bloodGroup: bloodGroup.trim() || undefined,
-          allergies: allergies.trim() ? allergies.split(',').map((s) => s.trim()) : [],
+          allergies: cleanAllergies,
           emergencyContact: emergencyContact.trim() ? { phone: emergencyContact.trim() } : undefined,
           onboardingComplete: true,
         }).catch((err) => console.warn('[patient-setup] Remote save notice:', err.message));
@@ -72,7 +74,7 @@ export default function PatientSetupScreen() {
           age: computedAge,
           gender,
           bloodGroup,
-          allergies,
+          allergies: cleanAllergies.join(', '),
           phone: user.phone,
           emergencyContact: emergencyContact.trim() || undefined,
         } as any);
