@@ -102,16 +102,11 @@ export class PrescriptionsService {
       if (!docRecord) {
         throw new ForbiddenException('Doctor profile not found.');
       }
-      // Allow REGISTERED, PENDING, and VERIFIED doctors to sign prescriptions
-      // Fully REJECTED doctors are blocked
-      const blockedStatuses = [VerificationStatus.REJECTED];
-      if (blockedStatuses.includes(docRecord.verification?.status)) {
+      // Strictly require verified status to issue prescriptions
+      if (docRecord.verification?.status !== VerificationStatus.VERIFIED) {
         throw new ForbiddenException(
-          'Your medical registration has been rejected. You cannot issue prescriptions. Contact admin@fiydoc.com for support.'
+          'Only verified medical practitioners can issue prescriptions. Your credentials are under review or unverified.'
         );
-      }
-      if (!docRecord.verification) {
-        throw new ForbiddenException('Doctor profile has no verification record. Please complete registration.');
       }
     }
 
@@ -145,7 +140,7 @@ export class PrescriptionsService {
       consultation.appointment?.status === 'COMPLETED';
     if (!isCompletedConsultation) {
       throw new BadRequestException(
-        'Prescriptions can only be issued for completed clinical consultations. Please mark the appointment as completed first.'
+        'Prescriptions can only be issued for completed, finalized clinical consultations. Please mark the appointment as completed first.'
       );
     }
 
@@ -363,14 +358,24 @@ export class PrescriptionsService {
       throw new ForbiddenException('Authentication required.');
     }
 
-    // Step 1: Resolve canonical Patient record (not User.id)
+    // Step 1: Enforce patient ownership immediately if role is PATIENT
+    if (currentUser.role === Role.PATIENT) {
+      const isOwner =
+        patientId === 'me' ||
+        patientId === currentUser.patient?.id ||
+        patientId === currentUser.id;
+      if (!isOwner) {
+        throw new ForbiddenException('Cannot access another patient\'s prescriptions.');
+      }
+    }
+
+    // Step 2: Resolve canonical Patient record (not User.id)
+    const targetId = patientId === 'me' ? (currentUser.patient?.id || currentUser.id) : patientId;
     const resolvedPatientRecord = await this.prisma.patient.findFirst({
       where: {
         OR: [
-          { id: patientId },
-          { userId: patientId },
-          ...(currentUser?.id ? [{ userId: currentUser.id }] : []),
-          ...(currentUser?.patient?.id ? [{ id: currentUser.patient.id }] : []),
+          { id: targetId },
+          { userId: targetId },
         ],
       },
     });
@@ -380,17 +385,6 @@ export class PrescriptionsService {
     }
 
     const resolvedPatientId = resolvedPatientRecord.id;
-
-    // Step 2: Enforce access control
-    if (currentUser.role === Role.PATIENT) {
-      const isOwner =
-        patientId === 'me' ||
-        resolvedPatientId === currentUser.patient?.id ||
-        resolvedPatientRecord.userId === currentUser.id;
-      if (!isOwner) {
-        throw new ForbiddenException('Cannot access another patient\'s prescriptions.');
-      }
-    }
 
     // Doctor can only access prescriptions for patients with whom they have an active or completed encounter relationship
     if (currentUser.role === Role.DOCTOR) {
