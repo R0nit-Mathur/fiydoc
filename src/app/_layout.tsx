@@ -8,6 +8,23 @@ import { ErrorBoundary } from '@/components/ui/ErrorBoundary';
 import { Colors } from '@/constants/theme';
 import '../global.css';
 
+import { LocationPermissionModal } from '@/components/location/LocationPermissionModal';
+import { useLocationStore } from '@/store/useLocationStore';
+
+function GlobalLocationGate() {
+  const { latitude, longitude, permissionStatus, isGenuineDeviceLocation } = useLocationStore();
+  const isLocationResolved = Boolean(
+    latitude && longitude && permissionStatus === 'granted' && isGenuineDeviceLocation
+  );
+
+  return (
+    <LocationPermissionModal
+      visible={!isLocationResolved}
+      onClose={() => {}}
+    />
+  );
+}
+
 export default function RootLayout() {
   const [queryClient] = useState(
     () =>
@@ -44,6 +61,7 @@ export default function RootLayout() {
       <QueryClientProvider client={queryClient}>
         <SafeAreaProvider>
           <StatusBar style="dark" />
+          <GlobalLocationGate />
           <Stack
             screenOptions={{
               headerShown: false,

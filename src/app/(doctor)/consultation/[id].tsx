@@ -86,6 +86,7 @@ import {
 } from '@/constants/medicalCatalog';
 import SmartMedicalTextInput from '@/components/doctor/SmartMedicalTextInput';
 import ClinicalDrawingNotepad from '@/components/doctor/ClinicalDrawingNotepad';
+import { isNegationAllergy } from '@/utils/allergyNormalizer';
 
 
 
@@ -621,6 +622,11 @@ export default function DoctorConsultationScreen() {
               </View>
 
               <View style={styles.allergiesRow}>
+                {allergies.length === 0 && (
+                  <Text style={{ fontSize: 13, color: colors.textMuted, fontStyle: 'italic', paddingVertical: 2 }}>
+                    0 allergies
+                  </Text>
+                )}
                 {allergies.map((al) => (
                   <View
                     key={al.id}
@@ -654,11 +660,14 @@ export default function DoctorConsultationScreen() {
                   />
                   <Pressable
                     onPress={() => {
-                      if (newAllergyInput.trim()) {
-                        setAllergies([
-                          ...allergies,
-                          { id: `a_${Date.now()}`, name: newAllergyInput.trim(), isSevere: false },
-                        ]);
+                      const trimmed = newAllergyInput.trim();
+                      if (trimmed) {
+                        if (!isNegationAllergy(trimmed)) {
+                          setAllergies([
+                            ...allergies,
+                            { id: `a_${Date.now()}`, name: trimmed, isSevere: false },
+                          ]);
+                        }
                         setNewAllergyInput('');
                         setShowAddAllergy(false);
                       }

@@ -151,6 +151,7 @@ interface LocationState {
   city: string;
   formattedAddress: string;
   permissionStatus: 'undetermined' | 'granted' | 'denied';
+  isGenuineDeviceLocation: boolean;
   isLoading: boolean;
   error: string | null;
 
@@ -163,12 +164,13 @@ interface LocationState {
 export const useLocationStore = create<LocationState>()(
   persist(
     (set, get) => ({
-      latitude: INDIAN_LOCATION_HUBS[0].latitude,
-      longitude: INDIAN_LOCATION_HUBS[0].longitude,
-      area: INDIAN_LOCATION_HUBS[0].name.split(',')[0].trim(),
-      city: INDIAN_LOCATION_HUBS[0].city,
-      formattedAddress: INDIAN_LOCATION_HUBS[0].name,
+      latitude: null,
+      longitude: null,
+      area: '',
+      city: '',
+      formattedAddress: '',
       permissionStatus: 'undetermined',
+      isGenuineDeviceLocation: false,
       isLoading: false,
       error: null,
 
@@ -262,6 +264,7 @@ export const useLocationStore = create<LocationState>()(
             city: cityName,
             formattedAddress: localityName,
             permissionStatus: 'granted',
+            isGenuineDeviceLocation: true,
             isLoading: false,
             error: null,
           });

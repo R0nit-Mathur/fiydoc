@@ -640,6 +640,12 @@ export default function MedicalIntakeScreen() {
                     </Pressable>
                   ))}
 
+                  {severeAllergies.length === 0 && allergies.length === 0 && (
+                    <Text style={{ fontSize: 13, color: '#6B7280', fontStyle: 'italic', alignSelf: 'center', marginRight: 8 }}>
+                      0 allergies
+                    </Text>
+                  )}
+
                   <Pressable onPress={handleAddAllergy} style={styles.bgAddChip}>
                     <Plus size={14} color={StitchColors.primary} />
                     <Text style={styles.bgAddChipText}>Add Allergy</Text>

@@ -428,6 +428,18 @@ export default function PatientProfileScreen() {
                 </Text>
               </View>
             </View>
+
+            <View style={[styles.detailRow, { borderTopWidth: StyleSheet.hairlineWidth, borderTopColor: colors.border }]}>
+              <View style={[styles.detailIconBox, { backgroundColor: '#FEF2F2' }]}>
+                <Heart size={16} color={StitchColors.secondaryContainer} />
+              </View>
+              <View style={{ flex: 1 }}>
+                <Text style={[styles.detailLabel, { color: colors.textMuted }]}>Known Allergies</Text>
+                <Text style={[styles.detailValue, { color: colors.text }]}>
+                  {validAllergies.length > 0 ? validAllergies.join(', ') : '0 allergies'}
+                </Text>
+              </View>
+            </View>
           </View>
         </Animated.View>
 
