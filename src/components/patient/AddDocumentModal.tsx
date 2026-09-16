@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { View, Text, ActivityIndicator, StyleSheet, Pressable, Platform, Alert } from 'react-native';
+import { View, Text, ActivityIndicator, StyleSheet, Pressable, Platform, Alert, Linking } from 'react-native';
 import { Modal } from '@/components/ui/Modal';
 import { Input } from '@/components/ui/Input';
 import { Button } from '@/components/ui/Button';
@@ -8,7 +8,7 @@ import { useHealthStore } from '@/store/useHealthStore';
 import { MedicalRecord } from '@/types/index';
 import { Palette, Typography, Spacing, StitchColors } from '@/constants/theme';
 import { useAppTheme } from '@/hooks/useAppTheme';
-import { ScanText, CheckCircle2, AlertCircle, FileUp, FileCheck } from 'lucide-react-native';
+import { ScanText, CheckCircle2, AlertCircle, FileUp, FileCheck, Eye, Plus } from 'lucide-react-native';
 import { pickClinicalDocument } from '@/utils/mediaPicker';
 
 interface AddDocumentModalProps {
@@ -51,6 +51,7 @@ export function AddDocumentModal({ visible, onClose }: AddDocumentModalProps) {
 
     const extracted: Record<string, string> = {
       'Document Title': docTitle.trim(),
+      'Uploaded File': selectedFile ? selectedFile.name : 'No file attached',
       'Category': docType,
       'Added On': new Date().toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' }),
       'Storage': selectedFile ? 'Stored securely on this device' : 'No file attached',
@@ -80,14 +81,19 @@ export function AddDocumentModal({ visible, onClose }: AddDocumentModalProps) {
     setScanStep('complete');
   };
 
+  const handleResetForMore = () => {
+    setScanStep('idle');
+    setDocTitle('');
+    setSelectedFile(null);
+    setExtractedData(null);
+    setError('');
+  };
+
   const handleCloseModal = () => {
     onClose();
     // Reset state after a delay so animation doesn't pop weirdly
     setTimeout(() => {
-      setScanStep('idle');
-      setDocTitle('');
-      setExtractedData(null);
-      setError('');
+      handleResetForMore();
     }, 300);
   };
 
@@ -111,7 +117,7 @@ export function AddDocumentModal({ visible, onClose }: AddDocumentModalProps) {
         ) : scanStep === 'complete' && extractedData ? (
           <View style={{ gap: Spacing.md }}>
             <View style={styles.ocrSuccessBox}>
-              <CheckCircle2 size={20} color={Palette.success} />
+              <CheckCircle2 size={20} color="#059669" />
               <Text style={styles.ocrSuccessText}>Document Added to Timeline</Text>
             </View>
 
@@ -124,12 +130,43 @@ export function AddDocumentModal({ visible, onClose }: AddDocumentModalProps) {
               ))}
             </View>
 
-            <Button
-              title="Done"
-              onPress={handleCloseModal}
-              variant="primary"
-              size="lg"
-            />
+            {selectedFile?.uri && (
+              <Button
+                title="View Uploaded Document"
+                onPress={() => {
+                  if (Platform.OS === 'web') {
+                    window.open(selectedFile.uri, '_blank');
+                  } else {
+                    Linking.openURL(selectedFile.uri).catch(() =>
+                      Alert.alert('Unable to open', 'Cannot open document preview on this device.')
+                    );
+                  }
+                }}
+                variant="outline"
+                size="md"
+                icon={<Eye size={16} color={StitchColors.primary} />}
+              />
+            )}
+
+            <View style={{ flexDirection: 'row', gap: Spacing.sm }}>
+              <View style={{ flex: 1 }}>
+                <Button
+                  title="Add More"
+                  onPress={handleResetForMore}
+                  variant="outline"
+                  size="lg"
+                  icon={<Plus size={16} color={colors.text} />}
+                />
+              </View>
+              <View style={{ flex: 1 }}>
+                <Button
+                  title="Done"
+                  onPress={handleCloseModal}
+                  variant="primary"
+                  size="lg"
+                />
+              </View>
+            </View>
           </View>
         ) : (
           <View style={{ gap: Spacing.md }}>
@@ -255,17 +292,18 @@ const useStyles = (colors: any) => StyleSheet.create({
   ocrSuccessBox: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: Palette.successBg,
+    backgroundColor: '#ECFDF5',
     padding: Spacing.md,
-    borderRadius: 8,
+    borderRadius: 10,
     gap: 10,
     borderWidth: 1,
-    borderColor: Palette.successBorder,
+    borderColor: '#A7F3D0',
   },
   ocrSuccessText: {
     ...Typography.body,
-    color: Palette.success,
-    fontWeight: '600',
+    color: '#065F46',
+    fontWeight: '700',
+    fontSize: 14,
   },
   extractedBox: {
     backgroundColor: colors.card,

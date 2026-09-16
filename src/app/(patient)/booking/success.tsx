@@ -53,7 +53,7 @@ export default function BookingSuccessScreen() {
 
   const [cancelDialogVisible, setCancelDialogVisible] = useState(false);
   const tokenNumber = params.tokenNumber || 'Token #04';
-  const isPending = !apt || apt.status === 'pending';
+  const isPending = apt?.status === 'pending';
 
   const handleSharePass = async () => {
     try {
@@ -102,7 +102,7 @@ export default function BookingSuccessScreen() {
             <View style={styles.ticketLetterhead}>
               <FiYLogo size="sm" />
               <Badge
-                label={isPending ? 'QUEUED FOR APPROVAL' : 'IN-CLINIC PASS'}
+                label={isPending ? 'QUEUED FOR APPROVAL' : 'CONFIRMED PASS'}
                 variant={isPending ? 'warning' : 'teal'}
                 size="sm"
               />

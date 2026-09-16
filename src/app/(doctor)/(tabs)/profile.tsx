@@ -23,6 +23,7 @@ import {
   Modal,
   TextInput,
   Alert,
+  ActivityIndicator,
 } from 'react-native';
 import { useRouter } from 'expo-router';
 import { SafeAreaView } from 'react-native-safe-area-context';
@@ -116,17 +117,25 @@ export default function DoctorProfileScreen() {
   const [showCadenceModal, setShowCadenceModal] = useState(false);
   const [slotDuration, setSlotDuration] = useState('15');
   const [bufferTime, setBufferTime] = useState('5');
+  const [savingDocFee, setSavingDocFee] = useState(false);
+  const [savingDocShifts, setSavingDocShifts] = useState(false);
+  const [savingDocProfile, setSavingDocProfile] = useState(false);
 
   const handleSaveFee = async () => {
-    setOpdFee(tempFee);
-    updateUser({ consultationFee: tempFee });
+    setSavingDocFee(true);
     try {
-      await doctorService.updateMyProfile({ consultationFee: Number(tempFee) });
-    } catch {
-      // Preserve the local draft for an offline doctor; it will remain visible on this device.
+      setOpdFee(tempFee);
+      updateUser({ consultationFee: tempFee });
+      try {
+        await doctorService.updateMyProfile({ consultationFee: Number(tempFee) });
+      } catch {
+        // Preserve the local draft for an offline doctor; it will remain visible on this device.
+      }
+      setShowFeeModal(false);
+      if (Platform.OS !== 'web') Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+    } finally {
+      setSavingDocFee(false);
     }
-    setShowFeeModal(false);
-    if (Platform.OS !== 'web') Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
   };
 
   const handleSavePayout = () => {
@@ -137,16 +146,21 @@ export default function DoctorProfileScreen() {
   };
 
   const handleSaveShifts = async () => {
-    const combinedTimings = `${tempMorningShift.trim()} • ${tempEveningShift.trim()}`;
-    setTempClinicTimings(combinedTimings);
-    updateUser({ clinicTimings: combinedTimings });
+    setSavingDocShifts(true);
     try {
-      await doctorService.updateMyProfile({ clinicTimings: combinedTimings });
-    } catch {
-      // Local state preserved
+      const combinedTimings = `${tempMorningShift.trim()} • ${tempEveningShift.trim()}`;
+      setTempClinicTimings(combinedTimings);
+      updateUser({ clinicTimings: combinedTimings });
+      try {
+        await doctorService.updateMyProfile({ clinicTimings: combinedTimings });
+      } catch {
+        // Local state preserved
+      }
+      setShowShiftsModal(false);
+      if (Platform.OS !== 'web') Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+    } finally {
+      setSavingDocShifts(false);
     }
-    setShowShiftsModal(false);
-    if (Platform.OS !== 'web') Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
   };
 
   const handleSaveCadence = () => {
@@ -155,39 +169,44 @@ export default function DoctorProfileScreen() {
   };
 
   const handleSaveProfile = async () => {
-    const cleanName = tempName.trim() || docName || 'Dr. Doctor';
-    const cleanSpec = tempSpec.trim() || docSpec || 'General Medicine';
-    const cleanClinicName = tempClinicName.trim() || user?.clinicName || `${cleanName}'s Clinic`;
-    const cleanClinicAddress = tempClinicAddress.trim() || user?.clinicAddress || 'Clinical Practice Address Pending';
-    const cleanClinicTimings = tempClinicTimings.trim() || user?.clinicTimings || '10:30 AM – 1:30 PM • 5:00 PM – 8:00 PM';
-
+    setSavingDocProfile(true);
     try {
-      await doctorService.updateMyProfile({
-        fullName: cleanName,
+      const cleanName = tempName.trim() || docName || 'Dr. Doctor';
+      const cleanSpec = tempSpec.trim() || docSpec || 'General Medicine';
+      const cleanClinicName = tempClinicName.trim() || user?.clinicName || `${cleanName}'s Clinic`;
+      const cleanClinicAddress = tempClinicAddress.trim() || user?.clinicAddress || 'Clinical Practice Address Pending';
+      const cleanClinicTimings = tempClinicTimings.trim() || user?.clinicTimings || '10:30 AM – 1:30 PM • 5:00 PM – 8:00 PM';
+
+      try {
+        await doctorService.updateMyProfile({
+          fullName: cleanName,
+          specialization: cleanSpec,
+          profilePhoto: tempAvatar?.startsWith('file:') ? undefined : tempAvatar || null,
+          clinicName: cleanClinicName,
+          clinicAddress: cleanClinicAddress,
+          clinicTimings: cleanClinicTimings,
+        });
+      } catch {
+        // Save locally to maintain responsive user experience
+      }
+      setDocName(cleanName);
+      setDocSpec(cleanSpec);
+      setDocAvatar(tempAvatar);
+      updateUser({
+        name: cleanName,
         specialization: cleanSpec,
-        profilePhoto: tempAvatar?.startsWith('file:') ? undefined : tempAvatar || null,
+        specialty: cleanSpec,
+        avatar: tempAvatar,
+        qualification: tempQual,
         clinicName: cleanClinicName,
         clinicAddress: cleanClinicAddress,
         clinicTimings: cleanClinicTimings,
       });
-    } catch {
-      // Save locally to maintain responsive user experience
+      setShowEditProfileModal(false);
+      if (Platform.OS !== 'web') Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+    } finally {
+      setSavingDocProfile(false);
     }
-    setDocName(cleanName);
-    setDocSpec(cleanSpec);
-    setDocAvatar(tempAvatar);
-    updateUser({
-      name: cleanName,
-      specialization: cleanSpec,
-      specialty: cleanSpec,
-      avatar: tempAvatar,
-      qualification: tempQual,
-      clinicName: cleanClinicName,
-      clinicAddress: cleanClinicAddress,
-      clinicTimings: cleanClinicTimings,
-    });
-    setShowEditProfileModal(false);
-    if (Platform.OS !== 'web') Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
   };
 
   return (
@@ -574,9 +593,19 @@ export default function DoctorProfileScreen() {
                 style={[styles.feeTextInput, { color: colors.text, borderColor: colors.border }]}
               />
             </View>
-            <Pressable onPress={handleSaveFee} style={[styles.modalSaveBtn, { backgroundColor: StitchColors.primaryContainer }]}>
-              <Check size={16} color="#FFFFFF" />
-              <Text style={styles.modalSaveBtnText}>Save Consultation Fee</Text>
+            <Pressable
+              onPress={handleSaveFee}
+              disabled={savingDocFee}
+              style={[styles.modalSaveBtn, { backgroundColor: StitchColors.primaryContainer }]}
+            >
+              {savingDocFee ? (
+                <ActivityIndicator size="small" color="#FFFFFF" />
+              ) : (
+                <>
+                  <Check size={16} color="#FFFFFF" />
+                  <Text style={styles.modalSaveBtnText}>Save Consultation Fee</Text>
+                </>
+              )}
             </Pressable>
           </View>
         </View>
@@ -782,9 +811,19 @@ export default function DoctorProfileScreen() {
               </View>
             </ScrollView>
 
-            <Pressable onPress={handleSaveProfile} style={[styles.modalSaveBtn, { backgroundColor: StitchColors.primaryContainer, marginTop: 8 }]}>
-              <Check size={16} color="#FFFFFF" />
-              <Text style={styles.modalSaveBtnText}>Save Changes</Text>
+            <Pressable
+              onPress={handleSaveProfile}
+              disabled={savingDocProfile}
+              style={[styles.modalSaveBtn, { backgroundColor: StitchColors.primaryContainer, marginTop: 8 }]}
+            >
+              {savingDocProfile ? (
+                <ActivityIndicator size="small" color="#FFFFFF" />
+              ) : (
+                <>
+                  <Check size={16} color="#FFFFFF" />
+                  <Text style={styles.modalSaveBtnText}>Save Changes</Text>
+                </>
+              )}
             </Pressable>
           </View>
         </View>
@@ -828,9 +867,19 @@ export default function DoctorProfileScreen() {
               </View>
             </View>
 
-            <Pressable onPress={handleSaveShifts} style={[styles.modalSaveBtn, { backgroundColor: StitchColors.primaryContainer }]}>
-              <Check size={16} color="#FFFFFF" />
-              <Text style={styles.modalSaveBtnText}>Save Shift Timings</Text>
+            <Pressable
+              onPress={handleSaveShifts}
+              disabled={savingDocShifts}
+              style={[styles.modalSaveBtn, { backgroundColor: StitchColors.primaryContainer }]}
+            >
+              {savingDocShifts ? (
+                <ActivityIndicator size="small" color="#FFFFFF" />
+              ) : (
+                <>
+                  <Check size={16} color="#FFFFFF" />
+                  <Text style={styles.modalSaveBtnText}>Save Shift Timings</Text>
+                </>
+              )}
             </Pressable>
           </View>
         </View>

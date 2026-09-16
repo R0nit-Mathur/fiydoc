@@ -191,9 +191,20 @@ export const useLocationStore = create<LocationState>()(
             return false;
           }
 
-          const loc = await Location.getCurrentPositionAsync({
-            accuracy: Location.Accuracy.High,
-          });
+          let loc: Location.LocationObject | null = null;
+          try {
+            loc = await Location.getCurrentPositionAsync({
+              accuracy: Platform.OS === 'android' ? Location.Accuracy.Balanced : Location.Accuracy.High,
+              timeInterval: 5000,
+            });
+          } catch (posErr) {
+            console.warn('[useLocationStore] Primary position lock failed, attempting fallback to last known position:', posErr);
+            loc = await Location.getLastKnownPositionAsync();
+          }
+
+          if (!loc || !loc.coords) {
+            throw new Error('Unable to retrieve location coordinates. Please ensure GPS is enabled.');
+          }
 
           const { latitude, longitude } = loc.coords;
 

@@ -56,15 +56,21 @@ export function LocationPermissionModal({
     setLoading(true);
     setErrorMessage('');
     try {
-      // 1. Check if location services are enabled on device hardware
-      const servicesEnabled = await Location.hasServicesEnabledAsync();
-      if (!servicesEnabled) {
-        setStatusState('blocked');
-        setErrorMessage(
-          'Location services are disabled on your device. Turn on Location in Device Settings to proceed.'
-        );
-        setLoading(false);
-        return;
+      // 1. Check if location services are enabled on device hardware (native only)
+      if (Platform.OS !== 'web') {
+        try {
+          const servicesEnabled = await Location.hasServicesEnabledAsync();
+          if (!servicesEnabled) {
+            setStatusState('blocked');
+            setErrorMessage(
+              'Location services are disabled on your device. Turn on Location in Device Settings to proceed.'
+            );
+            setLoading(false);
+            return;
+          }
+        } catch (servErr) {
+          console.warn('[LocationModal] hasServicesEnabledAsync warning:', servErr);
+        }
       }
 
       // 2. Check current permission status
@@ -82,6 +88,11 @@ export function LocationPermissionModal({
         setStatusState('blocked');
         setErrorMessage(
           'Location access is permanently blocked or denied. FiYDoc requires your exact pinpoint location without forging. Please enable Location in Device Settings.'
+        );
+      } else if (status === 'denied' && Platform.OS === 'web') {
+        setStatusState('blocked');
+        setErrorMessage(
+          'Location permission was denied in your browser. Click the lock/site settings icon in your browser address bar to allow Location, then try again.'
         );
       } else {
         setStatusState('prompt');
@@ -119,14 +130,20 @@ export function LocationPermissionModal({
     setErrorMessage('');
 
     try {
-      const servicesEnabled = await Location.hasServicesEnabledAsync();
-      if (!servicesEnabled) {
-        setStatusState('blocked');
-        setErrorMessage(
-          'Location is turned off on your device. Please open Settings and enable Location services.'
-        );
-        setLoading(false);
-        return;
+      if (Platform.OS !== 'web') {
+        try {
+          const servicesEnabled = await Location.hasServicesEnabledAsync();
+          if (!servicesEnabled) {
+            setStatusState('blocked');
+            setErrorMessage(
+              'Location is turned off on your device. Please open Settings and enable Location services.'
+            );
+            setLoading(false);
+            return;
+          }
+        } catch (servErr) {
+          console.warn('[LocationModal] hasServicesEnabledAsync check warning:', servErr);
+        }
       }
 
       // Trigger genuine system permission popup ("Allow While Using App" or "Only This Time")
@@ -143,12 +160,18 @@ export function LocationPermissionModal({
       } else {
         setStatusState('blocked');
         setErrorMessage(
-          'Location permission was denied. FiYDoc requires genuine pinpoint location to connect you with nearby clinicians. Please enable it in Device Settings.'
+          Platform.OS === 'web'
+            ? 'Location permission was denied in your browser. Click the lock/site settings icon in your browser address bar to allow Location, then try again.'
+            : 'Location permission was denied. FiYDoc requires genuine pinpoint location to connect you with nearby clinicians. Please enable it in Device Settings.'
         );
       }
     } catch (err: any) {
       setStatusState('blocked');
-      setErrorMessage(err?.message || 'Error requesting location permission. Please enable in Settings.');
+      setErrorMessage(
+        Platform.OS === 'web'
+          ? 'Could not access browser location. Please allow location in your browser address bar.'
+          : err?.message || 'Error requesting location permission. Please enable in Settings.'
+      );
     } finally {
       setLoading(false);
     }
@@ -160,7 +183,7 @@ export function LocationPermissionModal({
     } else if (Platform.OS === 'android') {
       Linking.openSettings();
     } else {
-      checkAndResolveLocation();
+      requestNativePermission();
     }
   };
 
@@ -232,7 +255,9 @@ export function LocationPermissionModal({
                   style={styles.primaryButton}
                 >
                   <Settings size={16} color="#FFFFFF" />
-                  <Text style={styles.primaryButtonText}>Open Device Settings</Text>
+                  <Text style={styles.primaryButtonText}>
+                    {Platform.OS === 'web' ? 'Allow in Browser Bar' : 'Open Device Settings'}
+                  </Text>
                 </TouchableOpacity>
 
                 <TouchableOpacity

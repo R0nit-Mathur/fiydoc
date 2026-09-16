@@ -19,6 +19,7 @@ import {
   Image,
   Pressable,
   Alert,
+  ActivityIndicator,
 } from 'react-native';
 import { useRouter } from 'expo-router';
 import { SafeAreaView } from 'react-native-safe-area-context';
@@ -93,6 +94,7 @@ export default function PatientProfileScreen() {
   const [privacyModalVisible, setPrivacyModalVisible] = useState(false);
   const [saveToast, setSaveToast] = useState(false);
   const [updateModalVisible, setUpdateModalVisible] = useState(false);
+  const [savingProfile, setSavingProfile] = useState(false);
 
   // Helper to auto-format DOB with slashes (DD/MM/YYYY)
   const formatDOBInput = (text: string) => {
@@ -149,39 +151,44 @@ export default function PatientProfileScreen() {
   };
 
   const handleSaveProfile = async () => {
-    const name = editName.trim() || user?.name || '';
-    const dob = editDOB.trim() || undefined;
-    const address = editAddress.trim() || undefined;
-    const bloodGroup = editBloodGroup.trim() || undefined;
-    const allergies = normalizeAllergies(editAllergies);
-    const conditions = editConditions.trim() ? editConditions.split(',').map((s) => s.trim()).filter(Boolean) : [];
-    const emergencyPhone = editEmergency.trim() || undefined;
-    const age = calculateAgeFromDOB(dob) ?? undefined;
+    setSavingProfile(true);
+    try {
+      const name = editName.trim() || user?.name || '';
+      const dob = editDOB.trim() || undefined;
+      const address = editAddress.trim() || undefined;
+      const bloodGroup = editBloodGroup.trim() || undefined;
+      const allergies = normalizeAllergies(editAllergies);
+      const conditions = editConditions.trim() ? editConditions.split(',').map((s) => s.trim()).filter(Boolean) : [];
+      const emergencyPhone = editEmergency.trim() || undefined;
+      const age = calculateAgeFromDOB(dob) ?? undefined;
 
-    updateUser({ name, email: editEmail.trim() || user?.email || '', phone: editPhone.trim(), avatar: editAvatar || undefined, dob, address, age, bloodGroup });
-    if (user?.id) {
-      try {
-        await patientService.updateProfile(user.id, {
-          email: editEmail.trim() || undefined,
-          phone: editPhone.trim() || undefined,
-          fullName: name,
-          dob,
-          address,
-          bloodGroup,
-          profilePhoto: editAvatar || undefined,
-          allergies,
-          conditions,
-          emergencyContact: emergencyPhone ? { phone: emergencyPhone, name: '', relation: '' } : undefined,
-        });
-        await queryClient.invalidateQueries({ queryKey: ['patient-profile', user.id] });
-      } catch {}
+      updateUser({ name, email: editEmail.trim() || user?.email || '', phone: editPhone.trim(), avatar: editAvatar || undefined, dob, address, age, bloodGroup });
+      if (user?.id) {
+        try {
+          await patientService.updateProfile(user.id, {
+            email: editEmail.trim() || undefined,
+            phone: editPhone.trim() || undefined,
+            fullName: name,
+            dob,
+            address,
+            bloodGroup,
+            profilePhoto: editAvatar || undefined,
+            allergies,
+            conditions,
+            emergencyContact: emergencyPhone ? { phone: emergencyPhone, name: '', relation: '' } : undefined,
+          });
+          await queryClient.invalidateQueries({ queryKey: ['patient-profile', user.id] });
+        } catch {}
+      }
+      if (Platform.OS !== 'web') {
+        Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+      }
+      setEditModalVisible(false);
+      setSaveToast(true);
+      setTimeout(() => setSaveToast(false), 3000);
+    } finally {
+      setSavingProfile(false);
     }
-    if (Platform.OS !== 'web') {
-      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
-    }
-    setEditModalVisible(false);
-    setSaveToast(true);
-    setTimeout(() => setSaveToast(false), 3000);
   };
 
   const handleRefresh = useCallback(async () => {
@@ -703,10 +710,15 @@ export default function PatientProfileScreen() {
         <View style={{ paddingTop: 12, borderTopWidth: StyleSheet.hairlineWidth, borderTopColor: colors.border }}>
           <TouchableOpacity
             onPress={handleSaveProfile}
+            disabled={savingProfile}
             style={[styles.modalSaveBtn, { backgroundColor: StitchColors.primaryContainer }]}
             activeOpacity={0.85}
           >
-            <Text style={styles.modalSaveBtnText}>Save Profile Changes</Text>
+            {savingProfile ? (
+              <ActivityIndicator size="small" color="#FFFFFF" />
+            ) : (
+              <Text style={styles.modalSaveBtnText}>Save Profile Changes</Text>
+            )}
           </TouchableOpacity>
         </View>
       </Modal>

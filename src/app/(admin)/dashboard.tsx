@@ -43,6 +43,7 @@ import { StitchColors, BorderRadius, Shadows } from '@/constants/theme';
 import { useAuthStore } from '@/store/useAuthStore';
 import { adminService, AdminStats, AdminDoctorItem, AuditLogItem } from '@/services/adminService';
 import { authService } from '@/services/authService';
+import { ConfirmationDialog } from '@/components/ui/ConfirmationDialog';
 
 type TabKey = 'verifications' | 'all-doctors' | 'audit-logs';
 
@@ -71,6 +72,10 @@ export default function AdminDashboardScreen() {
   const [actionType, setActionType] = useState<'APPROVE' | 'REJECT' | 'REQUEST_INFO' | 'SUSPEND' | null>(null);
   const [actionNotes, setActionNotes] = useState('');
   const [submittingAction, setSubmittingAction] = useState(false);
+
+  // Logout Modal
+  const [logoutModalVisible, setLogoutModalVisible] = useState(false);
+  const [loggingOut, setLoggingOut] = useState(false);
 
   const fetchStats = useCallback(async () => {
     try {
@@ -173,18 +178,21 @@ export default function AdminDashboardScreen() {
     }
   };
 
-  const handleLogout = async () => {
-    Alert.alert('Sign Out', 'Are you sure you want to sign out of the Super-Admin console?', [
-      { text: 'Cancel', style: 'cancel' },
-      {
-        text: 'Sign Out',
-        style: 'destructive',
-        onPress: async () => {
-          await authService.signOutAll('USER_ACTION');
-          router.replace('/(auth)/welcome');
-        },
-      },
-    ]);
+  const handleConfirmLogout = async () => {
+    try {
+      setLoggingOut(true);
+      if (Platform.OS !== 'web') {
+        Haptics.notificationAsync(Haptics.NotificationFeedbackType.Warning);
+      }
+      await authService.signOutAll('USER_ACTION');
+      router.replace('/(auth)/welcome');
+    } catch (err: any) {
+      console.warn('[Admin] Logout error:', err?.message);
+      router.replace('/(auth)/welcome');
+    } finally {
+      setLoggingOut(false);
+      setLogoutModalVisible(false);
+    }
   };
 
   const openDocument = (url?: string) => {
@@ -212,11 +220,17 @@ export default function AdminDashboardScreen() {
         </View>
 
         <View style={styles.headerRight}>
-          <Pressable onPress={handleRefresh} style={[styles.iconBtn, { backgroundColor: colors.backgroundElement }]} hitSlop={8}>
+          <Pressable onPress={handleRefresh} style={[styles.iconBtn, { backgroundColor: colors.backgroundElement }]} hitSlop={8} accessibilityLabel="Refresh Dashboard">
             <RefreshCw size={16} color={colors.text} />
           </Pressable>
-          <Pressable onPress={handleLogout} style={[styles.iconBtn, { backgroundColor: '#FEE2E2' }]} hitSlop={8}>
-            <LogOut size={16} color="#DC2626" />
+          <Pressable
+            onPress={() => setLogoutModalVisible(true)}
+            style={styles.headerLogoutBtn}
+            hitSlop={8}
+            accessibilityLabel="Sign Out of Admin Console"
+          >
+            <LogOut size={15} color="#DC2626" />
+            <Text style={styles.headerLogoutText}>Logout</Text>
           </Pressable>
         </View>
       </View>
@@ -678,6 +692,20 @@ export default function AdminDashboardScreen() {
           </View>
         </View>
       </Modal>
+
+      {/* Admin Sign Out Confirmation Dialog */}
+      <ConfirmationDialog
+        visible={logoutModalVisible}
+        title="Sign Out"
+        message="Are you sure you want to sign out of the Super-Admin console?"
+        confirmText="Sign Out"
+        cancelText="Cancel"
+        confirmVariant="danger"
+        iconVariant="danger"
+        loading={loggingOut}
+        onConfirm={handleConfirmLogout}
+        onCancel={() => setLogoutModalVisible(false)}
+      />
     </SafeAreaView>
   );
 }
@@ -725,6 +753,22 @@ const styles = StyleSheet.create({
     borderRadius: 17,
     alignItems: 'center',
     justifyContent: 'center',
+  },
+  headerLogoutBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    paddingVertical: 7,
+    paddingHorizontal: 12,
+    borderRadius: 17,
+    backgroundColor: '#FEE2E2',
+    borderWidth: 1,
+    borderColor: '#FECACA',
+  },
+  headerLogoutText: {
+    fontSize: 13,
+    fontWeight: '700',
+    color: '#DC2626',
   },
 
   scrollContent: {

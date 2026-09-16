@@ -1,6 +1,6 @@
 import React from 'react';
-import { View, Text, TouchableOpacity, StyleSheet } from 'react-native';
-import { FileText, Activity, Pill, Stethoscope, CheckCircle2, ChevronRight } from 'lucide-react-native';
+import { View, Text, TouchableOpacity, StyleSheet, Platform, Linking, Alert } from 'react-native';
+import { FileText, Activity, Pill, Stethoscope, CheckCircle2, ChevronRight, Eye, ExternalLink } from 'lucide-react-native';
 import { MedicalRecord } from '@/types/index';
 import { Palette, Typography, BorderRadius, Shadows, Spacing } from '@/constants/theme';
 
@@ -69,6 +69,27 @@ export function Timeline({ records, onRecordPress }: TimelineProps) {
 
               {cleanSummary ? (
                 <Text style={styles.summaryBox}>{cleanSummary}</Text>
+              ) : null}
+
+              {/* Document Action Button */}
+              {item.documentUrl ? (
+                <TouchableOpacity
+                  onPress={(e) => {
+                    e.stopPropagation?.();
+                    if (Platform.OS === 'web') {
+                      window.open(item.documentUrl, '_blank');
+                    } else {
+                      Linking.openURL(item.documentUrl!).catch(() =>
+                        Alert.alert('Unable to open', 'Cannot open document on this device.')
+                      );
+                    }
+                  }}
+                  style={styles.viewDocBtn}
+                  accessibilityLabel="View uploaded document"
+                >
+                  <Eye size={13} color="#0D9488" />
+                  <Text style={styles.viewDocBtnText}>View Document</Text>
+                </TouchableOpacity>
               ) : null}
 
               {/* Tag Chips */}
@@ -189,6 +210,24 @@ const styles = StyleSheet.create({
     borderWidth: StyleSheet.hairlineWidth,
     borderColor: Palette.cardBorderLight,
   },
+  viewDocBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    alignSelf: 'flex-start',
+    gap: 6,
+    backgroundColor: '#F0FDFA',
+    paddingHorizontal: 10,
+    paddingVertical: 6,
+    borderRadius: BorderRadius.md,
+    borderWidth: 1,
+    borderColor: '#99F6E4',
+    marginTop: 10,
+  },
+  viewDocBtnText: {
+    fontSize: 12,
+    fontWeight: '700',
+    color: '#0D9488',
+  },
   tagsRow: {
     flexDirection: 'row',
     flexWrap: 'wrap',
@@ -196,16 +235,16 @@ const styles = StyleSheet.create({
     marginTop: 8,
   },
   tagChip: {
-    backgroundColor: Palette.healthcareTealLight,
+    backgroundColor: '#F1F5F9',
     paddingHorizontal: 8,
-    paddingVertical: 2.5,
+    paddingVertical: 3,
     borderRadius: BorderRadius.sm,
-    borderWidth: 0.5,
-    borderColor: Palette.healthcareTealBorder,
+    borderWidth: 1,
+    borderColor: '#CBD5E1',
   },
   tagText: {
     fontSize: 10,
     fontWeight: '700',
-    color: Palette.healthcareTeal,
+    color: '#334155',
   },
 });

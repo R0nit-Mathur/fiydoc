@@ -304,7 +304,7 @@ export class AppointmentsService {
             fee: authoritativeFee,
             symptoms: dto.symptoms || [],
             notes: canonicalNotes,
-            status: AppointmentStatus.PENDING,
+            status: AppointmentStatus.CONFIRMED,
           },
           include: {
             doctor: { include: { clinic: true } },
@@ -348,17 +348,17 @@ export class AppointmentsService {
       if (patient?.userId) {
         notifData.push({
           userId: patient.userId,
-          type: 'APPOINTMENT_QUEUED',
-          title: 'Appointment Slot Queued',
-          message: `Your slot request with ${createdApt.doctor.fullName} on ${dto.date} at ${dto.startTime} is awaiting doctor approval.`,
+          type: 'APPOINTMENT_CONFIRMED',
+          title: 'Appointment Confirmed',
+          message: `Your appointment with ${createdApt.doctor.fullName} on ${dto.date} at ${dto.startTime} is confirmed. Show your token at OPD.`,
         });
       }
       if (createdApt.doctor?.userId) {
         notifData.push({
           userId: createdApt.doctor.userId,
-          type: 'NEW_BOOKING_REQUEST',
-          title: 'New Patient Slot Request',
-          message: `${createdApt.patient.fullName} requested ${dto.startTime} on ${dto.date}. Review and approve.`,
+          type: 'NEW_BOOKING_CONFIRMED',
+          title: 'New Confirmed Appointment',
+          message: `${createdApt.patient.fullName} booked ${dto.startTime} on ${dto.date} (Token: ${allocatedToken}).`,
         });
       }
       if (notifData.length > 0) {
