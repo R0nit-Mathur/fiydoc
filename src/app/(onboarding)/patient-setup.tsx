@@ -5,6 +5,7 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { Input } from '@/components/ui/Input';
 import { Button } from '@/components/ui/Button';
 import { useAuthStore } from '@/store/useAuthStore';
+import { useNotificationStore } from '@/store/useNotificationStore';
 import { patientService } from '@/services/patientService';
 import { Spacing, Typography, BorderRadius, StitchColors } from '@/constants/theme';
 import { useAppTheme } from '@/hooks/useAppTheme';
@@ -81,6 +82,15 @@ export default function PatientSetupScreen() {
       } else {
         setOnboardingCompleted(true);
       }
+
+      useNotificationStore.getState().addNotification({
+        title: 'Health Profile Created',
+        message: 'Welcome to FiYDoc! Your health profile and clinical records are now configured.',
+        type: 'profile_created',
+        recipientRole: 'patient',
+        recipientId: user?.id,
+      });
+
       router.replace('/(patient)/(tabs)/home');
     } finally {
       setLoading(false);

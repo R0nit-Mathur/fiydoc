@@ -21,20 +21,39 @@ export class AdminService {
   }
 
   async getAllDoctors(filter?: { status?: string; search?: string }) {
-    const where: any = {};
+    const andClauses: any[] = [];
+
     if (filter?.status) {
-      where.verification = { status: filter.status as VerificationStatus };
+      if (filter.status === 'PENDING') {
+        andClauses.push({
+          OR: [
+            { verification: { status: { in: [VerificationStatus.PENDING, VerificationStatus.REGISTERED, VerificationStatus.INFO_REQUIRED] } } },
+            { verification: null },
+          ],
+        });
+      } else {
+        andClauses.push({
+          verification: { status: filter.status as VerificationStatus },
+        });
+      }
     }
+
     if (filter?.search) {
       const q = filter.search.trim();
-      where.OR = [
-        { fullName: { contains: q, mode: 'insensitive' } },
-        { specialization: { contains: q, mode: 'insensitive' } },
-        { verification: { is: { registrationNumber: { contains: q, mode: 'insensitive' } } } },
-        { clinic: { is: { name: { contains: q, mode: 'insensitive' } } } },
-        { clinic: { is: { address: { contains: q, mode: 'insensitive' } } } },
-      ];
+      andClauses.push({
+        OR: [
+          { fullName: { contains: q, mode: 'insensitive' } },
+          { specialization: { contains: q, mode: 'insensitive' } },
+          { verification: { is: { registrationNumber: { contains: q, mode: 'insensitive' } } } },
+          { clinic: { is: { name: { contains: q, mode: 'insensitive' } } } },
+          { clinic: { is: { address: { contains: q, mode: 'insensitive' } } } },
+          { user: { is: { email: { contains: q, mode: 'insensitive' } } } },
+          { user: { is: { phone: { contains: q, mode: 'insensitive' } } } },
+        ],
+      });
     }
+
+    const where: any = andClauses.length > 0 ? { AND: andClauses } : {};
 
     return this.prisma.doctor.findMany({
       where,
@@ -98,7 +117,23 @@ export class AdminService {
       });
     }
 
-    if (!existing) throw new NotFoundException('Verification request not found.');
+    if (!existing && dto.doctorId) {
+      // Auto-create verification record if doctor exists but verification was missing
+      const doc = await this.prisma.doctor.findUnique({ where: { id: dto.doctorId } });
+      if (doc) {
+        existing = await this.prisma.doctorVerification.create({
+          data: {
+            doctorId: doc.id,
+            registrationNumber: `NMC-${Date.now().toString().slice(-6)}`,
+            registrationAuthority: 'National Medical Commission / State Council',
+            status: VerificationStatus.PENDING,
+          },
+          include: { doctor: { include: { user: true } } },
+        });
+      }
+    }
+
+    if (!existing) throw new NotFoundException('Verification request or doctor record not found.');
 
     let newStatus: VerificationStatus = VerificationStatus.VERIFIED;
     if (dto.action === 'REJECT') newStatus = VerificationStatus.REJECTED;

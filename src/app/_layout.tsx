@@ -8,8 +8,12 @@ import { ErrorBoundary } from '@/components/ui/ErrorBoundary';
 import { Colors } from '@/constants/theme';
 import '../global.css';
 
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import { LocationPermissionModal } from '@/components/location/LocationPermissionModal';
 import { useLocationStore } from '@/store/useLocationStore';
+import { useAuthStore } from '@/store/useAuthStore';
+import { useNotificationStore } from '@/store/useNotificationStore';
+import { notificationService } from '@/services/notificationService';
 
 function GlobalLocationGate() {
   const { latitude, longitude, permissionStatus, isGenuineDeviceLocation } = useLocationStore();
@@ -54,6 +58,54 @@ export default function RootLayout() {
     // Non-blocking server warmup to eliminate cloud cold start latency
     fetch('https://fiydoc.onrender.com/health').catch(() => {});
     checkAutoUpdate();
+
+    // App launch notification & server notification synchronization
+    try {
+      const auth = useAuthStore.getState();
+      if (auth.isAuthenticated && auth.user) {
+        const lastAppOpenKey = 'fiydoc_last_app_open_notif';
+        AsyncStorage.getItem(lastAppOpenKey).then((lastTime) => {
+          const now = Date.now();
+          // Trigger once every 30 minutes on app open
+          if (!lastTime || now - parseInt(lastTime, 10) > 30 * 60 * 1000) {
+            AsyncStorage.setItem(lastAppOpenKey, String(now)).catch(() => {});
+            const displayName = auth.role === 'doctor'
+              ? (auth.user?.name?.startsWith('Dr.') ? auth.user?.name : `Dr. ${auth.user?.name || 'Doctor'}`)
+              : (auth.user?.name || 'User');
+            useNotificationStore.getState().addNotification({
+              title: `Welcome back, ${displayName}`,
+              message: 'Your health dashboard, consultations, and OPD schedule are synchronized with the live server.',
+              type: 'app_open',
+              recipientId: auth.user?.id,
+              recipientRole: auth.role === 'doctor' ? 'doctor' : 'patient',
+            });
+          }
+        }).catch(() => {});
+
+        // Fetch and merge remote server notifications
+        if (auth.user.id) {
+          notificationService.getNotifications(auth.user.id).then((serverNotifs) => {
+            if (Array.isArray(serverNotifs) && serverNotifs.length > 0) {
+              const currentIds = new Set(useNotificationStore.getState().notifications.map((n) => n.id));
+              for (const sn of serverNotifs) {
+                if (!currentIds.has(sn.id)) {
+                  useNotificationStore.getState().addNotification({
+                    id: sn.id,
+                    title: sn.title,
+                    message: sn.message,
+                    type: sn.type,
+                    link: sn.link,
+                    read: sn.read,
+                    recipientId: auth.user?.id,
+                    recipientRole: auth.role === 'doctor' ? 'doctor' : 'patient',
+                  });
+                }
+              }
+            }
+          }).catch(() => {});
+        }
+      }
+    } catch {}
   }, []);
 
   return (

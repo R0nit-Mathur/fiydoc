@@ -21,7 +21,10 @@ import {
   StyleSheet,
   Platform,
   Alert,
+  Modal,
+  KeyboardAvoidingView,
 } from 'react-native';
+import { pickClinicalDocument } from '@/utils/mediaPicker';
 import { useRouter, useLocalSearchParams } from 'expo-router';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Image } from 'expo-image';
@@ -114,30 +117,77 @@ export default function MedicalIntakeScreen() {
 
   // File upload state
   const [attachedFile, setAttachedFile] = useState<string | null>(null);
+  const [attachedFileUri, setAttachedFileUri] = useState<string | null>(null);
+
+  // In-App Input Modal for Allergies, Conditions & Custom Reasons (Never crashes with window.prompt)
+  const [inputModalConfig, setInputModalConfig] = useState<{
+    visible: boolean;
+    title: string;
+    placeholder: string;
+    type: 'allergy' | 'condition' | 'reason';
+    value: string;
+  }>({
+    visible: false,
+    title: '',
+    placeholder: '',
+    type: 'allergy',
+    value: '',
+  });
+
+  const handleOpenInputModal = (type: 'allergy' | 'condition' | 'reason') => {
+    if (type === 'allergy') {
+      setInputModalConfig({
+        visible: true,
+        title: 'Add Known Allergy',
+        placeholder: 'e.g. Penicillin, Sulfa, Peanuts',
+        type: 'allergy',
+        value: '',
+      });
+    } else if (type === 'condition') {
+      setInputModalConfig({
+        visible: true,
+        title: 'Add Pre-existing Condition',
+        placeholder: 'e.g. Hypertension, Asthma, Diabetes',
+        type: 'condition',
+        value: '',
+      });
+    } else {
+      setInputModalConfig({
+        visible: true,
+        title: 'Add Custom Reason / Symptom',
+        placeholder: 'e.g. High fever, Knee joint pain',
+        type: 'reason',
+        value: '',
+      });
+    }
+  };
+
+  const handleSaveModalInput = () => {
+    const val = inputModalConfig.value.trim();
+    if (!val) {
+      setInputModalConfig((prev) => ({ ...prev, visible: false }));
+      return;
+    }
+
+    if (inputModalConfig.type === 'allergy') {
+      if (!isNegationAllergy(val)) {
+        setSevereAllergies((prev) => Array.from(new Set([...prev, val])));
+      }
+    } else if (inputModalConfig.type === 'condition') {
+      setActiveConditions((prev) => Array.from(new Set([...prev, val])));
+    } else if (inputModalConfig.type === 'reason') {
+      setCustomReasons((prev) => Array.from(new Set([...prev, val])));
+      setSelectedReason(val);
+    }
+    setInputModalConfig((prev) => ({ ...prev, visible: false, value: '' }));
+  };
 
   const handlePickDocument = async () => {
     try {
-      let DocumentPickerModule: any = null;
-      try {
-        DocumentPickerModule = require('expo-document-picker');
-      } catch {
-        DocumentPickerModule = null;
-      }
-
-      if (!DocumentPickerModule || !DocumentPickerModule.getDocumentAsync) {
-        alert('Document upload is supported via camera or files on updated builds.');
-        return;
-      }
-
-      const res = await DocumentPickerModule.getDocumentAsync({
-        type: ['application/pdf', 'image/*'],
-        copyToCacheDirectory: true,
-      });
-
-      if (!res.canceled && res.assets && res.assets[0]) {
-        const file = res.assets[0];
-        const sizeMb = file.size ? (file.size / (1024 * 1024)).toFixed(1) : '1.0';
-        setAttachedFile(`${file.name} (${sizeMb} MB)`);
+      const res = await pickClinicalDocument();
+      if (res) {
+        setAttachedFile(res.name);
+        setAttachedFileUri(res.uri);
       }
     } catch (err: any) {
       console.warn('[slot-select] Document pick error:', err?.message);
@@ -209,47 +259,12 @@ export default function MedicalIntakeScreen() {
         fee,
         reason: selectedReason,
         patientName: finalPatientName,
-        patientRelation: patientType === 'family' ? familyMemberRelation : 'Self',
+        patientRelation: patientType === 'family' ? (familyMemberRelation.trim() || 'Family Member') : 'Self',
         notes: symptomNotes,
+        attachedFile: attachedFile || '',
+        attachedFileUri: attachedFileUri || '',
       },
     });
-  };
-
-  const handleAddCustomReason = () => {
-    Alert.prompt
-      ? Alert.prompt('Add Custom Reason', 'Enter primary symptom or visit purpose:', [
-          { text: 'Cancel', style: 'cancel' },
-          {
-            text: 'Add',
-            onPress: (text?: string) => {
-              if (text && text.trim()) {
-                setCustomReasons([...customReasons, text.trim()]);
-                setSelectedReason(text.trim());
-              }
-            },
-          },
-        ])
-      : (() => {
-          const val = prompt('Enter primary symptom or visit purpose:');
-          if (val && val.trim()) {
-            setCustomReasons([...customReasons, val.trim()]);
-            setSelectedReason(val.trim());
-          }
-        })();
-  };
-
-  const handleAddAllergy = () => {
-    const val = prompt ? prompt('Add Allergy Name:') : null;
-    if (val && val.trim() && !isNegationAllergy(val.trim())) {
-      setSevereAllergies([...severeAllergies, val.trim()]);
-    }
-  };
-
-  const handleAddCondition = () => {
-    const val = prompt ? prompt('Add Pre-existing Condition:') : null;
-    if (val && val.trim()) {
-      setActiveConditions([...activeConditions, val.trim()]);
-    }
   };
 
   return (
@@ -393,7 +408,9 @@ export default function MedicalIntakeScreen() {
                   <Text style={styles.cardHeading}>Who is this visit for?</Text>
                 </View>
                 <View style={styles.patientBadge}>
-                  <Text style={styles.patientBadgeText}>Primary Patient</Text>
+                  <Text style={styles.patientBadgeText}>
+                    {patientType === 'family' ? (familyMemberRelation.trim() || 'Family Member') : 'Primary Patient'}
+                  </Text>
                 </View>
               </View>
 
@@ -551,7 +568,7 @@ export default function MedicalIntakeScreen() {
                   })}
 
                   <Pressable
-                    onPress={handleAddCustomReason}
+                    onPress={() => handleOpenInputModal('reason')}
                     style={styles.addOtherChip}
                   >
                     <Plus size={15} color={StitchColors.primary} />
@@ -646,7 +663,7 @@ export default function MedicalIntakeScreen() {
                     </Text>
                   )}
 
-                  <Pressable onPress={handleAddAllergy} style={styles.bgAddChip}>
+                  <Pressable onPress={() => handleOpenInputModal('allergy')} style={styles.bgAddChip}>
                     <Plus size={14} color={StitchColors.primary} />
                     <Text style={styles.bgAddChipText}>Add Allergy</Text>
                   </Pressable>
@@ -662,7 +679,9 @@ export default function MedicalIntakeScreen() {
                     <Activity size={17} color={StitchColors.primary} />
                     <Text style={styles.bgGroupTitle}>Pre-existing Chronic Conditions</Text>
                   </View>
-                  <Text style={styles.bgGroupSub}>Cardiology context</Text>
+                  <Text style={styles.bgGroupSub}>
+                    {params.doctorSpecialty ? `${params.doctorSpecialty} context` : 'Clinical context'}
+                  </Text>
                 </View>
 
                 <View style={styles.bgChipsWrap}>
@@ -692,7 +711,7 @@ export default function MedicalIntakeScreen() {
                     </Pressable>
                   ))}
 
-                  <Pressable onPress={handleAddCondition} style={styles.bgAddChip}>
+                  <Pressable onPress={() => handleOpenInputModal('condition')} style={styles.bgAddChip}>
                     <Plus size={14} color={StitchColors.primary} />
                     <Text style={styles.bgAddChipText}>Add Condition</Text>
                   </Pressable>
@@ -778,9 +797,7 @@ export default function MedicalIntakeScreen() {
                 </View>
 
                 <Pressable
-                  onPress={() => {
-                    setAttachedFile('ecg_report_aug2023.pdf (1.2 MB)');
-                  }}
+                  onPress={handlePickDocument}
                   style={styles.dropzone}
                 >
                   <View style={styles.dropzoneIconWrap}>
@@ -794,11 +811,12 @@ export default function MedicalIntakeScreen() {
                   {attachedFile && (
                     <View style={styles.filePill}>
                       <FileText size={14} color={StitchColors.secondary} />
-                      <Text style={styles.fileNameText}>{attachedFile}</Text>
+                      <Text style={styles.fileNameText} numberOfLines={1}>{attachedFile}</Text>
                       <Pressable
                         onPress={(e) => {
                           e.stopPropagation();
                           setAttachedFile(null);
+                          setAttachedFileUri(null);
                         }}
                         hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
                       >
@@ -858,7 +876,12 @@ export default function MedicalIntakeScreen() {
               onPress={nextStep}
               style={({ pressed }) => [styles.primaryActionBtn, pressed && styles.buttonPressed]}
             >
-              <Text style={styles.primaryActionText}>
+              <Text
+                style={styles.primaryActionText}
+                numberOfLines={1}
+                adjustsFontSizeToFit
+                minimumFontScale={0.8}
+              >
                 {currentStep === 0
                   ? 'Continue to History'
                   : currentStep === 1
@@ -881,6 +904,57 @@ export default function MedicalIntakeScreen() {
           </Pressable>
         </View>
       </View>
+
+      {/* Dynamic Modal for adding Allergies, Conditions, or Custom Reasons */}
+      <Modal
+        visible={inputModalConfig.visible}
+        transparent
+        animationType="fade"
+        onRequestClose={() => setInputModalConfig((prev) => ({ ...prev, visible: false }))}
+      >
+        <KeyboardAvoidingView
+          behavior={Platform.OS === 'ios' ? 'padding' : undefined}
+          style={styles.inputModalBackdrop}
+        >
+          <View style={styles.inputModalCard}>
+            <View style={styles.inputModalHeader}>
+              <Text style={styles.inputModalTitle}>{inputModalConfig.title}</Text>
+              <Pressable
+                onPress={() => setInputModalConfig((prev) => ({ ...prev, visible: false }))}
+                hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+              >
+                <X size={20} color={StitchColors.onSurfaceVariant} />
+              </Pressable>
+            </View>
+
+            <TextInput
+              style={styles.inputModalTextInput}
+              placeholder={inputModalConfig.placeholder}
+              placeholderTextColor={StitchColors.outline}
+              value={inputModalConfig.value}
+              onChangeText={(text) => setInputModalConfig((prev) => ({ ...prev, value: text }))}
+              autoFocus
+              returnKeyType="done"
+              onSubmitEditing={handleSaveModalInput}
+            />
+
+            <View style={styles.inputModalActions}>
+              <Pressable
+                onPress={() => setInputModalConfig((prev) => ({ ...prev, visible: false }))}
+                style={styles.inputModalCancelBtn}
+              >
+                <Text style={styles.inputModalCancelText}>Cancel</Text>
+              </Pressable>
+              <Pressable
+                onPress={handleSaveModalInput}
+                style={styles.inputModalSaveBtn}
+              >
+                <Text style={styles.inputModalSaveText}>Add</Text>
+              </Pressable>
+            </View>
+          </View>
+        </KeyboardAvoidingView>
+      </Modal>
     </SafeAreaView>
   );
 }
@@ -1373,11 +1447,14 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
+    flexWrap: 'wrap',
+    gap: 8,
   },
   bgGroupTitleRow: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: 6,
+    flexShrink: 1,
   },
   bgGroupTitle: {
     fontSize: 13,
@@ -1726,5 +1803,83 @@ const styles = StyleSheet.create({
     textDecorationLine: 'underline',
     fontWeight: '600',
     color: StitchColors.primary,
+  },
+
+  /* Input Modal Styles */
+  inputModalBackdrop: {
+    flex: 1,
+    backgroundColor: 'rgba(0, 0, 0, 0.5)',
+    justifyContent: 'center',
+    alignItems: 'center',
+    padding: 20,
+  },
+  inputModalCard: {
+    width: '100%',
+    maxWidth: 400,
+    backgroundColor: '#ffffff',
+    borderRadius: 20,
+    padding: 20,
+    gap: 16,
+    ...Platform.select({
+      ios: {
+        shadowColor: '#000',
+        shadowOffset: { width: 0, height: 4 },
+        shadowOpacity: 0.15,
+        shadowRadius: 12,
+      },
+      android: {
+        elevation: 6,
+      },
+      web: {
+        boxShadow: '0 4px 20px rgba(0, 0, 0, 0.15)',
+      },
+    }),
+  },
+  inputModalHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+  },
+  inputModalTitle: {
+    fontSize: 16,
+    fontWeight: '700',
+    color: StitchColors.onSurface,
+  },
+  inputModalTextInput: {
+    backgroundColor: StitchColors.surfaceContainerLow,
+    borderRadius: 12,
+    paddingHorizontal: 14,
+    paddingVertical: 12,
+    fontSize: 14,
+    color: StitchColors.onSurface,
+    borderWidth: 1,
+    borderColor: 'rgba(195, 198, 211, 0.4)',
+  },
+  inputModalActions: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'flex-end',
+    gap: 12,
+  },
+  inputModalCancelBtn: {
+    paddingVertical: 10,
+    paddingHorizontal: 16,
+    borderRadius: 10,
+  },
+  inputModalCancelText: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: StitchColors.onSurfaceVariant,
+  },
+  inputModalSaveBtn: {
+    backgroundColor: StitchColors.primary,
+    paddingVertical: 10,
+    paddingHorizontal: 20,
+    borderRadius: 10,
+  },
+  inputModalSaveText: {
+    fontSize: 14,
+    fontWeight: '700',
+    color: '#ffffff',
   },
 });

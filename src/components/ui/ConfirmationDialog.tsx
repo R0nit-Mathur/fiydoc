@@ -58,6 +58,8 @@ export function ConfirmationDialog({
 
   const IconComp = iconVariant === 'warning' ? AlertTriangle : iconVariant === 'danger' ? AlertCircle : Info;
 
+  const shouldStack = (cancelText?.length || 0) > 11 || (confirmText?.length || 0) > 13;
+
   return (
     <Modal
       transparent
@@ -79,27 +81,41 @@ export function ConfirmationDialog({
           </View>
 
           {/* Action Buttons */}
-          <View style={styles.buttonRow}>
-            <TouchableOpacity
-              onPress={onCancel}
-              disabled={loading}
-              activeOpacity={0.8}
-              style={styles.cancelButton}
-            >
-              <Text style={styles.cancelButtonText}>{cancelText}</Text>
-            </TouchableOpacity>
-
+          <View style={[styles.buttonRow, shouldStack && styles.buttonColumn]}>
             <TouchableOpacity
               onPress={onConfirm}
               disabled={loading}
               activeOpacity={0.8}
-              style={[styles.confirmButton, { backgroundColor: confirmBtnBg }]}
+              style={[styles.confirmButton, { backgroundColor: confirmBtnBg }, shouldStack && styles.fullWidthBtn]}
             >
               {loading ? (
                 <ActivityIndicator size="small" color="#FFFFFF" />
               ) : (
-                <Text style={styles.confirmButtonText}>{confirmText}</Text>
+                <Text
+                  style={styles.confirmButtonText}
+                  numberOfLines={1}
+                  adjustsFontSizeToFit
+                  minimumFontScale={0.8}
+                >
+                  {confirmText}
+                </Text>
               )}
+            </TouchableOpacity>
+
+            <TouchableOpacity
+              onPress={onCancel}
+              disabled={loading}
+              activeOpacity={0.8}
+              style={[styles.cancelButton, shouldStack && styles.fullWidthBtn]}
+            >
+              <Text
+                style={styles.cancelButtonText}
+                numberOfLines={1}
+                adjustsFontSizeToFit
+                minimumFontScale={0.8}
+              >
+                {cancelText}
+              </Text>
             </TouchableOpacity>
           </View>
         </Pressable>
@@ -118,10 +134,10 @@ const styles = StyleSheet.create({
   },
   dialogContainer: {
     width: '100%',
-    maxWidth: 340,
+    maxWidth: 380,
     backgroundColor: Palette.card,
     borderRadius: BorderRadius['2xl'],
-    padding: Spacing['2xl'],
+    padding: Spacing.xl,
     alignItems: 'center',
     borderWidth: 1,
     borderColor: Palette.cardBorderLight,
@@ -137,7 +153,7 @@ const styles = StyleSheet.create({
   },
   textContainer: {
     alignItems: 'center',
-    marginBottom: Spacing['2xl'],
+    marginBottom: Spacing.xl,
     gap: Spacing.xs,
   },
   titleText: {
@@ -152,13 +168,21 @@ const styles = StyleSheet.create({
   },
   buttonRow: {
     flexDirection: 'row',
-    gap: Spacing.md,
+    gap: Spacing.sm,
     width: '100%',
+  },
+  buttonColumn: {
+    flexDirection: 'column',
+    gap: Spacing.sm,
+  },
+  fullWidthBtn: {
+    width: '100%',
+    flex: undefined,
   },
   cancelButton: {
     flex: 1,
-    paddingVertical: Spacing.md,
-    paddingHorizontal: Spacing.lg,
+    paddingVertical: 12,
+    paddingHorizontal: Spacing.sm,
     borderRadius: BorderRadius.xl,
     backgroundColor: Palette.background,
     borderWidth: 1,
@@ -170,11 +194,12 @@ const styles = StyleSheet.create({
     fontSize: 14,
     fontWeight: '700',
     color: Palette.textSecondary,
+    textAlign: 'center',
   },
   confirmButton: {
-    flex: 1.2,
-    paddingVertical: Spacing.md,
-    paddingHorizontal: Spacing.lg,
+    flex: 1,
+    paddingVertical: 12,
+    paddingHorizontal: Spacing.sm,
     borderRadius: BorderRadius.xl,
     alignItems: 'center',
     justifyContent: 'center',
@@ -184,5 +209,6 @@ const styles = StyleSheet.create({
     fontSize: 14,
     fontWeight: '800',
     color: '#FFFFFF',
+    textAlign: 'center',
   },
 });

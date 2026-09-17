@@ -48,6 +48,7 @@ import {
   X,
   Sparkles,
   Info,
+  FileText,
 } from 'lucide-react-native';
 
 import { useAppointmentStore } from '@/store/useAppointmentStore';
@@ -91,6 +92,9 @@ export default function BookingConfirmScreen() {
     notes?: string;
     patientName?: string;
     patientPhone?: string;
+    patientRelation?: string;
+    attachedFile?: string;
+    attachedFileUri?: string;
   }>();
   const { colors, isDark } = useAppTheme();
   const insets = useSafeAreaInsets();
@@ -139,11 +143,15 @@ export default function BookingConfirmScreen() {
   const [couponApplied, setCouponApplied] = useState(true);
 
   // Patient info state with solid defaults so booking is never blocked
+  const isFamily = Boolean(params.patientRelation && params.patientRelation.toLowerCase() !== 'self');
   const [patientName, setPatientName] = useState(
     params.patientName || user?.name || (user?.email ? user.email.split('@')[0] : '') || 'Patient'
   );
   const [patientPhone, setPatientPhone] = useState(
     params.patientPhone || user?.phone || '9876543210'
+  );
+  const [patientRelation, setPatientRelation] = useState(
+    isFamily ? params.patientRelation! : 'Self'
   );
   const [patientAge, setPatientAge] = useState(user?.age ? String(user.age) : '');
   const [patientGender, setPatientGender] = useState(user?.gender || '');
@@ -386,8 +394,10 @@ export default function BookingConfirmScreen() {
                 <Text style={[styles.patientNameText, { color: patientName ? colors.text : StitchColors.error }]}>
                   {patientName || 'Enter Patient Name *'}
                 </Text>
-                <View style={styles.selfTag}>
-                  <Text style={styles.selfTagText}>Self</Text>
+                <View style={[styles.selfTag, isFamily && styles.familyTag]}>
+                  <Text style={[styles.selfTagText, isFamily && styles.familyTagText]}>
+                    {patientRelation || 'Self'}
+                  </Text>
                 </View>
               </View>
               <Text style={[styles.patientMetaText, { color: colors.textSecondary }]}>
@@ -409,6 +419,19 @@ export default function BookingConfirmScreen() {
               </View>
             </View>
           )}
+
+          {/* Attached Medical Document Pill */}
+          {params.attachedFile ? (
+            <View style={styles.attachedDocRow}>
+              <Text style={[styles.symptomsLabel, { color: colors.textMuted }]}>ATTACHED RECORD:</Text>
+              <View style={[styles.attachedDocPill, { backgroundColor: colors.backgroundElement, borderColor: colors.border }]}>
+                <FileText size={14} color={StitchColors.primaryContainer} />
+                <Text style={[styles.attachedDocText, { color: colors.text }]} numberOfLines={1}>
+                  {params.attachedFile}
+                </Text>
+              </View>
+            </View>
+          ) : null}
         </Animated.View>
 
         {/* Promo Code & Coupon Card */}
@@ -558,6 +581,17 @@ export default function BookingConfirmScreen() {
               <TextInput
                 value={patientName}
                 onChangeText={setPatientName}
+                style={[styles.editTextInput, { color: colors.text, borderColor: colors.border }]}
+              />
+            </View>
+
+            <View style={styles.editInputGroup}>
+              <Text style={[styles.editLabel, { color: colors.textMuted }]}>Relationship</Text>
+              <TextInput
+                value={patientRelation}
+                onChangeText={setPatientRelation}
+                placeholder="Self, Father, Mother, Spouse, Child, etc."
+                placeholderTextColor={colors.textMuted}
                 style={[styles.editTextInput, { color: colors.text, borderColor: colors.border }]}
               />
             </View>
@@ -847,6 +881,13 @@ const styles = StyleSheet.create({
     fontWeight: '700',
     color: '#0F766E',
   },
+  familyTag: {
+    backgroundColor: '#F5F3FF',
+    borderColor: '#DDD6FE',
+  },
+  familyTagText: {
+    color: '#6D28D9',
+  },
   patientMetaText: {
     fontSize: 12,
     marginTop: 3,
@@ -877,6 +918,27 @@ const styles = StyleSheet.create({
   symptomPillText: {
     fontSize: 11,
     fontWeight: '600',
+  },
+  attachedDocRow: {
+    marginTop: 10,
+    paddingTop: 8,
+    borderTopWidth: StyleSheet.hairlineWidth,
+    borderTopColor: '#E2E8F0',
+  },
+  attachedDocPill: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    paddingHorizontal: 10,
+    paddingVertical: 6,
+    borderRadius: 8,
+    borderWidth: 1,
+    marginTop: 2,
+  },
+  attachedDocText: {
+    fontSize: 12,
+    fontWeight: '600',
+    flex: 1,
   },
 
   /* Coupon */

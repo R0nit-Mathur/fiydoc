@@ -10,7 +10,7 @@
  * - App preferences & Log out
  */
 
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import {
   View,
   Text,
@@ -56,6 +56,7 @@ import {
 import { TouchableOpacity } from 'react-native';
 
 import { useAuthStore } from '@/store/useAuthStore';
+import { useNotificationStore } from '@/store/useNotificationStore';
 import { signOutAll } from '@/services/authService';
 import { useAppTheme } from '@/hooks/useAppTheme';
 import { BorderRadius, Shadows, StitchColors, Palette } from '@/constants/theme';
@@ -121,6 +122,56 @@ export default function DoctorProfileScreen() {
   const [savingDocShifts, setSavingDocShifts] = useState(false);
   const [savingDocProfile, setSavingDocProfile] = useState(false);
 
+  // Sync profile data from server on mount
+  useEffect(() => {
+    let isMounted = true;
+    const fetchDocProfile = async () => {
+      try {
+        const data = await doctorService.getMyProfile();
+        if (!isMounted || !data) return;
+        const resolvedName = data.user?.fullName || data.fullName || data.name || user?.name || '';
+        const resolvedSpec = data.specialization || data.specialty || user?.specialization || '';
+        const resolvedFee = data.consultationFee != null ? String(data.consultationFee) : (user?.consultationFee ? String(user.consultationFee) : '');
+        const resolvedAvatar = data.user?.profilePhoto || data.profilePhoto || user?.avatar || undefined;
+        const cName = data.clinic?.name || data.clinicName || user?.clinicName || '';
+        const cAddr = data.clinic?.address || data.clinicAddress || user?.clinicAddress || '';
+        const cTimings = data.clinicTimings || user?.clinicTimings || '10:30 AM – 1:30 PM • 5:00 PM – 8:00 PM';
+        const qual = data.qualification || user?.qualification || '';
+
+        setDocName(resolvedName);
+        setDocSpec(resolvedSpec);
+        setDocAvatar(resolvedAvatar);
+        setOpdFee(resolvedFee);
+        setTempName(resolvedName);
+        setTempSpec(resolvedSpec);
+        setTempAvatar(resolvedAvatar);
+        setTempFee(resolvedFee);
+        setTempQual(qual);
+        setTempClinicName(cName);
+        setTempClinicAddress(cAddr);
+        setTempClinicTimings(cTimings);
+
+        updateUser({
+          name: resolvedName,
+          specialization: resolvedSpec,
+          specialty: resolvedSpec,
+          consultationFee: resolvedFee,
+          avatar: resolvedAvatar,
+          qualification: qual,
+          clinicName: cName,
+          clinicAddress: cAddr,
+          clinicTimings: cTimings,
+        });
+      } catch (err) {
+        console.warn('[DoctorProfile] Failed to load server profile:', err);
+      }
+    };
+    fetchDocProfile();
+    return () => {
+      isMounted = false;
+    };
+  }, []);
+
   const handleSaveFee = async () => {
     setSavingDocFee(true);
     try {
@@ -128,10 +179,18 @@ export default function DoctorProfileScreen() {
       updateUser({ consultationFee: tempFee });
       try {
         await doctorService.updateMyProfile({ consultationFee: Number(tempFee) });
-      } catch {
-        // Preserve the local draft for an offline doctor; it will remain visible on this device.
+        Alert.alert('Success', 'Consultation fee updated.');
+      } catch (err: any) {
+        Alert.alert('Notice', err?.message || 'Failed to update fee on server. Saved locally.');
       }
       setShowFeeModal(false);
+      useNotificationStore.getState().addNotification({
+        title: 'Consultation Fee Updated',
+        message: `Your OPD consultation fee has been updated to ₹${tempFee}.`,
+        type: 'profile_updated',
+        recipientRole: 'doctor',
+        recipientId: user?.id,
+      });
       if (Platform.OS !== 'web') Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
     } finally {
       setSavingDocFee(false);
@@ -153,10 +212,18 @@ export default function DoctorProfileScreen() {
       updateUser({ clinicTimings: combinedTimings });
       try {
         await doctorService.updateMyProfile({ clinicTimings: combinedTimings });
-      } catch {
-        // Local state preserved
+        Alert.alert('Success', 'Practice shifts updated.');
+      } catch (err: any) {
+        Alert.alert('Notice', err?.message || 'Failed to sync shifts to server.');
       }
       setShowShiftsModal(false);
+      useNotificationStore.getState().addNotification({
+        title: 'Practice Shifts Updated',
+        message: `Your OPD timings are now configured as ${combinedTimings}.`,
+        type: 'profile_updated',
+        recipientRole: 'doctor',
+        recipientId: user?.id,
+      });
       if (Platform.OS !== 'web') Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
     } finally {
       setSavingDocShifts(false);
@@ -186,8 +253,9 @@ export default function DoctorProfileScreen() {
           clinicAddress: cleanClinicAddress,
           clinicTimings: cleanClinicTimings,
         });
-      } catch {
-        // Save locally to maintain responsive user experience
+        Alert.alert('Success', 'Profile updated successfully.');
+      } catch (err: any) {
+        Alert.alert('Update Notice', err?.message || 'Could not sync updates to server immediately. Changes saved locally.');
       }
       setDocName(cleanName);
       setDocSpec(cleanSpec);
@@ -203,6 +271,13 @@ export default function DoctorProfileScreen() {
         clinicTimings: cleanClinicTimings,
       });
       setShowEditProfileModal(false);
+      useNotificationStore.getState().addNotification({
+        title: 'Doctor Profile Updated',
+        message: 'Your clinic details, specialization, and profile parameters were saved.',
+        type: 'profile_updated',
+        recipientRole: 'doctor',
+        recipientId: user?.id,
+      });
       if (Platform.OS !== 'web') Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
     } finally {
       setSavingDocProfile(false);

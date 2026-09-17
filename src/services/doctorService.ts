@@ -8,6 +8,9 @@ export interface DoctorFilters {
 
 export interface SlotDetails {
   slots: string[];
+  allGeneratedSlots?: string[];
+  slotDurationMinutes?: number;
+  patientsPerSlot?: number;
   delayMinutes?: number;
   delayReason?: string | null;
   isOnLeave?: boolean;
@@ -64,6 +67,9 @@ export const doctorService = {
     const res = await apiClient<SlotDetails>(`/doctors/${doctorId}/slots?date=${date}`);
     return {
       slots: res.slots || [],
+      allGeneratedSlots: res.allGeneratedSlots || res.slots || [],
+      slotDurationMinutes: res.slotDurationMinutes || 15,
+      patientsPerSlot: res.patientsPerSlot || 1,
       delayMinutes: res.delayMinutes || 0,
       delayReason: res.delayReason || null,
       isOnLeave: Boolean(res.isOnLeave),
@@ -78,8 +84,8 @@ export const doctorService = {
     });
   },
 
-  applyScheduleLeave: async (payload: { doctorId?: string; date: string; reason?: string }) => {
-    return apiClient<{ success: boolean; isOnLeave: boolean; reason?: string }>('/doctors/schedule/leave', {
+  applyScheduleLeave: async (payload: { doctorId?: string; date?: string; startDate?: string; endDate?: string; reason?: string }) => {
+    return apiClient<{ success: boolean; isOnLeave: boolean; reason?: string; affectedDates?: string[] }>('/doctors/schedule/leave', {
       method: 'POST',
       body: JSON.stringify(payload),
     });
@@ -109,6 +115,34 @@ export const doctorService = {
     if (endDate) params.append('endDate', endDate);
     const qs = params.toString() ? `?${params.toString()}` : '';
     return apiClient<Record<string, SlotDetails>>(`/doctors/${doctorId}/schedule/week${qs}`);
+  },
+
+  manageCustomSlot: async (data: {
+    doctorId?: string;
+    date: string;
+    time: string;
+    action: 'add' | 'remove' | 'block';
+  }): Promise<SlotDetails> => {
+    return apiClient<SlotDetails>('/doctors/schedule/custom-slot', {
+      method: 'POST',
+      body: JSON.stringify(data),
+    });
+  },
+
+  updateScheduleSettings: async (data: {
+    doctorId?: string;
+    date?: string;
+    slotDurationMinutes?: number;
+    patientsPerSlot?: number;
+    morningStart?: string;
+    morningEnd?: string;
+    eveningStart?: string;
+    eveningEnd?: string;
+  }): Promise<any> => {
+    return apiClient('/doctors/schedule/settings', {
+      method: 'POST',
+      body: JSON.stringify(data),
+    });
   },
 };
 

@@ -73,9 +73,20 @@ export class PatientsService {
 
     try {
       if (dto.phone !== undefined || dto.email !== undefined) {
+        const user = await this.prisma.user.findUnique({ where: { id: existing.userId } });
         const updateUserData: any = {};
-        if (dto.phone !== undefined) updateUserData.phone = dto.phone ? dto.phone.trim() : null;
-        if (dto.email !== undefined) updateUserData.email = dto.email ? dto.email.trim().toLowerCase() : null;
+        if (dto.phone !== undefined && dto.phone.trim() !== '') {
+          const cleanPhone = dto.phone.trim();
+          if (cleanPhone !== user?.phone) {
+            updateUserData.phone = cleanPhone;
+          }
+        }
+        if (dto.email !== undefined && dto.email.trim() !== '') {
+          const cleanEmail = dto.email.trim().toLowerCase();
+          if (cleanEmail !== user?.email) {
+            updateUserData.email = cleanEmail;
+          }
+        }
         if (Object.keys(updateUserData).length > 0) {
           await this.prisma.user.update({
             where: { id: existing.userId },

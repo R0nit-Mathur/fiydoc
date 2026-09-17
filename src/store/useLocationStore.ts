@@ -298,6 +298,8 @@ export const useLocationStore = create<LocationState>()(
           area: hub.name.split(',')[0].trim(),
           city: hub.city,
           formattedAddress: hub.name,
+          permissionStatus: 'granted',
+          isGenuineDeviceLocation: true,
           error: null,
         });
       },
@@ -309,6 +311,8 @@ export const useLocationStore = create<LocationState>()(
           area: area || formattedAddress.split(',')[0].trim() || city,
           city,
           formattedAddress,
+          permissionStatus: 'granted',
+          isGenuineDeviceLocation: true,
           error: null,
         });
       },

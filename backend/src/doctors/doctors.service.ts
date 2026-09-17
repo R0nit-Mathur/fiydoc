@@ -1,6 +1,6 @@
 import { ForbiddenException, Injectable, NotFoundException, UnauthorizedException } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
-import { VerificationStatus } from '@prisma/client';
+import { VerificationStatus, Role } from '@prisma/client';
 
 @Injectable()
 export class DoctorsService {
@@ -177,7 +177,7 @@ export class DoctorsService {
 
   async getMyDoctorProfile(currentUser: any) {
     if (!currentUser?.id) throw new UnauthorizedException('Authentication required.');
-    const doctor =
+    let doctor =
       (await this.prisma.doctor.findFirst({
         where: {
           OR: [
@@ -198,6 +198,53 @@ export class DoctorsService {
             include: { qualifications: true, clinic: true, verification: true, availabilities: true },
           })
         : null);
+
+    if (!doctor && currentUser.role === Role.DOCTOR) {
+      const doctorName = (currentUser.email ? currentUser.email.split('@')[0] : 'Doctor');
+      const cleanName = doctorName.startsWith('Dr.') ? doctorName : `Dr. ${doctorName}`;
+      const defaultAvailabilities: { dayOfWeek: number; startTime: string; endTime: string; slotDurationMinutes: number }[] = [];
+      for (let day = 1; day <= 6; day++) {
+        defaultAvailabilities.push(
+          { dayOfWeek: day, startTime: '09:00', endTime: '13:00', slotDurationMinutes: 30 },
+          { dayOfWeek: day, startTime: '17:00', endTime: '20:00', slotDurationMinutes: 30 },
+        );
+      }
+      try {
+        doctor = await this.prisma.doctor.create({
+          data: {
+            userId: currentUser.id,
+            fullName: cleanName,
+            specialization: 'General Medicine',
+            consultationFee: 500,
+            clinic: {
+              create: {
+                name: `${cleanName}'s Clinic`,
+                address: 'Clinical Practice Address Pending',
+                timings: '09:00 - 13:00, 17:00 - 20:00',
+              },
+            },
+            availabilities: {
+              create: defaultAvailabilities,
+            },
+            verification: {
+              create: {
+                registrationNumber: `NMC-${Date.now().toString().slice(-6)}`,
+                registrationAuthority: 'National Medical Commission / State Council',
+                status: VerificationStatus.PENDING,
+              },
+            },
+          },
+          include: {
+            qualifications: true,
+            clinic: true,
+            verification: true,
+            availabilities: true,
+          },
+        });
+      } catch (err: any) {
+        console.warn('[doctors] getMyDoctorProfile auto-heal failed:', err?.message);
+      }
+    }
 
     if (!doctor) throw new NotFoundException('Doctor profile not found for this account.');
     return this.formatDoctor(doctor);
@@ -309,10 +356,56 @@ export class DoctorsService {
     slotDurationMinutes?: number;
     experienceYears?: number;
   }) {
-    const doctor = await this.prisma.doctor.findUnique({
+    let doctor = await this.prisma.doctor.findUnique({
       where: { userId },
       include: { verification: true, availabilities: true },
     });
+
+    if (!doctor) {
+      const user = await this.prisma.user.findUnique({ where: { id: userId } });
+      if (user && user.role === Role.DOCTOR) {
+        const doctorName = (user.email ? user.email.split('@')[0] : 'Doctor');
+        const cleanName = dto.fullName?.trim() || (doctorName.startsWith('Dr.') ? doctorName : `Dr. ${doctorName}`);
+        const defaultAvailabilities: { dayOfWeek: number; startTime: string; endTime: string; slotDurationMinutes: number }[] = [];
+        for (let day = 1; day <= 6; day++) {
+          defaultAvailabilities.push(
+            { dayOfWeek: day, startTime: '09:00', endTime: '13:00', slotDurationMinutes: 30 },
+            { dayOfWeek: day, startTime: '17:00', endTime: '20:00', slotDurationMinutes: 30 },
+          );
+        }
+        try {
+          doctor = await this.prisma.doctor.create({
+            data: {
+              userId: user.id,
+              fullName: cleanName,
+              specialization: dto.specialization?.trim() || 'General Medicine',
+              consultationFee: dto.consultationFee && dto.consultationFee > 0 ? dto.consultationFee : 500,
+              clinic: {
+                create: {
+                  name: dto.clinicName?.trim() || `${cleanName}'s Clinic`,
+                  address: dto.clinicAddress?.trim() || 'Clinical Practice Address Pending',
+                  timings: dto.clinicTimings?.trim() || '09:00 - 13:00, 17:00 - 20:00',
+                },
+              },
+              availabilities: {
+                create: defaultAvailabilities,
+              },
+              verification: {
+                create: {
+                  registrationNumber: `NMC-${Date.now().toString().slice(-6)}`,
+                  registrationAuthority: 'National Medical Commission / State Council',
+                  status: VerificationStatus.PENDING,
+                },
+              },
+            },
+            include: { verification: true, availabilities: true },
+          });
+        } catch (err: any) {
+          console.warn('[doctors] updateDoctorProfile auto-heal failed:', err?.message);
+        }
+      }
+    }
+
     if (!doctor) throw new ForbiddenException('Only doctors can update a practice profile.');
 
     const nameChanged = dto.fullName?.trim() && dto.fullName.trim() !== doctor.fullName;
@@ -508,47 +601,7 @@ export class DoctorsService {
     }
     const dayOfWeek = dateObj.getDay();
 
-    const matchingAvailabilities = (doctor.availabilities || []).filter(
-      (a) => a.dayOfWeek === dayOfWeek
-    );
-
-    let candidateSlots: string[] = [];
-
-    if (matchingAvailabilities.length > 0) {
-      for (const avail of matchingAvailabilities) {
-        const slotDuration = avail.slotDurationMinutes || 30;
-        const [startH, startM] = avail.startTime.split(':').map(Number);
-        const [endH, endM] = avail.endTime.split(':').map(Number);
-
-        let currentMinutes = startH * 60 + startM;
-        const endMinutes = endH * 60 + endM;
-
-        while (currentMinutes + slotDuration <= endMinutes) {
-          const h = Math.floor(currentMinutes / 60);
-          const m = currentMinutes % 60;
-          const timeStr = `${String(h).padStart(2, '0')}:${String(m).padStart(2, '0')}`;
-          candidateSlots.push(timeStr);
-          currentMinutes += slotDuration;
-        }
-      }
-    } else if (doctor.clinic?.timings && (!doctor.availabilities || doctor.availabilities.length === 0)) {
-      // Fallback: parse clinic timings string if doctor has no explicit availabilities configured
-      const intervals = this.parseTimingsToIntervals(doctor.clinic.timings);
-      for (const interval of intervals) {
-        const [startH, startM] = interval.startTime.split(':').map(Number);
-        const [endH, endM] = interval.endTime.split(':').map(Number);
-        let currentMinutes = startH * 60 + startM;
-        const endMinutes = endH * 60 + endM;
-        while (currentMinutes + 30 <= endMinutes) {
-          const h = Math.floor(currentMinutes / 60);
-          const m = currentMinutes % 60;
-          candidateSlots.push(`${String(h).padStart(2, '0')}:${String(m).padStart(2, '0')}`);
-          currentMinutes += 30;
-        }
-      }
-    }
-
-    // Check for schedule override (delay / leave)
+    // Check for schedule override (delay / leave / custom slots / capacity)
     const cleanDate = (date ? String(date).split('T')[0] : new Date().toISOString().split('T')[0]).trim();
     let override: any = null;
     try {
@@ -576,14 +629,70 @@ export class DoctorsService {
         date: cleanDate,
         doctorId: doctor.id,
         slots: [],
+        allGeneratedSlots: [],
         isOnLeave: true,
         leaveReason: override.reason || 'Doctor is on leave on this date',
       };
     }
 
+    const matchingAvailabilities = (doctor.availabilities || []).filter(
+      (a) => a.dayOfWeek === dayOfWeek
+    );
+
+    let candidateSlots: string[] = [];
+
+    if (matchingAvailabilities.length > 0) {
+      for (const avail of matchingAvailabilities) {
+        const slotDuration = override?.slotDurationMinutes || avail.slotDurationMinutes || 15;
+        const [startH, startM] = avail.startTime.split(':').map(Number);
+        const [endH, endM] = avail.endTime.split(':').map(Number);
+
+        let currentMinutes = startH * 60 + startM;
+        const endMinutes = endH * 60 + endM;
+
+        while (currentMinutes + slotDuration <= endMinutes) {
+          const h = Math.floor(currentMinutes / 60);
+          const m = currentMinutes % 60;
+          const timeStr = `${String(h).padStart(2, '0')}:${String(m).padStart(2, '0')}`;
+          candidateSlots.push(timeStr);
+          currentMinutes += slotDuration;
+        }
+      }
+    } else if (doctor.clinic?.timings && (!doctor.availabilities || doctor.availabilities.length === 0)) {
+      // Fallback: parse clinic timings string if doctor has no explicit availabilities configured
+      const intervals = this.parseTimingsToIntervals(doctor.clinic.timings);
+      const slotDuration = override?.slotDurationMinutes || 15;
+      for (const interval of intervals) {
+        const [startH, startM] = interval.startTime.split(':').map(Number);
+        const [endH, endM] = interval.endTime.split(':').map(Number);
+        let currentMinutes = startH * 60 + startM;
+        const endMinutes = endH * 60 + endM;
+        while (currentMinutes + slotDuration <= endMinutes) {
+          const h = Math.floor(currentMinutes / 60);
+          const m = currentMinutes % 60;
+          candidateSlots.push(`${String(h).padStart(2, '0')}:${String(m).padStart(2, '0')}`);
+          currentMinutes += slotDuration;
+        }
+      }
+    }
+
+    // Combine with customSlots and remove blockedSlots
+    const blockedSet = new Set(Array.isArray(override?.blockedSlots) ? override.blockedSlots : []);
+    const customList = Array.isArray(override?.customSlots) ? override.customSlots : [];
+
+    let candidateSlotsCombined = Array.from(new Set([...candidateSlots, ...customList]))
+      .filter((slot) => !blockedSet.has(slot));
+
+    // Sort chronologically
+    candidateSlotsCombined.sort((a, b) => {
+      const [ha, ma] = a.split(':').map(Number);
+      const [hb, mb] = b.split(':').map(Number);
+      return (ha * 60 + ma) - (hb * 60 + mb);
+    });
+
     const delayMinutes = override?.delayMinutes || 0;
     if (delayMinutes > 0) {
-      candidateSlots = candidateSlots.map((slot) => this.shift24hTime(slot, delayMinutes));
+      candidateSlotsCombined = candidateSlotsCombined.map((slot) => this.shift24hTime(slot, delayMinutes));
     }
 
     const bookedAppointments = await this.prisma.appointment.findMany({
@@ -596,7 +705,7 @@ export class DoctorsService {
     });
 
     // Count bookings per time slot to support patientsPerSlot
-    const patientsPerSlot = (doctor as any).patientsPerSlot || 1;
+    const patientsPerSlot = override?.patientsPerSlot || (doctor as any).patientsPerSlot || 1;
     const bookedCountByTime = new Map<string, number>();
     for (const apt of bookedAppointments) {
       const slotKey = apt.startTime.slice(0, 5);
@@ -612,7 +721,7 @@ export class DoctorsService {
     const isToday = cleanDate === todayIso || cleanDate === todayLocal;
     const currentMinutes = now.getHours() * 60 + now.getMinutes();
 
-    const availableSlots = candidateSlots.filter((slot) => {
+    const availableSlots = candidateSlotsCombined.filter((slot) => {
       // Check if slot is still under patient capacity
       const bookedCount = bookedCountByTime.get(slot) || 0;
       if (bookedCount >= patientsPerSlot) return false;
@@ -633,7 +742,9 @@ export class DoctorsService {
       date: cleanDate,
       doctorId: doctor.id,
       patientsPerSlot,
+      slotDurationMinutes: override?.slotDurationMinutes || 15,
       slots: availableSlots,
+      allGeneratedSlots: candidateSlotsCombined,
       delayMinutes,
       delayReason: override?.reason || null,
       isOnLeave: false,
@@ -767,9 +878,10 @@ export class DoctorsService {
 
   async applyScheduleLeave(
     doctorId: string | undefined,
-    date: string,
+    dateOrStartDate: string,
     reason?: string,
-    currentUser?: any
+    currentUser?: any,
+    endDate?: string,
   ) {
     const doctor = await this.prisma.doctor.findFirst({
       where: {
@@ -790,92 +902,116 @@ export class DoctorsService {
     }
 
     const cleanReason = reason?.trim() || 'Personal / Medical leave';
-    const cleanDate = (date ? String(date).split('T')[0] : new Date().toISOString().split('T')[0]).trim();
-    const id = (require('crypto').randomUUID ? require('crypto').randomUUID() : `dso_${Date.now()}`);
+    const startStr = (dateOrStartDate ? String(dateOrStartDate).split('T')[0] : new Date().toISOString().split('T')[0]).trim();
+    const endStr = endDate ? String(endDate).split('T')[0].trim() : startStr;
 
-    try {
-      await (this.prisma as any).doctorScheduleOverride?.upsert({
-        where: {
-          doctorId_date: {
-            doctorId: doctor.id,
-            date: cleanDate,
-          },
-        },
-        create: {
-          id,
-          doctorId: doctor.id,
-          date: cleanDate,
-          delayMinutes: 0,
-          isOnLeave: true,
-          reason: cleanReason,
-        },
-        update: {
-          delayMinutes: 0,
-          isOnLeave: true,
-          reason: cleanReason,
-        },
-      });
-    } catch (err: any) {
-      console.warn('[doctors] Prisma leave upsert failed, attempting raw SQL:', err?.message);
-      try {
-        await this.prisma.$executeRawUnsafe(`
-          INSERT INTO "DoctorScheduleOverride" ("id", "doctorId", "date", "delayMinutes", "isOnLeave", "reason", "updatedAt", "createdAt")
-          VALUES ($1, $2, $3, 0, true, $4, NOW(), NOW())
-          ON CONFLICT ("doctorId", "date")
-          DO UPDATE SET "delayMinutes" = 0, "isOnLeave" = true, "reason" = $4, "updatedAt" = NOW()
-        `, id, doctor.id, cleanDate, cleanReason);
-      } catch (sqlErr: any) {
-        console.error('[doctors] Raw SQL leave upsert also failed:', sqlErr?.message);
+    // Collect all dates in range [startStr, endStr]
+    const datesToApply: string[] = [];
+    const curr = new Date(`${startStr}T00:00:00Z`);
+    const end = new Date(`${endStr}T00:00:00Z`);
+
+    if (curr > end) {
+      datesToApply.push(startStr);
+    } else {
+      while (curr <= end) {
+        datesToApply.push(curr.toISOString().split('T')[0]);
+        curr.setUTCDate(curr.getUTCDate() + 1);
       }
     }
 
-    // Cancel all active appointments for this date
-    const appointments = await this.prisma.appointment.findMany({
-      where: {
-        doctorId: { in: [doctor.id, doctor.userId] },
-        date: cleanDate,
-        status: { in: ['PENDING', 'CONFIRMED'] },
-      },
-      include: { patient: true },
-    });
+    let totalCancelled = 0;
 
-    for (const apt of appointments) {
-      const cleanNotes = (apt.notes || '').replace(/\[Cancelled:[^\]]*\]/gi, '').trim();
-      const updatedNotes = cleanNotes
-        ? `${cleanNotes} [Cancelled: Doctor on leave - ${cleanReason}]`
-        : `[Cancelled: Doctor on leave - ${cleanReason}]`;
+    for (const cleanDate of datesToApply) {
+      const id = require('crypto').randomUUID ? require('crypto').randomUUID() : `dso_${Date.now()}_${Math.random().toString(36).slice(2, 6)}`;
 
-      await this.prisma.appointment.update({
-        where: { id: apt.id },
-        data: {
-          status: 'CANCELLED',
-          notes: updatedNotes,
-        },
-      });
-
-      if (apt.patient?.userId) {
-        try {
-          await this.prisma.notification.create({
-            data: {
-              userId: apt.patient.userId,
-              type: 'SCHEDULE_LEAVE',
-              title: '❌ Appointment Cancelled — Doctor on Leave',
-              message: `Dr. ${doctor.fullName} will be on leave on ${cleanDate} (${cleanReason}). Your appointment has been cancelled. Full refund/rescheduling is enabled in the app.`,
+      try {
+        await (this.prisma as any).doctorScheduleOverride?.upsert({
+          where: {
+            doctorId_date: {
+              doctorId: doctor.id,
+              date: cleanDate,
             },
-          });
-        } catch (notifErr: any) {
-          console.warn('[doctors] Notification failed:', notifErr?.message);
+          },
+          create: {
+            id,
+            doctorId: doctor.id,
+            date: cleanDate,
+            delayMinutes: 0,
+            isOnLeave: true,
+            reason: cleanReason,
+          },
+          update: {
+            delayMinutes: 0,
+            isOnLeave: true,
+            reason: cleanReason,
+          },
+        });
+      } catch (err: any) {
+        console.warn('[doctors] Prisma leave upsert failed, attempting raw SQL:', err?.message);
+        try {
+          await this.prisma.$executeRawUnsafe(`
+            INSERT INTO "DoctorScheduleOverride" ("id", "doctorId", "date", "delayMinutes", "isOnLeave", "reason", "updatedAt", "createdAt")
+            VALUES ($1, $2, $3, 0, true, $4, NOW(), NOW())
+            ON CONFLICT ("doctorId", "date")
+            DO UPDATE SET "delayMinutes" = 0, "isOnLeave" = true, "reason" = $4, "updatedAt" = NOW()
+          `, id, doctor.id, cleanDate, cleanReason);
+        } catch (sqlErr: any) {
+          console.error('[doctors] Raw SQL leave upsert also failed:', sqlErr?.message);
         }
       }
+
+      // Cancel all active appointments for this date
+      const appointments = await this.prisma.appointment.findMany({
+        where: {
+          doctorId: { in: [doctor.id, doctor.userId] },
+          date: cleanDate,
+          status: { in: ['PENDING', 'CONFIRMED'] },
+        },
+        include: { patient: true },
+      });
+
+      for (const apt of appointments) {
+        const cleanNotes = (apt.notes || '').replace(/\[Cancelled:[^\]]*\]/gi, '').trim();
+        const updatedNotes = cleanNotes
+          ? `${cleanNotes} [Cancelled: Doctor on leave - ${cleanReason}]`
+          : `[Cancelled: Doctor on leave - ${cleanReason}]`;
+
+        await this.prisma.appointment.update({
+          where: { id: apt.id },
+          data: {
+            status: 'CANCELLED',
+            notes: updatedNotes,
+          },
+        });
+
+        if (apt.patient?.userId) {
+          try {
+            await this.prisma.notification.create({
+              data: {
+                userId: apt.patient.userId,
+                type: 'SCHEDULE_LEAVE',
+                title: '❌ Appointment Cancelled — Doctor on Leave',
+                message: `Dr. ${doctor.fullName} will be on leave on ${cleanDate} (${cleanReason}). Your appointment has been cancelled. Full refund/rescheduling is enabled in the app.`,
+              },
+            });
+          } catch (notifErr: any) {
+            console.warn('[doctors] Notification failed:', notifErr?.message);
+          }
+        }
+      }
+
+      totalCancelled += appointments.length;
     }
 
     return {
       success: true,
       doctorId: doctor.id,
-      date: cleanDate,
+      startDate: startStr,
+      endDate: endStr,
+      dates: datesToApply,
       isOnLeave: true,
       reason: cleanReason,
-      cancelledAppointments: appointments.length,
+      cancelledAppointments: totalCancelled,
     };
   }
 
@@ -1080,6 +1216,205 @@ export class DoctorsService {
     }
 
     return map;
+  }
+
+  async manageCustomSlot(
+    doctorId: string | undefined,
+    date: string,
+    rawTime: string,
+    action: 'add' | 'remove' | 'block',
+    currentUser: any
+  ) {
+    const targetDocId = doctorId || currentUser?.doctorId || currentUser?.id;
+    const doctor = await this.prisma.doctor.findFirst({
+      where: {
+        OR: [{ id: targetDocId }, { userId: targetDocId }, { userId: currentUser?.id }],
+      },
+    });
+    if (!doctor) throw new NotFoundException('Doctor profile not found.');
+
+    const cleanDate = (date ? String(date).split('T')[0] : new Date().toISOString().split('T')[0]).trim();
+
+    // Normalize time to HH:mm (24-hour format)
+    const match = rawTime.trim().match(/^(\d{1,2}):(\d{2})\s*(AM|PM)?$/i);
+    let normalizedTime = rawTime.trim();
+    if (match) {
+      let h = parseInt(match[1], 10);
+      const m = parseInt(match[2], 10);
+      const meri = match[3]?.toUpperCase();
+      if (meri === 'PM' && h !== 12) h += 12;
+      if (meri === 'AM' && h === 12) h = 0;
+      normalizedTime = `${String(h).padStart(2, '0')}:${String(m).padStart(2, '0')}`;
+    }
+
+    const existing = await this.prisma.doctorScheduleOverride.findFirst({
+      where: {
+        doctorId: { in: [doctor.id, doctor.userId] },
+        date: cleanDate,
+      },
+    });
+
+    let currentCustom = Array.isArray(existing?.customSlots) ? [...existing!.customSlots] : [];
+    let currentBlocked = Array.isArray(existing?.blockedSlots) ? [...existing!.blockedSlots] : [];
+
+    if (action === 'add') {
+      if (!currentCustom.includes(normalizedTime)) {
+        currentCustom.push(normalizedTime);
+      }
+      currentBlocked = currentBlocked.filter((t) => t !== normalizedTime);
+    } else if (action === 'remove') {
+      currentCustom = currentCustom.filter((t) => t !== normalizedTime);
+      if (!currentBlocked.includes(normalizedTime)) {
+        currentBlocked.push(normalizedTime);
+      }
+    } else if (action === 'block') {
+      if (!currentBlocked.includes(normalizedTime)) {
+        currentBlocked.push(normalizedTime);
+      }
+      currentCustom = currentCustom.filter((t) => t !== normalizedTime);
+    }
+
+    await this.prisma.doctorScheduleOverride.upsert({
+      where: {
+        doctorId_date: {
+          doctorId: doctor.id,
+          date: cleanDate,
+        },
+      },
+      create: {
+        doctorId: doctor.id,
+        date: cleanDate,
+        customSlots: currentCustom,
+        blockedSlots: currentBlocked,
+      },
+      update: {
+        customSlots: currentCustom,
+        blockedSlots: currentBlocked,
+      },
+    });
+
+    // Audit log entry
+    if (currentUser?.id) {
+      try {
+        await this.prisma.auditLog.create({
+          data: {
+            actorUserId: currentUser.id,
+            action: `SLOT_${action.toUpperCase()}`,
+            targetType: 'DOCTOR_SCHEDULE',
+            targetId: doctor.id,
+            metadata: { date: cleanDate, time: normalizedTime, action },
+          },
+        });
+      } catch {}
+    }
+
+    return this.generateAvailableSlots(doctor.id, cleanDate);
+  }
+
+  async updateScheduleSettings(
+    dto: {
+      doctorId?: string;
+      date?: string;
+      slotDurationMinutes?: number;
+      patientsPerSlot?: number;
+      morningStart?: string;
+      morningEnd?: string;
+      eveningStart?: string;
+      eveningEnd?: string;
+    },
+    currentUser: any
+  ) {
+    const targetDocId = dto.doctorId || currentUser?.doctorId || currentUser?.id;
+    const doctor = await this.prisma.doctor.findFirst({
+      where: {
+        OR: [{ id: targetDocId }, { userId: targetDocId }, { userId: currentUser?.id }],
+      },
+      include: { availabilities: true },
+    });
+    if (!doctor) throw new NotFoundException('Doctor profile not found.');
+
+    const cleanDate = dto.date ? String(dto.date).split('T')[0].trim() : null;
+
+    // 1. If date provided, update or create override for that date
+    if (cleanDate) {
+      await this.prisma.doctorScheduleOverride.upsert({
+        where: {
+          doctorId_date: {
+            doctorId: doctor.id,
+            date: cleanDate,
+          },
+        },
+        create: {
+          doctorId: doctor.id,
+          date: cleanDate,
+          slotDurationMinutes: dto.slotDurationMinutes,
+          patientsPerSlot: dto.patientsPerSlot,
+        },
+        update: {
+          ...(dto.slotDurationMinutes ? { slotDurationMinutes: dto.slotDurationMinutes } : {}),
+          ...(dto.patientsPerSlot ? { patientsPerSlot: dto.patientsPerSlot } : {}),
+        },
+      });
+    }
+
+    // 2. Also update doctor default patientsPerSlot if provided
+    if (dto.patientsPerSlot && dto.patientsPerSlot > 0) {
+      await this.prisma.doctor.update({
+        where: { id: doctor.id },
+        data: { patientsPerSlot: dto.patientsPerSlot },
+      });
+    }
+
+    // 3. Update shift availabilities (Mon-Sat, 1-6)
+    const slotDuration = dto.slotDurationMinutes || 15;
+    const to24 = (t?: string) => {
+      if (!t) return null;
+      const m = t.trim().match(/^(\d{1,2}):(\d{2})\s*(AM|PM)?$/i);
+      if (!m) return t.trim();
+      let h = Number(m[1]);
+      const min = Number(m[2]);
+      const meri = m[3]?.toUpperCase();
+      if (meri === 'PM' && h !== 12) h += 12;
+      if (meri === 'AM' && h === 12) h = 0;
+      return `${String(h).padStart(2, '0')}:${String(min).padStart(2, '0')}`;
+    };
+
+    const mStart = to24(dto.morningStart) || '10:30';
+    const mEnd = to24(dto.morningEnd) || '13:30';
+    const eStart = to24(dto.eveningStart) || '17:00';
+    const eEnd = to24(dto.eveningEnd) || '20:00';
+
+    if (dto.morningStart || dto.eveningStart || dto.slotDurationMinutes) {
+      await this.prisma.availability.deleteMany({ where: { doctorId: doctor.id } });
+      const newAvails = [1, 2, 3, 4, 5, 6].flatMap((dayOfWeek) => [
+        { doctorId: doctor.id, dayOfWeek, startTime: mStart, endTime: mEnd, slotDurationMinutes: slotDuration },
+        { doctorId: doctor.id, dayOfWeek, startTime: eStart, endTime: eEnd, slotDurationMinutes: slotDuration },
+      ]);
+      await this.prisma.availability.createMany({ data: newAvails });
+    }
+
+    // Audit log
+    if (currentUser?.id) {
+      try {
+        await this.prisma.auditLog.create({
+          data: {
+            actorUserId: currentUser.id,
+            action: 'SCHEDULE_SETTINGS_UPDATED',
+            targetType: 'DOCTOR_SCHEDULE',
+            targetId: doctor.id,
+            metadata: dto as any,
+          },
+        });
+      } catch {}
+    }
+
+    return {
+      success: true,
+      doctorId: doctor.id,
+      date: cleanDate,
+      patientsPerSlot: dto.patientsPerSlot || doctor.patientsPerSlot,
+      slotDurationMinutes: slotDuration,
+    };
   }
 }
 

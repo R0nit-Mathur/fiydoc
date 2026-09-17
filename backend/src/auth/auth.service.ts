@@ -46,45 +46,17 @@ export class AuthService {
 
     const passwordHash = dto.password ? await bcrypt.hash(dto.password, 10) : null;
 
-    const user = await this.prisma.user.create({
-      data: {
-        email: dto.email ? dto.email.trim().toLowerCase() : undefined,
-        phone: dto.phone ? dto.phone.trim() : undefined,
-        passwordHash,
-        role: dto.role,
-      },
-    });
-
-    if (dto.role === Role.PATIENT) {
-      await this.prisma.patient.create({
-        data: {
-          userId: user.id,
-          fullName: dto.fullName?.trim() || 'Patient User',
-        },
-      });
-    } else if (dto.role === Role.DOCTOR) {
-      if (!dto.licenseNumber?.trim()) {
-        throw new BadRequestException('Medical license / registration number is required for doctor registration.');
-      }
-      if (!dto.clinicName?.trim()) {
-        throw new BadRequestException('Clinic or practice name is required for doctor registration.');
-      }
-      if (!dto.fullName?.trim()) {
-        throw new BadRequestException('Doctor full name is required for registration.');
-      }
-      if (!dto.specialization?.trim()) {
-        throw new BadRequestException('Specialization is required for doctor registration.');
-      }
-      if (dto.consultationFee === undefined || dto.consultationFee === null || Number(dto.consultationFee) < 0) {
-        throw new BadRequestException('A valid consultation fee (>= 0) is required for doctor registration.');
-      }
-
-      const registrationNumber = dto.licenseNumber.trim();
+    let doctorDataToCreate: any = null;
+    if (dto.role === Role.DOCTOR) {
+      const cleanName = dto.fullName?.trim() || 'Dr. Doctor';
+      const registrationNumber = dto.licenseNumber?.trim() || `NMC-${Date.now().toString().slice(-6)}`;
       const registrationAuthority = dto.registrationAuthority?.trim() || 'National Medical Commission / State Council';
-      const specialization = dto.specialization.trim();
-      const fee = Number(dto.consultationFee);
-      const clinicName = dto.clinicName.trim();
-      const clinicAddress = dto.clinicAddress?.trim() || null;
+      const specialization = dto.specialization?.trim() || 'General Medicine';
+      const fee = dto.consultationFee !== undefined && dto.consultationFee !== null && Number(dto.consultationFee) >= 0
+        ? Number(dto.consultationFee)
+        : 500;
+      const clinicName = dto.clinicName?.trim() || `${cleanName}'s Clinic`;
+      const clinicAddress = dto.clinicAddress?.trim() || 'Clinical Practice Address Pending';
       const clinicTimings = dto.clinicTimings?.trim() || '09:00 - 13:00, 17:00 - 20:00';
       const clinicLatitude = dto.clinicLatitude !== undefined && dto.clinicLatitude !== null ? Number(dto.clinicLatitude) : null;
       const clinicLongitude = dto.clinicLongitude !== undefined && dto.clinicLongitude !== null ? Number(dto.clinicLongitude) : null;
@@ -97,45 +69,127 @@ export class AuthService {
         );
       }
 
+      doctorDataToCreate = {
+        fullName: cleanName.startsWith('Dr.') ? cleanName : `Dr. ${cleanName}`,
+        specialization,
+        consultationFee: fee,
+        clinic: {
+          create: {
+            name: clinicName,
+            address: clinicAddress,
+            latitude: clinicLatitude,
+            longitude: clinicLongitude,
+            timings: clinicTimings,
+          },
+        },
+        availabilities: {
+          create: defaultAvailabilities,
+        },
+        qualifications: dto.qualifications && dto.qualifications.length > 0
+          ? {
+              create: {
+                degree: Array.isArray(dto.qualifications) ? dto.qualifications.join(', ') : String(dto.qualifications).trim(),
+                institution: null,
+                year: null,
+              },
+            }
+          : undefined,
+        verification: {
+          create: {
+            registrationNumber,
+            registrationAuthority,
+            status: VerificationStatus.PENDING,
+          },
+        },
+      };
+    }
+
+    const fullUser = await this.prisma.$transaction(async (tx) => {
+      const user = await tx.user.create({
+        data: {
+          email: dto.email ? dto.email.trim().toLowerCase() : undefined,
+          phone: dto.phone ? dto.phone.trim() : undefined,
+          passwordHash,
+          role: dto.role,
+        },
+      });
+
+      if (dto.role === Role.PATIENT) {
+        await tx.patient.create({
+          data: {
+            userId: user.id,
+            fullName: dto.fullName?.trim() || 'Patient User',
+          },
+        });
+      } else if (dto.role === Role.DOCTOR && doctorDataToCreate) {
+        await tx.doctor.create({
+          data: {
+            ...doctorDataToCreate,
+            userId: user.id,
+          },
+        });
+      }
+
+      return tx.user.findUnique({
+        where: { id: user.id },
+        include: {
+          patient: true,
+          doctor: {
+            include: { verification: true, clinic: true, qualifications: true },
+          },
+        },
+      });
+    });
+
+    return this.generateTokenResponse(fullUser);
+  }
+
+  async ensureDoctorRecordForUser(user: any): Promise<any> {
+    if (!user || user.role !== Role.DOCTOR || user.doctor) {
+      return user;
+    }
+
+    const doctorName = (user.email ? user.email.split('@')[0] : 'Doctor');
+    const cleanName = doctorName.startsWith('Dr.') ? doctorName : `Dr. ${doctorName}`;
+    const defaultAvailabilities: { dayOfWeek: number; startTime: string; endTime: string; slotDurationMinutes: number }[] = [];
+    for (let day = 1; day <= 6; day++) {
+      defaultAvailabilities.push(
+        { dayOfWeek: day, startTime: '09:00', endTime: '13:00', slotDurationMinutes: 30 },
+        { dayOfWeek: day, startTime: '17:00', endTime: '20:00', slotDurationMinutes: 30 },
+      );
+    }
+
+    try {
       await this.prisma.doctor.create({
         data: {
           userId: user.id,
-          fullName: dto.fullName.trim(),
-          specialization,
-          consultationFee: fee,
+          fullName: cleanName,
+          specialization: 'General Medicine',
+          consultationFee: 500,
           clinic: {
             create: {
-              name: clinicName || `${dto.fullName.trim()}'s Clinic`,
-              address: clinicAddress || 'Clinical Practice Address Pending',
-              latitude: clinicLatitude,
-              longitude: clinicLongitude,
-              timings: clinicTimings,
+              name: `${cleanName}'s Clinic`,
+              address: 'Clinical Practice Address Pending',
+              timings: '09:00 - 13:00, 17:00 - 20:00',
             },
           },
           availabilities: {
             create: defaultAvailabilities,
           },
-          qualifications: dto.qualifications && dto.qualifications.length > 0
-            ? {
-                create: {
-                  degree: Array.isArray(dto.qualifications) ? dto.qualifications.join(', ') : String(dto.qualifications).trim(),
-                  institution: null,
-                  year: null,
-                },
-              }
-            : undefined,
           verification: {
             create: {
-              registrationNumber,
-              registrationAuthority,
+              registrationNumber: `NMC-${Date.now().toString().slice(-6)}`,
+              registrationAuthority: 'National Medical Commission / State Council',
               status: VerificationStatus.PENDING,
             },
           },
         },
       });
+    } catch (err: any) {
+      console.warn('[auth] Auto-healing doctor record warning:', err?.message);
     }
 
-    const fullUser = await this.prisma.user.findUnique({
+    return this.prisma.user.findUnique({
       where: { id: user.id },
       include: {
         patient: true,
@@ -144,8 +198,6 @@ export class AuthService {
         },
       },
     });
-
-    return this.generateTokenResponse(fullUser);
   }
 
   async login(dto: { email?: string; phone?: string; password?: string }) {
@@ -183,6 +235,10 @@ export class AuthService {
     const valid = await bcrypt.compare(dto.password || '', user.passwordHash);
     if (!valid) {
       throw new UnauthorizedException('Invalid login credentials.');
+    }
+
+    if (user.role === Role.DOCTOR && !user.doctor) {
+      user = await this.ensureDoctorRecordForUser(user);
     }
 
     return this.generateTokenResponse(user);

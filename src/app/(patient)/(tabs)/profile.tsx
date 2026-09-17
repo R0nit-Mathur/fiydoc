@@ -28,6 +28,7 @@ import { useQueryClient } from '@tanstack/react-query';
 import * as Haptics from 'expo-haptics';
 import Svg, { Circle } from 'react-native-svg';
 import { useAuthStore } from '@/store/useAuthStore';
+import { useNotificationStore } from '@/store/useNotificationStore';
 import { usePatientProfileQuery } from '@/hooks/queries/usePatientQuery';
 import { Avatar } from '@/components/ui/Avatar';
 import { Badge } from '@/components/ui/Badge';
@@ -178,11 +179,20 @@ export default function PatientProfileScreen() {
             emergencyContact: emergencyPhone ? { phone: emergencyPhone, name: '', relation: '' } : undefined,
           });
           await queryClient.invalidateQueries({ queryKey: ['patient-profile', user.id] });
-        } catch {}
+        } catch (err: any) {
+          Alert.alert('Notice', err?.message || 'Changes saved locally, but server update failed.');
+        }
       }
       if (Platform.OS !== 'web') {
         Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
       }
+      useNotificationStore.getState().addNotification({
+        title: 'Profile Updated',
+        message: 'Your personal and medical profile details were saved successfully.',
+        type: 'profile_updated',
+        recipientRole: 'patient',
+        recipientId: user?.id,
+      });
       setEditModalVisible(false);
       setSaveToast(true);
       setTimeout(() => setSaveToast(false), 3000);

@@ -76,13 +76,9 @@ export function Timeline({ records, onRecordPress }: TimelineProps) {
                 <TouchableOpacity
                   onPress={(e) => {
                     e.stopPropagation?.();
-                    if (Platform.OS === 'web') {
-                      window.open(item.documentUrl, '_blank');
-                    } else {
-                      Linking.openURL(item.documentUrl!).catch(() =>
-                        Alert.alert('Unable to open', 'Cannot open document on this device.')
-                      );
-                    }
+                    Linking.openURL(item.documentUrl!).catch(() =>
+                      Alert.alert('Unable to open', 'Cannot open document on this device.')
+                    );
                   }}
                   style={styles.viewDocBtn}
                   accessibilityLabel="View uploaded document"

@@ -55,7 +55,7 @@ import { useAuthStore } from '@/store/useAuthStore';
 import { useNotificationStore } from '@/store/useNotificationStore';
 import { useAppointmentStore } from '@/store/useAppointmentStore';
 import { useAppointmentsQuery } from '@/hooks/queries/useAppointmentsQuery';
-import { useQueryClient } from '@tanstack/react-query';
+import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { doctorService } from '@/services/doctorService';
 import { BorderRadius, Shadows, StitchColors, DEFAULT_DOCTOR_AVATAR } from '@/constants/theme';
 import UndoToast from '@/components/ui/UndoToast';
@@ -75,6 +75,7 @@ export interface ScheduleSlot {
   status: 'booked' | 'available' | 'blocked';
   delayMins?: number;
   consultationId?: string;
+  rawTime?: string;
 }
 
 type ScheduleUndo =
@@ -105,14 +106,14 @@ function shiftTime(timeStr: string, meridiem: string, shiftMins: number): { time
   return { time: formattedTime, meridiem: newMeridiem };
 }
 
-// Generate dynamic 7 days starting from a given base date using live system clock
+// Generate dynamic 14 days starting from a given base date using live system clock
 function generateDynamicWeek(baseDate?: Date) {
   const days: { day: string; date: string; key: string; dot: string; fullDate: string; isToday: boolean }[] = [];
-  const dayNames = ['S', 'M', 'T', 'W', 'T', 'F', 'S'];
+  const dayNames = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
   const now = new Date();
   const base = baseDate || now;
 
-  for (let i = 0; i < 7; i++) {
+  for (let i = 0; i < 14; i++) {
     const d = new Date(base);
     d.setDate(base.getDate() + i);
     const dayLetter = dayNames[d.getDay()];
@@ -325,6 +326,34 @@ export default function DoctorScheduleScreen() {
     return [...serverAppointments, ...local];
   }, [serverAppointments, storeAppointments]);
 
+  const docId = user?.doctorId || user?.id;
+  const { data: serverSlotsData, refetch: refetchServerSlots } = useQuery({
+    queryKey: ['doctor-slots', docId, selectedDay],
+    queryFn: async () => {
+      if (!docId || !selectedDay) return null;
+      return doctorService.getAvailableSlotsDetailed(docId, selectedDay).catch(() => null);
+    },
+    enabled: Boolean(docId && selectedDay),
+    staleTime: 0,
+    refetchOnMount: 'always',
+  });
+
+  const [slotDuration, setSlotDuration] = useState('15');
+  const [slotDurationHours, setSlotDurationHours] = useState('0');
+  const [slotDurationMins, setSlotDurationMins] = useState('15');
+  const [maxPatients, setMaxPatients] = useState(12);
+
+  useEffect(() => {
+    if (serverSlotsData?.slotDurationMinutes) {
+      setSlotDuration(String(serverSlotsData.slotDurationMinutes));
+      setSlotDurationMins(String(serverSlotsData.slotDurationMinutes % 60));
+      setSlotDurationHours(String(Math.floor(serverSlotsData.slotDurationMinutes / 60)));
+    }
+    if (serverSlotsData?.patientsPerSlot) {
+      setMaxPatients(serverSlotsData.patientsPerSlot);
+    }
+  }, [serverSlotsData]);
+
   // Operations belong to a calendar date, never to the reusable session template.
   // A delay, block, or reschedule on Tuesday must not alter Wednesday's OPD.
   const [slotsByDate, setSlotsByDate] = useState<Record<string, { morning: ScheduleSlot[]; evening: ScheduleSlot[] }>>({});
@@ -337,8 +366,51 @@ export default function DoctorScheduleScreen() {
     return match ? `${match[1].padStart(2, '0')}:${match[2]}` : t.trim();
   };
 
-  const selectedMorningSlots = useMemo(() => {
+  const selectedMorningSlots: ScheduleSlot[] = useMemo(() => {
     const dayApts = allAppointments.filter((a) => a.date?.slice(0, 10) === selectedDay);
+    if (serverSlotsData?.allGeneratedSlots && serverSlotsData.allGeneratedSlots.length > 0) {
+      const morningTimes = serverSlotsData.allGeneratedSlots.filter((t: string) => {
+        const [h] = t.split(':').map(Number);
+        return h < 13;
+      });
+      const availSet = new Set(serverSlotsData.slots || []);
+      return morningTimes.map((timeStr: string, idx: number): ScheduleSlot => {
+        const [h, m] = timeStr.split(':').map(Number);
+        const meri = h >= 12 ? 'PM' : 'AM';
+        const displayH = h % 12 === 0 ? 12 : h % 12;
+        const formattedTime = `${String(displayH).padStart(2, '0')}:${String(m).padStart(2, '0')}`;
+        const match = dayApts.find(
+          (a) => normalizeTimeForMatch(a.time) === timeStr || normalizeTimeForMatch(a.time) === formattedTime
+        );
+        const isAvail = availSet.has(timeStr);
+        if (match) {
+          return {
+            id: `srv-m-${idx}-${timeStr}`,
+            rawTime: timeStr,
+            time: formattedTime,
+            meridiem: meri,
+            token: match.tokenNumber ? String(match.tokenNumber).replace(/^Token\s*/i, '') : `#0${idx + 1}`,
+            status: 'booked' as const,
+            patientId: match.patientId,
+            patientName: match.patientName,
+            consultationId: match.id,
+            reason: match.symptoms?.join(', ') || match.notes || 'OPD Consultation',
+            delayMins: activeDelayMinutes,
+          };
+        }
+        return {
+          id: `srv-m-${idx}-${timeStr}`,
+          rawTime: timeStr,
+          time: formattedTime,
+          meridiem: meri,
+          token: `#0${idx + 1}`,
+          status: isAvail ? ('available' as const) : ('blocked' as const),
+          reason: isAvail ? 'Open OPD Consultation' : 'Blocked / Capacity Full',
+          delayMins: activeDelayMinutes,
+        };
+      });
+    }
+
     return rawMorningSlots.map((slot) => {
       const displaySlot = activeDelayMinutes > 0
         ? {
@@ -364,10 +436,53 @@ export default function DoctorScheduleScreen() {
       }
       return displaySlot;
     });
-  }, [rawMorningSlots, allAppointments, selectedDay, activeDelayMinutes]);
+  }, [rawMorningSlots, allAppointments, selectedDay, activeDelayMinutes, serverSlotsData]);
 
-  const selectedEveningSlots = useMemo(() => {
+  const selectedEveningSlots: ScheduleSlot[] = useMemo(() => {
     const dayApts = allAppointments.filter((a) => a.date?.slice(0, 10) === selectedDay);
+    if (serverSlotsData?.allGeneratedSlots && serverSlotsData.allGeneratedSlots.length > 0) {
+      const eveningTimes = serverSlotsData.allGeneratedSlots.filter((t: string) => {
+        const [h] = t.split(':').map(Number);
+        return h >= 13;
+      });
+      const availSet = new Set(serverSlotsData.slots || []);
+      return eveningTimes.map((timeStr: string, idx: number): ScheduleSlot => {
+        const [h, m] = timeStr.split(':').map(Number);
+        const meri = h >= 12 ? 'PM' : 'AM';
+        const displayH = h % 12 === 0 ? 12 : h % 12;
+        const formattedTime = `${String(displayH).padStart(2, '0')}:${String(m).padStart(2, '0')}`;
+        const match = dayApts.find(
+          (a) => normalizeTimeForMatch(a.time) === timeStr || normalizeTimeForMatch(a.time) === formattedTime
+        );
+        const isAvail = availSet.has(timeStr);
+        if (match) {
+          return {
+            id: `srv-e-${idx}-${timeStr}`,
+            rawTime: timeStr,
+            time: formattedTime,
+            meridiem: meri,
+            token: match.tokenNumber ? String(match.tokenNumber).replace(/^Token\s*/i, '') : `#0${idx + 1}`,
+            status: 'booked' as const,
+            patientId: match.patientId,
+            patientName: match.patientName,
+            consultationId: match.id,
+            reason: match.symptoms?.join(', ') || match.notes || 'OPD Consultation',
+            delayMins: activeDelayMinutes,
+          };
+        }
+        return {
+          id: `srv-e-${idx}-${timeStr}`,
+          rawTime: timeStr,
+          time: formattedTime,
+          meridiem: meri,
+          token: `#0${idx + 1}`,
+          status: isAvail ? ('available' as const) : ('blocked' as const),
+          reason: isAvail ? 'Open Evening Slot' : 'Blocked / Capacity Full',
+          delayMins: activeDelayMinutes,
+        };
+      });
+    }
+
     return rawEveningSlots.map((slot) => {
       const displaySlot = activeDelayMinutes > 0
         ? {
@@ -393,7 +508,8 @@ export default function DoctorScheduleScreen() {
       }
       return displaySlot;
     });
-  }, [rawEveningSlots, allAppointments, selectedDay, activeDelayMinutes]);
+  }, [rawEveningSlots, allAppointments, selectedDay, activeDelayMinutes, serverSlotsData]);
+
   const updateSelectedSessionSlots = (session: 'morning' | 'evening', updater: (slots: ScheduleSlot[]) => ScheduleSlot[]) => {
     setSlotsByDate((previous) => {
       const current = previous[selectedDay] || {
@@ -423,17 +539,112 @@ export default function DoctorScheduleScreen() {
   const [customDelayMins, setCustomDelayMins] = useState('20');
   const [rescheduleSlot, setRescheduleSlot] = useState<ScheduleSlot | null>(null);
 
-  const [slotDuration, setSlotDuration] = useState('15');
-  const [slotDurationHours, setSlotDurationHours] = useState('0');
-  const [slotDurationMins, setSlotDurationMins] = useState('15');
-  const [maxPatients, setMaxPatients] = useState(12);
+  // Add Custom Slot Modal State
+  const [addSlotModalVisible, setAddSlotModalVisible] = useState(false);
+  const [customSlotHour, setCustomSlotHour] = useState('11');
+  const [customSlotMinute, setCustomSlotMinute] = useState('30');
+  const [customSlotMeridiem, setCustomSlotMeridiem] = useState<'AM' | 'PM'>('AM');
+
   const [delayNotice, setDelayNotice] = useState<string | null>(null);
   const [lastUndo, setLastUndo] = useState<ScheduleUndo | null>(null);
-const [undoDelayMins, setUndoDelayMins] = useState<number>(15);
+  const [undoDelayMins, setUndoDelayMins] = useState<number>(15);
+
+  const handleToggleSlotBlock = async (slot: ScheduleSlot) => {
+    const targetDocId = user?.doctorId || user?.id;
+    const timeToToggle = slot.rawTime || `${slot.time} ${slot.meridiem}`;
+    const isCurrentlyBlocked = slot.status === 'blocked';
+    const action = isCurrentlyBlocked ? 'remove' : 'block';
+    try {
+      if (Platform.OS !== 'web') Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+      await doctorService.manageCustomSlot({
+        doctorId: targetDocId,
+        date: selectedDay,
+        time: timeToToggle,
+        action,
+      });
+      await refetchServerSlots();
+      queryClient.invalidateQueries({ queryKey: ['doctor-slots'] });
+      queryClient.invalidateQueries({ queryKey: ['doctor-schedule-week'] });
+      setDelayNotice(`Slot ${slot.time} ${slot.meridiem} ${action === 'block' ? 'blocked' : 'unblocked'}.`);
+      setTimeout(() => setDelayNotice(null), 2500);
+    } catch (err: any) {
+      console.warn('[schedule] Toggle slot block error:', err?.message);
+    }
+  };
+
+  const handleAddCustomSlot = async () => {
+    const targetDocId = user?.doctorId || user?.id;
+    const timeString = `${customSlotHour}:${customSlotMinute} ${customSlotMeridiem}`;
+    try {
+      if (Platform.OS !== 'web') Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+      await doctorService.manageCustomSlot({
+        doctorId: targetDocId,
+        date: selectedDay,
+        time: timeString,
+        action: 'add',
+      });
+      setAddSlotModalVisible(false);
+      await refetchServerSlots();
+      queryClient.invalidateQueries({ queryKey: ['doctor-slots'] });
+      queryClient.invalidateQueries({ queryKey: ['doctor-schedule-week'] });
+      setDelayNotice(`Custom slot ${timeString} added for ${selectedDay}.`);
+      setTimeout(() => setDelayNotice(null), 3000);
+    } catch (err: any) {
+      console.warn('[schedule] Add custom slot error:', err?.message);
+    }
+  };
+
+  const handleDeleteSlot = async (slot: ScheduleSlot) => {
+    const targetDocId = user?.doctorId || user?.id;
+    const timeToDelete = slot.rawTime || `${slot.time} ${slot.meridiem}`;
+    try {
+      if (Platform.OS !== 'web') Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+      await doctorService.manageCustomSlot({
+        doctorId: targetDocId,
+        date: selectedDay,
+        time: timeToDelete,
+        action: 'remove',
+      });
+      await refetchServerSlots();
+      queryClient.invalidateQueries({ queryKey: ['doctor-slots'] });
+      queryClient.invalidateQueries({ queryKey: ['doctor-schedule-week'] });
+      setDelayNotice(`Slot ${slot.time} ${slot.meridiem} removed.`);
+      setTimeout(() => setDelayNotice(null), 2500);
+    } catch (err: any) {
+      console.warn('[schedule] Remove slot error:', err?.message);
+    }
+  };
 
   // Leave Form
   const [leaveReason, setLeaveReason] = useState('Personal / Medical Leave');
-  const [leaveDays, setLeaveDays] = useState('1 Day');
+  const [leaveStartDate, setLeaveStartDate] = useState(selectedDay || toLocalDateString(new Date()));
+  const [leaveEndDate, setLeaveEndDate] = useState('');
+
+  const applyLeavePreset = (preset: 'today' | 'tomorrow' | '3days' | '1week') => {
+    const base = new Date(selectedDay || Date.now());
+    if (preset === 'today') {
+      const todayStr = toLocalDateString(new Date());
+      setLeaveStartDate(todayStr);
+      setLeaveEndDate('');
+    } else if (preset === 'tomorrow') {
+      const tom = new Date();
+      tom.setDate(tom.getDate() + 1);
+      setLeaveStartDate(toLocalDateString(tom));
+      setLeaveEndDate('');
+    } else if (preset === '3days') {
+      const s = toLocalDateString(base);
+      const e = new Date(base);
+      e.setDate(e.getDate() + 2);
+      setLeaveStartDate(s);
+      setLeaveEndDate(toLocalDateString(e));
+    } else if (preset === '1week') {
+      const s = toLocalDateString(base);
+      const e = new Date(base);
+      e.setDate(e.getDate() + 6);
+      setLeaveStartDate(s);
+      setLeaveEndDate(toLocalDateString(e));
+    }
+  };
 
   const doctorName = user?.name ? (user.name.startsWith('Dr.') ? user.name : `Dr. ${user.name}`) : 'Doctor';
 
@@ -504,47 +715,64 @@ const [undoDelayMins, setUndoDelayMins] = useState<number>(15);
     setTimeout(() => setDelayNotice(null), 3500);
   };
 
-  // 2. LEAVE MANAGEMENT: Marks date as leave & notifies scheduled patients
-  const handleApplyLeave = () => {
+  // 2. LEAVE MANAGEMENT: Marks date range as leave & cancels appointments on server
+  const handleApplyLeave = async () => {
     setLeaveModalVisible(false);
-    if (!leaveDates.includes(selectedDay)) {
-      setLeaveDates([...leaveDates, selectedDay]);
-      setLastUndo({ kind: 'leave', day: selectedDay, label: 'Undo leave' });
+    const start = leaveStartDate.trim() || selectedDay;
+    const end = leaveEndDate.trim() || start;
+    const docId = user?.doctorId || user?.id;
+
+    // Generate list of affected date strings
+    const affected: string[] = [];
+    const cur = new Date(start);
+    const stop = new Date(end);
+    if (!isNaN(cur.getTime()) && !isNaN(stop.getTime()) && cur <= stop) {
+      while (cur <= stop) {
+        affected.push(toLocalDateString(cur));
+        cur.setDate(cur.getDate() + 1);
+      }
+    } else {
+      affected.push(start);
     }
-    setIsDayOnLeave(true);
-    setLeaveReasonText(leaveReason);
 
-    const selectedDayObj = weekDays.find((w) => w.key === selectedDay);
-    const dayLabel = selectedDayObj ? selectedDayObj.fullDate : selectedDay;
+    const mergedLeaves = Array.from(new Set([...leaveDates, ...affected]));
+    setLeaveDates(mergedLeaves);
+    setLastUndo({ kind: 'leave', day: start, label: 'Undo leave' });
 
+    if (affected.includes(selectedDay)) {
+      setIsDayOnLeave(true);
+      setLeaveReasonText(leaveReason);
+    }
+
+    const rangeLabel = start === end ? start : `${start} to ${end}`;
     useNotificationStore.getState().addNotification({
       title: 'OPD Schedule Update — Doctor On Leave',
-      message: `${doctorName} will be on leave on ${dayLabel} for ${leaveReason}. Your booked appointment is being rescheduled.`,
+      message: `${doctorName} will be on leave (${rangeLabel}) for ${leaveReason}. Booked appointments in this window are being cancelled.`,
       type: 'schedule_alert',
       recipientRole: 'patient',
     });
 
-    const docId = user?.doctorId || user?.id;
-    // Sync leave to server: cancels active bookings on that date and disables new slots
-    doctorService
-      .applyScheduleLeave({
+    try {
+      await doctorService.applyScheduleLeave({
         doctorId: docId,
-        date: selectedDay,
+        startDate: start,
+        endDate: end,
         reason: leaveReason,
-      })
-      .then(async () => {
-        await syncScheduleStatus(selectedDay);
-        queryClient.invalidateQueries({ queryKey: ['appointments'] });
-        queryClient.invalidateQueries({ queryKey: ['doctor-slots'] });
-        queryClient.invalidateQueries({ queryKey: ['doctor-schedule-week'] });
-      })
-      .catch((err) => {
-        console.warn('[schedule] Server leave sync notice:', err?.message);
       });
+      await syncScheduleStatus(selectedDay);
+      await Promise.all([
+        queryClient.invalidateQueries({ queryKey: ['appointments'] }),
+        queryClient.invalidateQueries({ queryKey: ['doctor-slots'] }),
+        queryClient.invalidateQueries({ queryKey: ['doctor-schedule-week'] }),
+      ]);
+      setDelayNotice(`Leave saved globally for ${rangeLabel} (${leaveReason}). Bookings cancelled.`);
+    } catch (err: any) {
+      console.warn('[schedule] Server leave sync notice:', err?.message);
+      setDelayNotice(`Leave applied locally. Server: ${err?.message || 'Offline'}`);
+    }
 
     if (Platform.OS !== 'web') Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
-    setDelayNotice(`Leave marked on server for ${dayLabel} (${leaveReason}). Booked visits cancelled.`);
-    setTimeout(() => setDelayNotice(null), 4000);
+    setTimeout(() => setDelayNotice(null), 4500);
   };
 
   // 3. POSTPONE / PREPONE RESCHEDULING: Shifts single slot earlier or later
@@ -792,7 +1020,14 @@ const [undoDelayMins, setUndoDelayMins] = useState<number>(15);
             </View>
           </View>
 
-          <View style={[styles.weekGrid, { backgroundColor: colors.card, borderColor: colors.border }]}>
+          <ScrollView
+            horizontal
+            showsHorizontalScrollIndicator={false}
+            nestedScrollEnabled={true}
+            directionalLockEnabled={true}
+            contentContainerStyle={styles.swipableCalendarScroll}
+            style={[styles.weekGridScroll, { backgroundColor: colors.card, borderColor: colors.border }]}
+          >
             {weekDays.map((w) => {
               const isSelected = selectedDay === w.key;
               const isLeave = leaveDates.includes(w.key);
@@ -803,7 +1038,7 @@ const [undoDelayMins, setUndoDelayMins] = useState<number>(15);
                   key={w.key}
                   onPress={() => handleSelectDay(w.key)}
                   style={[
-                    styles.dayCol,
+                    styles.dayColCard,
                     isSelected && [styles.dayColActive, { backgroundColor: StitchColors.primaryContainer }],
                     isLeave && !isSelected && { backgroundColor: '#FEE2E2', borderColor: '#FCA5A5' },
                     isOff && styles.dayColOff,
@@ -845,7 +1080,7 @@ const [undoDelayMins, setUndoDelayMins] = useState<number>(15);
                 </Pressable>
               );
             })}
-          </View>
+          </ScrollView>
         </View>
 
         {/* 4. Upcoming Holiday Notice Pill */}
@@ -970,9 +1205,23 @@ const [undoDelayMins, setUndoDelayMins] = useState<number>(15);
             <Text style={[styles.timelineSectionTitle, { color: colors.textSecondary }]}>
               {selectedSession === 'morning' ? 'MORNING SLOTS TIMELINE' : 'EVENING SLOTS TIMELINE'}
             </Text>
-            <Text style={[styles.timelineDateText, { color: colors.textSecondary }]}>
-              {weekDays.find((w) => w.key === selectedDay)?.fullDate || selectedDay}
-            </Text>
+            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+              <Text style={[styles.timelineDateText, { color: colors.textSecondary }]}>
+                {weekDays.find((w) => w.key === selectedDay)?.fullDate || selectedDay}
+              </Text>
+              <Pressable
+                onPress={() => {
+                  setCustomSlotMeridiem(selectedSession === 'morning' ? 'AM' : 'PM');
+                  setAddSlotModalVisible(true);
+                }}
+                style={[styles.addSlotBtn, { backgroundColor: StitchColors.primaryContainer }]}
+                accessibilityRole="button"
+                accessibilityLabel="Add custom slot"
+              >
+                <Plus size={12} color="#FFFFFF" />
+                <Text style={styles.addSlotBtnText}>+ Slot</Text>
+              </Pressable>
+            </View>
           </View>
 
           {/* DOCTOR ON LEAVE BANNER IF DATE IS MARKED */}
@@ -1124,12 +1373,7 @@ const [undoDelayMins, setUndoDelayMins] = useState<number>(15);
                       ) : isAvailable ? (
                         <>
                           <Pressable
-                            onPress={() => {
-                              const toggler = (prev: ScheduleSlot[]) =>
-                                prev.map((s) => (s.id === slot.id ? { ...s, status: 'blocked' as const } : s));
-                              updateSelectedSessionSlots(selectedSession, toggler);
-                              if (Platform.OS !== 'web') Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-                            }}
+                            onPress={() => handleToggleSlotBlock(slot)}
                             style={[styles.blockIconBtn, { backgroundColor: colors.backgroundElement }]}
                             accessibilityLabel="Block slot"
                           >
@@ -1137,17 +1381,21 @@ const [undoDelayMins, setUndoDelayMins] = useState<number>(15);
                           </Pressable>
                         </>
                       ) : (
-                        <Pressable
-                          onPress={() => {
-                            const toggler = (prev: ScheduleSlot[]) =>
-                              prev.map((s) => (s.id === slot.id ? { ...s, status: 'available' as const } : s));
-                            updateSelectedSessionSlots(selectedSession, toggler);
-                            if (Platform.OS !== 'web') Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-                          }}
-                          style={[styles.unblockBtn, { backgroundColor: colors.card }]}
-                        >
-                          <Text style={[styles.unblockBtnText, { color: StitchColors.primaryContainer }]}>Unblock</Text>
-                        </Pressable>
+                        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+                          <Pressable
+                            onPress={() => handleToggleSlotBlock(slot)}
+                            style={[styles.unblockBtn, { backgroundColor: colors.card }]}
+                          >
+                            <Text style={[styles.unblockBtnText, { color: StitchColors.primaryContainer }]}>Unblock</Text>
+                          </Pressable>
+                          <Pressable
+                            onPress={() => handleDeleteSlot(slot)}
+                            style={[styles.blockIconBtn, { backgroundColor: '#FEE2E2' }]}
+                            accessibilityLabel="Remove slot"
+                          >
+                            <X size={13} color="#DC2626" />
+                          </Pressable>
+                        </View>
                       )}
                     </View>
                   </View>
@@ -1376,12 +1624,23 @@ const [undoDelayMins, setUndoDelayMins] = useState<number>(15);
                   return `${String(h).padStart(2, '0')}:${String(min).padStart(2, '0')}`;
                 };
 
-                // Sync availability to server for standard working days (Mon-Sat, 1-6)
+                const targetDocId = user?.doctorId || user?.id;
                 try {
                   const morningStart24 = to24(morningStart);
                   const morningEnd24 = to24(morningEnd);
                   const eveningStart24 = to24(eveningStart);
                   const eveningEnd24 = to24(eveningEnd);
+
+                  await doctorService.updateScheduleSettings({
+                    doctorId: targetDocId,
+                    date: selectedDay,
+                    slotDurationMinutes: totalMins,
+                    patientsPerSlot: maxPatients,
+                    morningStart,
+                    morningEnd,
+                    eveningStart,
+                    eveningEnd,
+                  });
 
                   const availabilities = [1, 2, 3, 4, 5, 6].flatMap((dayOfWeek) => [
                     { dayOfWeek, startTime: morningStart24, endTime: morningEnd24, slotDurationMinutes: totalMins },
@@ -1389,9 +1648,10 @@ const [undoDelayMins, setUndoDelayMins] = useState<number>(15);
                   ]);
 
                   await doctorService.updateMyAvailability(availabilities);
+                  await refetchServerSlots();
                   queryClient.invalidateQueries({ queryKey: ['doctor-slots'] });
                   queryClient.invalidateQueries({ queryKey: ['doctor-schedule-week'] });
-                  setDelayNotice(`Shifts saved to server: Morning (${morningStart}-${morningEnd}), Evening (${eveningStart}-${eveningEnd}), ${totalMins}m slot duration.`);
+                  setDelayNotice(`Shifts & capacity saved to server: ${totalMins}m duration, ${maxPatients} patients/slot.`);
                 } catch (err: any) {
                   console.warn('[schedule] Server availability sync error:', err?.message);
                   setDelayNotice(`Shifts updated locally: ${totalMins}m slot duration.`);
@@ -1473,21 +1733,62 @@ const [undoDelayMins, setUndoDelayMins] = useState<number>(15);
               ))}
             </View>
 
-            <View style={{ marginTop: 10 }}>
-              <Text style={[styles.fieldLabel, { color: colors.textSecondary }]}>DURATION / DATES</Text>
-              <TextInput
-                value={leaveDays}
-                onChangeText={setLeaveDays}
-                placeholder="e.g. 3 Days (31 Oct - 02 Nov)"
-                placeholderTextColor={colors.textMuted}
-                style={[styles.textInputFull, { color: colors.text, borderColor: colors.border }]}
-              />
+            <View style={{ marginTop: 12 }}>
+              <Text style={[styles.fieldLabel, { color: colors.textSecondary }]}>QUICK DATE PRESETS</Text>
+              <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 6, marginBottom: 10 }}>
+                {[
+                  { label: 'Today', key: 'today' as const },
+                  { label: 'Tomorrow', key: 'tomorrow' as const },
+                  { label: '3 Days', key: '3days' as const },
+                  { label: '1 Week', key: '1week' as const },
+                ].map((p) => (
+                  <Pressable
+                    key={p.key}
+                    onPress={() => applyLeavePreset(p.key)}
+                    style={{
+                      paddingHorizontal: 12,
+                      paddingVertical: 6,
+                      borderRadius: BorderRadius.full,
+                      backgroundColor: colors.backgroundElement,
+                      borderWidth: 1,
+                      borderColor: colors.border,
+                    }}
+                  >
+                    <Text style={{ fontSize: 12, fontWeight: '700', color: colors.text }}>{p.label}</Text>
+                  </Pressable>
+                ))}
+              </View>
+
+              <View style={{ flexDirection: 'row', gap: 8 }}>
+                <View style={{ flex: 1 }}>
+                  <Text style={[styles.fieldLabel, { color: colors.textSecondary }]}>START DATE (YYYY-MM-DD)</Text>
+                  <TextInput
+                    value={leaveStartDate}
+                    onChangeText={setLeaveStartDate}
+                    placeholder="2026-09-17"
+                    placeholderTextColor={colors.textMuted}
+                    style={[styles.textInputFull, { color: colors.text, borderColor: colors.border }]}
+                  />
+                </View>
+                <View style={{ flex: 1 }}>
+                  <Text style={[styles.fieldLabel, { color: colors.textSecondary }]}>END DATE (OPTIONAL)</Text>
+                  <TextInput
+                    value={leaveEndDate}
+                    onChangeText={setLeaveEndDate}
+                    placeholder="Leave blank for 1 day"
+                    placeholderTextColor={colors.textMuted}
+                    style={[styles.textInputFull, { color: colors.text, borderColor: colors.border }]}
+                  />
+                </View>
+              </View>
             </View>
 
-            <View style={[styles.autoNoticeBox, { backgroundColor: colors.backgroundElement }]}>
+            <View style={[styles.autoNoticeBox, { backgroundColor: colors.backgroundElement, marginTop: 10 }]}>
               <CheckCircle2 size={16} color={StitchColors.secondary} />
               <Text style={[styles.autoNoticeBoxText, { color: colors.textSecondary }]}>
-                14 booked appointments will be automatically notified with rescheduling options.
+                {leaveEndDate && leaveEndDate.trim() && leaveEndDate.trim() !== leaveStartDate.trim()
+                  ? `Leave active from ${leaveStartDate} to ${leaveEndDate}. All booked visits in this range will be cancelled and patients notified.`
+                  : `Leave active for 1 day on ${leaveStartDate || selectedDay}. Booked visits will be cancelled and patients notified.`}
               </Text>
             </View>
 
@@ -1567,6 +1868,120 @@ const [undoDelayMins, setUndoDelayMins] = useState<number>(15);
           </View>
         </Modal>
       )}
+
+      {/* MODAL: Add Custom Slot */}
+      <Modal visible={addSlotModalVisible} transparent animationType="slide">
+        <View style={styles.modalBackdrop}>
+          <View style={[styles.modalCard, { backgroundColor: colors.card, borderColor: colors.border }]}>
+            <View style={styles.modalHeader}>
+              <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+                <Plus size={18} color={StitchColors.primaryContainer} />
+                <Text style={[styles.modalTitle, { color: colors.text }]}>Add Custom OPD Slot</Text>
+              </View>
+              <Pressable onPress={() => setAddSlotModalVisible(false)}>
+                <X size={18} color={colors.text} />
+              </Pressable>
+            </View>
+
+            <Text style={[styles.fieldLabel, { color: colors.textSecondary }]}>TARGET DATE</Text>
+            <View style={[styles.autoNoticeBox, { backgroundColor: colors.backgroundElement, marginBottom: 12 }]}>
+              <CalendarIcon size={16} color={StitchColors.primaryContainer} />
+              <Text style={[styles.autoNoticeBoxText, { color: colors.text, fontWeight: '700' }]}>
+                {weekDays.find((w) => w.key === selectedDay)?.fullDate || selectedDay}
+              </Text>
+            </View>
+
+            <Text style={[styles.fieldLabel, { color: colors.textSecondary }]}>SLOT TIMING (HOUR & MINUTE)</Text>
+            <View style={{ flexDirection: 'row', gap: 10, marginBottom: 12 }}>
+              <View style={{ flex: 1 }}>
+                <Text style={{ fontSize: 11, color: colors.textSecondary, marginBottom: 4 }}>Hour (1-12)</Text>
+                <TextInput
+                  value={customSlotHour}
+                  onChangeText={setCustomSlotHour}
+                  placeholder="11"
+                  placeholderTextColor={colors.textMuted}
+                  keyboardType="number-pad"
+                  maxLength={2}
+                  style={[styles.miniTextInput, { textAlign: 'center', borderColor: colors.border, color: colors.text }]}
+                />
+              </View>
+              <View style={{ flex: 1 }}>
+                <Text style={{ fontSize: 11, color: colors.textSecondary, marginBottom: 4 }}>Minute (00-59)</Text>
+                <TextInput
+                  value={customSlotMinute}
+                  onChangeText={setCustomSlotMinute}
+                  placeholder="30"
+                  placeholderTextColor={colors.textMuted}
+                  keyboardType="number-pad"
+                  maxLength={2}
+                  style={[styles.miniTextInput, { textAlign: 'center', borderColor: colors.border, color: colors.text }]}
+                />
+              </View>
+              <View style={{ flex: 1 }}>
+                <Text style={{ fontSize: 11, color: colors.textSecondary, marginBottom: 4 }}>Period</Text>
+                <View style={{ flexDirection: 'row', height: 42, borderRadius: BorderRadius.lg, overflow: 'hidden', borderWidth: 1, borderColor: colors.border }}>
+                  <Pressable
+                    onPress={() => setCustomSlotMeridiem('AM')}
+                    style={{
+                      flex: 1,
+                      backgroundColor: customSlotMeridiem === 'AM' ? StitchColors.primaryContainer : colors.backgroundElement,
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                    }}
+                  >
+                    <Text style={{ fontSize: 12, fontWeight: '700', color: customSlotMeridiem === 'AM' ? '#FFFFFF' : colors.text }}>AM</Text>
+                  </Pressable>
+                  <Pressable
+                    onPress={() => setCustomSlotMeridiem('PM')}
+                    style={{
+                      flex: 1,
+                      backgroundColor: customSlotMeridiem === 'PM' ? StitchColors.primaryContainer : colors.backgroundElement,
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                    }}
+                  >
+                    <Text style={{ fontSize: 12, fontWeight: '700', color: customSlotMeridiem === 'PM' ? '#FFFFFF' : colors.text }}>PM</Text>
+                  </Pressable>
+                </View>
+              </View>
+            </View>
+
+            <Text style={[styles.fieldLabel, { color: colors.textSecondary }]}>QUICK PRESETS</Text>
+            <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 6, marginBottom: 14 }}>
+              {['10:15 AM', '11:45 AM', '12:30 PM', '04:30 PM', '06:15 PM', '07:45 PM'].map((p) => (
+                <Pressable
+                  key={p}
+                  onPress={() => {
+                    const [t, meri] = p.split(' ');
+                    const [h, m] = t.split(':');
+                    setCustomSlotHour(h);
+                    setCustomSlotMinute(m);
+                    setCustomSlotMeridiem(meri as 'AM' | 'PM');
+                  }}
+                  style={{
+                    paddingHorizontal: 10,
+                    paddingVertical: 5,
+                    borderRadius: BorderRadius.full,
+                    backgroundColor: colors.backgroundElement,
+                    borderWidth: 1,
+                    borderColor: colors.border,
+                  }}
+                >
+                  <Text style={{ fontSize: 11, fontWeight: '600', color: colors.text }}>{p}</Text>
+                </Pressable>
+              ))}
+            </View>
+
+            <Pressable
+              onPress={handleAddCustomSlot}
+              style={[styles.applySettingsBtn, { backgroundColor: StitchColors.primaryContainer }]}
+            >
+              <Check size={16} color="#FFFFFF" />
+              <Text style={styles.applySettingsBtnText}>Create Slot & Publish to OPD</Text>
+            </Pressable>
+          </View>
+        </View>
+      </Modal>
 
       <UndoToast
         visible={Boolean(lastUndo && lastUndo.kind === 'slots')}
@@ -1734,6 +2149,39 @@ const styles = StyleSheet.create({
     padding: 6,
     borderWidth: 1,
     ...Shadows.subtle,
+  },
+  weekGridScroll: {
+    borderRadius: BorderRadius['2xl'],
+    borderWidth: 1,
+    ...Shadows.subtle,
+  },
+  swipableCalendarScroll: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingVertical: 6,
+    paddingHorizontal: 8,
+    gap: 8,
+  },
+  dayColCard: {
+    width: 54,
+    alignItems: 'center',
+    paddingVertical: 10,
+    borderRadius: BorderRadius.xl,
+    gap: 4,
+  },
+  addSlotBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    paddingHorizontal: 10,
+    paddingVertical: 5,
+    borderRadius: BorderRadius.full,
+    ...Shadows.subtle,
+  },
+  addSlotBtnText: {
+    fontSize: 12,
+    fontWeight: '700',
+    color: '#FFFFFF',
   },
   dayCol: {
     flex: 1,

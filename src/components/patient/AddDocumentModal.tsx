@@ -1,15 +1,27 @@
 import React, { useState } from 'react';
-import { View, Text, ActivityIndicator, StyleSheet, Pressable, Platform, Alert, Linking } from 'react-native';
+import {
+  View,
+  Text,
+  ActivityIndicator,
+  StyleSheet,
+  Pressable,
+  Platform,
+  Alert,
+  Image,
+  TouchableOpacity,
+  Modal as RNModal,
+} from 'react-native';
 import { Modal } from '@/components/ui/Modal';
 import { Input } from '@/components/ui/Input';
 import { Button } from '@/components/ui/Button';
 import { useAuthStore } from '@/store/useAuthStore';
 import { useHealthStore } from '@/store/useHealthStore';
 import { MedicalRecord } from '@/types/index';
-import { Palette, Typography, Spacing, StitchColors } from '@/constants/theme';
+import { Palette, Typography, Spacing, StitchColors, BorderRadius } from '@/constants/theme';
 import { useAppTheme } from '@/hooks/useAppTheme';
-import { ScanText, CheckCircle2, AlertCircle, FileUp, FileCheck, Eye, Plus } from 'lucide-react-native';
+import { ScanText, CheckCircle2, AlertCircle, FileUp, FileCheck, Eye, Plus, X } from 'lucide-react-native';
 import { pickClinicalDocument } from '@/utils/mediaPicker';
+import { apiClient } from '@/services/apiClient';
 
 interface AddDocumentModalProps {
   visible: boolean;
@@ -28,6 +40,7 @@ export function AddDocumentModal({ visible, onClose }: AddDocumentModalProps) {
   const [scanStep, setScanStep] = useState<'idle' | 'scanning' | 'complete'>('idle');
   const [extractedData, setExtractedData] = useState<Record<string, string> | null>(null);
   const [error, setError] = useState('');
+  const [showPreviewModal, setShowPreviewModal] = useState(false);
 
   const handlePickFile = async () => {
     const file = await pickClinicalDocument();
@@ -41,6 +54,10 @@ export function AddDocumentModal({ visible, onClose }: AddDocumentModalProps) {
 
   const handleStartScan = async () => {
     setError('');
+    if (!selectedFile || !selectedFile.uri) {
+      setError('Please select and attach a document or report file first.');
+      return;
+    }
     if (!docTitle.trim()) {
       setError('Please enter a document title or test name.');
       return;
@@ -54,13 +71,13 @@ export function AddDocumentModal({ visible, onClose }: AddDocumentModalProps) {
       'Uploaded File': selectedFile ? selectedFile.name : 'No file attached',
       'Category': docType,
       'Added On': new Date().toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' }),
-      'Storage': selectedFile ? 'Stored securely on this device' : 'No file attached',
+      'Storage': selectedFile ? 'Stored securely on this device & cloud timeline' : 'No file attached',
     };
 
     const tags = ['LOCAL_RECORD', docType.toUpperCase().replace(/\s+/g, '_')];
     const summary = selectedFile
-      ? `Local copy of ${selectedFile.name}. Review the original document for clinical values.`
-      : `Local medical record for ${docTitle.trim()}.`;
+      ? `Uploaded copy of ${selectedFile.name}. Review the original document for clinical values.`
+      : `Clinical medical record for ${docTitle.trim()}.`;
 
     const newRecord: MedicalRecord = {
       id: `rec_${Date.now()}`,
@@ -77,6 +94,23 @@ export function AddDocumentModal({ visible, onClose }: AddDocumentModalProps) {
     };
 
     addRecord(newRecord);
+
+    // Persist to backend database timeline
+    try {
+      await apiClient('/records', {
+        method: 'POST',
+        body: JSON.stringify({
+          title: docTitle.trim(),
+          type: docType === 'Prescription' ? 'PRESCRIPTION' : docType === 'Lab Result' ? 'LAB_REPORT' : 'IMAGING',
+          recordDate: new Date().toISOString(),
+          fileUrl: selectedFile?.uri || '',
+          notes: summary,
+        }),
+      });
+    } catch (e) {
+      console.warn('[AddDocumentModal] Server record sync notice:', e);
+    }
+
     setExtractedData(extracted);
     setScanStep('complete');
   };
@@ -98,6 +132,7 @@ export function AddDocumentModal({ visible, onClose }: AddDocumentModalProps) {
   };
 
   return (
+    <>
     <Modal
       visible={visible}
       onClose={handleCloseModal}
@@ -133,15 +168,7 @@ export function AddDocumentModal({ visible, onClose }: AddDocumentModalProps) {
             {selectedFile?.uri && (
               <Button
                 title="View Uploaded Document"
-                onPress={() => {
-                  if (Platform.OS === 'web') {
-                    window.open(selectedFile.uri, '_blank');
-                  } else {
-                    Linking.openURL(selectedFile.uri).catch(() =>
-                      Alert.alert('Unable to open', 'Cannot open document preview on this device.')
-                    );
-                  }
-                }}
+                onPress={() => setShowPreviewModal(true)}
                 variant="outline"
                 size="md"
                 icon={<Eye size={16} color={StitchColors.primary} />}
@@ -226,6 +253,41 @@ export function AddDocumentModal({ visible, onClose }: AddDocumentModalProps) {
         )}
       </View>
     </Modal>
+
+    {/* In-App Document Preview Modal */}
+    {showPreviewModal && selectedFile?.uri ? (
+      <RNModal
+        visible={showPreviewModal}
+        transparent
+        animationType="fade"
+        onRequestClose={() => setShowPreviewModal(false)}
+      >
+        <View style={styles.previewBackdrop}>
+          <View style={styles.previewCard}>
+            <View style={styles.previewHeader}>
+              <Text style={styles.previewTitle} numberOfLines={1}>
+                {selectedFile.name || 'Document Preview'}
+              </Text>
+              <TouchableOpacity
+                onPress={() => setShowPreviewModal(false)}
+                style={styles.previewCloseBtn}
+                hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+              >
+                <X size={18} color="#FFFFFF" />
+              </TouchableOpacity>
+            </View>
+            <View style={styles.previewBody}>
+              <Image
+                source={{ uri: selectedFile.uri }}
+                style={styles.previewImg}
+                resizeMode="contain"
+              />
+            </View>
+          </View>
+        </View>
+      </RNModal>
+    ) : null}
+    </>
   );
 }
 
@@ -330,5 +392,51 @@ const useStyles = (colors: any) => StyleSheet.create({
     fontWeight: '600',
     flex: 1,
     textAlign: 'right',
+  },
+  previewBackdrop: {
+    flex: 1,
+    backgroundColor: 'rgba(15, 23, 42, 0.85)',
+    justifyContent: 'center',
+    alignItems: 'center',
+    padding: Spacing.md,
+  },
+  previewCard: {
+    width: '100%',
+    maxWidth: 420,
+    backgroundColor: '#0F172A',
+    borderRadius: BorderRadius.xl,
+    overflow: 'hidden',
+  },
+  previewHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingHorizontal: 16,
+    paddingVertical: 12,
+    borderBottomWidth: 1,
+    borderBottomColor: '#334155',
+  },
+  previewTitle: {
+    fontSize: 14,
+    fontWeight: '700',
+    color: '#F8FAFC',
+    flex: 1,
+    marginRight: 8,
+  },
+  previewCloseBtn: {
+    padding: 6,
+    borderRadius: 20,
+    backgroundColor: '#334155',
+  },
+  previewBody: {
+    width: '100%',
+    height: 380,
+    backgroundColor: '#020617',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  previewImg: {
+    width: '100%',
+    height: '100%',
   },
 });

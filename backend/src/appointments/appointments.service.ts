@@ -501,6 +501,9 @@ export class AppointmentsService {
       this.checkAppointmentActorAccess(apt, currentUser);
 
       // Validate state transition for cancellation
+      if (String(apt.status).toUpperCase() === 'CANCELLED') {
+        return this.formatAppointment(apt);
+      }
       const cancellableStatuses: string[] = ['PENDING', 'CONFIRMED'];
       if (!cancellableStatuses.includes(String(apt.status).toUpperCase())) {
         throw new BadRequestException(

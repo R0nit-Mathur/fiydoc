@@ -13,6 +13,7 @@ import {
   Platform,
   Modal,
   RefreshControl,
+  Alert,
 } from 'react-native';
 import { useRouter } from 'expo-router';
 import { SafeAreaView } from 'react-native-safe-area-context';
@@ -260,9 +261,11 @@ export default function PatientAppointmentsScreen() {
       await appointmentService.cancelAppointment(cancelTargetApt.id);
       cancelInStore(cancelTargetApt.id);
       await queryClient.invalidateQueries({ queryKey: ['appointments'] });
-    } catch (error) {
+      Alert.alert('Appointment Cancelled', 'Your appointment has been cancelled successfully.');
+    } catch (error: any) {
       console.error('Failed to cancel appointment on server:', error);
       cancelInStore(cancelTargetApt.id);
+      Alert.alert('Notice', error?.message || 'Appointment cancelled locally.');
     } finally {
       setCancelling(false);
       setCancelModalVisible(false);

@@ -11,6 +11,11 @@ export class RecordsController {
   async getTimeline(@Param('patientId') patientId: string, @Request() req: any) {
     return this.recordsService.getPatientTimeline(patientId, req.user);
   }
+
+  @Post()
+  async createRecord(@Body() body: any, @Request() req: any) {
+    return this.recordsService.createRecord(body, req.user);
+  }
 }
 
 

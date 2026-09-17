@@ -47,10 +47,8 @@ import {
 import { useQuery } from '@tanstack/react-query';
 import { StitchColors } from '@/constants/theme';
 import { getSpecialtyConfig } from '@/constants/specialties';
-import { useDoctorsQuery } from '@/hooks/queries/useDoctorsQuery';
+import { useDoctorsQuery, useDoctorDetailQuery } from '@/hooks/queries/useDoctorsQuery';
 import { doctorService } from '@/services/doctorService';
-
-
 
 const generateDynamicDates = () => {
   const days = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
@@ -64,7 +62,7 @@ const generateDynamicDates = () => {
   // Requiring booking at least 15 mins before slot means after 19:45 (7:45 PM), no slots remain today.
   const isTodaySlotsEnded = currentMinutes >= 19 * 60 + 45;
 
-  for (let i = 0; i < 7; i++) {
+  for (let i = 0; i < 14; i++) {
     const d = new Date(today);
     d.setDate(today.getDate() + i);
     const dayName = i === 0 ? 'Today' : i === 1 ? 'Tomorrow' : days[d.getDay()];
@@ -108,10 +106,12 @@ export default function DoctorProfileScreen() {
   const router = useRouter();
   const insets = useSafeAreaInsets();
   const { id } = useLocalSearchParams<{ id?: string }>();
-  const { data: doctors, isLoading } = useDoctorsQuery();
+  const { data: detailDoctor, isLoading: isLoadingDetail } = useDoctorDetailQuery(id || '');
+  const { data: doctors, isLoading: isLoadingList } = useDoctorsQuery();
 
-  // Strict lookup: NEVER fallback to doctors[0] if doctor is not found
-  const doctor = doctors?.find((d) => d.id === id) || null;
+  // Authoritative lookup: prefer detailDoctor (fresh from server), fallback to list match
+  const doctor = detailDoctor || doctors?.find((d) => d.id === id) || null;
+  const isLoading = isLoadingDetail && !doctor;
 
   const [isFavorite, setIsFavorite] = useState(false);
 
@@ -545,6 +545,8 @@ export default function DoctorProfileScreen() {
             <ScrollView
               horizontal
               showsHorizontalScrollIndicator={false}
+              nestedScrollEnabled={true}
+              directionalLockEnabled={true}
               contentContainerStyle={styles.dateSelectorScroll}
             >
               {dynamicDates.map((item, idx) => {

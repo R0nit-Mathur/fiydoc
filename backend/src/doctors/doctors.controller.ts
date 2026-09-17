@@ -65,9 +65,10 @@ export class DoctorsController {
   @UseGuards(JwtAuthGuard)
   async applyLeave(
     @Request() req: any,
-    @Body() body: { doctorId?: string; date: string; reason?: string }
+    @Body() body: { doctorId?: string; date?: string; startDate?: string; endDate?: string; reason?: string }
   ) {
-    return this.doctorsService.applyScheduleLeave(body.doctorId, body.date, body.reason, req.user);
+    const startDate = body.startDate || body.date;
+    return this.doctorsService.applyScheduleLeave(body.doctorId, startDate, body.reason, req.user, body.endDate);
   }
 
   @Post('schedule/undo')
@@ -77,6 +78,46 @@ export class DoctorsController {
     @Body() body: { doctorId?: string; date: string; action: 'delay' | 'leave' }
   ) {
     return this.doctorsService.undoScheduleOverride(body.doctorId, body.date, body.action, req.user);
+  }
+
+  @Post('schedule/custom-slot')
+  @UseGuards(JwtAuthGuard)
+  async manageCustomSlot(
+    @Request() req: any,
+    @Body()
+    body: {
+      doctorId?: string;
+      date: string;
+      time: string;
+      action: 'add' | 'remove' | 'block';
+    }
+  ) {
+    return this.doctorsService.manageCustomSlot(
+      body.doctorId,
+      body.date,
+      body.time,
+      body.action,
+      req.user
+    );
+  }
+
+  @Post('schedule/settings')
+  @UseGuards(JwtAuthGuard)
+  async updateScheduleSettings(
+    @Request() req: any,
+    @Body()
+    body: {
+      doctorId?: string;
+      date?: string;
+      slotDurationMinutes?: number;
+      patientsPerSlot?: number;
+      morningStart?: string;
+      morningEnd?: string;
+      eveningStart?: string;
+      eveningEnd?: string;
+    }
+  ) {
+    return this.doctorsService.updateScheduleSettings(body, req.user);
   }
 
   @Get(':id/schedule/overrides')

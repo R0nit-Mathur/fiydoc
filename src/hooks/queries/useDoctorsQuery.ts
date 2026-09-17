@@ -15,5 +15,7 @@ export function useDoctorDetailQuery(id: string) {
     queryKey: ['doctor', id],
     queryFn: () => doctorService.getDoctorById(id),
     enabled: Boolean(id),
+    staleTime: 0,
+    refetchOnMount: 'always',
   });
 }

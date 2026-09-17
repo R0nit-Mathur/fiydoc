@@ -5,7 +5,7 @@ import {
   BadRequestException,
 } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
-import { Role } from '@prisma/client';
+import { Role, MedicalRecordType } from '@prisma/client';
 
 @Injectable()
 export class RecordsService {
@@ -72,6 +72,49 @@ export class RecordsService {
     return this.prisma.medicalRecord.findMany({
       where: { patientId: resolvedId },
       orderBy: { createdAt: 'desc' },
+    });
+  }
+
+  async createRecord(
+    dto: {
+      patientId?: string;
+      title: string;
+      type?: string;
+      documentUrl?: string;
+      summary?: string;
+      tags?: string[];
+    },
+    currentUser: any,
+  ) {
+    if (!currentUser) throw new ForbiddenException('Authentication required.');
+
+    let targetPatientId = dto.patientId;
+    if (!targetPatientId || targetPatientId === 'me') {
+      const p = await this.prisma.patient.findFirst({
+        where: { userId: currentUser.id },
+      });
+      if (!p) throw new NotFoundException('Patient record not found.');
+      targetPatientId = p.id;
+    } else {
+      targetPatientId = await this.resolvePatientId(targetPatientId, currentUser);
+    }
+
+    let typeEnum: MedicalRecordType = MedicalRecordType.UPLOADED_DOCUMENT;
+    if (dto.type?.toLowerCase().includes('prescription')) {
+      typeEnum = MedicalRecordType.PRESCRIPTION;
+    } else if (dto.type?.toLowerCase().includes('consultation')) {
+      typeEnum = MedicalRecordType.CONSULTATION;
+    }
+
+    return this.prisma.medicalRecord.create({
+      data: {
+        patientId: targetPatientId,
+        title: dto.title.trim(),
+        type: typeEnum,
+        documentUrl: dto.documentUrl || null,
+        summary: dto.summary || null,
+        tags: dto.tags || ['UPLOADED_DOCUMENT'],
+      },
     });
   }
 }

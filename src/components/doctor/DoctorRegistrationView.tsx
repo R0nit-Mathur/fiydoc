@@ -35,6 +35,7 @@ import { CardCarouselTabs, CarouselDots } from '@/components/ui/CardCarouselTabs
 import { FileUploadCard } from '@/components/ui/FileUploadCard';
 import { SegmentedRoleSelector } from '@/components/ui/SegmentedRoleSelector';
 import { useAuthStore } from '@/store/useAuthStore';
+import { useNotificationStore } from '@/store/useNotificationStore';
 import { authService } from '@/services/authService';
 import { StitchColors } from '@/constants/theme';
 import { pickClinicalDocument } from '@/utils/mediaPicker';
@@ -354,6 +355,13 @@ export function DoctorRegistrationView({
       );
 
       setSession(session);
+      useNotificationStore.getState().addNotification({
+        title: 'Doctor Profile Created & Submitted',
+        message: `Welcome Dr. ${cleanName}! Your doctor profile and medical credentials have been registered and sent for admin verification.`,
+        type: 'profile_created',
+        recipientRole: 'doctor',
+        recipientId: session?.id,
+      });
       setFinalSubmitting(false);
       router.replace('/(doctor)/(tabs)/home');
     } catch (err: any) {
