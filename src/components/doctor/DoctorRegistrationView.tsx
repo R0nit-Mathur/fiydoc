@@ -37,6 +37,7 @@ import { SegmentedRoleSelector } from '@/components/ui/SegmentedRoleSelector';
 import { useAuthStore } from '@/store/useAuthStore';
 import { useNotificationStore } from '@/store/useNotificationStore';
 import { authService } from '@/services/authService';
+import { apiClient } from '@/services/apiClient';
 import { StitchColors } from '@/constants/theme';
 import { pickClinicalDocument } from '@/utils/mediaPicker';
 import locationsData from '@/constants/locations.json';
@@ -162,7 +163,7 @@ export function DoctorRegistrationView({
   const [error, setError] = useState('');
 
   // ---------------- Handlers ----------------
-  const handleStep1Continue = () => {
+  const handleStep1Continue = async () => {
     setError('');
     if (!doctorName.trim()) {
       setError('Please provide your full professional name.');
@@ -186,15 +187,47 @@ export function DoctorRegistrationView({
     }
 
     setStep1Loading(true);
-    setTimeout(() => {
+
+    try {
+      const cleanEmail = contactEmail.trim();
+      const cleanName = doctorName.trim();
+      const cleanPhone = contactPhone.trim();
+      const cleanPassword = password.trim();
+
+      // If user is not yet logged in or registered, register immediately on backend
+      const currentSession = useAuthStore.getState().user;
+      if (!currentSession?.isLoggedIn || currentSession?.email !== cleanEmail) {
+        console.log('[DoctorRegistrationView] Registering doctor account at Step 1 for:', cleanEmail);
+        const session = await authService.registerWithEmail(
+          cleanEmail,
+          cleanPassword,
+          'doctor',
+          cleanName,
+          cleanPhone,
+          {
+            specialization: specialization.trim() || 'General Medicine',
+            consultationFee: Number(consultationFee) || 500,
+          }
+        );
+        setSession(session);
+      }
+
       setStep1Loading(false);
       setStep1Success(true);
       setTimeout(() => {
         setMainStep(2);
         setCardIndex(0);
         setStep1Success(false);
-      }, 700);
-    }, 1200);
+      }, 500);
+    } catch (err: any) {
+      setStep1Loading(false);
+      console.warn('[DoctorRegistrationView] Step 1 registration error:', err?.message);
+      if (err?.message?.includes('already registered')) {
+        setError('[Account Exists] This email is already registered. Please sign in or use a different email.');
+      } else {
+        setError(err?.message || 'Failed to create doctor account. Please check your connection and try again.');
+      }
+    }
   };
 
   const handleCard1Continue = () => {
@@ -336,31 +369,59 @@ export function DoctorRegistrationView({
         ? `${clinicAddress.trim()}, ${clinicCity.trim()} ${clinicPin.trim()}`
         : 'Clinical Practice Address Pending';
 
-      const session = await authService.registerWithEmail(
-        cleanEmail,
-        cleanPassword,
-        'doctor',
-        cleanName,
-        cleanPhone,
-        {
-          licenseNumber: councilRegNumber.trim() || `NMC-${Date.now()}`,
-          registrationAuthority: primaryCouncil.trim() || 'National Medical Commission / State Council',
-          specialization: specialization.trim() || 'General Medicine',
-          qualifications: qualificationList,
-          clinicName: clinicName.trim() || hospitalName.trim() || `${cleanName}'s Clinic`,
-          clinicAddress: fullClinicAddress,
-          clinicTimings: `${morningShiftTime}, ${eveningShiftTime}`,
-          consultationFee: Number(consultationFee) || 800,
-        }
-      );
+      const doctorFields = {
+        licenseNumber: councilRegNumber.trim() || `NMC-${Date.now()}`,
+        registrationAuthority: primaryCouncil.trim() || 'National Medical Commission / State Council',
+        specialization: specialization.trim() || 'General Medicine',
+        qualifications: qualificationList,
+        clinicName: clinicName.trim() || hospitalName.trim() || `${cleanName}'s Clinic`,
+        clinicAddress: fullClinicAddress,
+        clinicTimings: `${morningShiftTime}, ${eveningShiftTime}`,
+        consultationFee: Number(consultationFee) || 800,
+      };
 
-      setSession(session);
+      let currentSession = useAuthStore.getState().user;
+
+      if (!currentSession?.isLoggedIn) {
+        console.log('[DoctorRegistrationView] Registering doctor account at final submit for:', cleanEmail);
+        currentSession = await authService.registerWithEmail(
+          cleanEmail,
+          cleanPassword,
+          'doctor',
+          cleanName,
+          cleanPhone,
+          doctorFields
+        );
+        setSession(currentSession);
+      } else {
+        // If already registered in Step 1, update doctor profile with full medical credentials
+        try {
+          console.log('[DoctorRegistrationView] Updating registered doctor profile for:', currentSession.id);
+          await apiClient('/doctors/me', {
+            method: 'PATCH',
+            body: JSON.stringify({
+              fullName: cleanName.startsWith('Dr.') ? cleanName : `Dr. ${cleanName}`,
+              specialization: doctorFields.specialization,
+              consultationFee: doctorFields.consultationFee,
+              clinicName: doctorFields.clinicName,
+              clinicAddress: doctorFields.clinicAddress,
+              clinicTimings: doctorFields.clinicTimings,
+              qualifications: doctorFields.qualifications,
+              licenseNumber: doctorFields.licenseNumber,
+              registrationAuthority: doctorFields.registrationAuthority,
+            }),
+          });
+        } catch (updateErr: any) {
+          console.warn('[DoctorRegistrationView] Profile update notice:', updateErr?.message);
+        }
+      }
+
       useNotificationStore.getState().addNotification({
         title: 'Doctor Profile Created & Submitted',
         message: `Welcome Dr. ${cleanName}! Your doctor profile and medical credentials have been registered and sent for admin verification.`,
         type: 'profile_created',
         recipientRole: 'doctor',
-        recipientId: session?.id,
+        recipientId: currentSession?.id,
       });
       setFinalSubmitting(false);
       router.replace('/(doctor)/(tabs)/home');

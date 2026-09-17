@@ -2,25 +2,18 @@ import Constants from 'expo-constants';
 import { useAuthStore } from '@/store/useAuthStore';
 import { tokenStorage } from '@/utils/tokenStorage';
 
+const PRODUCTION_API_URL = 'https://fiydoc.onrender.com';
+
 function getBaseUrl(): string {
   const envUrl = process.env.EXPO_PUBLIC_API_URL?.trim();
 
-  // 1. If configured with a production/cloud HTTPS backend, prioritize it immediately
-  if (envUrl && envUrl.startsWith('https://')) {
-    return envUrl;
+  // If explicitly configured with an API URL, use it
+  if (envUrl && envUrl.length > 0) {
+    return envUrl.replace(/\/+$/, '');
   }
 
-  // 2. If in Expo Go / Dev client without cloud HTTPS, extract Metro LAN IP dynamically
-  const hostUri = Constants.expoConfig?.hostUri || (Constants as any).manifest?.debuggerHost;
-  if (hostUri) {
-    const ip = hostUri.split(':')[0];
-    if (ip && ip !== 'localhost' && ip !== '127.0.0.1') {
-      return `http://${ip}:3000`;
-    }
-  }
-
-  // 3. Fallback to production cloud service
-  return envUrl || 'https://fiydoc.onrender.com';
+  // Authoritative default: live production service on Render
+  return PRODUCTION_API_URL;
 }
 
 export async function apiClient<T>(endpoint: string, options: RequestInit = {}): Promise<T> {
@@ -40,6 +33,7 @@ export async function apiClient<T>(endpoint: string, options: RequestInit = {}):
   }
 
   const url = `${baseUrl}${endpoint}`;
+  console.log(`[apiClient] --> ${options.method || 'GET'} ${url}`);
   try {
     const response = await fetch(url, {
       ...options,
