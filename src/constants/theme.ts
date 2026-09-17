@@ -41,8 +41,8 @@ export const StitchColors = {
   // Secondary (Vitality Teal)
   secondary: '#006b5f',
   onSecondary: '#ffffff',
-  secondaryContainer: '#76f4e0',
-  onSecondaryContainer: '#006f63',
+  secondaryContainer: '#0f766e',
+  onSecondaryContainer: '#ffffff',
 
   // Tertiary (Sky Cyan)
   tertiary: '#004059',
@@ -62,8 +62,8 @@ export const StitchColors = {
   onPrimaryFixed: '#001a41',
   onPrimaryFixedVariant: '#004493',
 
-  secondaryFixed: '#79f7e3',
-  secondaryFixedDim: '#59dbc7',
+  secondaryFixed: '#f0fdfa',
+  secondaryFixedDim: '#99f6e4',
   onSecondaryFixed: '#00201c',
   onSecondaryFixedVariant: '#005047',
 
@@ -88,10 +88,10 @@ export const Palette = {
   primaryBlueBorder: StitchColors.onPrimaryContainer,
 
   // Vitality Teal
-  healthcareTeal: StitchColors.secondaryContainer,
-  healthcareTealHover: StitchColors.secondary,
-  healthcareTealLight: StitchColors.secondaryFixed,
-  healthcareTealBorder: StitchColors.secondaryFixedDim,
+  healthcareTeal: '#0f766e',
+  healthcareTealHover: '#006b5f',
+  healthcareTealLight: '#f0fdfa',
+  healthcareTealBorder: '#99f6e4',
 
   // Sky Cyan
   skyCyan: StitchColors.tertiaryContainer,
@@ -373,7 +373,7 @@ export const Colors = {
     surfaceContainerHighest: StitchColors.surfaceContainerHighest,
 
     // Status
-    success: StitchColors.secondaryContainer,
+    success: '#059669',
     warning: '#f59e0b',
     danger: StitchColors.error,
   },

@@ -386,7 +386,7 @@ export default function BookingConfirmScreen() {
                 <Text style={[styles.patientNameText, { color: patientName ? colors.text : StitchColors.error }]}>
                   {patientName || 'Enter Patient Name *'}
                 </Text>
-                <View style={[styles.selfTag, { backgroundColor: Palette.healthcareTealLight }]}>
+                <View style={styles.selfTag}>
                   <Text style={styles.selfTagText}>Self</Text>
                 </View>
               </View>
@@ -835,14 +835,17 @@ const styles = StyleSheet.create({
     fontWeight: '700',
   },
   selfTag: {
-    paddingHorizontal: 6,
+    paddingHorizontal: 8,
     paddingVertical: 2,
-    borderRadius: 4,
+    borderRadius: 6,
+    backgroundColor: '#F0FDFA',
+    borderWidth: 1,
+    borderColor: '#99F6E4',
   },
   selfTagText: {
     fontSize: 10,
     fontWeight: '700',
-    color: StitchColors.secondary,
+    color: '#0F766E',
   },
   patientMetaText: {
     fontSize: 12,

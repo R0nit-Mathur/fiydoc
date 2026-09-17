@@ -13,9 +13,9 @@ export function Badge({ label, variant = 'teal', size = 'md', icon }: BadgeProps
   const { isDark } = useAppTheme();
 
   const lightStyles = {
-    teal: { bg: '#E0F7F5', border: '#76F4E0', text: '#006B5F' },
+    teal: { bg: '#F0FDFA', border: '#99F6E4', text: '#0F766E' },
     blue: { bg: '#EAEDFF', border: '#ADC6FF', text: '#1450A3' },
-    success: { bg: '#E0F7F5', border: '#76F4E0', text: '#006B5F' },
+    success: { bg: '#ECFDF5', border: '#A7F3D0', text: '#047857' },
     warning: { bg: '#FFFBEB', border: '#FDE68A', text: '#B45309' },
     danger: { bg: '#FFDAD6', border: '#FFB4AB', text: '#BA1A1A' },
     purple: { bg: '#F5F3FF', border: '#DDD6FE', text: '#6D28D9' },

@@ -15,6 +15,8 @@ export interface SlotDetails {
 }
 
 export const doctorService = {
+  getMyProfile: async (): Promise<any> => apiClient<any>('/doctors/me'),
+
   updateMyProfile: async (profile: {
     fullName?: string;
     specialization?: string;

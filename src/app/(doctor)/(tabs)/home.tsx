@@ -23,6 +23,7 @@ import {
   StatusBar,
   Modal,
   RefreshControl,
+  ActivityIndicator,
 } from 'react-native';
 import { useRouter } from 'expo-router';
 import { useQueryClient } from '@tanstack/react-query';
@@ -52,6 +53,7 @@ import { useAuthStore } from '@/store/useAuthStore';
 import { useAppointmentStore } from '@/store/useAppointmentStore';
 import { useAppointmentsQuery } from '@/hooks/queries/useAppointmentsQuery';
 import { signOutAll } from '@/services/authService';
+import { doctorService } from '@/services/doctorService';
 import { useAppTheme } from '@/hooks/useAppTheme';
 import { BorderRadius, Shadows, Spacing, StitchColors, Palette, DEFAULT_DOCTOR_AVATAR } from '@/constants/theme';
 import { AppUpdateModal } from '@/components/ui/AppUpdateModal';
@@ -65,13 +67,41 @@ const DOCTOR_AVATAR = DEFAULT_DOCTOR_AVATAR;
 export default function DoctorHomeScreen() {
   const router = useRouter();
   const { colors, isDark } = useAppTheme();
-  const { user } = useAuthStore();
+  const { user, updateUser, setVerificationStatus } = useAuthStore();
   const { appointments: storeAppointments } = useAppointmentStore();
   const { data: serverAppointments = [] } = useAppointmentsQuery(undefined, user?.id);
   const queryClient = useQueryClient();
   const [drawerOpen, setDrawerOpen] = useState(false);
   const [updateModalVisible, setUpdateModalVisible] = useState(false);
   const [refreshing, setRefreshing] = useState(false);
+  const [checkingVerification, setCheckingVerification] = useState(false);
+  const [verificationCheckMsg, setVerificationCheckMsg] = useState<string | null>(null);
+
+  const isVerified = user?.verificationStatus === 'verified';
+
+  const handleCheckStatus = async () => {
+    setCheckingVerification(true);
+    setVerificationCheckMsg(null);
+    try {
+      const profile = await doctorService.getMyProfile();
+      if (profile?.verificationStatus) {
+        const status = profile.verificationStatus.toLowerCase();
+        updateUser({ verificationStatus: status });
+        setVerificationStatus(status);
+        if (status === 'verified') {
+          setVerificationCheckMsg('Credentials verified! Welcome to FiYDoc.');
+        } else {
+          setVerificationCheckMsg('Your profile is currently queued under review by the medical board.');
+        }
+      } else {
+        setVerificationCheckMsg('Your application remains queued under review.');
+      }
+    } catch {
+      setVerificationCheckMsg('Unable to refresh verification status right now. Please try again.');
+    } finally {
+      setCheckingVerification(false);
+    }
+  };
 
   const handleRefresh = async () => {
     setRefreshing(true);
@@ -148,6 +178,174 @@ export default function DoctorHomeScreen() {
     }
     router.push(`/(doctor)/consultation/${appointmentId}` as any);
   };
+
+  if (!isVerified) {
+    return (
+      <SafeAreaView style={[styles.safeArea, { backgroundColor: colors.background }]} edges={['top']}>
+        <StatusBar barStyle={isDark ? 'light-content' : 'dark-content'} />
+
+        {/* Top Header */}
+        <View style={[styles.headerBar, { borderBottomColor: colors.border, backgroundColor: colors.card }]}>
+          <View style={styles.headerLeftLogoRow}>
+            <FiYLogo size="md" />
+            <Text style={[styles.headerBrandText, { color: colors.text }]}>FiYDoc Pro</Text>
+          </View>
+          <Pressable
+            onPress={() => signOutAll('USER_ACTION')}
+            style={[styles.pendingLogoutBtn, { backgroundColor: isDark ? 'rgba(239, 68, 68, 0.15)' : '#FEF2F2' }]}
+            hitSlop={8}
+          >
+            <LogOut size={15} color={StitchColors.error} />
+            <Text style={styles.pendingLogoutText}>Sign Out</Text>
+          </Pressable>
+        </View>
+
+        <ScrollView
+          contentContainerStyle={styles.pendingScrollContent}
+          showsVerticalScrollIndicator={false}
+          refreshControl={
+            <RefreshControl
+              refreshing={refreshing}
+              onRefresh={async () => {
+                setRefreshing(true);
+                try {
+                  await handleCheckStatus();
+                } finally {
+                  setRefreshing(false);
+                }
+              }}
+              colors={[StitchColors.primaryContainer]}
+              tintColor={StitchColors.primaryContainer}
+            />
+          }
+        >
+          <Animated.View
+            entering={FadeInDown.duration(400)}
+            style={[styles.pendingCard, { backgroundColor: colors.card, borderColor: colors.border }]}
+          >
+            <View style={styles.pendingIconCircle}>
+              <Clock size={36} color="#D97706" />
+            </View>
+
+            <View style={styles.pendingBadgeRow}>
+              <View style={styles.pendingBadge}>
+                <Text style={styles.pendingBadgeText}>QUEUED FOR VERIFICATION</Text>
+              </View>
+            </View>
+
+            <Text style={[styles.pendingTitle, { color: colors.text }]}>
+              Application Under Review
+            </Text>
+
+            <Text style={[styles.pendingDoctorName, { color: colors.textSecondary }]}>
+              Welcome, {user?.name ? (user.name.startsWith('Dr.') ? user.name : `Dr. ${user.name}`) : 'Doctor'}
+            </Text>
+
+            <Text style={[styles.pendingBodyText, { color: colors.textSecondary }]}>
+              Your clinical profile and registration credentials have been submitted and are currently queued for verification by the medical verification board.
+            </Text>
+
+            {verificationCheckMsg && (
+              <View style={[styles.feedbackMsgBox, { backgroundColor: isDark ? 'rgba(217, 119, 6, 0.15)' : '#FFFBEB', borderColor: '#FDE68A' }]}>
+                <Text style={[styles.feedbackMsgText, { color: isDark ? '#FCD34D' : '#92400E' }]}>
+                  {verificationCheckMsg}
+                </Text>
+              </View>
+            )}
+
+            {/* Stages Checklist */}
+            <View style={styles.stagesContainer}>
+              <View style={styles.stageItem}>
+                <View style={[styles.stageIconWrap, { backgroundColor: '#ECFDF5', borderColor: '#A7F3D0' }]}>
+                  <CheckCircle2 size={16} color="#059669" />
+                </View>
+                <View style={styles.stageTextWrap}>
+                  <Text style={[styles.stageTitle, { color: colors.text }]}>Profile & Credentials Submitted</Text>
+                  <Text style={[styles.stageSub, { color: colors.textSecondary }]}>Registration details recorded</Text>
+                </View>
+              </View>
+
+              <View style={styles.stageConnector} />
+
+              <View style={styles.stageItem}>
+                <View style={[styles.stageIconWrap, { backgroundColor: '#FFFBEB', borderColor: '#FDE68A' }]}>
+                  <Clock size={16} color="#D97706" />
+                </View>
+                <View style={styles.stageTextWrap}>
+                  <Text style={[styles.stageTitle, { color: colors.text }]}>Council & License Verification</Text>
+                  <Text style={[styles.stageSub, { color: colors.textSecondary }]}>Medical authority cross-referencing in progress</Text>
+                </View>
+              </View>
+
+              <View style={styles.stageConnector} />
+
+              <View style={styles.stageItem}>
+                <View style={[styles.stageIconWrap, { backgroundColor: colors.backgroundElement, borderColor: colors.border }]}>
+                  <ShieldCheck size={16} color="#94A3B8" />
+                </View>
+                <View style={styles.stageTextWrap}>
+                  <Text style={[styles.stageTitle, { color: '#94A3B8' }]}>OPD Queue & Clinic Activation</Text>
+                  <Text style={[styles.stageSub, { color: colors.textSecondary }]}>Enabled immediately upon verification</Text>
+                </View>
+              </View>
+            </View>
+
+            {/* Credential Details Snapshot */}
+            <View style={[styles.detailsSnapshotBox, { backgroundColor: colors.backgroundElement, borderColor: colors.border }]}>
+              <View style={styles.snapshotRow}>
+                <Text style={[styles.snapshotLabel, { color: colors.textSecondary }]}>Doctor Account</Text>
+                <Text style={[styles.snapshotValue, { color: colors.text }]} numberOfLines={1}>
+                  {user?.email || 'Registered'}
+                </Text>
+              </View>
+              <View style={styles.snapshotRow}>
+                <Text style={[styles.snapshotLabel, { color: colors.textSecondary }]}>Council License</Text>
+                <Text style={[styles.snapshotValue, { color: colors.text }]}>
+                  {user?.licenseNumber || user?.registrationNumber || 'Under Review'}
+                </Text>
+              </View>
+              <View style={styles.snapshotRow}>
+                <Text style={[styles.snapshotLabel, { color: colors.textSecondary }]}>Specialty</Text>
+                <Text style={[styles.snapshotValue, { color: colors.text }]}>
+                  {user?.specialization || user?.specialty || 'General Medicine'}
+                </Text>
+              </View>
+              <View style={styles.snapshotRow}>
+                <Text style={[styles.snapshotLabel, { color: colors.textSecondary }]}>Current Status</Text>
+                <Text style={[styles.snapshotValue, { color: '#D97706', fontWeight: '700' }]}>
+                  Pending Admin Approval
+                </Text>
+              </View>
+            </View>
+
+            {/* Check Status Button */}
+            <Pressable
+              onPress={handleCheckStatus}
+              disabled={checkingVerification}
+              style={({ pressed }) => [
+                styles.refreshStatusBtn,
+                pressed && { opacity: 0.85 },
+              ]}
+            >
+              {checkingVerification ? (
+                <ActivityIndicator size="small" color="#ffffff" />
+              ) : (
+                <>
+                  <RefreshCw size={16} color="#ffffff" />
+                  <Text style={styles.refreshStatusBtnText}>Check Verification Status</Text>
+                </>
+              )}
+            </Pressable>
+
+            {/* Explanatory notice */}
+            <Text style={[styles.pendingNotice, { color: colors.textSecondary }]}>
+              National Medical Commission (NMC) compliance requires credential verification to protect patients and ensure verified practitioners on the FiYDoc network.
+            </Text>
+          </Animated.View>
+        </ScrollView>
+      </SafeAreaView>
+    );
+  }
 
   return (
     <SafeAreaView style={[styles.safeArea, { backgroundColor: colors.background }]} edges={['top']}>
@@ -945,5 +1143,179 @@ const styles = StyleSheet.create({
   },
   buildVersionText: {
     fontSize: 10,
+  },
+  headerLeftLogoRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+  },
+  headerBrandText: {
+    fontSize: 16,
+    fontWeight: '800',
+    letterSpacing: -0.3,
+  },
+  pendingLogoutBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderRadius: 8,
+  },
+  pendingLogoutText: {
+    fontSize: 12,
+    fontWeight: '700',
+    color: StitchColors.error,
+  },
+  pendingScrollContent: {
+    padding: 16,
+    paddingBottom: 40,
+    alignItems: 'center',
+  },
+  pendingCard: {
+    width: '100%',
+    maxWidth: 520,
+    borderRadius: BorderRadius['2xl'],
+    borderWidth: 1,
+    padding: 24,
+    alignItems: 'center',
+    ...Shadows.subtle,
+  },
+  pendingIconCircle: {
+    width: 68,
+    height: 68,
+    borderRadius: 34,
+    backgroundColor: '#FEF3C7',
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginBottom: 16,
+  },
+  pendingBadgeRow: {
+    marginBottom: 12,
+  },
+  pendingBadge: {
+    backgroundColor: '#FFFBEB',
+    borderWidth: 1,
+    borderColor: '#FDE68A',
+    paddingHorizontal: 12,
+    paddingVertical: 4,
+    borderRadius: BorderRadius.full,
+  },
+  pendingBadgeText: {
+    fontSize: 11,
+    fontWeight: '800',
+    color: '#B45309',
+    letterSpacing: 0.5,
+  },
+  pendingTitle: {
+    fontSize: 20,
+    fontWeight: '800',
+    textAlign: 'center',
+    marginBottom: 4,
+  },
+  pendingDoctorName: {
+    fontSize: 14,
+    fontWeight: '600',
+    textAlign: 'center',
+    marginBottom: 12,
+  },
+  pendingBodyText: {
+    fontSize: 13,
+    lineHeight: 19,
+    textAlign: 'center',
+    marginBottom: 20,
+    paddingHorizontal: 8,
+  },
+  feedbackMsgBox: {
+    width: '100%',
+    padding: 10,
+    borderRadius: BorderRadius.md,
+    borderWidth: 1,
+    marginBottom: 16,
+  },
+  feedbackMsgText: {
+    fontSize: 12,
+    fontWeight: '600',
+    textAlign: 'center',
+  },
+  stagesContainer: {
+    width: '100%',
+    paddingVertical: 8,
+    marginBottom: 20,
+  },
+  stageItem: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
+  },
+  stageIconWrap: {
+    width: 32,
+    height: 32,
+    borderRadius: 16,
+    borderWidth: 1,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  stageTextWrap: {
+    flex: 1,
+  },
+  stageTitle: {
+    fontSize: 13,
+    fontWeight: '700',
+  },
+  stageSub: {
+    fontSize: 11,
+    marginTop: 1,
+  },
+  stageConnector: {
+    width: 2,
+    height: 18,
+    backgroundColor: '#E2E8F0',
+    marginLeft: 15,
+    marginVertical: 2,
+  },
+  detailsSnapshotBox: {
+    width: '100%',
+    borderRadius: BorderRadius.lg,
+    borderWidth: 1,
+    padding: 14,
+    gap: 8,
+    marginBottom: 20,
+  },
+  snapshotRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+  },
+  snapshotLabel: {
+    fontSize: 12,
+    fontWeight: '500',
+  },
+  snapshotValue: {
+    fontSize: 12,
+    fontWeight: '600',
+  },
+  refreshStatusBtn: {
+    width: '100%',
+    height: 48,
+    borderRadius: BorderRadius.xl,
+    backgroundColor: StitchColors.primaryContainer,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 8,
+    marginBottom: 16,
+    ...Shadows.subtle,
+  },
+  refreshStatusBtnText: {
+    fontSize: 14,
+    fontWeight: '700',
+    color: '#ffffff',
+  },
+  pendingNotice: {
+    fontSize: 11,
+    lineHeight: 16,
+    textAlign: 'center',
+    paddingHorizontal: 12,
   },
 });

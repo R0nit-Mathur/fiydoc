@@ -155,7 +155,7 @@ export function DoctorRegistrationView({
   const [tempEveningTokens, setTempEveningTokens] = useState('12');
 
   // Autocomplete Dropdown State
-  const [activeDropdown, setActiveDropdown] = useState<'city' | 'college' | 'hospital' | null>(null);
+  const [activeDropdown, setActiveDropdown] = useState<'city' | 'college' | 'hospital' | 'ugState' | 'pgState' | 'pgCollege' | null>(null);
 
   const [finalSubmitting, setFinalSubmitting] = useState(false);
   const [error, setError] = useState('');
@@ -429,8 +429,8 @@ export function DoctorRegistrationView({
                 <TextInput
                   value={doctorName}
                   onChangeText={setDoctorName}
-                  placeholder="e.g. Dr. Rajesh Sharma"
-                  placeholderTextColor="#737783"
+                  placeholder="Full name with Dr. prefix"
+                  placeholderTextColor="#94A3B8"
                   style={styles.textInput}
                 />
               </View>
@@ -471,7 +471,7 @@ export function DoctorRegistrationView({
                   value={dob}
                   onChangeText={(text) => setDob(formatDOBInput(text))}
                   placeholder="DD/MM/YYYY"
-                  placeholderTextColor="#737783"
+                  placeholderTextColor="#94A3B8"
                   style={styles.textInput}
                   keyboardType="number-pad"
                   maxLength={10}
@@ -487,8 +487,8 @@ export function DoctorRegistrationView({
                 <TextInput
                   value={contactPhone}
                   onChangeText={setContactPhone}
-                  placeholder="+91 98765 43210"
-                  placeholderTextColor="#737783"
+                  placeholder="10-digit mobile number"
+                  placeholderTextColor="#94A3B8"
                   style={styles.textInput}
                   keyboardType="phone-pad"
                 />
@@ -503,8 +503,8 @@ export function DoctorRegistrationView({
                 <TextInput
                   value={contactEmail}
                   onChangeText={setContactEmail}
-                  placeholder="doctor@hospital.in"
-                  placeholderTextColor="#737783"
+                  placeholder="doctor@example.com"
+                  placeholderTextColor="#94A3B8"
                   style={styles.textInput}
                   keyboardType="email-address"
                   autoCapitalize="none"
@@ -520,8 +520,8 @@ export function DoctorRegistrationView({
                 <TextInput
                   value={password}
                   onChangeText={setPassword}
-                  placeholder="Enter portal password (min. 6 characters)"
-                  placeholderTextColor="#737783"
+                  placeholder="Create portal password (min. 6 characters)"
+                  placeholderTextColor="#94A3B8"
                   style={styles.textInput}
                   secureTextEntry
                 />
@@ -669,8 +669,8 @@ export function DoctorRegistrationView({
                       if (val.trim().length > 1) setActiveDropdown('college');
                     }}
                     onFocus={() => setActiveDropdown('college')}
-                    placeholder="e.g. Seth GS Medical College & KEM Hospital"
-                    placeholderTextColor="#737783"
+                    placeholder="Search or enter medical college"
+                    placeholderTextColor="#94A3B8"
                     style={styles.textInput}
                   />
                 </View>
@@ -701,26 +701,63 @@ export function DoctorRegistrationView({
 
               {/* State of College & Graduation Year */}
               <View style={styles.rowTwoCols}>
-                <View style={[styles.inputGroup, { flex: 1 }]}>
-                  <Text style={styles.inputLabel}>State of College</Text>
+                <View style={[styles.inputGroup, { flex: 1.2, minWidth: 0 }]}>
+                  <View style={styles.dropdownHeaderRow}>
+                    <Text style={styles.inputLabel}>State of College</Text>
+                    <Pressable
+                      onPress={() => setActiveDropdown(activeDropdown === 'ugState' ? null : 'ugState')}
+                      hitSlop={8}
+                      style={styles.dropdownToggleBtn}
+                    >
+                      <Text style={styles.dropdownToggleText}>Browse</Text>
+                      <ChevronDown size={12} color={StitchColors.primary} />
+                    </Pressable>
+                  </View>
                   <View style={styles.inputWrapper}>
                     <TextInput
                       value={ugState}
-                      onChangeText={setUgState}
-                      placeholder="e.g. Maharashtra"
-                      placeholderTextColor="#737783"
+                      onChangeText={(val) => {
+                        setUgState(val);
+                        if (val.trim().length > 0) setActiveDropdown('ugState');
+                      }}
+                      onFocus={() => setActiveDropdown('ugState')}
+                      placeholder="Select state (e.g. Delhi)"
+                      placeholderTextColor="#94A3B8"
                       style={styles.textInput}
                     />
                   </View>
+                  {activeDropdown === 'ugState' && (
+                    <View style={styles.autocompleteCard}>
+                      <ScrollView style={{ maxHeight: 180 }} keyboardShouldPersistTaps="handled" nestedScrollEnabled>
+                        {(locationsData.states || [])
+                          .filter((s) => !ugState.trim() || s.toLowerCase().includes(ugState.toLowerCase().trim()))
+                          .slice(0, 10)
+                          .map((state) => (
+                            <Pressable
+                              key={state}
+                              onPress={() => {
+                                setUgState(state);
+                                setActiveDropdown(null);
+                              }}
+                              style={styles.autocompleteItem}
+                            >
+                              <Text style={styles.autocompleteItemText} numberOfLines={1}>
+                                {state}
+                              </Text>
+                            </Pressable>
+                          ))}
+                      </ScrollView>
+                    </View>
+                  )}
                 </View>
-                <View style={[styles.inputGroup, { flex: 1 }]}>
+                <View style={[styles.inputGroup, { flex: 1, minWidth: 85 }]}>
                   <Text style={styles.inputLabel}>Graduation Year</Text>
                   <View style={styles.inputWrapper}>
                     <TextInput
                       value={ugYear}
                       onChangeText={setUgYear}
                       placeholder="YYYY"
-                      placeholderTextColor="#737783"
+                      placeholderTextColor="#94A3B8"
                       style={[styles.textInput, { textAlign: 'center' }]}
                       keyboardType="number-pad"
                       maxLength={4}
@@ -789,8 +826,8 @@ export function DoctorRegistrationView({
                   <TextInput
                     value={primaryCouncil}
                     onChangeText={setPrimaryCouncil}
-                    placeholder="e.g. Maharashtra Medical Council (MMC)"
-                    placeholderTextColor="#737783"
+                    placeholder="e.g. Delhi Medical Council, MMC"
+                    placeholderTextColor="#94A3B8"
                     style={styles.textInput}
                   />
                 </View>
@@ -804,8 +841,8 @@ export function DoctorRegistrationView({
                     <TextInput
                       value={councilRegNumber}
                       onChangeText={setCouncilRegNumber}
-                      placeholder="e.g. MMC-2015-08-3821"
-                      placeholderTextColor="#737783"
+                      placeholder="Registration number"
+                      placeholderTextColor="#94A3B8"
                       style={styles.textInput}
                     />
                   </View>
@@ -817,7 +854,7 @@ export function DoctorRegistrationView({
                       value={councilRegYear}
                       onChangeText={setCouncilRegYear}
                       placeholder="YYYY"
-                      placeholderTextColor="#737783"
+                      placeholderTextColor="#94A3B8"
                       style={[styles.textInput, { textAlign: 'center' }]}
                       keyboardType="number-pad"
                       maxLength={4}
@@ -851,14 +888,15 @@ export function DoctorRegistrationView({
 
                 {dualLicenseActive && (
                   <View style={styles.secondaryCouncilBox}>
-                    <Text style={styles.secondaryCouncilTitle}>Secondary Council: Karnataka (KMC)</Text>
+                    <Text style={styles.secondaryCouncilTitle}>Secondary Council Registration</Text>
                     <View style={styles.rowTwoCols}>
                       <View style={{ flex: 2 }}>
                         <TextInput
                           value={secondaryRegNumber}
                           onChangeText={setSecondaryRegNumber}
                           style={styles.miniTextInput}
-                          placeholder="KMC-108249"
+                          placeholder="Registration number"
+                          placeholderTextColor="#94A3B8"
                         />
                       </View>
                       <View style={{ flex: 1 }}>
@@ -867,6 +905,7 @@ export function DoctorRegistrationView({
                           onChangeText={setSecondaryRegYear}
                           style={[styles.miniTextInput, { textAlign: 'center' }]}
                           placeholder="Year"
+                          placeholderTextColor="#94A3B8"
                         />
                       </View>
                     </View>
@@ -956,7 +995,7 @@ export function DoctorRegistrationView({
                         value={pgCategory}
                         onChangeText={setPgCategory}
                         placeholder="e.g. MD / MS / DNB / DM"
-                        placeholderTextColor="#737783"
+                        placeholderTextColor="#94A3B8"
                         style={styles.textInput}
                       />
                     </View>
@@ -970,7 +1009,7 @@ export function DoctorRegistrationView({
                         value={specialization}
                         onChangeText={setSpecialization}
                         placeholder="e.g. Cardiology, Orthopedics, Pediatrics"
-                        placeholderTextColor="#737783"
+                        placeholderTextColor="#94A3B8"
                         style={styles.textInput}
                       />
                     </View>
@@ -978,40 +1017,114 @@ export function DoctorRegistrationView({
 
                   {/* PG College */}
                   <View style={styles.inputGroup}>
-                    <Text style={styles.inputLabel}>PG College / Teaching Hospital</Text>
+                    <View style={styles.dropdownHeaderRow}>
+                      <Text style={styles.inputLabel}>PG College / Teaching Hospital</Text>
+                      <Pressable
+                        onPress={() => setActiveDropdown(activeDropdown === 'pgCollege' ? null : 'pgCollege')}
+                        hitSlop={8}
+                        style={styles.dropdownToggleBtn}
+                      >
+                        <Text style={styles.dropdownToggleText}>Browse Colleges</Text>
+                        <ChevronDown size={14} color={StitchColors.primary} />
+                      </Pressable>
+                    </View>
                     <View style={styles.inputWrapper}>
                       <TextInput
                         value={pgCollege}
-                        onChangeText={setPgCollege}
-                        placeholder="e.g. All India Institute of Medical Sciences (AIIMS)"
-                        placeholderTextColor="#737783"
+                        onChangeText={(val) => {
+                          setPgCollege(val);
+                          if (val.trim().length > 1) setActiveDropdown('pgCollege');
+                        }}
+                        onFocus={() => setActiveDropdown('pgCollege')}
+                        placeholder="Search or enter PG institute"
+                        placeholderTextColor="#94A3B8"
                         style={styles.textInput}
                       />
                     </View>
+                    {activeDropdown === 'pgCollege' && (
+                      <View style={styles.autocompleteCard}>
+                        <ScrollView style={{ maxHeight: 180 }} keyboardShouldPersistTaps="handled" nestedScrollEnabled>
+                          {locationsData.colleges
+                            .filter((c) => !pgCollege.trim() || c.toLowerCase().includes(pgCollege.toLowerCase().trim()))
+                            .slice(0, 8)
+                            .map((college) => (
+                              <Pressable
+                                key={college}
+                                onPress={() => {
+                                  setPgCollege(college);
+                                  setActiveDropdown(null);
+                                }}
+                                style={styles.autocompleteItem}
+                              >
+                                <Text style={styles.autocompleteItemText} numberOfLines={1}>
+                                  {college}
+                                </Text>
+                              </Pressable>
+                            ))}
+                        </ScrollView>
+                      </View>
+                    )}
                   </View>
 
                   {/* State & Year */}
                   <View style={styles.rowTwoCols}>
-                    <View style={[styles.inputGroup, { flex: 1 }]}>
-                      <Text style={styles.inputLabel}>State of Training</Text>
+                    <View style={[styles.inputGroup, { flex: 1.2, minWidth: 0 }]}>
+                      <View style={styles.dropdownHeaderRow}>
+                        <Text style={styles.inputLabel}>State of Training</Text>
+                        <Pressable
+                          onPress={() => setActiveDropdown(activeDropdown === 'pgState' ? null : 'pgState')}
+                          hitSlop={8}
+                          style={styles.dropdownToggleBtn}
+                        >
+                          <Text style={styles.dropdownToggleText}>Browse</Text>
+                          <ChevronDown size={12} color={StitchColors.primary} />
+                        </Pressable>
+                      </View>
                       <View style={styles.inputWrapper}>
                         <TextInput
                           value={pgState}
-                          onChangeText={setPgState}
-                          placeholder="e.g. New Delhi"
-                          placeholderTextColor="#737783"
+                          onChangeText={(val) => {
+                            setPgState(val);
+                            if (val.trim().length > 0) setActiveDropdown('pgState');
+                          }}
+                          onFocus={() => setActiveDropdown('pgState')}
+                          placeholder="Select state (e.g. Delhi)"
+                          placeholderTextColor="#94A3B8"
                           style={styles.textInput}
                         />
                       </View>
+                      {activeDropdown === 'pgState' && (
+                        <View style={styles.autocompleteCard}>
+                          <ScrollView style={{ maxHeight: 180 }} keyboardShouldPersistTaps="handled" nestedScrollEnabled>
+                            {(locationsData.states || [])
+                              .filter((s) => !pgState.trim() || s.toLowerCase().includes(pgState.toLowerCase().trim()))
+                              .slice(0, 10)
+                              .map((state) => (
+                                <Pressable
+                                  key={state}
+                                  onPress={() => {
+                                    setPgState(state);
+                                    setActiveDropdown(null);
+                                  }}
+                                  style={styles.autocompleteItem}
+                                >
+                                  <Text style={styles.autocompleteItemText} numberOfLines={1}>
+                                    {state}
+                                  </Text>
+                                </Pressable>
+                              ))}
+                          </ScrollView>
+                        </View>
+                      )}
                     </View>
-                    <View style={[styles.inputGroup, { flex: 1 }]}>
+                    <View style={[styles.inputGroup, { flex: 1, minWidth: 85 }]}>
                       <Text style={styles.inputLabel}>Completion Year</Text>
                       <View style={styles.inputWrapper}>
                         <TextInput
                           value={pgYear}
                           onChangeText={setPgYear}
                           placeholder="YYYY"
-                          placeholderTextColor="#737783"
+                          placeholderTextColor="#94A3B8"
                           style={[styles.textInput, { textAlign: 'center' }]}
                           keyboardType="number-pad"
                           maxLength={4}
@@ -1251,7 +1364,8 @@ export function DoctorRegistrationView({
                     value={clinicName}
                     onChangeText={setClinicName}
                     style={styles.textInput}
-                    placeholder="Sharma Heart & Vascular Clinic"
+                    placeholder="Clinic / practice facility name"
+                    placeholderTextColor="#94A3B8"
                   />
                 </View>
               </View>
@@ -1265,14 +1379,15 @@ export function DoctorRegistrationView({
                     value={clinicAddress}
                     onChangeText={setClinicAddress}
                     style={styles.textInput}
-                    placeholder="Suite 302, Green Glen Medical Enclave"
+                    placeholder="Street address, building, suite"
+                    placeholderTextColor="#94A3B8"
                   />
                 </View>
               </View>
 
               {/* City & PIN */}
               <View style={styles.rowTwoCols}>
-                <View style={[styles.inputGroup, { flex: 2 }]}>
+                <View style={[styles.inputGroup, { flex: 1.4, minWidth: 0 }]}>
                   <View style={styles.dropdownHeaderRow}>
                     <Text style={styles.inputLabel}>City / Region</Text>
                     <Pressable
@@ -1292,8 +1407,8 @@ export function DoctorRegistrationView({
                         if (val.trim().length > 0) setActiveDropdown('city');
                       }}
                       onFocus={() => setActiveDropdown('city')}
-                      placeholder="e.g. Bengaluru, Mumbai, Delhi"
-                      placeholderTextColor="#737783"
+                      placeholder="Search or enter city"
+                      placeholderTextColor="#94A3B8"
                       style={styles.textInput}
                     />
                   </View>
@@ -1319,14 +1434,14 @@ export function DoctorRegistrationView({
                     </View>
                   )}
                 </View>
-                <View style={[styles.inputGroup, { flex: 1 }]}>
+                <View style={[styles.inputGroup, { flex: 1, minWidth: 105 }]}>
                   <Text style={styles.inputLabel}>PIN Code</Text>
                   <View style={styles.inputWrapper}>
                     <TextInput
                       value={clinicPin}
                       onChangeText={setClinicPin}
-                      placeholder="560001"
-                      placeholderTextColor="#737783"
+                      placeholder="6-digit PIN"
+                      placeholderTextColor="#94A3B8"
                       style={[styles.textInput, { textAlign: 'center' }]}
                       keyboardType="number-pad"
                       maxLength={6}
@@ -1418,7 +1533,8 @@ export function DoctorRegistrationView({
                     }}
                     onFocus={() => setActiveDropdown('hospital')}
                     style={styles.textInput}
-                    placeholder="Apollo Hospitals, Bannerghatta Road"
+                    placeholder="Search or enter hospital name"
+                    placeholderTextColor="#94A3B8"
                   />
                 </View>
                 {activeDropdown === 'hospital' && (
@@ -1454,8 +1570,8 @@ export function DoctorRegistrationView({
                     <TextInput
                       value={hospitalDept}
                       onChangeText={setHospitalDept}
-                      placeholder="e.g. Cardiology"
-                      placeholderTextColor="#737783"
+                      placeholder="Department (e.g. Cardiology)"
+                      placeholderTextColor="#94A3B8"
                       style={styles.textInput}
                     />
                   </View>
@@ -1466,8 +1582,8 @@ export function DoctorRegistrationView({
                     <TextInput
                       value={hospitalDesignation}
                       onChangeText={setHospitalDesignation}
-                      placeholder="e.g. Senior Consultant"
-                      placeholderTextColor="#737783"
+                      placeholder="Designation (e.g. Consultant)"
+                      placeholderTextColor="#94A3B8"
                       style={styles.textInput}
                     />
                   </View>
@@ -1503,12 +1619,12 @@ export function DoctorRegistrationView({
 
               {/* Hospital ID Upload */}
               <FileUploadCard
-                label="Hospital ID Card / Empanelment Letter"
+                label="Hospital ID / Empanelment Letter"
                 isUploaded={hospitalFileUploaded}
                 fileName={hospitalFileName}
                 fileSize={hospitalFileSize}
-                subtitle="Empanelment verified"
-                uploadPrompt="Tap to select & upload ID / Letter"
+                subtitle="Institutional Attachment"
+                uploadPrompt="Tap to select & upload empanelment letter"
                 uploadSubtitle="PDF, JPG, PNG (Max 15MB)"
                 onRemove={() => setHospitalFileUploaded(false)}
                 onUpload={() => {
@@ -1527,13 +1643,13 @@ export function DoctorRegistrationView({
                   style={styles.secondaryButton}
                 >
                   <ArrowLeft size={16} color="#334155" />
-                  <Text style={styles.secondaryButtonText}>Back</Text>
+                  <Text style={styles.secondaryButtonText}>Back: Clinic</Text>
                 </Pressable>
                 <Pressable
                   onPress={() => setSlideIndex(2)}
                   style={styles.primaryFlexButton}
                 >
-                  <Text style={styles.primaryFlexButtonText}>Next: Timings & Fee</Text>
+                  <Text style={styles.primaryFlexButtonText}>Next: Schedule</Text>
                   <ArrowRight size={16} color="#ffffff" />
                 </Pressable>
               </View>
@@ -1544,14 +1660,14 @@ export function DoctorRegistrationView({
           {slideIndex === 2 && (
             <View style={styles.formCard}>
               <View style={styles.cardHeaderRow}>
-                <View style={{ flex: 1, paddingRight: 8 }}>
-                  <View style={styles.cardTitleTagRow}>
-                    <Text style={styles.cardHeaderTitle}>3. OPD TIMINGS & CONSULTATION FEE</Text>
+                <View style={{ flex: 1 }}>
+                  <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+                    <Text style={styles.cardHeaderTitle}>3. OPD SCHEDULE & CONSULTATION FEE</Text>
                     <View style={styles.stepBadgePill}>
                       <Text style={styles.stepBadgeText}>Step 3 of 3</Text>
                     </View>
                   </View>
-                  <Text style={styles.cardHeaderSubtitle}>Configure appointment tokens and in-person slots</Text>
+                  <Text style={styles.cardHeaderSubtitle}>Consultation pricing and weekly OPD roster</Text>
                 </View>
                 <View style={styles.mandatoryBadge}>
                   <Text style={styles.mandatoryBadgeText}>Mandatory</Text>
@@ -1567,8 +1683,8 @@ export function DoctorRegistrationView({
                     <TextInput
                       value={consultationFee}
                       onChangeText={setConsultationFee}
-                      placeholder="800"
-                      placeholderTextColor="#737783"
+                      placeholder="Fee (e.g. 500)"
+                      placeholderTextColor="#94A3B8"
                       style={[styles.textInput, { fontWeight: '700' }]}
                       keyboardType="number-pad"
                     />
@@ -1994,6 +2110,7 @@ const styles = StyleSheet.create({
   },
   inputGroup: {
     gap: 4,
+    minWidth: 0,
   },
   inputLabel: {
     fontSize: 12,
@@ -2009,6 +2126,7 @@ const styles = StyleSheet.create({
     borderColor: '#CBD5E1',
     height: 48,
     paddingHorizontal: 12,
+    overflow: 'hidden',
   },
   inputIcon: {
     marginRight: 8,
@@ -2090,6 +2208,7 @@ const styles = StyleSheet.create({
   rowTwoCols: {
     flexDirection: 'row',
     gap: 10,
+    alignItems: 'flex-start',
   },
   dualLicenseBox: {
     paddingTop: 4,

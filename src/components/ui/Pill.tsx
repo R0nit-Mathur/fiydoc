@@ -37,9 +37,9 @@ const VARIANT_COLORS: Record<PillVariant, { bg: string; text: string; border: st
     border: 'transparent',
   },
   teal: {
-    bg: StitchColors.secondaryContainer,
-    text: StitchColors.onSecondaryContainer,
-    border: 'transparent',
+    bg: '#F0FDFA',
+    text: '#0F766E',
+    border: '#99F6E4',
   },
   warning: {
     bg: Palette.warningBg,

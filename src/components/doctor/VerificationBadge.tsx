@@ -27,11 +27,11 @@ export function VerificationBadge({
 
   const config = {
     verified: {
-      icon: <ShieldCheck size={size === 'sm' ? 14 : size === 'lg' ? 20 : 16} color="#00A896" />,
+      icon: <ShieldCheck size={size === 'sm' ? 14 : size === 'lg' ? 20 : 16} color="#0D9488" />,
       label: 'Verified Practitioner',
-      bgColor: isDark ? 'rgba(0, 168, 150, 0.15)' : '#E0F7F5',
-      borderColor: isDark ? 'rgba(0, 168, 150, 0.3)' : '#76F4E0',
-      textColor: colors.teal,
+      bgColor: isDark ? 'rgba(0, 168, 150, 0.15)' : '#F0FDFA',
+      borderColor: isDark ? 'rgba(0, 168, 150, 0.3)' : '#99F6E4',
+      textColor: isDark ? '#2DD4BF' : '#0F766E',
     },
     pending: {
       icon: <Award size={size === 'sm' ? 14 : size === 'lg' ? 20 : 16} color="#F59E0B" />,
