@@ -7,6 +7,8 @@ import {
   MinLength,
   IsNumber,
 } from 'class-validator';
+import { Type } from 'class-transformer';
+
 export enum PublicRegisterRole {
   PATIENT = 'PATIENT',
   DOCTOR = 'DOCTOR',
@@ -56,19 +58,30 @@ export class RegisterDto {
   clinicAddress?: string;
 
   @IsOptional()
+  @Type(() => Number)
   clinicLatitude?: number;
 
   @IsOptional()
+  @Type(() => Number)
   clinicLongitude?: number;
 
   @IsOptional()
+  @Type(() => Number)
   @IsNumber({}, { message: 'Consultation fee must be a valid number.' })
   consultationFee?: number;
+
+  @IsOptional()
+  @Type(() => Number)
+  experienceYears?: number;
+
+  @IsOptional()
+  @Type(() => Number)
+  patientsPerSlot?: number;
 
   @IsOptional()
   @IsString()
   clinicTimings?: string;
 
   @IsOptional()
-  qualifications?: string[];
+  qualifications?: string[] | string;
 }

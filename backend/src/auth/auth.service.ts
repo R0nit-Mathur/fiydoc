@@ -1,4 +1,4 @@
-import { Injectable, BadRequestException, UnauthorizedException } from '@nestjs/common';
+import { Injectable, BadRequestException, UnauthorizedException, Logger, HttpException } from '@nestjs/common';
 import { JwtService } from '@nestjs/jwt';
 import { PrismaService } from '../prisma/prisma.service';
 import * as bcrypt from 'bcryptjs';
@@ -10,138 +10,178 @@ import { OAuth2Client } from 'google-auth-library';
 
 @Injectable()
 export class AuthService {
+  private readonly logger = new Logger(AuthService.name);
+
   constructor(
     private prisma: PrismaService,
     private jwtService: JwtService
   ) {}
 
   async register(dto: RegisterDto) {
-    if ((dto.role as any) === Role.ADMIN || (dto.role as any) === 'ADMIN') {
-      throw new BadRequestException('Public administrator registration is prohibited.');
-    }
-
-    if (!dto.email && !dto.phone) {
-      throw new BadRequestException('Email or phone number is required.');
-    }
-
-    if (dto.email) {
-      const existing = await this.prisma.user.findUnique({ where: { email: dto.email.trim().toLowerCase() } });
-      if (existing) {
-        throw new BadRequestException({
-          code: 'EMAIL_ALREADY_REGISTERED',
-          message: 'This email is already registered. Please sign in instead.',
-        });
+    try {
+      if ((dto.role as any) === Role.ADMIN || (dto.role as any) === 'ADMIN') {
+        throw new BadRequestException('Public administrator registration is prohibited.');
       }
-    }
 
-    if (dto.phone) {
-      const existing = await this.prisma.user.findUnique({ where: { phone: dto.phone.trim() } });
-      if (existing) {
-        throw new BadRequestException({
-          code: 'PHONE_ALREADY_REGISTERED',
-          message: 'This phone number is already registered. Please sign in instead.',
-        });
+      if (!dto.email && !dto.phone) {
+        throw new BadRequestException('Email or phone number is required.');
       }
-    }
 
-    const passwordHash = dto.password ? await bcrypt.hash(dto.password, 10) : null;
+      const cleanEmail = dto.email ? dto.email.trim().toLowerCase() : null;
+      const cleanPhone = dto.phone ? dto.phone.trim() : null;
 
-    let doctorDataToCreate: any = null;
-    if (dto.role === Role.DOCTOR) {
-      const cleanName = dto.fullName?.trim() || 'Dr. Doctor';
-      const registrationNumber = dto.licenseNumber?.trim() || `NMC-${Date.now().toString().slice(-6)}`;
-      const registrationAuthority = dto.registrationAuthority?.trim() || 'National Medical Commission / State Council';
-      const specialization = dto.specialization?.trim() || 'General Medicine';
-      const fee = dto.consultationFee !== undefined && dto.consultationFee !== null && Number(dto.consultationFee) >= 0
-        ? Number(dto.consultationFee)
-        : 500;
-      const clinicName = dto.clinicName?.trim() || `${cleanName}'s Clinic`;
-      const clinicAddress = dto.clinicAddress?.trim() || 'Clinical Practice Address Pending';
-      const clinicTimings = dto.clinicTimings?.trim() || '09:00 - 13:00, 17:00 - 20:00';
-      const clinicLatitude = dto.clinicLatitude !== undefined && dto.clinicLatitude !== null ? Number(dto.clinicLatitude) : null;
-      const clinicLongitude = dto.clinicLongitude !== undefined && dto.clinicLongitude !== null ? Number(dto.clinicLongitude) : null;
+      if (cleanEmail) {
+        const existing = await this.prisma.user.findUnique({ where: { email: cleanEmail } });
+        if (existing) {
+          throw new BadRequestException({
+            code: 'EMAIL_ALREADY_REGISTERED',
+            message: 'This email is already registered. Please sign in instead.',
+          });
+        }
+      }
 
+      if (cleanPhone) {
+        const existing = await this.prisma.user.findUnique({ where: { phone: cleanPhone } });
+        if (existing) {
+          throw new BadRequestException({
+            code: 'PHONE_ALREADY_REGISTERED',
+            message: 'This phone number is already registered. Please sign in instead.',
+          });
+        }
+      }
+
+      const passwordHash = dto.password ? await bcrypt.hash(dto.password, 10) : null;
+      const isDoctor = (dto.role as any) === Role.DOCTOR || (dto.role as any) === 'DOCTOR';
+      const roleToSet = isDoctor ? Role.DOCTOR : Role.PATIENT;
+
+      let doctorDataToCreate: any = null;
       const defaultAvailabilities: { dayOfWeek: number; startTime: string; endTime: string; slotDurationMinutes: number }[] = [];
-      for (let day = 1; day <= 6; day++) {
-        defaultAvailabilities.push(
-          { dayOfWeek: day, startTime: '09:00', endTime: '13:00', slotDurationMinutes: 30 },
-          { dayOfWeek: day, startTime: '17:00', endTime: '20:00', slotDurationMinutes: 30 },
-        );
+
+      if (isDoctor) {
+        const cleanName = dto.fullName?.trim() || 'Dr. Doctor';
+        const registrationNumber = dto.licenseNumber?.trim() || `NMC-${Date.now().toString().slice(-6)}`;
+        const registrationAuthority = dto.registrationAuthority?.trim() || 'National Medical Commission / State Council';
+        const specialization = dto.specialization?.trim() || 'General Medicine';
+        const fee = dto.consultationFee !== undefined && dto.consultationFee !== null && Number(dto.consultationFee) >= 0
+          ? Number(dto.consultationFee)
+          : 500;
+        const clinicName = dto.clinicName?.trim() || `${cleanName}'s Clinic`;
+        const clinicAddress = dto.clinicAddress?.trim() || 'Clinical Practice Address Pending';
+        const clinicTimings = dto.clinicTimings?.trim() || '09:00 - 13:00, 17:00 - 20:00';
+        const clinicLatitude = dto.clinicLatitude !== undefined && dto.clinicLatitude !== null ? Number(dto.clinicLatitude) : null;
+        const clinicLongitude = dto.clinicLongitude !== undefined && dto.clinicLongitude !== null ? Number(dto.clinicLongitude) : null;
+
+        for (let day = 1; day <= 6; day++) {
+          defaultAvailabilities.push(
+            { dayOfWeek: day, startTime: '09:00', endTime: '13:00', slotDurationMinutes: 30 },
+            { dayOfWeek: day, startTime: '17:00', endTime: '20:00', slotDurationMinutes: 30 },
+          );
+        }
+
+        const qualString = dto.qualifications
+          ? (Array.isArray(dto.qualifications) ? dto.qualifications.join(', ') : String(dto.qualifications).trim())
+          : null;
+
+        doctorDataToCreate = {
+          fullName: cleanName.startsWith('Dr.') ? cleanName : `Dr. ${cleanName}`,
+          specialization,
+          consultationFee: fee,
+          experienceYears: dto.experienceYears ? Number(dto.experienceYears) : 0,
+          patientsPerSlot: dto.patientsPerSlot ? Number(dto.patientsPerSlot) : 1,
+          clinic: {
+            create: {
+              name: clinicName,
+              address: clinicAddress,
+              latitude: clinicLatitude,
+              longitude: clinicLongitude,
+              timings: clinicTimings,
+            },
+          },
+          qualifications: qualString
+            ? {
+                create: {
+                  degree: qualString,
+                  institution: null,
+                  year: null,
+                },
+              }
+            : undefined,
+          verification: {
+            create: {
+              registrationNumber,
+              registrationAuthority,
+              status: VerificationStatus.PENDING,
+            },
+          },
+        };
       }
 
-      doctorDataToCreate = {
-        fullName: cleanName.startsWith('Dr.') ? cleanName : `Dr. ${cleanName}`,
-        specialization,
-        consultationFee: fee,
-        clinic: {
-          create: {
-            name: clinicName,
-            address: clinicAddress,
-            latitude: clinicLatitude,
-            longitude: clinicLongitude,
-            timings: clinicTimings,
-          },
-        },
-        availabilities: {
-          create: defaultAvailabilities,
-        },
-        qualifications: dto.qualifications && dto.qualifications.length > 0
-          ? {
-              create: {
-                degree: Array.isArray(dto.qualifications) ? dto.qualifications.join(', ') : String(dto.qualifications).trim(),
-                institution: null,
-                year: null,
+      const fullUser = await this.prisma.$transaction(
+        async (tx) => {
+          const user = await tx.user.create({
+            data: {
+              email: cleanEmail || undefined,
+              phone: cleanPhone || undefined,
+              passwordHash,
+              role: roleToSet,
+            },
+          });
+
+          if (roleToSet === Role.PATIENT) {
+            await tx.patient.create({
+              data: {
+                userId: user.id,
+                fullName: dto.fullName?.trim() || 'Patient User',
               },
+            });
+          } else if (roleToSet === Role.DOCTOR && doctorDataToCreate) {
+            const createdDoc = await tx.doctor.create({
+              data: {
+                ...doctorDataToCreate,
+                userId: user.id,
+              },
+            });
+
+            if (defaultAvailabilities.length > 0) {
+              await tx.availability.createMany({
+                data: defaultAvailabilities.map((a) => ({
+                  doctorId: createdDoc.id,
+                  dayOfWeek: a.dayOfWeek,
+                  startTime: a.startTime,
+                  endTime: a.endTime,
+                  slotDurationMinutes: a.slotDurationMinutes,
+                })),
+              });
             }
-          : undefined,
-        verification: {
-          create: {
-            registrationNumber,
-            registrationAuthority,
-            status: VerificationStatus.PENDING,
-          },
-        },
-      };
-    }
+          }
 
-    const fullUser = await this.prisma.$transaction(async (tx) => {
-      const user = await tx.user.create({
-        data: {
-          email: dto.email ? dto.email.trim().toLowerCase() : undefined,
-          phone: dto.phone ? dto.phone.trim() : undefined,
-          passwordHash,
-          role: dto.role,
+          return tx.user.findUnique({
+            where: { id: user.id },
+            include: {
+              patient: true,
+              doctor: {
+                include: { verification: true, clinic: true, qualifications: true },
+              },
+            },
+          });
         },
-      });
+        {
+          maxWait: 15000,
+          timeout: 45000,
+        }
+      );
 
-      if (dto.role === Role.PATIENT) {
-        await tx.patient.create({
-          data: {
-            userId: user.id,
-            fullName: dto.fullName?.trim() || 'Patient User',
-          },
-        });
-      } else if (dto.role === Role.DOCTOR && doctorDataToCreate) {
-        await tx.doctor.create({
-          data: {
-            ...doctorDataToCreate,
-            userId: user.id,
-          },
-        });
+      this.logger.log(`✅ Registered new ${fullUser?.role}: ${fullUser?.email || fullUser?.phone}`);
+      return this.generateTokenResponse(fullUser);
+    } catch (err: any) {
+      this.logger.error(`❌ [register] Failed for ${dto?.email || dto?.phone}: ${err?.message}`, err?.stack);
+      if (err instanceof HttpException) {
+        throw err;
       }
-
-      return tx.user.findUnique({
-        where: { id: user.id },
-        include: {
-          patient: true,
-          doctor: {
-            include: { verification: true, clinic: true, qualifications: true },
-          },
-        },
-      });
-    });
-
-    return this.generateTokenResponse(fullUser);
+      throw new BadRequestException(
+        `Registration failed: ${err?.message || 'Database error during account creation'}`
+      );
+    }
   }
 
   async ensureDoctorRecordForUser(user: any): Promise<any> {
@@ -160,7 +200,7 @@ export class AuthService {
     }
 
     try {
-      await this.prisma.doctor.create({
+      const createdDoc = await this.prisma.doctor.create({
         data: {
           userId: user.id,
           fullName: cleanName,
@@ -173,9 +213,6 @@ export class AuthService {
               timings: '09:00 - 13:00, 17:00 - 20:00',
             },
           },
-          availabilities: {
-            create: defaultAvailabilities,
-          },
           verification: {
             create: {
               registrationNumber: `NMC-${Date.now().toString().slice(-6)}`,
@@ -185,8 +222,20 @@ export class AuthService {
           },
         },
       });
+
+      if (defaultAvailabilities.length > 0) {
+        await this.prisma.availability.createMany({
+          data: defaultAvailabilities.map((a) => ({
+            doctorId: createdDoc.id,
+            dayOfWeek: a.dayOfWeek,
+            startTime: a.startTime,
+            endTime: a.endTime,
+            slotDurationMinutes: a.slotDurationMinutes,
+          })),
+        });
+      }
     } catch (err: any) {
-      console.warn('[auth] Auto-healing doctor record warning:', err?.message);
+      this.logger.warn(`⚠️ [ensureDoctorRecordForUser] Warning: ${err?.message}`);
     }
 
     return this.prisma.user.findUnique({
@@ -194,7 +243,7 @@ export class AuthService {
       include: {
         patient: true,
         doctor: {
-          include: { verification: true, clinic: true, qualifications: true },
+          include: { verification: true, clinic: true, qualifications: true, availabilities: true },
         },
       },
     });
