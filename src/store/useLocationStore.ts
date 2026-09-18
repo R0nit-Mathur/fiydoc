@@ -15,6 +15,14 @@ export interface LocationHub {
 
 export const INDIAN_LOCATION_HUBS: LocationHub[] = [
   {
+    id: 'hub_all_india',
+    name: 'All Locations (Nationwide)',
+    city: 'All Locations',
+    state: 'India',
+    latitude: 0,
+    longitude: 0,
+  },
+  {
     id: 'hub_delhi_cp',
     name: 'Connaught Place, New Delhi',
     city: 'New Delhi',
@@ -159,6 +167,7 @@ interface LocationState {
   detectDeviceLocation: () => Promise<boolean>;
   setHub: (hub: LocationHub) => void;
   setManualLocation: (lat: number, lng: number, city: string, address: string, area?: string) => void;
+  setAllLocations: () => void;
 }
 
 export const useLocationStore = create<LocationState>()(
@@ -332,6 +341,19 @@ export const useLocationStore = create<LocationState>()(
           area: area || formattedAddress.split(',')[0].trim() || city,
           city,
           formattedAddress,
+          permissionStatus: 'granted',
+          isGenuineDeviceLocation: true,
+          error: null,
+        });
+      },
+
+      setAllLocations: () => {
+        set({
+          latitude: null,
+          longitude: null,
+          area: 'All India',
+          city: 'All Locations',
+          formattedAddress: 'All Doctors (Nationwide)',
           permissionStatus: 'granted',
           isGenuineDeviceLocation: true,
           error: null,

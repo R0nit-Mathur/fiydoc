@@ -15,8 +15,10 @@ import {
   StyleSheet,
   Platform,
   TouchableOpacity,
+  RefreshControl,
 } from 'react-native';
 import { useRouter } from 'expo-router';
+import * as Haptics from 'expo-haptics';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import Animated, { FadeIn, FadeInDown } from 'react-native-reanimated';
 import { useNotificationStore } from '@/store/useNotificationStore';
@@ -52,6 +54,16 @@ export default function PatientNotificationsScreen() {
   const markAllAsRead = useNotificationStore((s) => s.markAllAsRead);
 
   const [activeFilter, setActiveFilter] = useState<string>('all');
+  const [refreshing, setRefreshing] = useState(false);
+
+  const handleRefresh = async () => {
+    setRefreshing(true);
+    if (Platform.OS !== 'web') {
+      Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+    }
+    await new Promise((resolve) => setTimeout(resolve, 600));
+    setRefreshing(false);
+  };
 
   const patientNotifications = useMemo(() => {
     return notifications.filter((n) => {
@@ -200,6 +212,14 @@ export default function PatientNotificationsScreen() {
       <ScrollView
         contentContainerStyle={styles.scrollContent}
         showsVerticalScrollIndicator={false}
+        refreshControl={
+          <RefreshControl
+            refreshing={refreshing}
+            onRefresh={handleRefresh}
+            colors={[StitchColors.primaryContainer]}
+            tintColor={StitchColors.primaryContainer}
+          />
+        }
       >
         {filteredNotifications.length === 0 ? (
           <Animated.View entering={FadeIn.duration(400)} style={styles.emptyContainer}>

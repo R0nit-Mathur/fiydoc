@@ -26,6 +26,7 @@ import {
   Platform,
   StatusBar,
   Modal,
+  RefreshControl,
 } from 'react-native';
 import { useRouter } from 'expo-router';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -90,13 +91,24 @@ export default function PatientHomeScreen() {
   const [allSpecialtiesModalVisible, setAllSpecialtiesModalVisible] = useState(false);
   const [guideModalVisible, setGuideModalVisible] = useState(false);
   const [updateModalVisible, setUpdateModalVisible] = useState(false);
+  const [refreshing, setRefreshing] = useState(false);
   const hasPromptedGuideRef = useRef(false);
 
   const { formattedAddress, city, area, permissionStatus } = useLocationStore();
-  const { data: doctors = [] } = useDoctorsQuery();
+  const { data: doctors = [], refetch: refetchDoctors } = useDoctorsQuery();
+  const { data: serverAppointments = [], refetch: refetchAppointments } = useAppointmentsQuery();
   const user = useAuthStore((s) => s.user);
   const appointments = useAppointmentStore((s) => s.appointments);
   const records = useHealthStore((s) => s.records);
+
+  const handleRefresh = async () => {
+    setRefreshing(true);
+    if (Platform.OS !== 'web') {
+      Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+    }
+    await Promise.all([refetchDoctors(), refetchAppointments()]);
+    setRefreshing(false);
+  };
 
   // Prompt for location on first visit if permission is undetermined
   useEffect(() => {
@@ -121,8 +133,6 @@ export default function PatientHomeScreen() {
       return () => clearTimeout(timer);
     }
   }, [permissionStatus, locationModalVisible, user?.dob, user?.bloodGroup, user?.address]);
-
-  const { data: serverAppointments = [] } = useAppointmentsQuery();
 
   // Merge server (authoritative) + local-only store appointments (dedup by id)
   const combinedAppointments = useMemo(() => {
@@ -218,6 +228,14 @@ export default function PatientHomeScreen() {
         style={styles.flex1}
         contentContainerStyle={styles.scrollContent}
         showsVerticalScrollIndicator={false}
+        refreshControl={
+          <RefreshControl
+            refreshing={refreshing}
+            onRefresh={handleRefresh}
+            tintColor={StitchColors.primary}
+            colors={[StitchColors.primary]}
+          />
+        }
       >
         {/* 1. Greeting & Location Header */}
         <View style={styles.greetingSection}>

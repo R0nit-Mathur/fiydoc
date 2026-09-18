@@ -23,6 +23,7 @@ import {
   Platform,
   Linking,
   Modal,
+  RefreshControl,
 } from 'react-native';
 import { useRouter } from 'expo-router';
 import { SafeAreaView } from 'react-native-safe-area-context';
@@ -94,6 +95,16 @@ export default function DoctorPatientsScreen() {
   const [showCalendarPicker, setShowCalendarPicker] = useState(false);
   const [historyPatient, setHistoryPatient] = useState<PatientRecord | null>(null);
   const [historyDate, setHistoryDate] = useState<string | null>(null);
+  const [refreshing, setRefreshing] = useState(false);
+
+  const handleRefresh = async () => {
+    setRefreshing(true);
+    if (Platform.OS !== 'web') {
+      Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+    }
+    await refetch();
+    setRefreshing(false);
+  };
 
   const patientRoster = useMemo<PatientRecord[]>(() => {
     const byPatient = new Map<string, typeof appointments>();
@@ -207,6 +218,14 @@ export default function DoctorPatientsScreen() {
         contentContainerStyle={styles.scrollContent}
         showsVerticalScrollIndicator={false}
         keyboardShouldPersistTaps="handled"
+        refreshControl={
+          <RefreshControl
+            refreshing={refreshing}
+            onRefresh={handleRefresh}
+            tintColor={StitchColors.primaryContainer}
+            colors={[StitchColors.primaryContainer]}
+          />
+        }
       >
         {/* 2. Top Title & Total Roster Count */}
         <View style={styles.titleSection}>

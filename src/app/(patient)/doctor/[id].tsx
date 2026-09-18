@@ -19,6 +19,7 @@ import {
   Alert,
   Share,
   ActivityIndicator,
+  RefreshControl,
 } from 'react-native';
 import { useRouter, useLocalSearchParams } from 'expo-router';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -106,8 +107,8 @@ export default function DoctorProfileScreen() {
   const router = useRouter();
   const insets = useSafeAreaInsets();
   const { id } = useLocalSearchParams<{ id?: string }>();
-  const { data: detailDoctor, isLoading: isLoadingDetail } = useDoctorDetailQuery(id || '');
-  const { data: doctors, isLoading: isLoadingList } = useDoctorsQuery();
+  const { data: detailDoctor, isLoading: isLoadingDetail, refetch: refetchDetail } = useDoctorDetailQuery(id || '');
+  const { data: doctors, isLoading: isLoadingList, refetch: refetchList } = useDoctorsQuery();
 
   // Authoritative lookup: prefer detailDoctor (fresh from server), fallback to list match
   const doctor = detailDoctor || doctors?.find((d) => d.id === id) || null;
@@ -119,6 +120,7 @@ export default function DoctorProfileScreen() {
   }, [doctor?.name]);
 
   const [isFavorite, setIsFavorite] = useState(false);
+  const [refreshing, setRefreshing] = useState(false);
 
   const DATES = useMemo(() => generateDynamicDates(), []);
   const initialDateIdx = useMemo(() => {
@@ -136,7 +138,7 @@ export default function DoctorProfileScreen() {
 
   const currentDate = DATES[selectedDateIndex] || DATES[0];
 
-  const { data: weekOverrides = {} } = useQuery({
+  const { data: weekOverrides = {}, refetch: refetchWeek } = useQuery({
     queryKey: ['doctor-schedule-week', doctor?.id],
     queryFn: () =>
       doctor?.id
@@ -157,6 +159,15 @@ export default function DoctorProfileScreen() {
     staleTime: 0,
     refetchOnMount: 'always',
   });
+
+  const handleRefresh = async () => {
+    setRefreshing(true);
+    if (Platform.OS !== 'web') {
+      Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+    }
+    await Promise.all([refetchDetail(), refetchSlots(), refetchWeek(), refetchList()]);
+    setRefreshing(false);
+  };
 
   const currentOverride = weekOverrides[currentDate?.isoDate || ''];
   const isOnLeave = Boolean(slotData?.isOnLeave) || Boolean(currentOverride?.isOnLeave);
@@ -410,6 +421,14 @@ export default function DoctorProfileScreen() {
           { paddingBottom: Math.max(insets.bottom, Platform.OS === 'android' ? 24 : 14) + 80 },
         ]}
         showsVerticalScrollIndicator={false}
+        refreshControl={
+          <RefreshControl
+            refreshing={refreshing}
+            onRefresh={handleRefresh}
+            tintColor={StitchColors.primary}
+            colors={[StitchColors.primary]}
+          />
+        }
       >
         <View style={styles.contentWrap}>
           {/* Ambient Header Banner */}

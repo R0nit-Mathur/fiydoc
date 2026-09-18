@@ -24,6 +24,7 @@ import {
   TextInput,
   Alert,
   ActivityIndicator,
+  RefreshControl,
 } from 'react-native';
 import { useRouter } from 'expo-router';
 import { SafeAreaView } from 'react-native-safe-area-context';
@@ -124,55 +125,62 @@ export default function DoctorProfileScreen() {
   const [savingDocFee, setSavingDocFee] = useState(false);
   const [savingDocShifts, setSavingDocShifts] = useState(false);
   const [savingDocProfile, setSavingDocProfile] = useState(false);
+  const [refreshing, setRefreshing] = useState(false);
+
+  const fetchDocProfile = async () => {
+    try {
+      const data = await doctorService.getMyProfile();
+      if (!data) return;
+      const resolvedName = data.user?.fullName || data.fullName || data.name || user?.name || '';
+      const resolvedSpec = data.specialization || data.specialty || user?.specialization || '';
+      const resolvedFee = data.consultationFee != null ? String(data.consultationFee) : (user?.consultationFee ? String(user.consultationFee) : '');
+      const resolvedAvatar = data.user?.profilePhoto || data.profilePhoto || user?.avatar || undefined;
+      const cName = data.clinic?.name || data.clinicName || user?.clinicName || '';
+      const cAddr = data.clinic?.address || data.clinicAddress || user?.clinicAddress || '';
+      const cTimings = data.clinicTimings || user?.clinicTimings || '10:30 AM – 1:30 PM • 5:00 PM – 8:00 PM';
+      const qual = data.qualification || user?.qualification || '';
+
+      setDocName(resolvedName);
+      setDocSpec(resolvedSpec);
+      setDocAvatar(resolvedAvatar);
+      setOpdFee(resolvedFee);
+      setTempName(resolvedName);
+      setTempSpec(resolvedSpec);
+      setTempAvatar(resolvedAvatar);
+      setTempFee(resolvedFee);
+      setTempQual(qual);
+      setTempClinicName(cName);
+      setTempClinicAddress(cAddr);
+      setTempClinicTimings(cTimings);
+
+      updateUser({
+        name: resolvedName,
+        specialization: resolvedSpec,
+        specialty: resolvedSpec,
+        consultationFee: resolvedFee,
+        avatar: resolvedAvatar,
+        qualification: qual,
+        clinicName: cName,
+        clinicAddress: cAddr,
+        clinicTimings: cTimings,
+      });
+    } catch (err) {
+      console.warn('[DoctorProfile] Failed to load server profile:', err);
+    }
+  };
+
+  const handleRefresh = async () => {
+    setRefreshing(true);
+    if (Platform.OS !== 'web') {
+      Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+    }
+    await fetchDocProfile();
+    setRefreshing(false);
+  };
 
   // Sync profile data from server on mount
   useEffect(() => {
-    let isMounted = true;
-    const fetchDocProfile = async () => {
-      try {
-        const data = await doctorService.getMyProfile();
-        if (!isMounted || !data) return;
-        const resolvedName = data.user?.fullName || data.fullName || data.name || user?.name || '';
-        const resolvedSpec = data.specialization || data.specialty || user?.specialization || '';
-        const resolvedFee = data.consultationFee != null ? String(data.consultationFee) : (user?.consultationFee ? String(user.consultationFee) : '');
-        const resolvedAvatar = data.user?.profilePhoto || data.profilePhoto || user?.avatar || undefined;
-        const cName = data.clinic?.name || data.clinicName || user?.clinicName || '';
-        const cAddr = data.clinic?.address || data.clinicAddress || user?.clinicAddress || '';
-        const cTimings = data.clinicTimings || user?.clinicTimings || '10:30 AM – 1:30 PM • 5:00 PM – 8:00 PM';
-        const qual = data.qualification || user?.qualification || '';
-
-        setDocName(resolvedName);
-        setDocSpec(resolvedSpec);
-        setDocAvatar(resolvedAvatar);
-        setOpdFee(resolvedFee);
-        setTempName(resolvedName);
-        setTempSpec(resolvedSpec);
-        setTempAvatar(resolvedAvatar);
-        setTempFee(resolvedFee);
-        setTempQual(qual);
-        setTempClinicName(cName);
-        setTempClinicAddress(cAddr);
-        setTempClinicTimings(cTimings);
-
-        updateUser({
-          name: resolvedName,
-          specialization: resolvedSpec,
-          specialty: resolvedSpec,
-          consultationFee: resolvedFee,
-          avatar: resolvedAvatar,
-          qualification: qual,
-          clinicName: cName,
-          clinicAddress: cAddr,
-          clinicTimings: cTimings,
-        });
-      } catch (err) {
-        console.warn('[DoctorProfile] Failed to load server profile:', err);
-      }
-    };
     fetchDocProfile();
-    return () => {
-      isMounted = false;
-    };
   }, []);
 
   const handleSaveFee = async () => {
@@ -328,6 +336,14 @@ export default function DoctorProfileScreen() {
       <ScrollView
         contentContainerStyle={styles.scrollContent}
         showsVerticalScrollIndicator={false}
+        refreshControl={
+          <RefreshControl
+            refreshing={refreshing}
+            onRefresh={handleRefresh}
+            tintColor={StitchColors.primaryContainer}
+            colors={[StitchColors.primaryContainer]}
+          />
+        }
       >
         {/* 2. Doctor Identity Card */}
         <Animated.View

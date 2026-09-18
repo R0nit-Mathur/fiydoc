@@ -45,6 +45,7 @@ export function LocationPermissionModal({
     permissionStatus,
     isGenuineDeviceLocation,
     setHub,
+    setAllLocations,
   } = useLocationStore();
 
   const [loading, setLoading] = useState(false);
@@ -201,27 +202,20 @@ export function LocationPermissionModal({
       visible={visible}
       transparent
       animationType="fade"
-      onRequestClose={() => {
-        // Disallow dismissing without resolving genuine device location
-        if (isLocationResolved) {
-          onClose();
-        }
-      }}
+      onRequestClose={onClose}
     >
       <View style={styles.backdrop}>
         <View style={styles.cardContainer}>
-          {/* Close button ONLY if location was already successfully resolved */}
-          {isLocationResolved && (
-            <TouchableOpacity
-              onPress={onClose}
-              style={styles.closeBtn}
-              activeOpacity={0.7}
-              hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
-              accessibilityLabel="Close location modal"
-            >
-              <X size={18} color={Palette.textPrimary} />
-            </TouchableOpacity>
-          )}
+          {/* Close button always available */}
+          <TouchableOpacity
+            onPress={onClose}
+            style={styles.closeBtn}
+            activeOpacity={0.7}
+            hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+            accessibilityLabel="Close location modal"
+          >
+            <X size={18} color={Palette.textPrimary} />
+          </TouchableOpacity>
 
           {/* Location Pin Hero Icon */}
           <View style={styles.heroIconBox}>
@@ -229,9 +223,9 @@ export function LocationPermissionModal({
           </View>
 
           {/* Title & Healthcare Justification */}
-          <Text style={styles.title}>Pinpoint Location Required</Text>
+          <Text style={styles.title}>Choose Your Location</Text>
           <Text style={styles.subtitle}>
-            FiYDoc requires your genuine device location to calculate exact clinic distances, live token queues, and dispatch emergency care. You can choose "While Using App" or "Only This Time".
+            FiYDoc uses your location to show clinic distance and local token queues. You can allow location access, pick a city, or browse all doctors nationwide.
           </Text>
 
           {/* Current Address Pill if previously resolved */}
@@ -305,15 +299,31 @@ export function LocationPermissionModal({
               </TouchableOpacity>
             )}
 
+            {/* Browse All Nationwide Option */}
+            <TouchableOpacity
+              onPress={() => {
+                setAllLocations();
+                onLocationResolved?.();
+                onClose();
+              }}
+              activeOpacity={0.8}
+              style={styles.browseAllButton}
+            >
+              <Globe2 size={15} color={StitchColors.primary} />
+              <Text style={styles.browseAllButtonText}>
+                Browse All Doctors (Any Location)
+              </Text>
+            </TouchableOpacity>
+
             {/* Manual Location Selection Option */}
             <TouchableOpacity
               onPress={() => setShowManualHubs((prev) => !prev)}
               activeOpacity={0.8}
               style={styles.manualSelectToggle}
             >
-              <Globe2 size={15} color={StitchColors.primary} />
+              <MapPin size={15} color={StitchColors.primary} />
               <Text style={styles.manualSelectToggleText}>
-                {showManualHubs ? 'Hide City Selection' : 'Choose City / Location Manually'}
+                {showManualHubs ? 'Hide City Selection' : 'Choose Specific City / Medical Hub'}
               </Text>
               {showManualHubs ? (
                 <ChevronUp size={15} color={StitchColors.primary} />
@@ -498,6 +508,24 @@ const styles = StyleSheet.create({
     fontSize: 13,
     fontWeight: '700',
     color: Palette.textSecondary,
+  },
+  browseAllButton: {
+    width: '100%',
+    backgroundColor: '#F0FDFA',
+    borderWidth: 1,
+    borderColor: '#99F6E4',
+    borderRadius: BorderRadius.xl,
+    paddingVertical: 12,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: Spacing.sm,
+    marginTop: 4,
+  },
+  browseAllButtonText: {
+    fontSize: 13.5,
+    fontWeight: '700',
+    color: '#0D9488',
   },
   manualSelectToggle: {
     flexDirection: 'row',

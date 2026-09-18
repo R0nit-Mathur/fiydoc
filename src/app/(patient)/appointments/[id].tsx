@@ -17,6 +17,7 @@ import {
   Platform,
   Linking,
   Pressable,
+  RefreshControl,
 } from 'react-native';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { SafeAreaView } from 'react-native-safe-area-context';
@@ -49,11 +50,24 @@ import {
 export default function AppointmentDetailScreen() {
   const router = useRouter();
   const { id } = useLocalSearchParams<{ id: string }>();
-  const { data: apt, isLoading } = useAppointmentDetailQuery(id as string);
+  const { data: apt, isLoading, refetch } = useAppointmentDetailQuery(id as string);
   const queryClient = useQueryClient();
   const cancelAppointment = useAppointmentStore((s) => s.cancelAppointment);
   const [cancelDialogVisible, setCancelDialogVisible] = useState(false);
+  const [refreshing, setRefreshing] = useState(false);
   const { colors, isDark } = useAppTheme();
+
+  const handleRefresh = async () => {
+    setRefreshing(true);
+    if (Platform.OS !== 'web') {
+      Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+    }
+    await Promise.all([
+      refetch(),
+      queryClient.invalidateQueries({ queryKey: ['appointment', id] }),
+    ]);
+    setRefreshing(false);
+  };
 
   const handleSafeBack = () => {
     if (router.canGoBack()) router.back();
@@ -149,6 +163,14 @@ export default function AppointmentDetailScreen() {
       <ScrollView
         contentContainerStyle={styles.scrollContent}
         showsVerticalScrollIndicator={false}
+        refreshControl={
+          <RefreshControl
+            refreshing={refreshing}
+            onRefresh={handleRefresh}
+            tintColor={StitchColors.primary}
+            colors={[StitchColors.primary]}
+          />
+        }
       >
         {/* Delay Notice Banner */}
         {Boolean(apt.delayMinutes && apt.delayMinutes > 0 && apt.status !== 'cancelled') && (

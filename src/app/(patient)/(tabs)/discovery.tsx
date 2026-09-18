@@ -40,6 +40,7 @@ import { useLocationStore } from '@/store/useLocationStore';
 import { DoctorCard } from '@/components/ui/DoctorCard';
 import { DoctorCardSkeleton } from '@/components/ui/Skeleton';
 import { EmptyState } from '@/components/ui/EmptyState';
+import { LocationPermissionModal } from '@/components/location/LocationPermissionModal';
 import { Doctor } from '@/types/index';
 
 const FILTER_PILLS = [
@@ -59,6 +60,7 @@ export default function DoctorDiscoveryScreen() {
   const [selectedSpecialty, setSelectedSpecialty] = useState(params.specialty || 'All');
   const [activeFilters, setActiveFilters] = useState<string[]>([]);
   const [refreshing, setRefreshing] = useState(false);
+  const [locationModalVisible, setLocationModalVisible] = useState(false);
 
   useEffect(() => {
     if (params.specialty) setSelectedSpecialty(params.specialty);
@@ -114,6 +116,11 @@ export default function DoctorDiscoveryScreen() {
       list = list.filter((doc) => (doc.rating || 0) >= 4.8);
     }
 
+    const isNationwide = !area || area === 'All India' || city === 'All Locations';
+    if (isNationwide) {
+      return list.sort((a, b) => ((b.rating || 0) - (a.rating || 0)) || ((b.experienceYears || 0) - (a.experienceYears || 0)));
+    }
+
     // Helper to extract numeric distance
     const getDistanceNum = (doc: Doctor) => {
       if (typeof doc.distanceKm === 'number') return doc.distanceKm;
@@ -126,7 +133,7 @@ export default function DoctorDiscoveryScreen() {
     };
 
     return list.sort((a, b) => getDistanceNum(a) - getDistanceNum(b));
-  }, [doctors, searchQuery, activeFilters]);
+  }, [doctors, searchQuery, activeFilters, area, city]);
 
   const displaySpecialtyTitle =
     selectedSpecialty === 'All'
@@ -196,10 +203,20 @@ export default function DoctorDiscoveryScreen() {
                 </Text>
               </View>
 
-              <View style={styles.locationPill}>
+              <Pressable
+                onPress={() => {
+                  if (Platform.OS !== 'web') {
+                    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+                  }
+                  setLocationModalVisible(true);
+                }}
+                style={({ pressed }) => [styles.locationPill, pressed && { opacity: 0.75 }]}
+                accessibilityRole="button"
+                accessibilityLabel="Select location or browse nationwide"
+              >
                 <MapPin size={13} color="#2563eb" fill="#2563eb" />
-                <Text style={styles.locationText}>{area || city || 'Near You'}</Text>
-              </View>
+                <Text style={styles.locationText}>{area || city || 'All Locations'}</Text>
+              </Pressable>
             </View>
 
             {/* Search Input Box */}
@@ -309,6 +326,13 @@ export default function DoctorDiscoveryScreen() {
           </View>
         </View>
       </ScrollView>
+
+      {/* Location Permission & Hub Selection Modal */}
+      <LocationPermissionModal
+        visible={locationModalVisible}
+        onClose={() => setLocationModalVisible(false)}
+        onLocationResolved={() => setLocationModalVisible(false)}
+      />
     </SafeAreaView>
   );
 }
