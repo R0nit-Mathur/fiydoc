@@ -68,20 +68,20 @@ export function WelcomeGuideModal({ visible, onClose }: WelcomeGuideModalProps) 
           </View>
 
           <ScrollView showsVerticalScrollIndicator={false} style={styles.scroll}>
-            <Text style={styles.title}>Welcome to FiYDOC!</Text>
+            <Text style={styles.title}>Getting Started</Text>
             <Text style={styles.subtitle}>
-              Here is how to get the best clinical experience from your care portal:
+              Key features to help manage your clinical visits and records:
             </Text>
 
             {/* Step 1 */}
             <View style={styles.stepItem}>
               <View style={[styles.stepIconWrap, { backgroundColor: '#EFF6FF' }]}>
-                <UserCheck size={20} color="#2563eb" />
+                <UserCheck size={18} color="#2563eb" />
               </View>
               <View style={styles.stepContent}>
-                <Text style={styles.stepHeading}>Complete Your Profile</Text>
+                <Text style={styles.stepHeading}>Complete Profile</Text>
                 <Text style={styles.stepText}>
-                  Add your date of birth, emergency contact, and blood group in the Profile tab. Your consulting doctors rely on these vitals during in-clinic check-ins.
+                  Keep your date of birth, emergency contact, and blood group updated for in-clinic check-ins.
                 </Text>
               </View>
             </View>
@@ -89,12 +89,12 @@ export function WelcomeGuideModal({ visible, onClose }: WelcomeGuideModalProps) 
             {/* Step 2 */}
             <View style={styles.stepItem}>
               <View style={[styles.stepIconWrap, { backgroundColor: '#F0FDF4' }]}>
-                <Stethoscope size={20} color="#16a34a" />
+                <Stethoscope size={18} color="#16a34a" />
               </View>
               <View style={styles.stepContent}>
-                <Text style={styles.stepHeading}>Explore Verified Doctors</Text>
+                <Text style={styles.stepHeading}>Find Doctors</Text>
                 <Text style={styles.stepText}>
-                  Find verified doctors and clinics by specialty or location. View live token queues and consultation fees upfront.
+                  Search practitioners by specialty or facility with upfront consultation fees.
                 </Text>
               </View>
             </View>
@@ -102,12 +102,12 @@ export function WelcomeGuideModal({ visible, onClose }: WelcomeGuideModalProps) 
             {/* Step 3 */}
             <View style={styles.stepItem}>
               <View style={[styles.stepIconWrap, { backgroundColor: '#FAF5FF' }]}>
-                <Calendar size={20} color="#9333ea" />
+                <Calendar size={18} color="#9333ea" />
               </View>
               <View style={styles.stepContent}>
-                <Text style={styles.stepHeading}>Instant OPD Tokens</Text>
+                <Text style={styles.stepHeading}>OPD Queue Tokens</Text>
                 <Text style={styles.stepText}>
-                  Pick your preferred time slot, enter patient details, and receive an instant digital OPD Token with zero waiting room queues.
+                  Reserve a consultation slot and receive a verified clinic token pass.
                 </Text>
               </View>
             </View>
@@ -115,12 +115,12 @@ export function WelcomeGuideModal({ visible, onClose }: WelcomeGuideModalProps) 
             {/* Step 4 */}
             <View style={styles.stepItem}>
               <View style={[styles.stepIconWrap, { backgroundColor: '#FFFBEB' }]}>
-                <ShieldCheck size={20} color="#d97706" />
+                <ShieldCheck size={18} color="#d97706" />
               </View>
               <View style={styles.stepContent}>
-                <Text style={styles.stepHeading}>Digital Health Records</Text>
+                <Text style={styles.stepHeading}>Health Records</Text>
                 <Text style={styles.stepText}>
-                  All electronic prescriptions and lab reports are automatically saved to your encrypted records vault.
+                  View signed electronic prescriptions and diagnostic reports anytime in your account.
                 </Text>
               </View>
             </View>
@@ -132,11 +132,11 @@ export function WelcomeGuideModal({ visible, onClose }: WelcomeGuideModalProps) 
               onPress={handleGoToProfile}
               style={({ pressed }) => [
                 styles.primaryBtn,
-                pressed && { opacity: 0.9, transform: [{ scale: 0.98 }] },
+                pressed && { opacity: 0.9 },
               ]}
             >
-              <Text style={styles.primaryBtnText}>Update Profile Now</Text>
-              <ChevronRight size={18} color="#ffffff" strokeWidth={2.4} />
+              <Text style={styles.primaryBtnText} numberOfLines={1}>Complete Profile</Text>
+              <ChevronRight size={16} color="#ffffff" strokeWidth={2.4} />
             </Pressable>
 
             <Pressable
@@ -146,7 +146,7 @@ export function WelcomeGuideModal({ visible, onClose }: WelcomeGuideModalProps) 
                 pressed && { opacity: 0.7 },
               ]}
             >
-              <Text style={styles.secondaryBtnText}>Explore Dashboard</Text>
+              <Text style={styles.secondaryBtnText}>Dismiss</Text>
             </Pressable>
           </View>
         </View>
@@ -245,12 +245,14 @@ const styles = StyleSheet.create({
     fontSize: 14,
     fontWeight: '700',
     color: '#0f172a',
+    flexShrink: 1,
   },
   stepText: {
     fontSize: 12,
-    lineHeight: 16,
+    lineHeight: 17,
     color: '#64748b',
     marginTop: 2,
+    flexShrink: 1,
   },
   footer: {
     paddingTop: 12,
@@ -259,28 +261,29 @@ const styles = StyleSheet.create({
   },
   primaryBtn: {
     width: '100%',
-    height: 48,
-    borderRadius: 24,
+    height: 46,
+    borderRadius: 23,
     backgroundColor: '#1450a3',
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
+    paddingHorizontal: 16,
     marginBottom: 8,
   },
   primaryBtnText: {
-    fontSize: 15,
+    fontSize: 14,
     fontWeight: '700',
     color: '#ffffff',
     marginRight: 6,
   },
   secondaryBtn: {
     width: '100%',
-    height: 40,
+    height: 38,
     alignItems: 'center',
     justifyContent: 'center',
   },
   secondaryBtnText: {
-    fontSize: 14,
+    fontSize: 13,
     fontWeight: '600',
     color: '#64748b',
   },

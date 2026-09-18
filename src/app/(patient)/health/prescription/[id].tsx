@@ -134,11 +134,19 @@ export default function DedicatedPrescriptionScreen() {
     }
   };
 
+  const handleSafeBack = () => {
+    if (router.canGoBack()) {
+      router.back();
+    } else {
+      router.replace('/(patient)/(tabs)/health');
+    }
+  };
+
   if (loading && !rx) {
     return (
       <SafeAreaView style={styles.safeArea} edges={['top']}>
         <View style={styles.header}>
-          <TouchableOpacity onPress={() => router.back()} style={styles.backBtn}>
+          <TouchableOpacity onPress={handleSafeBack} style={styles.backBtn} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}>
             <ArrowLeft size={20} color={colors.text} />
           </TouchableOpacity>
           <Text style={styles.headerTitle}>Digital Prescription</Text>
@@ -155,7 +163,7 @@ export default function DedicatedPrescriptionScreen() {
     return (
       <SafeAreaView style={styles.safeArea} edges={['top']}>
         <View style={styles.header}>
-          <TouchableOpacity onPress={() => router.back()} style={styles.backBtn}>
+          <TouchableOpacity onPress={handleSafeBack} style={styles.backBtn} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}>
             <ArrowLeft size={20} color={colors.text} />
           </TouchableOpacity>
           <Text style={styles.headerTitle}>Digital Prescription</Text>
@@ -174,7 +182,7 @@ export default function DedicatedPrescriptionScreen() {
       {/* Top Bar */}
       <View style={styles.header}>
         <TouchableOpacity
-          onPress={() => router.back()}
+          onPress={handleSafeBack}
           style={styles.backBtn}
           hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
           accessibilityRole="button"

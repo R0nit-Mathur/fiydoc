@@ -15,7 +15,7 @@
  * - Top Rated In-Clinic Doctors list with live DoctorCard token telemetry
  */
 
-import React, { useState, useEffect, useMemo } from 'react';
+import React, { useState, useEffect, useMemo, useRef } from 'react';
 import {
   View,
   Text,
@@ -71,6 +71,7 @@ import {
   PhoneCall,
   ShieldCheck,
   RefreshCw,
+  LogOut,
 } from 'lucide-react-native';
 
 import { SPECIALTIES, ALL_SPECIALTIES } from '@/constants/specialties';
@@ -89,6 +90,7 @@ export default function PatientHomeScreen() {
   const [allSpecialtiesModalVisible, setAllSpecialtiesModalVisible] = useState(false);
   const [guideModalVisible, setGuideModalVisible] = useState(false);
   const [updateModalVisible, setUpdateModalVisible] = useState(false);
+  const hasPromptedGuideRef = useRef(false);
 
   const { formattedAddress, city, area, permissionStatus } = useLocationStore();
   const { data: doctors = [] } = useDoctorsQuery();
@@ -106,11 +108,13 @@ export default function PatientHomeScreen() {
     }
   }, [permissionStatus]);
 
-  // Check if user profile is incomplete, prompt welcome guide ONLY after location is resolved/dismissed
+  // Check if user profile is incomplete, prompt welcome guide ONCE per session after location is resolved/dismissed
   useEffect(() => {
+    if (hasPromptedGuideRef.current) return;
     if (permissionStatus !== 'undetermined' && !locationModalVisible) {
       const timer = setTimeout(() => {
-        if (!user?.dob || !user?.bloodGroup || !user?.address) {
+        if (!hasPromptedGuideRef.current && (!user?.dob || !user?.bloodGroup || !user?.address)) {
+          hasPromptedGuideRef.current = true;
           setGuideModalVisible(true);
         }
       }, 1200);
@@ -242,7 +246,9 @@ export default function PatientHomeScreen() {
           </View>
 
           <View style={styles.greetingBlock}>
-            <Text style={styles.greetingSmall}>Good morning,</Text>
+            <Text style={styles.greetingSmall}>
+              {new Date().getHours() < 12 ? 'Good morning,' : new Date().getHours() < 17 ? 'Good afternoon,' : 'Good evening,'}
+            </Text>
             <Text style={styles.greetingBig}>{greetingName}</Text>
           </View>
 
@@ -629,7 +635,7 @@ export default function PatientHomeScreen() {
                 <View style={[styles.drawerMenuIcon, { backgroundColor: '#FFF1F2' }]}>
                   <Heart size={18} color="#e11d48" />
                 </View>
-                <Text style={styles.drawerMenuText}>Saved Doctors</Text>
+                <Text style={styles.drawerMenuText}>Find Doctors</Text>
               </Pressable>
 
               <Pressable
@@ -645,7 +651,7 @@ export default function PatientHomeScreen() {
                 <View style={[styles.drawerMenuIcon, { backgroundColor: '#FFFBEB' }]}>
                   <CreditCard size={18} color="#d97706" />
                 </View>
-                <Text style={styles.drawerMenuText}>Payment History</Text>
+                <Text style={styles.drawerMenuText}>Past Visits & Receipts</Text>
               </Pressable>
 
               <Pressable
@@ -681,7 +687,7 @@ export default function PatientHomeScreen() {
                   pressed && { opacity: 0.7 },
                 ]}
               >
-                <X size={17} color="#e11d48" />
+                <LogOut size={17} color="#e11d48" />
                 <Text style={styles.logoutText}>Log Out</Text>
               </Pressable>
               <Text style={styles.versionText}>FIYDOC v1.0.1</Text>
@@ -706,7 +712,10 @@ export default function PatientHomeScreen() {
       {/* Welcome & Profile Details Guidance Modal */}
       <WelcomeGuideModal
         visible={guideModalVisible}
-        onClose={() => setGuideModalVisible(false)}
+        onClose={() => {
+          hasPromptedGuideRef.current = true;
+          setGuideModalVisible(false);
+        }}
       />
 
       {/* App Updates (OTA) Modal */}

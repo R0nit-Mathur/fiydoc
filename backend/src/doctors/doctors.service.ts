@@ -272,21 +272,23 @@ export class DoctorsService {
 
     if (!doctor) throw new NotFoundException('Doctor profile not found.');
 
-    await this.prisma.availability.deleteMany({
-      where: { doctorId: doctor.id },
-    });
-
-    if (availabilities && availabilities.length > 0) {
-      await this.prisma.availability.createMany({
-        data: availabilities.map((a) => ({
-          doctorId: doctor.id,
-          dayOfWeek: Number(a.dayOfWeek),
-          startTime: a.startTime.trim().slice(0, 5),
-          endTime: a.endTime.trim().slice(0, 5),
-          slotDurationMinutes: Number(a.slotDurationMinutes) || 30,
-        })),
+    await this.prisma.$transaction(async (tx) => {
+      await tx.availability.deleteMany({
+        where: { doctorId: doctor.id },
       });
-    }
+
+      if (availabilities && availabilities.length > 0) {
+        await tx.availability.createMany({
+          data: availabilities.map((a) => ({
+            doctorId: doctor.id,
+            dayOfWeek: Number(a.dayOfWeek),
+            startTime: a.startTime.trim().slice(0, 5),
+            endTime: a.endTime.trim().slice(0, 5),
+            slotDurationMinutes: Number(a.slotDurationMinutes) || 30,
+          })),
+        });
+      }
+    }, { maxWait: 5000, timeout: 10000 });
 
     return this.getMyDoctorProfile(currentUser);
   }
@@ -468,7 +470,6 @@ export class DoctorsService {
         const timingStr = dto.clinicTimings?.trim() || updated.clinic?.timings || '09:00 - 13:00, 17:00 - 20:00';
         const parsedIntervals = this.parseTimingsToIntervals(timingStr);
         if (parsedIntervals.length > 0) {
-          await this.prisma.availability.deleteMany({ where: { doctorId: doctor.id } });
           const newAvailabilities: { doctorId: string; dayOfWeek: number; startTime: string; endTime: string; slotDurationMinutes: number }[] = [];
           for (let day = 1; day <= 6; day++) {
             for (const interval of parsedIntervals) {
@@ -481,7 +482,10 @@ export class DoctorsService {
               });
             }
           }
-          await this.prisma.availability.createMany({ data: newAvailabilities });
+          await this.prisma.$transaction(async (tx) => {
+            await tx.availability.deleteMany({ where: { doctorId: doctor.id } });
+            await tx.availability.createMany({ data: newAvailabilities });
+          }, { maxWait: 5000, timeout: 10000 });
         } else if (dto.slotDurationMinutes && dto.slotDurationMinutes > 0) {
           // No new timing string but slot duration changed — update existing availabilities in-place
           await this.prisma.availability.updateMany({
@@ -517,17 +521,18 @@ export class DoctorsService {
     }
 
     if (dto.availabilities && dto.availabilities.length > 0) {
-      // Full replace with provided schedule
-      await this.prisma.availability.deleteMany({ where: { doctorId: doctor.id } });
-      await this.prisma.availability.createMany({
-        data: dto.availabilities.map((a) => ({
-          doctorId: doctor.id,
-          dayOfWeek: a.dayOfWeek,
-          startTime: a.startTime,
-          endTime: a.endTime,
-          slotDurationMinutes: a.slotDurationMinutes || dto.slotDurationMinutes || 30,
-        })),
-      });
+      // Full replace with provided schedule inside an atomic transaction
+      const newAvails = dto.availabilities.map((a) => ({
+        doctorId: doctor.id,
+        dayOfWeek: a.dayOfWeek,
+        startTime: a.startTime,
+        endTime: a.endTime,
+        slotDurationMinutes: a.slotDurationMinutes || dto.slotDurationMinutes || 30,
+      }));
+      await this.prisma.$transaction(async (tx) => {
+        await tx.availability.deleteMany({ where: { doctorId: doctor.id } });
+        await tx.availability.createMany({ data: newAvails });
+      }, { maxWait: 5000, timeout: 10000 });
     } else if (dto.slotDurationMinutes && dto.slotDurationMinutes > 0) {
       // Just update slot duration on all existing availabilities
       await this.prisma.availability.updateMany({

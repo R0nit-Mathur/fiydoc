@@ -31,7 +31,11 @@ import {
   ChevronRight,
   UploadCloud,
   ShieldCheck,
+  Eye,
 } from 'lucide-react-native';
+import { DocumentViewerModal } from '@/components/ui/DocumentViewerModal';
+import { fileUploadService } from '@/services/fileUploadService';
+import { healthService } from '@/services/healthService';
 
 interface LabRecordsTabProps {
   patientId?: string;
@@ -48,6 +52,16 @@ export function LabRecordsTab({ patientId, patientName }: LabRecordsTabProps) {
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedReport, setSelectedReport] = useState<LabReport | null>(null);
   const [uploadModalVisible, setUploadModalVisible] = useState(false);
+  const [viewerDoc, setViewerDoc] = useState<{
+    visible: boolean;
+    title: string;
+    url: string | null;
+    subtitle?: string;
+  }>({
+    visible: false,
+    title: 'Lab Report',
+    url: null,
+  });
 
   // New report form state
   const [newTestName, setNewTestName] = useState('');
@@ -69,7 +83,7 @@ export function LabRecordsTab({ patientId, patientName }: LabRecordsTabProps) {
     });
   }, [labReports, selectedCategory, searchQuery]);
 
-  const handleCreateReport = () => {
+  const handleCreateReport = async () => {
     if (!newTestName.trim()) {
       if (Platform.OS === 'web') {
         alert('Please enter test name');
@@ -83,9 +97,19 @@ export function LabRecordsTab({ patientId, patientName }: LabRecordsTabProps) {
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
     }
 
+    let cloudUrl = pickedFile?.uri;
+    if (pickedFile?.uri) {
+      try {
+        const uploadRes = await fileUploadService.uploadFile(pickedFile, 'documents');
+        if (uploadRes?.url) cloudUrl = uploadRes.url;
+      } catch (err: any) {
+        console.warn('[LabRecordsTab] Cloud upload notice:', err?.message);
+      }
+    }
+
     const created: LabReport = {
       id: `lab_${Date.now()}`,
-      patientId: patientId || 'patient_default',
+      patientId: patientId || 'me',
       patientName: patientName || 'Patient',
       testName: newTestName.trim(),
       category: newCategory,
@@ -97,12 +121,29 @@ export function LabRecordsTab({ patientId, patientName }: LabRecordsTabProps) {
       summary: newSummary.trim() || 'Patient uploaded lab results verified by lab technician.',
       fileName: pickedFile?.name || `${newTestName.replace(/\s+/g, '_')}_Report.pdf`,
       fileSize: pickedFile?.size || '1.1 MB',
+      fileUrl: cloudUrl,
       parameters: [
         { name: `${newTestName} Primary Marker`, value: 'Normal', unit: 'Index', referenceRange: 'Negative / Within Limits' },
       ],
     };
 
     addLabReport(created);
+
+    // Persist to backend /records authoritatively
+    try {
+      await healthService.createRecord({
+        patientId: patientId || 'me',
+        title: `Lab Report: ${newTestName.trim()}`,
+        type: 'LAB_REPORT',
+        documentUrl: cloudUrl,
+        fileUrl: cloudUrl,
+        summary: created.summary,
+        tags: ['LAB_REPORT', newCategory.toUpperCase()],
+      });
+    } catch (e: any) {
+      console.warn('[LabRecordsTab] Server record sync warning:', e?.message);
+    }
+
     setNewTestName('');
     setNewSummary('');
     setPickedFile(null);
@@ -333,15 +374,18 @@ export function LabRecordsTab({ patientId, patientName }: LabRecordsTabProps) {
                   </View>
                   <Pressable
                     onPress={() => {
-                      if (Platform.OS === 'web') {
-                        alert(`Opening official report: ${selectedReport.fileName}`);
-                      } else {
-                        Alert.alert('Report Download', `Downloading ${selectedReport.fileName} to device.`);
-                      }
+                      setViewerDoc({
+                        visible: true,
+                        title: selectedReport.testName,
+                        url: selectedReport.fileUrl || null,
+                        subtitle: `${selectedReport.labName} • ${selectedReport.fileName || 'Report.pdf'}`,
+                      });
                     }}
-                    style={[styles.downloadBtn, { backgroundColor: StitchColors.primaryContainer }]}
+                    style={[styles.downloadBtn, { backgroundColor: StitchColors.primaryContainer, flexDirection: 'row', alignItems: 'center', gap: 4, paddingHorizontal: 12 }]}
+                    accessibilityLabel="View lab report"
                   >
-                    <Download size={14} color="#ffffff" />
+                    <Eye size={15} color="#ffffff" />
+                    <Text style={{ color: '#ffffff', fontSize: 12, fontWeight: '700' }}>View</Text>
                   </Pressable>
                 </View>
               </ScrollView>
@@ -477,6 +521,32 @@ export function LabRecordsTab({ patientId, patientName }: LabRecordsTabProps) {
                           {pickedFile.size} • Attached & Ready to Save
                         </Text>
                       </View>
+                      <Pressable
+                        onPress={(e) => {
+                          e.stopPropagation();
+                          setViewerDoc({
+                            visible: true,
+                            title: pickedFile.name,
+                            url: pickedFile.uri,
+                            subtitle: 'Attached Lab Document',
+                          });
+                        }}
+                        style={{
+                          flexDirection: 'row',
+                          alignItems: 'center',
+                          gap: 4,
+                          backgroundColor: '#EFF6FF',
+                          paddingHorizontal: 8,
+                          paddingVertical: 4,
+                          borderRadius: 6,
+                          borderWidth: 1,
+                          borderColor: '#DBEAFE',
+                        }}
+                        hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+                      >
+                        <Eye size={13} color={StitchColors.primary} />
+                        <Text style={{ fontSize: 11, fontWeight: '700', color: StitchColors.primary }}>View</Text>
+                      </Pressable>
                       <CheckCircle2 size={18} color={StitchColors.secondaryContainer} />
                     </View>
                   ) : (
@@ -525,6 +595,15 @@ export function LabRecordsTab({ patientId, patientName }: LabRecordsTabProps) {
           </View>
         </View>
       </Modal>
+
+      {/* Universal Document Viewer Modal */}
+      <DocumentViewerModal
+        visible={viewerDoc.visible}
+        title={viewerDoc.title}
+        subtitle={viewerDoc.subtitle}
+        documentUrl={viewerDoc.url}
+        onClose={() => setViewerDoc((prev) => ({ ...prev, visible: false }))}
+      />
     </View>
   );
 }

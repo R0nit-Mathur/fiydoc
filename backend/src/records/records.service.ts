@@ -81,8 +81,11 @@ export class RecordsService {
       title: string;
       type?: string;
       documentUrl?: string;
+      fileUrl?: string;
       summary?: string;
+      notes?: string;
       tags?: string[];
+      category?: string;
     },
     currentUser: any,
   ) {
@@ -106,14 +109,20 @@ export class RecordsService {
       typeEnum = MedicalRecordType.CONSULTATION;
     }
 
+    const docUrl = dto.documentUrl || dto.fileUrl || null;
+    const docSummary = dto.summary || dto.notes || null;
+    const docTags = dto.tags && dto.tags.length > 0 
+      ? dto.tags 
+      : (dto.category ? [dto.category] : ['UPLOADED_DOCUMENT']);
+
     return this.prisma.medicalRecord.create({
       data: {
         patientId: targetPatientId,
         title: dto.title.trim(),
         type: typeEnum,
-        documentUrl: dto.documentUrl || null,
-        summary: dto.summary || null,
-        tags: dto.tags || ['UPLOADED_DOCUMENT'],
+        documentUrl: docUrl,
+        summary: docSummary,
+        tags: docTags,
       },
     });
   }

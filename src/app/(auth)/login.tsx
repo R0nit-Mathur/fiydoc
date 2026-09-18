@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useRef } from 'react';
 import {
   View,
   Text,
@@ -38,6 +38,7 @@ export default function LoginScreen() {
   const [loading, setLoading] = useState(false);
   const [googleLoading, setGoogleLoading] = useState(false);
   const [error, setError] = useState('');
+  const passwordInputRef = useRef<TextInput>(null);
 
   const toggleAuthMode = () => {
     if (Platform.OS !== 'web') {
@@ -158,6 +159,9 @@ export default function LoginScreen() {
                     keyboardType="email-address"
                     autoCapitalize="none"
                     autoCorrect={false}
+                    returnKeyType="next"
+                    onSubmitEditing={() => passwordInputRef.current?.focus()}
+                    blurOnSubmit={false}
                   />
                 </View>
               </View>
@@ -170,6 +174,7 @@ export default function LoginScreen() {
                 <View style={styles.inputWrapper}>
                   <Lock size={19} color="#737783" style={styles.inputIcon} />
                   <TextInput
+                    ref={passwordInputRef}
                     value={password}
                     onChangeText={setPassword}
                     placeholder="Enter secure password"
@@ -177,6 +182,8 @@ export default function LoginScreen() {
                     style={styles.textInput}
                     secureTextEntry={!showPassword}
                     autoCapitalize="none"
+                    returnKeyType="go"
+                    onSubmitEditing={handleAuth}
                   />
                   <Pressable
                     onPress={() => setShowPassword(!showPassword)}

@@ -1,6 +1,6 @@
 import React from 'react';
 import { View, Text, Pressable, StyleSheet } from 'react-native';
-import { FileText, Trash2, UploadCloud, CheckCircle2 } from 'lucide-react-native';
+import { FileText, Trash2, UploadCloud, CheckCircle2, Eye } from 'lucide-react-native';
 import { StitchColors } from '@/constants/theme';
 
 export interface FileUploadCardProps {
@@ -13,6 +13,7 @@ export interface FileUploadCardProps {
   uploadSubtitle?: string;
   onUpload?: () => void;
   onRemove?: () => void;
+  onView?: () => void;
   style?: any;
 }
 
@@ -26,6 +27,7 @@ export function FileUploadCard({
   uploadSubtitle = 'PDF, JPG, PNG (Max 15MB)',
   onUpload,
   onRemove,
+  onView,
   style,
 }: FileUploadCardProps) {
   return (
@@ -44,7 +46,11 @@ export function FileUploadCard({
 
       {isUploaded ? (
         <View style={styles.uploadedCard}>
-          <View style={styles.fileInfoRow}>
+          <Pressable
+            onPress={onView}
+            disabled={!onView}
+            style={styles.fileInfoRow}
+          >
             <View style={styles.fileIconBox}>
               <FileText size={18} color={StitchColors.primary} />
             </View>
@@ -56,18 +62,32 @@ export function FileUploadCard({
                 {fileSize} • {subtitle}
               </Text>
             </View>
-          </View>
+          </Pressable>
 
-          {onRemove && (
-            <Pressable
-              onPress={onRemove}
-              hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
-              style={styles.deleteButton}
-              accessibilityLabel="Remove file"
-            >
-              <Trash2 size={16} color="#94a3b8" />
-            </Pressable>
-          )}
+          <View style={styles.cardActionsRow}>
+            {onView && (
+              <Pressable
+                onPress={onView}
+                hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+                style={styles.viewButton}
+                accessibilityLabel="View document"
+              >
+                <Eye size={16} color={StitchColors.primary} />
+                <Text style={styles.viewButtonText}>View</Text>
+              </Pressable>
+            )}
+
+            {onRemove && (
+              <Pressable
+                onPress={onRemove}
+                hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+                style={styles.deleteButton}
+                accessibilityLabel="Remove file"
+              >
+                <Trash2 size={16} color="#94a3b8" />
+              </Pressable>
+            )}
+          </View>
         </View>
       ) : (
         <Pressable
@@ -150,9 +170,30 @@ const styles = StyleSheet.create({
     color: '#64748b',
     marginTop: 1,
   },
+  cardActionsRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    marginLeft: 6,
+  },
+  viewButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    backgroundColor: '#eff6ff',
+    paddingHorizontal: 8,
+    paddingVertical: 5,
+    borderRadius: 6,
+    borderWidth: 1,
+    borderColor: '#dbeafe',
+  },
+  viewButtonText: {
+    fontSize: 11,
+    fontWeight: '600',
+    color: StitchColors.primary,
+  },
   deleteButton: {
     padding: 6,
-    marginLeft: 6,
   },
   uploadPlaceholder: {
     borderWidth: 1.5,

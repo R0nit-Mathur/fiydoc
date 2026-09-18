@@ -61,6 +61,8 @@ import { signOutAll } from '@/services/authService';
 import { useAppTheme } from '@/hooks/useAppTheme';
 import { BorderRadius, Shadows, StitchColors, Palette } from '@/constants/theme';
 import { AppUpdateModal } from '@/components/ui/AppUpdateModal';
+import { DocumentViewerModal } from '@/components/ui/DocumentViewerModal';
+import { fileUploadService } from '@/services/fileUploadService';
 import { pickImageFromGallery } from '@/utils/mediaPicker';
 import { Avatar } from '@/components/ui/Avatar';
 import { useAppointmentStore } from '@/store/useAppointmentStore';
@@ -110,6 +112,7 @@ export default function DoctorProfileScreen() {
   const [tempClinicName, setTempClinicName] = useState(user?.clinicName || '');
   const [tempClinicAddress, setTempClinicAddress] = useState(user?.clinicAddress || '');
   const [tempClinicTimings, setTempClinicTimings] = useState(user?.clinicTimings || '10:30 AM – 1:30 PM • 5:00 PM – 8:00 PM');
+  const [viewerAvatarVisible, setViewerAvatarVisible] = useState(false);
 
   // Interactive OPD Shifts & Consultation Cadence state
   const [showShiftsModal, setShowShiftsModal] = useState(false);
@@ -244,11 +247,26 @@ export default function DoctorProfileScreen() {
       const cleanClinicAddress = tempClinicAddress.trim() || user?.clinicAddress || 'Clinical Practice Address Pending';
       const cleanClinicTimings = tempClinicTimings.trim() || user?.clinicTimings || '10:30 AM – 1:30 PM • 5:00 PM – 8:00 PM';
 
+      let finalAvatarUrl = tempAvatar;
+      if (tempAvatar && (tempAvatar.startsWith('file:') || tempAvatar.startsWith('data:'))) {
+        try {
+          const uploadRes = await fileUploadService.uploadFile(
+            { uri: tempAvatar, name: 'doctor_avatar.jpg' },
+            'doctors'
+          );
+          if (uploadRes?.url) {
+            finalAvatarUrl = uploadRes.url;
+          }
+        } catch (uploadErr: any) {
+          console.warn('[DoctorProfile] Avatar cloud upload notice:', uploadErr?.message);
+        }
+      }
+
       try {
         await doctorService.updateMyProfile({
           fullName: cleanName,
           specialization: cleanSpec,
-          profilePhoto: tempAvatar?.startsWith('file:') ? undefined : tempAvatar || null,
+          profilePhoto: finalAvatarUrl || null,
           clinicName: cleanClinicName,
           clinicAddress: cleanClinicAddress,
           clinicTimings: cleanClinicTimings,
@@ -259,12 +277,12 @@ export default function DoctorProfileScreen() {
       }
       setDocName(cleanName);
       setDocSpec(cleanSpec);
-      setDocAvatar(tempAvatar);
+      setDocAvatar(finalAvatarUrl);
       updateUser({
         name: cleanName,
         specialization: cleanSpec,
         specialty: cleanSpec,
-        avatar: tempAvatar,
+        avatar: finalAvatarUrl,
         qualification: tempQual,
         clinicName: cleanClinicName,
         clinicAddress: cleanClinicAddress,
@@ -317,12 +335,18 @@ export default function DoctorProfileScreen() {
           style={[styles.identityCard, { backgroundColor: colors.card, borderColor: colors.border }]}
         >
           <View style={styles.identityTopRow}>
-            <View style={styles.avatarWrap}>
+            <Pressable
+              onPress={() => {
+                if (docAvatar) setViewerAvatarVisible(true);
+              }}
+              style={styles.avatarWrap}
+              accessibilityLabel="View profile photo"
+            >
               <Avatar uri={docAvatar || null} name={docName || 'Doctor'} size="xl" />
               <View style={styles.verifiedMiniBadge}>
                 <ShieldCheck size={12} color="#FFFFFF" />
               </View>
-            </View>
+            </Pressable>
 
             <View style={{ flex: 1, marginLeft: 14 }}>
               <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
@@ -1034,6 +1058,15 @@ export default function DoctorProfileScreen() {
         visible={showUpdateModal}
         onClose={() => setShowUpdateModal(false)}
       />
+
+      {/* Universal In-App Document Viewer Modal */}
+      <DocumentViewerModal
+        visible={viewerAvatarVisible}
+        title={docName || 'Doctor Profile Photo'}
+        subtitle="Medical Practitioner Profile"
+        documentUrl={docAvatar}
+        onClose={() => setViewerAvatarVisible(false)}
+      />
     </SafeAreaView>
   );
 }
@@ -1063,7 +1096,7 @@ const styles = StyleSheet.create({
   },
   scrollContent: {
     padding: 16,
-    paddingBottom: 90,
+    paddingBottom: 120,
     gap: 16,
   },
   identityCard: {

@@ -18,12 +18,20 @@ export default function RecordDetailScreen() {
   const rec = records?.find((r) => r.id === id) || records?.[0];
   const styles = useStyles(colors, isDark);
 
+  const handleSafeBack = () => {
+    if (router.canGoBack()) {
+      router.back();
+    } else {
+      router.replace('/(patient)/(tabs)/health');
+    }
+  };
+
   return (
     <SafeAreaView style={styles.safeArea}>
       <View style={styles.container}>
         <View style={styles.topHeader}>
           <Pressable
-            onPress={() => router.back()}
+            onPress={handleSafeBack}
             hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
             style={styles.backButton}
             accessibilityRole="button"

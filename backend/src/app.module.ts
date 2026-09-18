@@ -10,9 +10,10 @@ import { ConsultationsModule } from './consultations/consultations.module';
 import { PrescriptionsModule } from './prescriptions/prescriptions.module';
 import { RecordsModule } from './records/records.module';
 import { VerificationModule } from './verification/verification.module';
-import { AdminModule } from './admin/admin.module';
 import { PatientsModule } from './patients/patients.module';
 import { NotificationsModule } from './notifications/notifications.module';
+import { UploadModule } from './upload/upload.module';
+import { AdminModule } from './admin/admin.module';
 
 @Module({
   imports: [
@@ -32,6 +33,7 @@ import { NotificationsModule } from './notifications/notifications.module';
     VerificationModule,
     AdminModule,
     NotificationsModule,
+    UploadModule,
   ],
   controllers: [AppController],
 })

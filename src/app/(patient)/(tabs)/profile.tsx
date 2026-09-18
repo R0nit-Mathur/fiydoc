@@ -38,6 +38,8 @@ import { useAppTheme } from '@/hooks/useAppTheme';
 import { patientService } from '@/services/patientService';
 import { pickImageFromGallery } from '@/utils/mediaPicker';
 import { normalizeAllergies } from '@/utils/allergyNormalizer';
+import { fileUploadService } from '@/services/fileUploadService';
+import { DocumentViewerModal } from '@/components/ui/DocumentViewerModal';
 import {
   LogOut,
   ChevronRight,
@@ -56,6 +58,7 @@ import {
   Calendar,
   MapPin,
   RefreshCw,
+  Eye,
 } from 'lucide-react-native';
 import { AppUpdateModal } from '@/components/ui/AppUpdateModal';
 import { StitchColors, BorderRadius, Shadows, Spacing, Palette } from '@/constants/theme';
@@ -96,6 +99,8 @@ export default function PatientProfileScreen() {
   const [saveToast, setSaveToast] = useState(false);
   const [updateModalVisible, setUpdateModalVisible] = useState(false);
   const [savingProfile, setSavingProfile] = useState(false);
+  const [viewerVisible, setViewerVisible] = useState(false);
+  const [viewerDoc, setViewerDoc] = useState<{ url: string; title: string; mimeType?: string } | null>(null);
 
   // Helper to auto-format DOB with slashes (DD/MM/YYYY)
   const formatDOBInput = (text: string) => {
@@ -154,6 +159,20 @@ export default function PatientProfileScreen() {
   const handleSaveProfile = async () => {
     setSavingProfile(true);
     try {
+      let finalAvatar = editAvatar;
+      if (editAvatar && (editAvatar.startsWith('file:') || editAvatar.startsWith('data:'))) {
+        try {
+          const uploadRes = await fileUploadService.uploadFile(
+            { uri: editAvatar, name: `patient_${user?.id || 'avatar'}_${Date.now()}.jpg` },
+            'patients'
+          );
+          finalAvatar = uploadRes.url;
+          setEditAvatar(uploadRes.url);
+        } catch (uploadErr) {
+          console.warn('Failed to upload avatar to storage, using local preview:', uploadErr);
+        }
+      }
+
       const name = editName.trim() || user?.name || '';
       const dob = editDOB.trim() || undefined;
       const address = editAddress.trim() || undefined;
@@ -163,7 +182,7 @@ export default function PatientProfileScreen() {
       const emergencyPhone = editEmergency.trim() || undefined;
       const age = calculateAgeFromDOB(dob) ?? undefined;
 
-      updateUser({ name, email: editEmail.trim() || user?.email || '', phone: editPhone.trim(), avatar: editAvatar || undefined, dob, address, age, bloodGroup });
+      updateUser({ name, email: editEmail.trim() || user?.email || '', phone: editPhone.trim(), avatar: finalAvatar || undefined, dob, address, age, bloodGroup });
       if (user?.id) {
         try {
           await patientService.updateProfile(user.id, {
@@ -173,7 +192,7 @@ export default function PatientProfileScreen() {
             dob,
             address,
             bloodGroup,
-            profilePhoto: editAvatar || undefined,
+            profilePhoto: finalAvatar || undefined,
             allergies,
             conditions,
             emergencyContact: emergencyPhone ? { phone: emergencyPhone, name: '', relation: '' } : undefined,
@@ -316,7 +335,18 @@ export default function PatientProfileScreen() {
                     transform="rotate(-90 42 42)"
                   />
                 </Svg>
-                <Avatar uri={user?.avatar || null} name={user?.name || 'Patient'} size="lg" />
+                <Pressable
+                  onPress={() => {
+                    if (user?.avatar) {
+                      setViewerDoc({ url: user.avatar, title: `${user.name || 'Patient'}'s Profile Photo`, mimeType: 'image/jpeg' });
+                      setViewerVisible(true);
+                    }
+                  }}
+                  accessibilityRole="button"
+                  accessibilityLabel="View profile photo"
+                >
+                  <Avatar uri={user?.avatar || null} name={user?.name || 'Patient'} size="lg" />
+                </Pressable>
               </View>
               <Pressable
                 onPress={handleOpenEdit}
@@ -529,7 +559,23 @@ export default function PatientProfileScreen() {
           showsVerticalScrollIndicator={false}
         >
           <View style={styles.modalForm}>
-            <Text style={[styles.modalFieldLabel, { color: colors.textSecondary }]}>Profile Photo</Text>
+            <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 }}>
+              <Text style={[styles.modalFieldLabel, { color: colors.textSecondary, marginBottom: 0 }]}>Profile Photo</Text>
+              {editAvatar ? (
+                <TouchableOpacity
+                  onPress={() => {
+                    setViewerDoc({ url: editAvatar, title: 'Profile Photo Preview', mimeType: 'image/jpeg' });
+                    setViewerVisible(true);
+                  }}
+                  style={{ flexDirection: 'row', alignItems: 'center', gap: 4 }}
+                  accessibilityRole="button"
+                  accessibilityLabel="View profile photo"
+                >
+                  <Eye size={13} color={StitchColors.primaryContainer} />
+                  <Text style={{ fontSize: 12, fontWeight: '600', color: StitchColors.primaryContainer }}>View Photo</Text>
+                </TouchableOpacity>
+              ) : null}
+            </View>
             <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.avatarPickerRow}>
               {/* Custom Upload from Device Button */}
               <TouchableOpacity
@@ -785,6 +831,17 @@ export default function PatientProfileScreen() {
           </TouchableOpacity>
         </View>
       </Modal>
+
+      <DocumentViewerModal
+        visible={viewerVisible}
+        onClose={() => {
+          setViewerVisible(false);
+          setViewerDoc(null);
+        }}
+        url={viewerDoc?.url}
+        title={viewerDoc?.title}
+        mimeType={viewerDoc?.mimeType}
+      />
     </SafeAreaView>
   );
 }

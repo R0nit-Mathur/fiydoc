@@ -3,6 +3,7 @@ import { View, Text, TouchableOpacity, StyleSheet, Platform, Linking, Alert } fr
 import { FileText, Activity, Pill, Stethoscope, CheckCircle2, ChevronRight, Eye, ExternalLink } from 'lucide-react-native';
 import { MedicalRecord } from '@/types/index';
 import { Palette, Typography, BorderRadius, Shadows, Spacing } from '@/constants/theme';
+import { DocumentViewerModal } from '@/components/ui/DocumentViewerModal';
 
 interface TimelineProps {
   records: MedicalRecord[];
@@ -10,6 +11,9 @@ interface TimelineProps {
 }
 
 export function Timeline({ records, onRecordPress }: TimelineProps) {
+  const [viewerVisible, setViewerVisible] = React.useState(false);
+  const [viewerDoc, setViewerDoc] = React.useState<{ url: string; title: string } | null>(null);
+
   const getIcon = (type: MedicalRecord['type']) => {
     switch (type) {
       case 'Lab Result':
@@ -76,9 +80,8 @@ export function Timeline({ records, onRecordPress }: TimelineProps) {
                 <TouchableOpacity
                   onPress={(e) => {
                     e.stopPropagation?.();
-                    Linking.openURL(item.documentUrl!).catch(() =>
-                      Alert.alert('Unable to open', 'Cannot open document on this device.')
-                    );
+                    setViewerDoc({ url: item.documentUrl!, title: item.title });
+                    setViewerVisible(true);
                   }}
                   style={styles.viewDocBtn}
                   accessibilityLabel="View uploaded document"
@@ -102,6 +105,16 @@ export function Timeline({ records, onRecordPress }: TimelineProps) {
           </View>
         );
       })}
+
+      <DocumentViewerModal
+        visible={viewerVisible}
+        onClose={() => {
+          setViewerVisible(false);
+          setViewerDoc(null);
+        }}
+        url={viewerDoc?.url}
+        title={viewerDoc?.title}
+      />
     </View>
   );
 }

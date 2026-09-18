@@ -62,6 +62,7 @@ model User {
   googleId     String?    @unique
   role         Role
   status       UserStatus @default(ACTIVE)
+  pushToken    String?
   createdAt    DateTime   @default(now())
   updatedAt    DateTime   @updatedAt
 
@@ -146,6 +147,8 @@ model Availability {
   startTime           String // "09:00"
   endTime             String // "17:00"
   slotDurationMinutes Int    @default(30)
+
+  @@index([doctorId, dayOfWeek])
 }
 
 model DoctorVerification {
@@ -183,7 +186,7 @@ model Appointment {
 
   consultation Consultation?
 
-  @@unique([doctorId, date, startTime])
+  @@index([doctorId, date, startTime, status])
   @@index([doctorId, date])
   @@index([patientId])
 }
@@ -228,6 +231,9 @@ model Prescription {
   verificationCode     String                 @unique @default(uuid())
   medicines            PrescriptionMedicine[]
   createdAt            DateTime               @default(now())
+
+  @@index([patientId])
+  @@index([doctorId])
 }
 
 model PrescriptionMedicine {
@@ -252,6 +258,8 @@ model MedicalRecord {
   summary     String?
   tags        String[]          @default([])
   createdAt   DateTime          @default(now())
+
+  @@index([patientId, createdAt])
 }
 
 model Notification {
@@ -264,6 +272,9 @@ model Notification {
   payload   Json?
   read      Boolean  @default(false)
   createdAt DateTime @default(now())
+
+  @@index([userId, read])
+  @@index([userId, createdAt])
 }
 
 model AuditLog {
@@ -275,6 +286,9 @@ model AuditLog {
   targetId    String
   metadata    Json?
   timestamp   DateTime @default(now())
+
+  @@index([actorUserId, timestamp])
+  @@index([targetId])
 }
 
 model DailyDoctorToken {

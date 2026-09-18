@@ -1,10 +1,14 @@
 import { Injectable, BadRequestException, ForbiddenException, NotFoundException, HttpException } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
+import { NotificationsService } from '../notifications/notifications.service';
 import { AppointmentStatus, ConsultationType, Role } from '@prisma/client';
 
 @Injectable()
 export class AppointmentsService {
-  constructor(private prisma: PrismaService) {}
+  constructor(
+    private prisma: PrismaService,
+    private notificationsService: NotificationsService
+  ) {}
 
   private calculateShiftedTime(timeStr: string, minutes: number): string {
     if (!timeStr) return '';
@@ -256,40 +260,13 @@ export class AppointmentsService {
     const endM = totalMinutes % 60;
     const authoritativeEndTime = `${String(endH).padStart(2, '0')}:${String(endM).padStart(2, '0')}`;
 
-    // Concurrency-safe atomic token sequence allocation via DailyDoctorToken (non-fatal, outside tx)
-    let allocatedToken = `Token #01`;
-    try {
-      const tokenRecord = await this.prisma.dailyDoctorToken.upsert({
-        where: {
-          doctorId_date: {
-            doctorId: dto.doctorId,
-            date: dto.date,
-          },
-        },
-        create: {
-          doctorId: dto.doctorId,
-          date: dto.date,
-          lastToken: 1,
-        },
-        update: {
-          lastToken: { increment: 1 },
-        },
-      });
-      allocatedToken = `Token #${String(tokenRecord.lastToken).padStart(2, '0')}`;
-    } catch (tokenErr: any) {
-      console.warn('[appointments] DailyDoctorToken upsert failed (non-fatal):', tokenErr?.message);
-      allocatedToken = `Token #${String((Math.floor(Date.now() / 1000) % 99) + 1).padStart(2, '0')}`;
-    }
-
-    const canonicalNotes = dto.notes
-      ? `${dto.notes.trim()} [${allocatedToken}]`
-      : `[${allocatedToken}]`;
-
-    // Lean transactional check for double-booking and creation
-    let createdApt;
+    // Concurrency-safe atomic reservation & token allocation inside a lean transaction
+    let createdApt: any;
+    let allocatedToken = 'Token #01';
     try {
       createdApt = await this.prisma.$transaction(async (tx) => {
-        const existing = await tx.appointment.findFirst({
+        // 1. Capacity check: count active bookings for this doctor, date, and slot
+        const activeCount = await tx.appointment.count({
           where: {
             doctorId: dto.doctorId,
             date: dto.date,
@@ -298,9 +275,51 @@ export class AppointmentsService {
           },
         });
 
-        if (existing) {
-          throw new BadRequestException('This slot is already booked. Please choose another time.');
+        const maxCapacity = (doctor as any).patientsPerSlot || 1;
+        if (activeCount >= maxCapacity) {
+          throw new BadRequestException('This slot is already fully booked. Please choose another time.');
         }
+
+        // 2. Concurrency-safe atomic token sequence allocation via DailyDoctorToken
+        let tokenNum = 1;
+        try {
+          const tokenRecord = await tx.dailyDoctorToken.upsert({
+            where: {
+              doctorId_date: {
+                doctorId: dto.doctorId,
+                date: dto.date,
+              },
+            },
+            create: {
+              doctorId: dto.doctorId,
+              date: dto.date,
+              lastToken: 1,
+            },
+            update: {
+              lastToken: { increment: 1 },
+            },
+          });
+          tokenNum = tokenRecord.lastToken;
+        } catch {
+          // Fallback atomic raw SQL in case of concurrent first-day insert
+          try {
+            const rawRes: any = await tx.$queryRawUnsafe(`
+              INSERT INTO "DailyDoctorToken" ("id", "doctorId", "date", "lastToken", "updatedAt")
+              VALUES (gen_random_uuid()::text, $1, $2, 1, CURRENT_TIMESTAMP)
+              ON CONFLICT ("doctorId", "date")
+              DO UPDATE SET "lastToken" = "DailyDoctorToken"."lastToken" + 1, "updatedAt" = CURRENT_TIMESTAMP
+              RETURNING "lastToken"
+            `, dto.doctorId, dto.date);
+            tokenNum = rawRes?.[0]?.lastToken || activeCount + 1;
+          } catch {
+            tokenNum = activeCount + 1;
+          }
+        }
+        allocatedToken = `Token #${String(tokenNum).padStart(2, '0')}`;
+
+        const canonicalNotes = dto.notes
+          ? `${dto.notes.trim()} [${allocatedToken}]`
+          : `[${allocatedToken}]`;
 
         return tx.appointment.create({
           data: {
@@ -320,6 +339,9 @@ export class AppointmentsService {
             patient: true,
           },
         });
+      }, {
+        maxWait: 5000,
+        timeout: 10000,
       });
     } catch (err: any) {
       if (err?.code === 'P2002' || err?.message?.includes('P2002') || err?.message?.includes('Unique constraint')) {
@@ -351,30 +373,28 @@ export class AppointmentsService {
       }
     }
 
-    // Trigger notification for both patient and doctor — non-fatal (outside tx)
+    // Trigger push notifications for both patient and doctor — non-fatal (outside tx)
     try {
-      const notifData: any[] = [];
       if (patient?.userId) {
-        notifData.push({
+        this.notificationsService.create({
           userId: patient.userId,
           type: 'APPOINTMENT_CONFIRMED',
           title: 'Appointment Confirmed',
-          message: `Your appointment with ${createdApt.doctor.fullName} on ${dto.date} at ${dto.startTime} is confirmed. Show your token at OPD.`,
-        });
+          message: `Your appointment with ${createdApt.doctor.fullName} on ${dto.date} at ${dto.startTime} is confirmed. Token: ${allocatedToken}. Show token at OPD.`,
+          payload: { appointmentId: createdApt.id, doctorId: dto.doctorId, date: dto.date },
+        }).catch(() => {});
       }
       if (createdApt.doctor?.userId) {
-        notifData.push({
+        this.notificationsService.create({
           userId: createdApt.doctor.userId,
           type: 'NEW_BOOKING_CONFIRMED',
           title: 'New Confirmed Appointment',
-          message: `${createdApt.patient.fullName} booked ${dto.startTime} on ${dto.date} (Token: ${allocatedToken}).`,
-        });
-      }
-      if (notifData.length > 0) {
-        await this.prisma.notification.createMany({ data: notifData });
+          message: `${createdApt.patient.fullName} booked ${dto.startTime} on ${dto.date} (${allocatedToken}).`,
+          payload: { appointmentId: createdApt.id, patientId: dto.patientId, date: dto.date },
+        }).catch(() => {});
       }
     } catch (notifErr: any) {
-      console.warn('[appointments] Notification insert failed (non-fatal):', notifErr?.message);
+      console.warn('[appointments] Notification dispatch failed (non-fatal):', notifErr?.message);
     }
 
     return this.formatAppointment(createdApt);
@@ -555,14 +575,13 @@ export class AppointmentsService {
         const cancelledByName = isCancelledByPatient ? updated.patient?.fullName || 'Patient' : `Dr. ${updated.doctor?.fullName || 'Doctor'}`;
 
         if (recipientUserId) {
-          await this.prisma.notification.create({
-            data: {
-              userId: recipientUserId,
-              type: 'APPOINTMENT_CANCELLED',
-              title: 'Appointment Cancelled',
-              message: `The appointment for ${updated.date} at ${updated.startTime} was cancelled by ${cancelledByName}.`,
-            },
-          });
+          this.notificationsService.create({
+            userId: recipientUserId,
+            type: 'APPOINTMENT_CANCELLED',
+            title: 'Appointment Cancelled',
+            message: `The appointment for ${updated.date} at ${updated.startTime} was cancelled by ${cancelledByName}.`,
+            payload: { appointmentId: updated.id, date: updated.date },
+          }).catch(() => {});
         }
       } catch (notifErr: any) {
         console.warn('[appointments] Notification creation failed (non-fatal):', notifErr?.message);
@@ -653,14 +672,13 @@ export class AppointmentsService {
       // Notify patient on confirmation (non-fatal)
       if (normalizedStatus === AppointmentStatus.CONFIRMED && updated.patient?.userId) {
         try {
-          await this.prisma.notification.create({
-            data: {
-              userId: updated.patient.userId,
-              type: 'APPOINTMENT_APPROVED',
-              title: 'Appointment Approved by Doctor',
-              message: `Dr. ${updated.doctor?.fullName || 'Doctor'} approved your appointment for ${updated.date} at ${updated.startTime}.`,
-            },
-          });
+          this.notificationsService.create({
+            userId: updated.patient.userId,
+            type: 'APPOINTMENT_APPROVED',
+            title: 'Appointment Approved by Doctor',
+            message: `Dr. ${updated.doctor?.fullName || 'Doctor'} approved your appointment for ${updated.date} at ${updated.startTime}.`,
+            payload: { appointmentId: updated.id, date: updated.date },
+          }).catch(() => {});
         } catch (notifErr: any) {
           console.warn('[appointments] Notification creation failed (non-fatal):', notifErr?.message);
         }
@@ -727,14 +745,13 @@ export class AppointmentsService {
 
     if (updated.patient?.userId) {
       try {
-        await this.prisma.notification.create({
-          data: {
-            userId: updated.patient.userId,
-            type: 'APPOINTMENT_REJECTED',
-            title: 'Appointment Request Declined',
-            message: `Dr. ${updated.doctor.fullName} was unable to accept your appointment for ${updated.date} at ${updated.startTime}. Reason: ${rejectionReason}.`,
-          },
-        });
+        this.notificationsService.create({
+          userId: updated.patient.userId,
+          type: 'APPOINTMENT_REJECTED',
+          title: 'Appointment Request Declined',
+          message: `Dr. ${updated.doctor.fullName} was unable to accept your appointment for ${updated.date} at ${updated.startTime}. Reason: ${rejectionReason}.`,
+          payload: { appointmentId: updated.id, date: updated.date, reason: rejectionReason },
+        }).catch(() => {});
       } catch {}
     }
 

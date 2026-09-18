@@ -34,7 +34,7 @@ import { ChevronRight } from 'lucide-react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import { FiYLogo } from '@/components/ui/FiYLogo';
 
-const WALLPAPER_IMAGE = require('../../../assets/images/ultra_minimalist_apple_style_3d_medical_illustration_on_a_clean_soft_porcelain.png');
+const WALLPAPER_IMAGE = require('../../../assets/images/ultra_minimalist_apple_style_3d_medical_illustration_on_a_clean_soft_porcelain.jpg');
 
 export default function WelcomeScreen() {
   const router = useRouter();

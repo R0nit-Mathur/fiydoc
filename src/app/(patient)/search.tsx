@@ -139,7 +139,13 @@ export default function SearchScreen() {
       {/* Top Search Bar with Back & Clear */}
       <View style={[styles.headerBar, { borderBottomColor: colors.border, backgroundColor: colors.card }]}>
         <Pressable
-          onPress={() => router.back()}
+          onPress={() => {
+            if (router.canGoBack()) {
+              router.back();
+            } else {
+              router.replace('/(patient)/(tabs)/home');
+            }
+          }}
           hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
           style={[styles.backButton, { backgroundColor: colors.backgroundElement, borderColor: colors.border }]}
           accessibilityRole="button"

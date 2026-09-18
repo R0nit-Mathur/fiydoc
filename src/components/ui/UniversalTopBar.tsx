@@ -53,6 +53,8 @@ export function UniversalTopBar({
       onBackPress();
     } else if (router.canGoBack()) {
       router.back();
+    } else {
+      router.replace('/(auth)/welcome');
     }
   };
 

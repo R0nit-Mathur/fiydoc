@@ -7,7 +7,7 @@
   "license": "UNLICENSED",
   "scripts": {
     "postinstall": "prisma generate",
-    "build": "prisma generate && node -e \"try{require('child_process').execSync('npx prisma db push --skip-generate',{stdio:'inherit'})}catch(e){console.warn('[db:push] skipped or failed:',e.message)}\" && nest build && node -e \"const fs=require('fs');if(!fs.existsSync('./dist/main.js')&&fs.existsSync('./dist/src/main.js')){fs.writeFileSync('./dist/main.js','require(\\\"./src/main.js\\\");\\\\n');}\"",
+    "build": "prisma generate && nest build && node -e \"const fs=require('fs');if(!fs.existsSync('./dist/main.js')&&fs.existsSync('./dist/src/main.js')){fs.writeFileSync('./dist/main.js','require(\\\"./src/main.js\\\");\\\\n');}\"",
     "format": "prettier --write \"src/**/*.ts\"",
     "start": "nest start",
     "start:dev": "nest start --watch",
@@ -15,6 +15,7 @@
     "start:prod": "node -e \"const fs=require('fs');const p=fs.existsSync('./dist/main.js')?'./dist/main.js':'./dist/src/main.js';require(p);\"",
     "prisma:generate": "prisma generate",
     "prisma:migrate": "prisma migrate dev",
+    "prisma:push": "npx prisma db push --skip-generate",
     "prisma:studio": "prisma studio",
     "prisma:seed": "ts-node prisma/seed.ts",
     "test": "ts-node test/verify-security.ts"

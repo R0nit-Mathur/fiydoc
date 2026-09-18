@@ -87,6 +87,7 @@ import {
 import SmartMedicalTextInput from '@/components/doctor/SmartMedicalTextInput';
 import ClinicalDrawingNotepad from '@/components/doctor/ClinicalDrawingNotepad';
 import { isNegationAllergy } from '@/utils/allergyNormalizer';
+import { ConfirmationDialog } from '@/components/ui/ConfirmationDialog';
 
 
 
@@ -125,6 +126,22 @@ export default function DoctorConsultationScreen() {
 
   // 1. ACTIVE SESSION TIMER — Resets for every patient and when opening fresh
   const [sessionSeconds, setSessionSeconds] = useState(0);
+  const [exitConfirmVisible, setExitConfirmVisible] = useState(false);
+
+  const handleBackPress = () => {
+    const hasUnsavedWork =
+      (medications && medications.length > 0) ||
+      (diagnoses && diagnoses.length > 0) ||
+      (chiefComplaint && chiefComplaint.trim().length > 0) ||
+      (physicalObservation && physicalObservation.trim().length > 0);
+
+    if (hasUnsavedWork) {
+      setExitConfirmVisible(true);
+    } else {
+      if (router.canGoBack()) router.back();
+      else router.replace('/(doctor)/(tabs)/directory');
+    }
+  };
 
   useEffect(() => {
     setSessionSeconds(0);
@@ -348,6 +365,16 @@ export default function DoctorConsultationScreen() {
       Alert.alert('No Medications', 'Please add at least one medication before signing the prescription.');
       return;
     }
+
+    const invalidMed = medications.find((m) => !m.dosage?.trim() || !m.frequency?.trim());
+    if (invalidMed) {
+      Alert.alert(
+        'Incomplete Medication Details',
+        `Please provide a valid dosage and frequency for "${invalidMed.name || 'medication'}" before signing.`
+      );
+      return;
+    }
+
     if (!diagnoses || diagnoses.length === 0) {
       Alert.alert('No Diagnosis', 'Please add a diagnosis before completing the consultation.');
       return;
@@ -518,10 +545,7 @@ export default function DoctorConsultationScreen() {
       {/* 1. Top Bar: Back, "Consultation", Active Timer & Doctor Avatar */}
       <View style={[styles.headerBar, { borderBottomColor: colors.border, backgroundColor: colors.card }]}>
         <Pressable
-          onPress={() => {
-            if (router.canGoBack()) router.back();
-            else router.replace('/(doctor)/(tabs)/directory');
-          }}
+          onPress={handleBackPress}
           hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
           style={[styles.backBtn, { backgroundColor: colors.backgroundElement }]}
         >
@@ -2103,6 +2127,23 @@ export default function DoctorConsultationScreen() {
           </View>
         </Modal>
       )}
+
+      {/* 11. EXIT CONFIRMATION DIALOG */}
+      <ConfirmationDialog
+        visible={exitConfirmVisible}
+        title="Leave Active Consultation?"
+        message="You have unsaved clinical notes or medications for this patient. Leaving now will discard these changes."
+        confirmText="Leave Session"
+        cancelText="Continue Consultation"
+        confirmVariant="danger"
+        iconVariant="danger"
+        onConfirm={() => {
+          setExitConfirmVisible(false);
+          if (router.canGoBack()) router.back();
+          else router.replace('/(doctor)/(tabs)/directory');
+        }}
+        onCancel={() => setExitConfirmVisible(false)}
+      />
     </SafeAreaView>
   );
 }

@@ -188,7 +188,6 @@ export default function DoctorHomeScreen() {
         <View style={[styles.headerBar, { borderBottomColor: colors.border, backgroundColor: colors.card }]}>
           <View style={styles.headerLeftLogoRow}>
             <FiYLogo size="md" />
-            <Text style={[styles.headerBrandText, { color: colors.text }]}>FiYDoc Pro</Text>
           </View>
           <Pressable
             onPress={() => signOutAll('USER_ACTION')}
@@ -229,20 +228,20 @@ export default function DoctorHomeScreen() {
 
             <View style={styles.pendingBadgeRow}>
               <View style={styles.pendingBadge}>
-                <Text style={styles.pendingBadgeText}>QUEUED FOR VERIFICATION</Text>
+                <Text style={styles.pendingBadgeText}>UNDER REVIEW</Text>
               </View>
             </View>
 
             <Text style={[styles.pendingTitle, { color: colors.text }]}>
-              Application Under Review
+              Verification in Progress
             </Text>
 
             <Text style={[styles.pendingDoctorName, { color: colors.textSecondary }]}>
-              Welcome, {user?.name ? (user.name.startsWith('Dr.') ? user.name : `Dr. ${user.name}`) : 'Doctor'}
+              {user?.name ? (user.name.startsWith('Dr.') ? user.name : `Dr. ${user.name}`) : 'Doctor'}
             </Text>
 
             <Text style={[styles.pendingBodyText, { color: colors.textSecondary }]}>
-              Your clinical profile and registration credentials have been submitted and are currently queued for verification by the medical verification board.
+              Your registration details have been submitted. Council and identity credentials are currently being verified for clinical practice authorization.
             </Text>
 
             {verificationCheckMsg && (
@@ -260,8 +259,8 @@ export default function DoctorHomeScreen() {
                   <CheckCircle2 size={16} color="#059669" />
                 </View>
                 <View style={styles.stageTextWrap}>
-                  <Text style={[styles.stageTitle, { color: colors.text }]}>Profile & Credentials Submitted</Text>
-                  <Text style={[styles.stageSub, { color: colors.textSecondary }]}>Registration details recorded</Text>
+                  <Text style={[styles.stageTitle, { color: colors.text }]}>Credentials Submitted</Text>
+                  <Text style={[styles.stageSub, { color: colors.textSecondary }]}>Profile and council information recorded</Text>
                 </View>
               </View>
 
@@ -272,8 +271,8 @@ export default function DoctorHomeScreen() {
                   <Clock size={16} color="#D97706" />
                 </View>
                 <View style={styles.stageTextWrap}>
-                  <Text style={[styles.stageTitle, { color: colors.text }]}>Council & License Verification</Text>
-                  <Text style={[styles.stageSub, { color: colors.textSecondary }]}>Medical authority cross-referencing in progress</Text>
+                  <Text style={[styles.stageTitle, { color: colors.text }]}>Authority Review</Text>
+                  <Text style={[styles.stageSub, { color: colors.textSecondary }]}>Medical council license cross-referencing</Text>
                 </View>
               </View>
 
@@ -284,8 +283,8 @@ export default function DoctorHomeScreen() {
                   <ShieldCheck size={16} color="#94A3B8" />
                 </View>
                 <View style={styles.stageTextWrap}>
-                  <Text style={[styles.stageTitle, { color: '#94A3B8' }]}>OPD Queue & Clinic Activation</Text>
-                  <Text style={[styles.stageSub, { color: colors.textSecondary }]}>Enabled immediately upon verification</Text>
+                  <Text style={[styles.stageTitle, { color: '#94A3B8' }]}>OPD Activation</Text>
+                  <Text style={[styles.stageSub, { color: colors.textSecondary }]}>Immediate queue access upon approval</Text>
                 </View>
               </View>
             </View>
@@ -293,27 +292,27 @@ export default function DoctorHomeScreen() {
             {/* Credential Details Snapshot */}
             <View style={[styles.detailsSnapshotBox, { backgroundColor: colors.backgroundElement, borderColor: colors.border }]}>
               <View style={styles.snapshotRow}>
-                <Text style={[styles.snapshotLabel, { color: colors.textSecondary }]}>Doctor Account</Text>
+                <Text style={[styles.snapshotLabel, { color: colors.textSecondary }]}>Email</Text>
                 <Text style={[styles.snapshotValue, { color: colors.text }]} numberOfLines={1}>
                   {user?.email || 'Registered'}
                 </Text>
               </View>
               <View style={styles.snapshotRow}>
                 <Text style={[styles.snapshotLabel, { color: colors.textSecondary }]}>Council License</Text>
-                <Text style={[styles.snapshotValue, { color: colors.text }]}>
+                <Text style={[styles.snapshotValue, { color: colors.text }]} numberOfLines={1}>
                   {user?.licenseNumber || user?.registrationNumber || 'Under Review'}
                 </Text>
               </View>
               <View style={styles.snapshotRow}>
                 <Text style={[styles.snapshotLabel, { color: colors.textSecondary }]}>Specialty</Text>
-                <Text style={[styles.snapshotValue, { color: colors.text }]}>
+                <Text style={[styles.snapshotValue, { color: colors.text }]} numberOfLines={1}>
                   {user?.specialization || user?.specialty || 'General Medicine'}
                 </Text>
               </View>
               <View style={styles.snapshotRow}>
-                <Text style={[styles.snapshotLabel, { color: colors.textSecondary }]}>Current Status</Text>
+                <Text style={[styles.snapshotLabel, { color: colors.textSecondary }]}>Status</Text>
                 <Text style={[styles.snapshotValue, { color: '#D97706', fontWeight: '700' }]}>
-                  Pending Admin Approval
+                  Pending Approval
                 </Text>
               </View>
             </View>
@@ -332,14 +331,14 @@ export default function DoctorHomeScreen() {
               ) : (
                 <>
                   <RefreshCw size={16} color="#ffffff" />
-                  <Text style={styles.refreshStatusBtnText}>Check Verification Status</Text>
+                  <Text style={styles.refreshStatusBtnText}>Check Status</Text>
                 </>
               )}
             </Pressable>
 
             {/* Explanatory notice */}
             <Text style={[styles.pendingNotice, { color: colors.textSecondary }]}>
-              National Medical Commission (NMC) compliance requires credential verification to protect patients and ensure verified practitioners on the FiYDoc network.
+              Medical registration verification is required before consulting patients on FiYDoc.
             </Text>
           </Animated.View>
         </ScrollView>
@@ -632,7 +631,9 @@ export default function DoctorHomeScreen() {
               <Avatar uri={user?.avatar || null} name={user?.name || 'Doctor'} size="md" />
               <View style={{ flex: 1, marginLeft: 12 }}>
                 <Text style={[styles.drawerDoctorName, { color: colors.text }]}>{user?.name || 'Doctor'}</Text>
-                <Text style={[styles.drawerDoctorSpec, { color: StitchColors.primaryContainer }]}>FiYDoc Doctor Account</Text>
+                <Text style={[styles.drawerDoctorSpec, { color: StitchColors.primaryContainer }]}>
+                  {(user as any)?.specialty || 'Medical Specialist'}
+                </Text>
               </View>
             </View>
 

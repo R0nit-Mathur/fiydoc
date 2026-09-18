@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useRef } from 'react';
 import {
   View,
   Text,
@@ -39,6 +39,9 @@ export default function SignUpScreen() {
   const [googleLoading, setGoogleLoading] = useState(false);
   const [isSuccess, setIsSuccess] = useState(false);
   const [error, setError] = useState('');
+
+  const emailInputRef = useRef<TextInput>(null);
+  const passwordInputRef = useRef<TextInput>(null);
 
   const handleRoleSelect = (selected: 'patient' | 'doctor') => {
     if (Platform.OS !== 'web') {
@@ -125,7 +128,7 @@ export default function SignUpScreen() {
 
       <KeyboardAvoidingView
         style={{ flex: 1 }}
-        behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+        behavior={Platform.OS === 'ios' ? 'padding' : undefined}
       >
         <ScrollView
           contentContainerStyle={styles.scrollContainer}
@@ -180,6 +183,9 @@ export default function SignUpScreen() {
                       placeholderTextColor="#737783"
                       style={styles.textInput}
                       autoCapitalize="words"
+                      returnKeyType="next"
+                      onSubmitEditing={() => emailInputRef.current?.focus()}
+                      blurOnSubmit={false}
                     />
                   </View>
                 </View>
@@ -190,6 +196,7 @@ export default function SignUpScreen() {
                   <View style={styles.inputWrapper}>
                     <Mail size={20} color="#737783" style={styles.inputIcon} />
                     <TextInput
+                      ref={emailInputRef}
                       value={contactInfo}
                       onChangeText={setContactInfo}
                       placeholder="name@domain.com"
@@ -198,6 +205,9 @@ export default function SignUpScreen() {
                       keyboardType="email-address"
                       autoCapitalize="none"
                       autoCorrect={false}
+                      returnKeyType="next"
+                      onSubmitEditing={() => passwordInputRef.current?.focus()}
+                      blurOnSubmit={false}
                     />
                   </View>
                 </View>
@@ -208,6 +218,7 @@ export default function SignUpScreen() {
                   <View style={styles.inputWrapper}>
                     <Lock size={20} color="#737783" style={styles.inputIcon} />
                     <TextInput
+                      ref={passwordInputRef}
                       value={password}
                       onChangeText={setPassword}
                       placeholder="At least 8 characters"
@@ -215,6 +226,8 @@ export default function SignUpScreen() {
                       style={styles.textInput}
                       secureTextEntry={!showPassword}
                       autoCapitalize="none"
+                      returnKeyType="go"
+                      onSubmitEditing={handleSignUp}
                     />
                     <Pressable
                       onPress={() => setShowPassword(!showPassword)}

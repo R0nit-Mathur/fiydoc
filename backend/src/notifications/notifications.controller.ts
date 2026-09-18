@@ -1,4 +1,4 @@
-import { Controller, Get, Post, Param, UseGuards, Request } from '@nestjs/common';
+import { Controller, Get, Post, Param, UseGuards, Request, Body } from '@nestjs/common';
 import { NotificationsService } from './notifications.service';
 import { JwtAuthGuard } from '../auth/jwt-auth.guard';
 
@@ -15,6 +15,11 @@ export class NotificationsController {
   @Get('me')
   async getMyNotifications(@Request() req: any) {
     return this.notificationsService.getForUser('me', req.user);
+  }
+
+  @Post('push-token')
+  async registerPushToken(@Request() req: any, @Body() body: { pushToken: string }) {
+    return this.notificationsService.registerPushToken(req.user.id, body.pushToken);
   }
 
   @Post('me/read-all')

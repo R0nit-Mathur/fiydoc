@@ -33,11 +33,13 @@ import { Modal } from 'react-native';
 import { StepProgressTracker } from '@/components/ui/StepProgressTracker';
 import { CardCarouselTabs, CarouselDots } from '@/components/ui/CardCarouselTabs';
 import { FileUploadCard } from '@/components/ui/FileUploadCard';
+import { DocumentViewerModal } from '@/components/ui/DocumentViewerModal';
 import { SegmentedRoleSelector } from '@/components/ui/SegmentedRoleSelector';
 import { useAuthStore } from '@/store/useAuthStore';
 import { useNotificationStore } from '@/store/useNotificationStore';
 import { authService } from '@/services/authService';
 import { apiClient } from '@/services/apiClient';
+import { fileUploadService } from '@/services/fileUploadService';
 import { StitchColors } from '@/constants/theme';
 import { pickClinicalDocument } from '@/utils/mediaPicker';
 import locationsData from '@/constants/locations.json';
@@ -66,11 +68,25 @@ export function DoctorRegistrationView({
     return `${cleaned.slice(0, 2)}/${cleaned.slice(2, 4)}/${cleaned.slice(4, 8)}`;
   };
 
-  // Safe file picker for degree and clinic proof documents
-  const handlePickDocument = async (onSuccess: (fileName: string, fileSize: string) => void) => {
+  // Safe file picker for degree, license, and clinic proof documents with cloud sync
+  const handlePickDocument = async (
+    onSuccess: (fileName: string, fileSize: string, uri: string) => void,
+    category: 'doctors' | 'documents' = 'doctors',
+  ) => {
     const file = await pickClinicalDocument();
     if (file) {
-      onSuccess(file.name, file.size || '1.5 MB');
+      onSuccess(file.name, file.size || '1.5 MB', file.uri);
+      // Asynchronously upload to Supabase storage to obtain a permanent cloud URL
+      fileUploadService
+        .uploadFile(file, category)
+        .then((res) => {
+          if (res?.url) {
+            onSuccess(file.name, file.size || '1.5 MB', res.url);
+          }
+        })
+        .catch((err) => {
+          console.warn('[DoctorRegistrationView] Background file upload:', err?.message);
+        });
     }
   };
 
@@ -96,6 +112,7 @@ export function DoctorRegistrationView({
   const [ugFileUploaded, setUgFileUploaded] = useState(false);
   const [ugFileName, setUgFileName] = useState('MBBS_Degree_Certificate.pdf');
   const [ugFileSize, setUgFileSize] = useState('2.1 MB');
+  const [ugFileUri, setUgFileUri] = useState<string | null>(null);
 
   // Card 2: Council
   const [primaryCouncil, setPrimaryCouncil] = useState('State Medical Council / MCI');
@@ -117,10 +134,15 @@ export function DoctorRegistrationView({
   const [pgFileUploaded, setPgFileUploaded] = useState(false);
   const [pgFileName, setPgFileName] = useState('PG_Degree_Certificate.pdf');
   const [pgFileSize, setPgFileSize] = useState('3.2 MB');
+  const [pgFileUri, setPgFileUri] = useState<string | null>(null);
 
   // Card 4: ID Proof
   const [idVerified, setIdVerified] = useState(false);
   const [idLoading, setIdLoading] = useState(false);
+  const [idFileUploaded, setIdFileUploaded] = useState(false);
+  const [idFileName, setIdFileName] = useState('Govt_ID_Proof.pdf');
+  const [idFileSize, setIdFileSize] = useState('1.5 MB');
+  const [idFileUri, setIdFileUri] = useState<string | null>(null);
 
   // Step 3: 3-Slide Flow State
   const [slideIndex, setSlideIndex] = useState(0); // 0 = Clinic, 1 = Hospital, 2 = Schedule
@@ -133,6 +155,7 @@ export function DoctorRegistrationView({
   const [clinicFileUploaded, setClinicFileUploaded] = useState(false);
   const [clinicFileName, setClinicFileName] = useState('Clinic_Establishment_Reg.pdf');
   const [clinicFileSize, setClinicFileSize] = useState('1.8 MB');
+  const [clinicFileUri, setClinicFileUri] = useState<string | null>(null);
 
   // Slide 2: Hospital Affiliations
   const [hospitalName, setHospitalName] = useState('');
@@ -142,6 +165,19 @@ export function DoctorRegistrationView({
   const [hospitalFileUploaded, setHospitalFileUploaded] = useState(false);
   const [hospitalFileName, setHospitalFileName] = useState('Hospital_Empanelment_Letter.pdf');
   const [hospitalFileSize, setHospitalFileSize] = useState('1.4 MB');
+  const [hospitalFileUri, setHospitalFileUri] = useState<string | null>(null);
+
+  // Universal Document Viewer State
+  const [viewerState, setViewerState] = useState<{
+    visible: boolean;
+    title: string;
+    url: string | null;
+    subtitle?: string;
+  }>({
+    visible: false,
+    title: 'Medical Document',
+    url: null,
+  });
 
   // Slide 3: OPD Timings & Consultation Fee
   const [consultationFee, setConsultationFee] = useState('800');
@@ -415,6 +451,31 @@ export function DoctorRegistrationView({
         } catch (updateErr: any) {
           console.warn('[DoctorRegistrationView] Profile update notice:', updateErr?.message);
         }
+      }
+
+      // Authoritative verification documents submission
+      try {
+        const docsToSubmit = [
+          ugFileUploaded && ugFileUri ? { type: 'UG_DEGREE', name: ugFileName, url: ugFileUri } : null,
+          pgFileUploaded && pgFileUri ? { type: 'PG_DEGREE', name: pgFileName, url: pgFileUri } : null,
+          idFileUploaded && idFileUri ? { type: 'GOVT_ID', name: idFileName, url: idFileUri } : null,
+          clinicFileUploaded && clinicFileUri ? { type: 'CLINIC_ESTABLISHMENT', name: clinicFileName, url: clinicFileUri } : null,
+          hospitalFileUploaded && hospitalFileUri ? { type: 'HOSPITAL_EMPANELMENT', name: hospitalFileName, url: hospitalFileUri } : null,
+        ].filter(Boolean);
+
+        const docProfile = await apiClient<any>('/doctors/me');
+        if (docProfile?.id) {
+          await apiClient(`/verification/${docProfile.id}/submit`, {
+            method: 'POST',
+            body: JSON.stringify({
+              registrationNumber: doctorFields.licenseNumber,
+              registrationAuthority: doctorFields.registrationAuthority,
+              submittedDocuments: docsToSubmit,
+            }),
+          });
+        }
+      } catch (verifErr: any) {
+        console.warn('[DoctorRegistrationView] Verification document submission notice:', verifErr?.message);
       }
 
       useNotificationStore.getState().addNotification({
@@ -845,13 +906,25 @@ export function DoctorRegistrationView({
                 subtitle="Verified File"
                 uploadPrompt="Tap to select & upload certificate"
                 uploadSubtitle="PDF, JPG, PNG (Max 15MB)"
-                onRemove={() => setUgFileUploaded(false)}
+                onRemove={() => {
+                  setUgFileUploaded(false);
+                  setUgFileUri(null);
+                }}
+                onView={() => {
+                  setViewerState({
+                    visible: true,
+                    title: 'UG Degree Certificate',
+                    url: ugFileUri,
+                    subtitle: ugFileName,
+                  });
+                }}
                 onUpload={() => {
-                  handlePickDocument((name, size) => {
+                  handlePickDocument((name, size, uri) => {
                     setUgFileName(name);
                     setUgFileSize(size);
+                    setUgFileUri(uri);
                     setUgFileUploaded(true);
-                  });
+                  }, 'doctors');
                 }}
               />
 
@@ -1258,13 +1331,25 @@ export function DoctorRegistrationView({
                     subtitle="Form 8 Additional Qualification"
                     uploadPrompt="Tap to select & upload PG certificate"
                     uploadSubtitle="PDF, JPG, PNG (Max 15MB)"
-                    onRemove={() => setPgFileUploaded(false)}
+                    onRemove={() => {
+                      setPgFileUploaded(false);
+                      setPgFileUri(null);
+                    }}
+                    onView={() => {
+                      setViewerState({
+                        visible: true,
+                        title: 'PG Degree Certificate',
+                        url: pgFileUri,
+                        subtitle: pgFileName,
+                      });
+                    }}
                     onUpload={() => {
-                      handlePickDocument((name, size) => {
+                      handlePickDocument((name, size, uri) => {
                         setPgFileName(name);
                         setPgFileSize(size);
+                        setPgFileUri(uri);
                         setPgFileUploaded(true);
-                      });
+                      }, 'doctors');
                     }}
                   />
                 </View>
@@ -1350,6 +1435,38 @@ export function DoctorRegistrationView({
                   <Text style={styles.summaryValueVerified}>Completed</Text>
                 </View>
               </View>
+
+              {/* Government ID Document Upload */}
+              <FileUploadCard
+                label="Government ID Document (Aadhaar / Passport / Voter ID)"
+                isUploaded={idFileUploaded}
+                fileName={idFileName}
+                fileSize={idFileSize}
+                subtitle="Official Identity Record"
+                uploadPrompt="Tap to upload ID proof (Aadhaar/Passport/Voter ID)"
+                uploadSubtitle="PDF, JPG, PNG (Max 15MB)"
+                onRemove={() => {
+                  setIdFileUploaded(false);
+                  setIdFileUri(null);
+                }}
+                onView={() => {
+                  setViewerState({
+                    visible: true,
+                    title: 'Government Identity Document',
+                    url: idFileUri,
+                    subtitle: idFileName,
+                  });
+                }}
+                onUpload={() => {
+                  handlePickDocument((name, size, uri) => {
+                    setIdFileName(name);
+                    setIdFileSize(size);
+                    setIdFileUri(uri);
+                    setIdFileUploaded(true);
+                    setIdVerified(true);
+                  }, 'doctors');
+                }}
+              />
 
               {/* Card 4 CTA */}
               <View style={styles.actionContainer}>
@@ -1575,13 +1692,25 @@ export function DoctorRegistrationView({
                 subtitle="Clinical Establishment Act"
                 uploadPrompt="Tap to select & upload establishment proof"
                 uploadSubtitle="PDF, JPG, PNG (Max 15MB)"
-                onRemove={() => setClinicFileUploaded(false)}
+                onRemove={() => {
+                  setClinicFileUploaded(false);
+                  setClinicFileUri(null);
+                }}
+                onView={() => {
+                  setViewerState({
+                    visible: true,
+                    title: 'Clinic Establishment Proof',
+                    url: clinicFileUri,
+                    subtitle: clinicFileName,
+                  });
+                }}
                 onUpload={() => {
-                  handlePickDocument((name, size) => {
+                  handlePickDocument((name, size, uri) => {
                     setClinicFileName(name);
                     setClinicFileSize(size);
+                    setClinicFileUri(uri);
                     setClinicFileUploaded(true);
-                  });
+                  }, 'doctors');
                 }}
               />
 
@@ -1742,13 +1871,25 @@ export function DoctorRegistrationView({
                 subtitle="Institutional Attachment"
                 uploadPrompt="Tap to select & upload empanelment letter"
                 uploadSubtitle="PDF, JPG, PNG (Max 15MB)"
-                onRemove={() => setHospitalFileUploaded(false)}
+                onRemove={() => {
+                  setHospitalFileUploaded(false);
+                  setHospitalFileUri(null);
+                }}
+                onView={() => {
+                  setViewerState({
+                    visible: true,
+                    title: 'Hospital Empanelment Letter',
+                    url: hospitalFileUri,
+                    subtitle: hospitalFileName,
+                  });
+                }}
                 onUpload={() => {
-                  handlePickDocument((name, size) => {
+                  handlePickDocument((name, size, uri) => {
                     setHospitalFileName(name);
                     setHospitalFileSize(size);
+                    setHospitalFileUri(uri);
                     setHospitalFileUploaded(true);
-                  });
+                  }, 'doctors');
                 }}
               />
 
@@ -2045,6 +2186,15 @@ export function DoctorRegistrationView({
           />
         </View>
       )}
+
+      {/* Universal In-App Document Viewer Modal */}
+      <DocumentViewerModal
+        visible={viewerState.visible}
+        title={viewerState.title}
+        subtitle={viewerState.subtitle}
+        documentUrl={viewerState.url}
+        onClose={() => setViewerState((prev) => ({ ...prev, visible: false }))}
+      />
     </View>
   );
 }

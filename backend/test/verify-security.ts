@@ -15,6 +15,7 @@ const mockPrisma: any = {
     findUnique: async () => null,
     findFirst: async () => null,
     findMany: async () => [],
+    count: async () => 0,
     create: async (args: any) => ({ id: 'apt_123', ...args.data, doctor: { fullName: 'Dr. Test' }, patient: { fullName: 'Pat Test' } }),
     update: async (args: any) => ({ id: 'apt_123', ...args.data, doctor: { fullName: 'Dr. Test' }, patient: { fullName: 'Pat Test' } }),
     updateMany: async () => ({ count: 1 }),
@@ -22,6 +23,11 @@ const mockPrisma: any = {
   doctor: {
     findUnique: async () => null,
     findFirst: async () => null,
+    create: async (args: any) => ({ id: 'doc_1', ...args.data }),
+  },
+  availability: {
+    createMany: async () => ({ count: 1 }),
+    deleteMany: async () => ({ count: 1 }),
   },
   patient: {
     findUnique: async () => null,
@@ -54,7 +60,12 @@ const mockPrisma: any = {
     upsert: async (args: any) => ({ lastToken: 1 }),
   },
   user: {
-    findUnique: async () => null,
+    findUnique: async (args: any) => {
+      if (args?.where?.id) {
+        return { id: args.where.id, email: 'mock@example.com', role: Role.PATIENT };
+      }
+      return null;
+    },
     create: async (args: any) => ({ id: 'u_123', ...args.data }),
   },
   $transaction: async (cb: any) => cb(mockPrisma),
@@ -70,13 +81,13 @@ import { PublicRegisterRole } from '../src/auth/dto/register.dto';
 
 import { DoctorsService } from '../src/doctors/doctors.service';
 
-const appointmentsService = new AppointmentsService(mockPrisma);
+const notificationsService = new NotificationsService(mockPrisma);
+const appointmentsService = new AppointmentsService(mockPrisma, notificationsService);
 const prescriptionsService = new PrescriptionsService(mockPrisma, mockSupabase);
 const consultationsService = new ConsultationsService(mockPrisma);
 const recordsService = new RecordsService(mockPrisma);
 const patientsService = new PatientsService(mockPrisma);
 const authService = new AuthService(mockPrisma, { sign: () => 'mock_token' } as any);
-const notificationsService = new NotificationsService(mockPrisma);
 const doctorsService = new DoctorsService(mockPrisma);
 
 async function runTests() {
@@ -775,6 +786,10 @@ async function runTests() {
       availabilities: [],
     });
     mockPrisma.patient.findUnique = async () => ({ id: 'pat_1' });
+
+    mockPrisma.appointment.count = async () => {
+      return slotTaken ? 1 : 0;
+    };
 
     mockPrisma.appointment.findFirst = async () => {
       if (slotTaken) {

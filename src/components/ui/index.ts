@@ -126,3 +126,9 @@ export {
 // Empty State
 export { EmptyState } from './EmptyState';
 
+// Document Viewer Modal
+export {
+  DocumentViewerModal,
+  type DocumentViewerModalProps,
+} from './DocumentViewerModal';
+

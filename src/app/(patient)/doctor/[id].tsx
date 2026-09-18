@@ -113,6 +113,11 @@ export default function DoctorProfileScreen() {
   const doctor = detailDoctor || doctors?.find((d) => d.id === id) || null;
   const isLoading = isLoadingDetail && !doctor;
 
+  const doctorDisplayName = useMemo(() => {
+    if (!doctor?.name) return 'The doctor';
+    return doctor.name.startsWith('Dr.') ? doctor.name : `Dr. ${doctor.name}`;
+  }, [doctor?.name]);
+
   const [isFavorite, setIsFavorite] = useState(false);
 
   const DATES = useMemo(() => generateDynamicDates(), []);
@@ -607,7 +612,7 @@ export default function DoctorProfileScreen() {
                   <Text style={{ fontSize: 14, fontWeight: '700', color: '#B91C1C' }}>Doctor is on Leave</Text>
                 </View>
                 <Text style={{ fontSize: 12.5, color: '#7F1D1D', lineHeight: 18 }}>
-                  Dr. {doctor?.name || 'Doctor'} will be on leave on {currentDate.day}, {currentDate.date} {currentDate.month} ({leaveReason}). Please select another date to schedule your visit.
+                  {doctorDisplayName} will be on leave on {currentDate.day}, {currentDate.date} {currentDate.month} ({leaveReason}). Please select another date to schedule your visit.
                 </Text>
               </View>
             )}
@@ -621,7 +626,7 @@ export default function DoctorProfileScreen() {
                     Doctor Schedule Delayed (+{delayMinutes}m)
                   </Text>
                   <Text style={{ fontSize: 12, color: '#78350F', marginTop: 2, lineHeight: 17 }}>
-                    Dr. {doctor?.name || 'Doctor'} has an active delay of ~{delayMinutes} minutes on this date ({delayReason}). Displayed slot times reflect the adjusted consultation schedule.
+                    {doctorDisplayName} has an active delay of ~{delayMinutes} minutes on this date ({delayReason}). Displayed slot times reflect the adjusted consultation schedule.
                   </Text>
                 </View>
               </View>

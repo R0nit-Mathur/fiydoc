@@ -1,5 +1,6 @@
 import * as WebBrowser from 'expo-web-browser';
 import * as Linking from 'expo-linking';
+import * as AuthSession from 'expo-auth-session';
 import { authService, UserSession } from './authService';
 
 WebBrowser.maybeCompleteAuthSession();
@@ -13,7 +14,10 @@ export const googleAuthService = {
    * Connects either through Supabase Google Provider or Direct Google OAuth 2.0.
    */
   async signInWithGoogle(requestedRole?: 'patient' | 'doctor'): Promise<UserSession | null> {
-    const redirectUri = Linking.createURL('oauth/google');
+    const redirectUri = AuthSession.makeRedirectUri({
+      scheme: 'fiydoc',
+      path: 'oauth/google',
+    });
 
     const clientId =
       process.env.EXPO_PUBLIC_GOOGLE_CLIENT_ID ||

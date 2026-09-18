@@ -190,19 +190,16 @@ export function AppUpdateModal({ visible, onClose }: AppUpdateModalProps) {
           )}
         </View>
 
-        {/* Deployment CLI Note */}
+        {/* Seamless Updates Note */}
         <View style={[styles.cliNotice, { borderColor: colors.border }]}>
           <View style={styles.cliTitleRow}>
             <Send size={13} color={colors.textMuted} />
             <Text style={[styles.cliTitle, { color: colors.textMuted }]}>
-              OTA Publishing Pipeline (EAS)
+              Automatic Over-the-Air Delivery
             </Text>
           </View>
-          <Text style={[styles.cliCode, { color: colors.textSecondary }]}>
-            pnpm run update:production -- "Your Release Notes"
-          </Text>
-          <Text style={[styles.cliSub, { color: colors.textMuted }]}>
-            Dispatches live JavaScript & asset changes instantly to all iOS and Android devices without app store re-review.
+          <Text style={[styles.cliSub, { color: colors.textSecondary, marginTop: 4 }]}>
+            FiYDoc receives security and clinical feature updates instantly without requiring a full app store download.
           </Text>
         </View>
       </View>

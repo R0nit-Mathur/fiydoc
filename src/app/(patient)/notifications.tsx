@@ -115,7 +115,13 @@ export default function PatientNotificationsScreen() {
       <View style={[styles.headerBar, { backgroundColor: colors.card, borderBottomColor: colors.border }]}>
         <View style={styles.headerLeft}>
           <Pressable
-            onPress={() => router.back()}
+            onPress={() => {
+              if (router.canGoBack()) {
+                router.back();
+              } else {
+                router.replace('/(patient)/(tabs)/home');
+              }
+            }}
             hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
             style={[styles.backButton, { backgroundColor: colors.backgroundElement, borderColor: colors.border }]}
             accessibilityRole="button"

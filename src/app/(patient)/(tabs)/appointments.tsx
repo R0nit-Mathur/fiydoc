@@ -399,12 +399,19 @@ export default function PatientAppointmentsScreen() {
                     ? 'Your completed visits will appear here.'
                     : 'Cancelled appointments will appear here.'}
                 </Text>
-                {activeTab === 'upcoming' && (
+                {activeTab === 'upcoming' ? (
                   <Pressable
                     onPress={() => router.push('/(patient)/(tabs)/home')}
                     style={{ marginTop: 8, backgroundColor: StitchColors.primaryContainer, paddingHorizontal: 24, paddingVertical: 12, borderRadius: 12 }}
                   >
                     <Text style={{ color: '#fff', fontWeight: '700', fontSize: 14 }}>Find a Doctor</Text>
+                  </Pressable>
+                ) : (
+                  <Pressable
+                    onPress={() => setActiveTab('upcoming')}
+                    style={{ marginTop: 8, backgroundColor: StitchColors.surfaceContainerHigh, paddingHorizontal: 20, paddingVertical: 10, borderRadius: 10, borderWidth: 1, borderColor: StitchColors.outlineVariant }}
+                  >
+                    <Text style={{ color: StitchColors.onSurface, fontWeight: '600', fontSize: 13 }}>View Upcoming Visits</Text>
                   </Pressable>
                 )}
               </View>

@@ -49,6 +49,7 @@ import {
   Sparkles,
   Info,
   FileText,
+  Eye,
 } from 'lucide-react-native';
 
 import { useAppointmentStore } from '@/store/useAppointmentStore';
@@ -56,6 +57,9 @@ import { useAuthStore } from '@/store/useAuthStore';
 import { useBookAppointmentMutation } from '@/hooks/queries/useAppointmentsQuery';
 import { useQueryClient } from '@tanstack/react-query';
 import { Appointment } from '@/types/index';
+import { DocumentViewerModal } from '@/components/ui/DocumentViewerModal';
+import { fileUploadService } from '@/services/fileUploadService';
+import { healthService } from '@/services/healthService';
 import { BorderRadius, Shadows, Spacing, StitchColors, Palette } from '@/constants/theme';
 import { useAppTheme } from '@/hooks/useAppTheme';
 import { formatHumanDate, formatTimeSlot, formatCurrency } from '@/utils/formatters';
@@ -104,6 +108,7 @@ export default function BookingConfirmScreen() {
   const { bookingDraft, resetBookingDraft } = useAppointmentStore();
   const bookMutation = useBookAppointmentMutation();
   const queryClient = useQueryClient();
+  const [viewerVisible, setViewerVisible] = useState(false);
 
   const doctor = bookingDraft.doctor || (params.doctorName ? {
     id: params.doctorId || 'doc-1',
@@ -252,6 +257,29 @@ export default function BookingConfirmScreen() {
         if ((bookedAppointment as any)?.tokenNumber) {
           finalToken = (bookedAppointment as any).tokenNumber;
         }
+
+        // Authoritatively persist any pre-consultation document attached during booking
+        if (params.attachedFileUri && user?.id) {
+          try {
+            const uploadRes = await fileUploadService.uploadFile({
+              uri: params.attachedFileUri,
+              name: params.attachedFile || 'Pre_Consultation_Doc.pdf',
+            }, 'documents');
+            if (uploadRes?.url) {
+              await healthService.createRecord({
+                patientId: user.id,
+                title: `Pre-consultation Record: ${params.attachedFile || 'Medical Document'}`,
+                type: 'UPLOADED_DOCUMENT',
+                documentUrl: uploadRes.url,
+                fileUrl: uploadRes.url,
+                summary: `Attached by patient during booking with ${doctorDisplayName} on ${date}.`,
+                tags: ['APPOINTMENT_ATTACHMENT', 'PRE_CONSULTATION'],
+              });
+            }
+          } catch (uploadErr) {
+            console.warn('[confirm] Attachment cloud sync notice:', uploadErr);
+          }
+        }
       } else {
         throw new Error('User not logged in, booking saved to device.');
       }
@@ -289,7 +317,13 @@ export default function BookingConfirmScreen() {
       {/* Top App Bar */}
       <View style={[styles.topBar, { borderBottomColor: colors.border }]}>
         <Pressable
-          onPress={() => router.back()}
+          onPress={() => {
+            if (router.canGoBack()) {
+              router.back();
+            } else {
+              router.replace('/(patient)/(tabs)/home');
+            }
+          }}
           hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
           style={[styles.iconButton, { backgroundColor: colors.backgroundElement, borderColor: colors.border }]}
           accessibilityRole="button"
@@ -449,6 +483,24 @@ export default function BookingConfirmScreen() {
                 <Text style={[styles.attachedDocText, { color: colors.text }]} numberOfLines={1}>
                   {params.attachedFile}
                 </Text>
+                <Pressable
+                  onPress={() => setViewerVisible(true)}
+                  style={{
+                    flexDirection: 'row',
+                    alignItems: 'center',
+                    gap: 3,
+                    backgroundColor: '#EFF6FF',
+                    paddingHorizontal: 8,
+                    paddingVertical: 3,
+                    borderRadius: 6,
+                    marginLeft: 6,
+                  }}
+                  hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+                  accessibilityLabel="View attached document"
+                >
+                  <Eye size={12} color={StitchColors.primary} />
+                  <Text style={{ fontSize: 11, fontWeight: '700', color: StitchColors.primary }}>View</Text>
+                </Pressable>
               </View>
             </View>
           ) : null}
@@ -657,6 +709,15 @@ export default function BookingConfirmScreen() {
           </View>
         </View>
       </Modal>
+
+      {/* Universal In-App Document Viewer Modal */}
+      <DocumentViewerModal
+        visible={viewerVisible}
+        title={params.attachedFile || 'Pre-Consultation Document'}
+        subtitle="Attached Clinical Report"
+        documentUrl={params.attachedFileUri}
+        onClose={() => setViewerVisible(false)}
+      />
     </SafeAreaView>
   );
 }

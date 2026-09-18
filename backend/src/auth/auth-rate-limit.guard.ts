@@ -14,10 +14,24 @@ interface RateLimitRecord {
 @Injectable()
 export class AuthRateLimitGuard implements CanActivate {
   private readonly rateLimits = new Map<string, RateLimitRecord>();
-  private readonly limit = 10; // Max 10 auth requests
+  private readonly limit = 30; // Max 30 auth requests per minute (allows multi-step onboarding)
   private readonly windowMs = 60 * 1000; // per 1 minute window
+  private lastCleanup = Date.now();
+
+  private cleanupExpired() {
+    const now = Date.now();
+    if (now - this.lastCleanup > 60000) {
+      this.lastCleanup = now;
+      for (const [ip, rec] of this.rateLimits.entries()) {
+        if (now > rec.resetTime) {
+          this.rateLimits.delete(ip);
+        }
+      }
+    }
+  }
 
   canActivate(context: ExecutionContext): boolean {
+    this.cleanupExpired();
     const request = context.switchToHttp().getRequest();
     const ip =
       request.headers['x-forwarded-for']?.toString().split(',')[0].trim() ||

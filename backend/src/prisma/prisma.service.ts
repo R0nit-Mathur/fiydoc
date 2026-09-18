@@ -101,7 +101,50 @@ export class PrismaService extends PrismaClient implements OnModuleInit, OnModul
         ALTER TABLE "MedicalRecord" ADD COLUMN IF NOT EXISTS "tags" TEXT[] DEFAULT '{}';
       `);
 
-      this.logger.log('✅ Consultation and MedicalRecord schema columns verified.');
+      // Ensure User.pushToken column exists for mobile push notifications
+      await this.$executeRawUnsafe(`
+        ALTER TABLE "User" ADD COLUMN IF NOT EXISTS "pushToken" TEXT;
+      `);
+
+      // Drop hard unique constraint on Appointment so cancelled slots can be re-booked and patientsPerSlot > 1 works
+      await this.$executeRawUnsafe(`
+        ALTER TABLE "Appointment" DROP CONSTRAINT IF EXISTS "Appointment_doctorId_date_startTime_key";
+      `);
+      await this.$executeRawUnsafe(`
+        DROP INDEX IF EXISTS "Appointment_doctorId_date_startTime_key";
+      `);
+
+      // Create high-concurrency composite indexes
+      await this.$executeRawUnsafe(`
+        CREATE INDEX IF NOT EXISTS "Appointment_doctorId_date_startTime_status_idx"
+        ON "Appointment"("doctorId", "date", "startTime", "status");
+      `);
+      await this.$executeRawUnsafe(`
+        CREATE INDEX IF NOT EXISTS "Notification_userId_read_idx"
+        ON "Notification"("userId", "read");
+      `);
+      await this.$executeRawUnsafe(`
+        CREATE INDEX IF NOT EXISTS "Notification_userId_createdAt_idx"
+        ON "Notification"("userId", "createdAt");
+      `);
+      await this.$executeRawUnsafe(`
+        CREATE INDEX IF NOT EXISTS "MedicalRecord_patientId_createdAt_idx"
+        ON "MedicalRecord"("patientId", "createdAt");
+      `);
+      await this.$executeRawUnsafe(`
+        CREATE INDEX IF NOT EXISTS "Prescription_patientId_idx"
+        ON "Prescription"("patientId");
+      `);
+      await this.$executeRawUnsafe(`
+        CREATE INDEX IF NOT EXISTS "Prescription_doctorId_idx"
+        ON "Prescription"("doctorId");
+      `);
+      await this.$executeRawUnsafe(`
+        CREATE INDEX IF NOT EXISTS "Availability_doctorId_dayOfWeek_idx"
+        ON "Availability"("doctorId", "dayOfWeek");
+      `);
+
+      this.logger.log('✅ Consultation, MedicalRecord, pushToken and performance indexes verified.');
 
 
 

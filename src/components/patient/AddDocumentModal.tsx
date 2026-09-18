@@ -22,6 +22,8 @@ import { useAppTheme } from '@/hooks/useAppTheme';
 import { ScanText, CheckCircle2, AlertCircle, FileUp, FileCheck, Eye, Plus, X } from 'lucide-react-native';
 import { pickClinicalDocument } from '@/utils/mediaPicker';
 import { apiClient } from '@/services/apiClient';
+import { fileUploadService } from '@/services/fileUploadService';
+import { DocumentViewerModal } from '@/components/ui/DocumentViewerModal';
 
 interface AddDocumentModalProps {
   visible: boolean;
@@ -41,11 +43,13 @@ export function AddDocumentModal({ visible, onClose }: AddDocumentModalProps) {
   const [extractedData, setExtractedData] = useState<Record<string, string> | null>(null);
   const [error, setError] = useState('');
   const [showPreviewModal, setShowPreviewModal] = useState(false);
+  const [uploadedUrl, setUploadedUrl] = useState<string | null>(null);
 
   const handlePickFile = async () => {
     const file = await pickClinicalDocument();
     if (file) {
       setSelectedFile(file);
+      setUploadedUrl(file.uri);
       if (!docTitle.trim()) {
         setDocTitle(file.name.replace(/\.[^/.]+$/, ''));
       }
@@ -64,14 +68,28 @@ export function AddDocumentModal({ visible, onClose }: AddDocumentModalProps) {
     }
 
     setScanStep('scanning');
-    await new Promise((resolve) => setTimeout(resolve, 800));
+
+    // Upload file to Supabase cloud storage
+    let cloudUrl = uploadedUrl || selectedFile.uri;
+    try {
+      const uploadRes = await fileUploadService.uploadFile(
+        { uri: selectedFile.uri, name: selectedFile.name },
+        'documents',
+      );
+      if (uploadRes?.url) {
+        cloudUrl = uploadRes.url;
+        setUploadedUrl(cloudUrl);
+      }
+    } catch (uploadErr: any) {
+      console.warn('[AddDocumentModal] Cloud upload warning:', uploadErr?.message);
+    }
 
     const extracted: Record<string, string> = {
       'Document Title': docTitle.trim(),
       'Uploaded File': selectedFile ? selectedFile.name : 'No file attached',
       'Category': docType,
       'Added On': new Date().toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' }),
-      'Storage': selectedFile ? 'Stored securely on this device & cloud timeline' : 'No file attached',
+      'Storage': 'Stored securely in FiYDoc Medical Cloud',
     };
 
     const tags = ['LOCAL_RECORD', docType.toUpperCase().replace(/\s+/g, '_')];
@@ -87,7 +105,7 @@ export function AddDocumentModal({ visible, onClose }: AddDocumentModalProps) {
       createdAt: 'Today',
       doctorName: 'FiYDoc Health Records',
       facility: 'FiYDoc Healthcare Diagnostics',
-      documentUrl: selectedFile?.uri,
+      documentUrl: cloudUrl,
       summary,
       extractedTags: tags,
       tags,
@@ -103,8 +121,11 @@ export function AddDocumentModal({ visible, onClose }: AddDocumentModalProps) {
           title: docTitle.trim(),
           type: docType === 'Prescription' ? 'PRESCRIPTION' : docType === 'Lab Result' ? 'LAB_REPORT' : 'IMAGING',
           recordDate: new Date().toISOString(),
-          fileUrl: selectedFile?.uri || '',
+          documentUrl: cloudUrl,
+          fileUrl: cloudUrl,
+          summary,
           notes: summary,
+          tags,
         }),
       });
     } catch (e) {
@@ -221,10 +242,33 @@ export function AddDocumentModal({ visible, onClose }: AddDocumentModalProps) {
                       {selectedFile.name}
                     </Text>
                     <Text style={styles.fileSubText}>
-                      {selectedFile.size ? `${selectedFile.size} • Stored on this device` : 'Stored on this device'}
+                      {selectedFile.size ? `${selectedFile.size} • Cloud synced` : 'Cloud synced'}
                     </Text>
                   </View>
-                  <Text style={styles.changeFileText}>Change</Text>
+                  <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+                    <Pressable
+                      onPress={(e) => {
+                        e.stopPropagation();
+                        setShowPreviewModal(true);
+                      }}
+                      style={styles.viewFileBtn}
+                      hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+                      accessibilityLabel="View selected document"
+                    >
+                      <Eye size={13} color={StitchColors.primary} />
+                      <Text style={styles.viewFileBtnText}>View</Text>
+                    </Pressable>
+                    <Pressable
+                      onPress={(e) => {
+                        e.stopPropagation();
+                        handlePickFile();
+                      }}
+                      hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+                      accessibilityLabel="Change selected document"
+                    >
+                      <Text style={styles.changeFileText}>Change</Text>
+                    </Pressable>
+                  </View>
                 </View>
               ) : (
                 <View style={styles.filePickerPlaceholder}>
@@ -254,39 +298,14 @@ export function AddDocumentModal({ visible, onClose }: AddDocumentModalProps) {
       </View>
     </Modal>
 
-    {/* In-App Document Preview Modal */}
-    {showPreviewModal && selectedFile?.uri ? (
-      <RNModal
-        visible={showPreviewModal}
-        transparent
-        animationType="fade"
-        onRequestClose={() => setShowPreviewModal(false)}
-      >
-        <View style={styles.previewBackdrop}>
-          <View style={styles.previewCard}>
-            <View style={styles.previewHeader}>
-              <Text style={styles.previewTitle} numberOfLines={1}>
-                {selectedFile.name || 'Document Preview'}
-              </Text>
-              <TouchableOpacity
-                onPress={() => setShowPreviewModal(false)}
-                style={styles.previewCloseBtn}
-                hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
-              >
-                <X size={18} color="#FFFFFF" />
-              </TouchableOpacity>
-            </View>
-            <View style={styles.previewBody}>
-              <Image
-                source={{ uri: selectedFile.uri }}
-                style={styles.previewImg}
-                resizeMode="contain"
-              />
-            </View>
-          </View>
-        </View>
-      </RNModal>
-    ) : null}
+    {/* Universal In-App Document Viewer Modal */}
+    <DocumentViewerModal
+      visible={showPreviewModal}
+      onClose={() => setShowPreviewModal(false)}
+      title={selectedFile?.name || 'Document Preview'}
+      subtitle={docTitle.trim() || 'Medical Clinical Record'}
+      documentUrl={uploadedUrl || selectedFile?.uri}
+    />
     </>
   );
 }
@@ -348,6 +367,22 @@ const useStyles = (colors: any) => StyleSheet.create({
   },
   changeFileText: {
     fontSize: 12,
+    fontWeight: '700',
+    color: StitchColors.primary,
+  },
+  viewFileBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    backgroundColor: '#eff6ff',
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    borderRadius: 6,
+    borderWidth: 1,
+    borderColor: '#dbeafe',
+  },
+  viewFileBtnText: {
+    fontSize: 11,
     fontWeight: '700',
     color: StitchColors.primary,
   },

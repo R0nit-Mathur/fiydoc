@@ -59,10 +59,17 @@ export class AuthService {
 
       if (isDoctor) {
         const cleanName = dto.fullName?.trim() || 'Dr. Doctor';
-        const registrationNumber = dto.licenseNumber?.trim() || `NMC-${Date.now().toString().slice(-6)}`;
+        const randomSuffix = require('crypto').randomBytes(3).toString('hex').toUpperCase();
+        const registrationNumber = dto.licenseNumber?.trim() || `NMC-${randomSuffix}`;
         const registrationAuthority = dto.registrationAuthority?.trim() || 'National Medical Commission / State Council';
-        const specialization = dto.specialization?.trim() || 'General Medicine';
-        const fee = dto.consultationFee !== undefined && dto.consultationFee !== null && Number(dto.consultationFee) >= 0
+        if (!dto.specialization?.trim()) {
+          throw new BadRequestException('Specialization is required for doctor registration.');
+        }
+        if (dto.consultationFee !== undefined && dto.consultationFee !== null && Number(dto.consultationFee) < 0) {
+          throw new BadRequestException('Consultation fee cannot be negative.');
+        }
+        const specialization = dto.specialization.trim();
+        const fee = dto.consultationFee !== undefined && dto.consultationFee !== null
           ? Number(dto.consultationFee)
           : 500;
         const clinicName = dto.clinicName?.trim() || `${cleanName}'s Clinic`;
@@ -166,17 +173,33 @@ export class AuthService {
           });
         },
         {
-          maxWait: 15000,
-          timeout: 45000,
+          maxWait: 5000,
+          timeout: 10000,
         }
       );
 
       this.logger.log(`✅ Registered new ${fullUser?.role}: ${fullUser?.email || fullUser?.phone}`);
       return this.generateTokenResponse(fullUser);
     } catch (err: any) {
-      this.logger.error(`❌ [register] Failed for ${dto?.email || dto?.phone}: ${err?.message}`, err?.stack);
+      this.logger.error(`❌ [register] Failed for ${dto?.email || dto?.phone}: ${err?.message}`);
       if (err instanceof HttpException) {
         throw err;
+      }
+      if (err?.code === 'P2002' || err?.message?.includes('P2002')) {
+        const msg = String(err?.message || '');
+        if (msg.includes('email') || (dto.email && msg.includes('User_email_key'))) {
+          throw new BadRequestException({
+            code: 'EMAIL_ALREADY_REGISTERED',
+            message: 'This email is already registered. Please sign in instead.',
+          });
+        }
+        if (msg.includes('phone') || (dto.phone && msg.includes('User_phone_key'))) {
+          throw new BadRequestException({
+            code: 'PHONE_ALREADY_REGISTERED',
+            message: 'This phone number is already registered. Please sign in instead.',
+          });
+        }
+        throw new BadRequestException('An account with this email or phone number is already registered.');
       }
       throw new BadRequestException(
         `Registration failed: ${err?.message || 'Database error during account creation'}`

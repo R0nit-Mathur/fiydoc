@@ -9,16 +9,23 @@ export interface PickedMedia {
 }
 
 async function persistPickedFile(uri: string, filename: string): Promise<string> {
-  if (Platform.OS === 'web' || !FileSystem.documentDirectory) return uri;
+  if (Platform.OS === 'web') return uri;
+
+  const baseDir = FileSystem.cacheDirectory || FileSystem.documentDirectory;
+  if (!baseDir) return uri;
 
   const sanitizedName = filename.replace(/[^a-zA-Z0-9._-]/g, '_');
-  const destination = `${FileSystem.documentDirectory}fiydoc-media/${Date.now()}-${sanitizedName}`;
+  const targetDir = `${baseDir}fiydoc-media/`;
+  const destination = `${targetDir}${Date.now()}-${sanitizedName}`;
   try {
-    await FileSystem.makeDirectoryAsync(`${FileSystem.documentDirectory}fiydoc-media`, { intermediates: true });
+    const dirInfo = await FileSystem.getInfoAsync(targetDir);
+    if (!dirInfo.exists) {
+      await FileSystem.makeDirectoryAsync(targetDir, { intermediates: true });
+    }
     await FileSystem.copyAsync({ from: uri, to: destination });
     return destination;
   } catch (error: any) {
-    console.warn('[mediaPicker] Could not persist picked file:', error?.message);
+    console.warn('[mediaPicker] Could not persist picked file, using original uri:', error?.message);
     return uri;
   }
 }

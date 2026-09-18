@@ -60,6 +60,10 @@ export default function AppointmentDetailScreen() {
     else router.replace('/(patient)/(tabs)/home');
   };
 
+  const doctorDisplayName = apt?.doctorName
+    ? (apt.doctorName.startsWith('Dr.') ? apt.doctorName : `Dr. ${apt.doctorName}`)
+    : 'Doctor';
+
   if (isLoading || !apt) {
     return (
       <SafeAreaView style={[styles.container, { backgroundColor: colors.background }]} edges={['top']}>
@@ -115,7 +119,7 @@ export default function AppointmentDetailScreen() {
       type: 'appointment',
       link: '/(doctor)/(tabs)/appointments',
     });
-    router.back();
+    handleSafeBack();
   };
 
   const handleDirections = () => {
@@ -155,7 +159,7 @@ export default function AppointmentDetailScreen() {
                 Consultation Delayed (+{apt.delayMinutes} mins)
               </Text>
               <Text style={{ fontSize: 12.5, color: '#78350F', marginTop: 2, lineHeight: 17 }}>
-                Dr. {apt.doctorName} is running behind schedule. Your adjusted expected consultation time is{' '}
+                {doctorDisplayName} is running behind schedule. Your adjusted expected consultation time is{' '}
                 <Text style={{ fontWeight: '700' }}>{apt.expectedTime || apt.time}</Text> (was {apt.time}).
                 {apt.delayReason ? ` Reason: ${apt.delayReason}.` : ''}
               </Text>
@@ -170,7 +174,7 @@ export default function AppointmentDetailScreen() {
               Cancelled: Doctor On Leave
             </Text>
             <Text style={{ fontSize: 12.5, color: '#7F1D1D', lineHeight: 18 }}>
-              {apt.cancelReason || 'Dr. ' + apt.doctorName + ' is on leave on this date. Your appointment has been cancelled and a full refund has been initiated.'}
+              {apt.cancelReason || `${doctorDisplayName} is on leave on this date. Your appointment has been cancelled and a full refund has been initiated.`}
             </Text>
           </View>
         )}

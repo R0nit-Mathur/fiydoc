@@ -48,7 +48,9 @@ import {
   Shield,
   ArrowRight,
   Check,
+  Eye,
 } from 'lucide-react-native';
+import { DocumentViewerModal } from '@/components/ui/DocumentViewerModal';
 import { StitchColors, DEFAULT_DOCTOR_AVATAR, BorderRadius, Shadows, Palette } from '@/constants/theme';
 import { Avatar } from '@/components/ui/Avatar';
 import { useAppointmentStore } from '@/store/useAppointmentStore';
@@ -119,6 +121,8 @@ export default function MedicalIntakeScreen() {
   // File upload state
   const [attachedFile, setAttachedFile] = useState<string | null>(null);
   const [attachedFileUri, setAttachedFileUri] = useState<string | null>(null);
+  const [viewerVisible, setViewerVisible] = useState(false);
+  const [slotRequiredAlert, setSlotRequiredAlert] = useState(false);
 
   // In-App Input Modal for Allergies, Conditions & Custom Reasons (Never crashes with window.prompt)
   const [inputModalConfig, setInputModalConfig] = useState<{
@@ -203,6 +207,14 @@ export default function MedicalIntakeScreen() {
   };
 
   const nextStep = () => {
+    if (currentStep === 0 && !slotTime) {
+      if (Platform.OS !== 'web') {
+        Haptics.notificationAsync(Haptics.NotificationFeedbackType.Warning);
+      }
+      setSlotRequiredAlert(true);
+      setTimeout(() => setSlotRequiredAlert(false), 3000);
+      return;
+    }
     if (Platform.OS !== 'web') {
       Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
     }
@@ -223,6 +235,16 @@ export default function MedicalIntakeScreen() {
   };
 
   const proceedToConfirm = () => {
+    if (!slotTime) {
+      if (Platform.OS !== 'web') {
+        Haptics.notificationAsync(Haptics.NotificationFeedbackType.Warning);
+      }
+      setSlotRequiredAlert(true);
+      setCurrentStep(0);
+      setTimeout(() => setSlotRequiredAlert(false), 3000);
+      return;
+    }
+
     let finalPatientName = '';
     if (patientType === 'self') {
       finalPatientName = user?.name?.trim() || user?.email?.split('@')[0] || 'Patient';
@@ -831,6 +853,27 @@ export default function MedicalIntakeScreen() {
                       <Pressable
                         onPress={(e) => {
                           e.stopPropagation();
+                          setViewerVisible(true);
+                        }}
+                        style={{
+                          flexDirection: 'row',
+                          alignItems: 'center',
+                          gap: 3,
+                          backgroundColor: '#EFF6FF',
+                          paddingHorizontal: 7,
+                          paddingVertical: 3,
+                          borderRadius: 6,
+                          marginHorizontal: 4,
+                        }}
+                        hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+                        accessibilityLabel="View attached document"
+                      >
+                        <Eye size={12} color={StitchColors.primary} />
+                        <Text style={{ fontSize: 11, fontWeight: '700', color: StitchColors.primary }}>View</Text>
+                      </Pressable>
+                      <Pressable
+                        onPress={(e) => {
+                          e.stopPropagation();
                           setAttachedFile(null);
                           setAttachedFileUri(null);
                         }}
@@ -877,6 +920,13 @@ export default function MedicalIntakeScreen() {
         ]}
       >
         <View style={styles.bottomBarInner}>
+          {slotRequiredAlert && (
+            <View style={{ backgroundColor: '#FEF3C7', borderColor: '#FCD34D', borderWidth: 1, paddingVertical: 8, paddingHorizontal: 12, borderRadius: 10, marginBottom: 8, alignItems: 'center' }}>
+              <Text style={{ color: '#92400E', fontSize: 12, fontWeight: '700' }}>
+                ⚠️ Please select an appointment time slot before continuing
+              </Text>
+            </View>
+          )}
           <View style={styles.bottomActionsRow}>
             {currentStep > 0 && (
               <Pressable
@@ -890,7 +940,11 @@ export default function MedicalIntakeScreen() {
 
             <Pressable
               onPress={nextStep}
-              style={({ pressed }) => [styles.primaryActionBtn, pressed && styles.buttonPressed]}
+              style={({ pressed }) => [
+                styles.primaryActionBtn,
+                currentStep === 0 && !slotTime && { opacity: 0.88 },
+                pressed && styles.buttonPressed,
+              ]}
             >
               <Text
                 style={styles.primaryActionText}
@@ -899,7 +953,7 @@ export default function MedicalIntakeScreen() {
                 minimumFontScale={0.8}
               >
                 {currentStep === 0
-                  ? 'Continue to History'
+                  ? (slotTime ? 'Continue to History' : 'Select a Slot to Continue')
                   : currentStep === 1
                   ? 'Continue to Vitals'
                   : 'Proceed to Confirm Booking'}
@@ -971,6 +1025,14 @@ export default function MedicalIntakeScreen() {
           </View>
         </KeyboardAvoidingView>
       </Modal>
+      {/* Universal In-App Document Viewer Modal */}
+      <DocumentViewerModal
+        visible={viewerVisible}
+        title={attachedFile || 'Pre-Consultation Document'}
+        subtitle="Uploaded Patient Clinical Record"
+        documentUrl={attachedFileUri}
+        onClose={() => setViewerVisible(false)}
+      />
     </SafeAreaView>
   );
 }

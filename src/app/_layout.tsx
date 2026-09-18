@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import { View, StyleSheet, Platform } from 'react-native';
 import { Stack } from 'expo-router';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
@@ -6,6 +7,7 @@ import { StatusBar } from 'expo-status-bar';
 import * as Updates from 'expo-updates';
 import { ErrorBoundary } from '@/components/ui/ErrorBoundary';
 import { Colors } from '@/constants/theme';
+import { useAppTheme } from '@/hooks/useAppTheme';
 import '../global.css';
 
 import AsyncStorage from '@react-native-async-storage/async-storage';
@@ -14,6 +16,7 @@ import { useLocationStore } from '@/store/useLocationStore';
 import { useAuthStore } from '@/store/useAuthStore';
 import { useNotificationStore } from '@/store/useNotificationStore';
 import { notificationService } from '@/services/notificationService';
+import { usePushNotifications } from '@/hooks/usePushNotifications';
 
 function GlobalLocationGate() {
   const { latitude, longitude, permissionStatus, isGenuineDeviceLocation } = useLocationStore();
@@ -30,6 +33,7 @@ function GlobalLocationGate() {
 }
 
 export default function RootLayout() {
+  usePushNotifications();
   const [queryClient] = useState(
     () =>
       new QueryClient({
@@ -108,42 +112,70 @@ export default function RootLayout() {
     } catch {}
   }, []);
 
+  const { isDark, colors } = useAppTheme();
+
   return (
     <ErrorBoundary>
       <QueryClientProvider client={queryClient}>
         <SafeAreaProvider>
-          <StatusBar style="dark" />
+          <StatusBar style={isDark ? 'light' : 'dark'} />
           <GlobalLocationGate />
-          <Stack
-            screenOptions={{
-              headerShown: false,
-              animation: 'slide_from_right',
-              gestureEnabled: true,
-              gestureDirection: 'horizontal',
-              contentStyle: { backgroundColor: Colors.light.background },
-            }}
-          >
-            <Stack.Screen name="index" />
-            <Stack.Screen
-              name="(auth)"
-              options={{
-                animation: 'fade',
-                gestureEnabled: false,
-              }}
-            />
-            <Stack.Screen
-              name="(onboarding)"
-              options={{
-                animation: 'slide_from_bottom',
-                gestureEnabled: false,
-              }}
-            />
-            <Stack.Screen name="(patient)" />
-            <Stack.Screen name="(doctor)" />
-            <Stack.Screen name="(admin)" />
-          </Stack>
+          <View style={[styles.rootWrapper, Platform.OS === 'web' && { backgroundColor: isDark ? '#090D16' : '#F1F5F9' }]}>
+            <View style={[styles.appContainer, Platform.OS === 'web' && styles.webResponsiveContainer]}>
+              <Stack
+                screenOptions={{
+                  headerShown: false,
+                  animation: 'slide_from_right',
+                  gestureEnabled: true,
+                  gestureDirection: 'horizontal',
+                  contentStyle: { backgroundColor: colors.background },
+                }}
+              >
+                <Stack.Screen name="index" />
+                <Stack.Screen
+                  name="(auth)"
+                  options={{
+                    animation: 'fade',
+                    gestureEnabled: false,
+                  }}
+                />
+                <Stack.Screen
+                  name="(onboarding)"
+                  options={{
+                    animation: 'slide_from_bottom',
+                    gestureEnabled: false,
+                  }}
+                />
+                <Stack.Screen name="(patient)" />
+                <Stack.Screen name="(doctor)" />
+                <Stack.Screen name="(admin)" />
+              </Stack>
+            </View>
+          </View>
         </SafeAreaProvider>
       </QueryClientProvider>
     </ErrorBoundary>
   );
 }
+
+const styles = StyleSheet.create({
+  rootWrapper: {
+    flex: 1,
+    width: '100%',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  appContainer: {
+    flex: 1,
+    width: '100%',
+  },
+  webResponsiveContainer: {
+    maxWidth: 640,
+    width: '100%',
+    ...Platform.select({
+      web: {
+        boxShadow: '0 20px 40px -15px rgba(0, 0, 0, 0.2)',
+      },
+    }),
+  },
+});
