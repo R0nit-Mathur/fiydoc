@@ -17,6 +17,16 @@ export const INDIAN_MEDICAL_COUNCILS: IndianCouncilInfo[] = [
   { code: 'APMC', name: 'Andhra Pradesh Medical Council (APMC)', state: 'Andhra Pradesh', sampleFormat: 'APMC-67890' },
   { code: 'TSMC', name: 'Telangana State Medical Council (TSMC)', state: 'Telangana', sampleFormat: 'TSMC-78901' },
   { code: 'RMC', name: 'Rajasthan Medical Council (RMC)', state: 'Rajasthan', sampleFormat: 'RMC-89012' },
+  { code: 'TCMC', name: 'Travancore Cochin / Kerala Medical Council', state: 'Kerala', sampleFormat: 'KMC-65432' },
+  { code: 'MPMC', name: 'Madhya Pradesh Medical Council (MPMC)', state: 'Madhya Pradesh', sampleFormat: 'MPMC-12345' },
+  { code: 'PMC', name: 'Punjab Medical Council (PMC)', state: 'Punjab', sampleFormat: 'PMC-23456' },
+  { code: 'BMC', name: 'Bihar Medical Council (BMC)', state: 'Bihar', sampleFormat: 'BMC-34567' },
+  { code: 'HMC', name: 'Haryana State Medical Council', state: 'Haryana', sampleFormat: 'HMC-45678' },
+  { code: 'OMC', name: 'Odisha Medical Council', state: 'Odisha', sampleFormat: 'OMC-56789' },
+  { code: 'JKMC', name: 'Jammu & Kashmir Medical Council', state: 'Jammu & Kashmir', sampleFormat: 'JKMC-67890' },
+  { code: 'AMC', name: 'Assam Medical Council', state: 'Assam', sampleFormat: 'AMC-78901' },
+  { code: 'UKMC', name: 'Uttarakhand Medical Council', state: 'Uttarakhand', sampleFormat: 'UKMC-89012' },
+  { code: 'HPMC', name: 'Himachal Pradesh Medical Council', state: 'Himachal Pradesh', sampleFormat: 'HPMC-90123' },
 ];
 
 export const doctorVerificationService = {

@@ -50,11 +50,20 @@ export class AppointmentsService {
 
     const expectedTime = delayMinutes > 0 ? this.calculateShiftedTime(apt.startTime, delayMinutes) : apt.startTime;
 
+    const allergyTagMatch = apt.notes?.match(/\[Allergies:\s*([^\]]+)\]/i);
+    const conditionTagMatch = apt.notes?.match(/\[Conditions:\s*([^\]]+)\]/i);
+    const notesAllergies = allergyTagMatch ? allergyTagMatch[1].split(',').map((s: string) => s.trim()).filter(Boolean) : [];
+    const notesConditions = conditionTagMatch ? conditionTagMatch[1].split(',').map((s: string) => s.trim()).filter(Boolean) : [];
+    const patientAllergies = Array.from(new Set([...(apt.patient?.allergies || []), ...notesAllergies]));
+    const patientConditions = Array.from(new Set([...(apt.patient?.chronicConditions || []), ...notesConditions]));
+
     return {
       id: apt.id,
       patientId: apt.patientId,
       patientName: apt.patient?.fullName || null,
       patientAvatar: apt.patient?.profilePhoto || null,
+      patientAllergies,
+      patientConditions,
       doctorId: apt.doctorId,
       doctorName: apt.doctor?.fullName || null,
       doctorSpecialty: apt.doctor?.specialization || null,
@@ -504,10 +513,10 @@ export class AppointmentsService {
       if (String(apt.status).toUpperCase() === 'CANCELLED') {
         return this.formatAppointment(apt);
       }
-      const cancellableStatuses: string[] = ['PENDING', 'CONFIRMED'];
+      const cancellableStatuses: string[] = ['PENDING', 'CONFIRMED', 'UPCOMING', 'CHECKED_IN', 'IN_PROGRESS'];
       if (!cancellableStatuses.includes(String(apt.status).toUpperCase())) {
         throw new BadRequestException(
-          `Cannot cancel appointment in '${apt.status}' state. Only pending or confirmed appointments can be cancelled.`
+          `Cannot cancel appointment in '${apt.status}' state. Only active or scheduled appointments can be cancelled.`
         );
       }
 
@@ -743,11 +752,13 @@ export class AppointmentsService {
     const isPatientOwner =
       (currentUser.patient && currentUser.patient.id === apt.patientId) ||
       (apt.patient && apt.patient.userId === currentUser.id) ||
-      apt.patientId === currentUser.id;
+      apt.patientId === currentUser.id ||
+      (currentUser.email && apt.patient?.email === currentUser.email);
     const isDoctorOwner =
       (currentUser.doctor && currentUser.doctor.id === apt.doctorId) ||
       (apt.doctor && apt.doctor.userId === currentUser.id) ||
-      apt.doctorId === currentUser.id;
+      apt.doctorId === currentUser.id ||
+      (currentUser.email && apt.doctor?.email === currentUser.email);
 
     if (!isPatientOwner && !isDoctorOwner) {
       throw new ForbiddenException('You do not have permission to view or manage this appointment.');

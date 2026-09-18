@@ -20,6 +20,7 @@ import { Badge } from '@/components/ui/Badge';
 import { FiYLogo } from '@/components/ui/FiYLogo';
 import { ConfirmationDialog } from '@/components/ui/ConfirmationDialog';
 import { ConfirmationAnimation } from '@/components/ui/ConfirmationAnimation';
+import { appointmentService } from '@/services/appointmentService';
 import {
   StitchColors,
   Palette,
@@ -71,10 +72,15 @@ export default function BookingSuccessScreen() {
     Linking.openURL(`https://www.google.com/maps/search/?api=1&query=${address}`);
   };
 
-  const handleConfirmCancel = () => {
+  const handleConfirmCancel = async () => {
     setCancelDialogVisible(false);
     if (apt?.id) {
       cancelAppointment(apt.id);
+      try {
+        await appointmentService.cancelAppointment(apt.id);
+      } catch (e: any) {
+        console.warn('[BookingSuccess] Server cancellation notice:', e?.message);
+      }
     }
     router.replace('/(patient)/(tabs)/home');
   };

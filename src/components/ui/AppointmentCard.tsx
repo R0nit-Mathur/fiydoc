@@ -9,9 +9,10 @@ import { Palette, BorderRadius, Shadows } from '@/constants/theme';
 interface AppointmentCardProps {
   appointment: Appointment;
   onPress: () => void;
+  onCancel?: () => void;
 }
 
-export function AppointmentCard({ appointment, onPress }: AppointmentCardProps) {
+export function AppointmentCard({ appointment, onPress, onCancel }: AppointmentCardProps) {
   const statusBadge = {
     upcoming: { label: 'Upcoming', variant: 'blue' as const },
     confirmed: { label: 'Confirmed', variant: 'teal' as const },
@@ -22,6 +23,8 @@ export function AppointmentCard({ appointment, onPress }: AppointmentCardProps) 
     in_progress: { label: 'In Consultation', variant: 'teal' as const },
     pending: { label: 'Pending', variant: 'warning' as const },
   }[appointment.status] || { label: 'Confirmed', variant: 'teal' as const };
+
+  const isCancellable = ['upcoming', 'confirmed', 'pending', 'checked_in'].includes(appointment.status);
 
   return (
     <Pressable
@@ -74,6 +77,21 @@ export function AppointmentCard({ appointment, onPress }: AppointmentCardProps) 
           <Text style={styles.timeTagText}>{appointment.time}</Text>
         </View>
         <Text style={styles.feeText}>₹{appointment.fee}</Text>
+
+        {onCancel && isCancellable && (
+          <Pressable
+            onPress={(e) => {
+              e.stopPropagation();
+              onCancel();
+            }}
+            hitSlop={8}
+            style={({ pressed }) => [styles.cancelBtn, pressed && styles.cancelBtnPressed]}
+            accessibilityRole="button"
+            accessibilityLabel="Cancel appointment"
+          >
+            <Text style={styles.cancelBtnText}>Cancel</Text>
+          </Pressable>
+        )}
       </View>
     </Pressable>
   );
@@ -176,5 +194,21 @@ const styles = StyleSheet.create({
     fontSize: 13,
     fontWeight: '800',
     color: Palette.primaryBlue,
+  },
+  cancelBtn: {
+    paddingHorizontal: 10,
+    paddingVertical: 4,
+    borderRadius: BorderRadius.sm,
+    backgroundColor: '#fee2e2',
+    borderWidth: 1,
+    borderColor: '#fca5a5',
+  },
+  cancelBtnPressed: {
+    opacity: 0.8,
+  },
+  cancelBtnText: {
+    fontSize: 11,
+    fontWeight: '700',
+    color: '#dc2626',
   },
 });

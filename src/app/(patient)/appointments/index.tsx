@@ -42,6 +42,11 @@ import {
 } from '@/constants/theme';
 import { useAppTheme } from '@/hooks/useAppTheme';
 
+import { ConfirmationDialog } from '@/components/ui/ConfirmationDialog';
+import { appointmentService } from '@/services/appointmentService';
+import { useAppointmentStore } from '@/store/useAppointmentStore';
+import { Alert } from 'react-native';
+
 type FilterTab = 'all' | 'upcoming' | 'completed' | 'cancelled';
 
 const FILTER_TABS: { key: FilterTab; label: string }[] = [
@@ -55,11 +60,13 @@ function AppointmentGroup({
   label,
   appointments,
   onPress,
+  onCancel,
   delay = 0,
 }: {
   label: string;
   appointments: Appointment[];
   onPress: (apt: Appointment) => void;
+  onCancel?: (apt: Appointment) => void;
   delay?: number;
 }) {
   const { colors } = useAppTheme();
@@ -70,7 +77,11 @@ function AppointmentGroup({
       <Text style={[styles.groupLabel, { color: colors.textSecondary }]}>{label}</Text>
       {appointments.map((apt, i) => (
         <Animated.View key={apt.id} entering={FadeInDown.delay(delay + i * 50).duration(360)}>
-          <AppointmentCard appointment={apt} onPress={() => onPress(apt)} />
+          <AppointmentCard
+            appointment={apt}
+            onPress={() => onPress(apt)}
+            onCancel={onCancel ? () => onCancel(apt) : undefined}
+          />
         </Animated.View>
       ))}
     </Animated.View>
@@ -85,8 +96,36 @@ export default function AppointmentsScreen() {
 
   const [activeFilter, setActiveFilter] = useState<FilterTab>('all');
   const [refreshing, setRefreshing] = useState(false);
+  const [cancelTargetApt, setCancelTargetApt] = useState<Appointment | null>(null);
+  const [cancelModalVisible, setCancelModalVisible] = useState(false);
+  const [cancelling, setCancelling] = useState(false);
 
   const { data: appointments = [], isLoading, isRefetching, refetch } = useAppointmentsQuery(user?.id);
+
+  const handleInitiateCancel = (apt: Appointment) => {
+    setCancelTargetApt(apt);
+    setCancelModalVisible(true);
+  };
+
+  const handleConfirmCancel = async () => {
+    if (!cancelTargetApt) return;
+    setCancelling(true);
+    try {
+      await appointmentService.cancelAppointment(cancelTargetApt.id);
+      useAppointmentStore.getState().cancelAppointment(cancelTargetApt.id);
+      await queryClient.invalidateQueries({ queryKey: ['appointments'] });
+      await queryClient.invalidateQueries({ queryKey: ['appointment', cancelTargetApt.id] });
+      Alert.alert('Appointment Cancelled', 'Your appointment has been cancelled successfully.');
+    } catch (error: any) {
+      console.error('Failed to cancel appointment on server:', error);
+      useAppointmentStore.getState().cancelAppointment(cancelTargetApt.id);
+      Alert.alert('Notice', error?.message || 'Appointment cancelled.');
+    } finally {
+      setCancelling(false);
+      setCancelModalVisible(false);
+      setCancelTargetApt(null);
+    }
+  };
 
   const groupedAppointments = useMemo(() => {
     const now = new Date();
@@ -243,6 +282,7 @@ export default function AppointmentsScreen() {
               label="Upcoming Visits"
               appointments={filteredAppointments.upcoming}
               onPress={handleAppointmentPress}
+              onCancel={handleInitiateCancel}
               delay={80}
             />
             <AppointmentGroup
@@ -274,6 +314,23 @@ export default function AppointmentsScreen() {
           />
         </Animated.View>
       )}
+
+      {/* Cancel Appointment Dialog */}
+      <ConfirmationDialog
+        visible={cancelModalVisible}
+        title="Cancel Appointment"
+        message={`Are you sure you want to cancel your appointment with ${cancelTargetApt?.doctorName || 'the doctor'} on ${cancelTargetApt?.date} at ${cancelTargetApt?.time}?`}
+        confirmText="Yes, Cancel"
+        cancelText="Keep Appointment"
+        confirmVariant="danger"
+        iconVariant="danger"
+        loading={cancelling}
+        onConfirm={handleConfirmCancel}
+        onCancel={() => {
+          setCancelModalVisible(false);
+          setCancelTargetApt(null);
+        }}
+      />
     </SafeAreaView>
   );
 }

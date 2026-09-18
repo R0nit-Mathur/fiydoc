@@ -217,8 +217,12 @@ model Prescription {
   patient              Patient                @relation(fields: [patientId], references: [id])
   doctorId             String
   doctor               Doctor                 @relation(fields: [doctorId], references: [id])
+  diagnosis            String?
   doctorNotes          String?
   followUpInstructions String?
+  labTests             Json?                  @default("[]")
+  lifestyleInstructions String[]              @default([])
+  vitals               Json?
   pdfUrl               String?
   issuedAt             DateTime?
   verificationCode     String                 @unique @default(uuid())

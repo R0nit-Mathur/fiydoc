@@ -41,6 +41,7 @@ import { apiClient } from '@/services/apiClient';
 import { StitchColors } from '@/constants/theme';
 import { pickClinicalDocument } from '@/utils/mediaPicker';
 import locationsData from '@/constants/locations.json';
+import { INDIAN_MEDICAL_COUNCILS } from '@/services/doctorVerificationService';
 
 export interface DoctorRegistrationViewProps {
   onSwitchToPatient?: () => void;
@@ -157,7 +158,7 @@ export function DoctorRegistrationView({
   const [tempEveningTokens, setTempEveningTokens] = useState('12');
 
   // Autocomplete Dropdown State
-  const [activeDropdown, setActiveDropdown] = useState<'city' | 'college' | 'hospital' | 'ugState' | 'pgState' | 'pgCollege' | null>(null);
+  const [activeDropdown, setActiveDropdown] = useState<'city' | 'college' | 'hospital' | 'ugState' | 'pgState' | 'pgCollege' | 'primaryCouncil' | null>(null);
 
   const [finalSubmitting, setFinalSubmitting] = useState(false);
   const [error, setError] = useState('');
@@ -890,16 +891,62 @@ export function DoctorRegistrationView({
 
               {/* Primary State Medical Council */}
               <View style={styles.inputGroup}>
-                <Text style={styles.inputLabel}>Primary State Medical Council</Text>
+                <View style={styles.dropdownHeaderRow}>
+                  <Text style={styles.inputLabel}>Primary State Medical Council</Text>
+                  <Pressable
+                    onPress={() => setActiveDropdown(activeDropdown === 'primaryCouncil' ? null : 'primaryCouncil')}
+                    hitSlop={8}
+                    style={styles.dropdownToggleBtn}
+                  >
+                    <Text style={styles.dropdownToggleText}>Browse Councils</Text>
+                    <ChevronDown size={14} color={StitchColors.primary} />
+                  </Pressable>
+                </View>
                 <View style={styles.inputWrapper}>
                   <TextInput
                     value={primaryCouncil}
-                    onChangeText={setPrimaryCouncil}
-                    placeholder="e.g. Delhi Medical Council, MMC"
+                    onChangeText={(val) => {
+                      setPrimaryCouncil(val);
+                      if (val.trim().length > 0) setActiveDropdown('primaryCouncil');
+                    }}
+                    onFocus={() => setActiveDropdown('primaryCouncil')}
+                    placeholder="e.g. Delhi Medical Council, MMC, KMC"
                     placeholderTextColor="#94A3B8"
                     style={styles.textInput}
                   />
                 </View>
+                {activeDropdown === 'primaryCouncil' && (
+                  <View style={styles.autocompleteCard}>
+                    <ScrollView style={{ maxHeight: 200 }} keyboardShouldPersistTaps="handled" nestedScrollEnabled>
+                      {INDIAN_MEDICAL_COUNCILS
+                        .filter((c) =>
+                          !primaryCouncil.trim() ||
+                          c.name.toLowerCase().includes(primaryCouncil.toLowerCase().trim()) ||
+                          c.code.toLowerCase().includes(primaryCouncil.toLowerCase().trim()) ||
+                          c.state.toLowerCase().includes(primaryCouncil.toLowerCase().trim())
+                        )
+                        .map((council) => (
+                          <Pressable
+                            key={council.code}
+                            onPress={() => {
+                              setPrimaryCouncil(council.name);
+                              setActiveDropdown(null);
+                            }}
+                            style={styles.autocompleteItem}
+                          >
+                            <View style={{ flex: 1 }}>
+                              <Text style={styles.autocompleteItemText} numberOfLines={1}>
+                                {council.name}
+                              </Text>
+                              <Text style={{ fontSize: 11, color: '#64748B', marginTop: 1 }}>
+                                {council.state} • Sample: {council.sampleFormat}
+                              </Text>
+                            </View>
+                          </Pressable>
+                        ))}
+                    </ScrollView>
+                  </View>
+                )}
               </View>
 
               {/* Council Reg Number & Reg Year */}

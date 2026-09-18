@@ -483,8 +483,14 @@ export default function DoctorPatientsScreen() {
 
                   <Pressable
                     onPress={() => {
-                      setHistoryPatient(patient);
-                      setHistoryDate(patient.visits[0]?.date || null);
+                      if (Platform.OS !== 'web') {
+                        Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+                      }
+                      const activeVisit = patient.visits.find((v) =>
+                        ['confirmed', 'in_progress', 'checked_in', 'upcoming', 'pending'].includes(v.status)
+                      ) || patient.visits[0];
+                      const targetId = activeVisit?.id || patient.id;
+                      router.push(`/(doctor)/consultation/${targetId}` as any);
                     }}
                     style={[styles.primaryActionBtn, { backgroundColor: StitchColors.primaryContainer }]}
                   >
@@ -528,14 +534,21 @@ export default function DoctorPatientsScreen() {
             ) : null}
             <ScrollView contentContainerStyle={{ gap: 10 }}>
               {historyPatient?.visits.filter((visit) => !historyDate || visit.date === historyDate).map((visit) => (
-                <View key={visit.id} style={[styles.historyRow, { backgroundColor: colors.backgroundElement, borderColor: colors.border }]}>
+                <Pressable
+                  key={visit.id}
+                  onPress={() => {
+                    setHistoryPatient(null);
+                    router.push(`/(doctor)/consultation/${visit.id}`);
+                  }}
+                  style={[styles.historyRow, { backgroundColor: colors.backgroundElement, borderColor: colors.border }]}
+                >
                   <Calendar size={16} color={StitchColors.primaryContainer} />
                   <View style={{ flex: 1 }}>
                     <Text style={[styles.historyDate, { color: colors.text }]}>{visit.date} · {visit.time}</Text>
                     <Text style={[styles.historyReason, { color: colors.textSecondary }]}>{visit.reason}</Text>
                   </View>
                   <Text style={[styles.historyStatus, { color: StitchColors.primaryContainer }]}>{visit.status}</Text>
-                </View>
+                </Pressable>
               ))}
             </ScrollView>
           </View>

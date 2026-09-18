@@ -33,6 +33,7 @@ import {
   FileText,
   ShieldCheck,
   Stethoscope,
+  Sparkles,
 } from 'lucide-react-native';
 
 export default function DedicatedPrescriptionScreen() {
@@ -80,6 +81,17 @@ export default function DedicatedPrescriptionScreen() {
                     year: 'numeric',
                   })
                 : '',
+              diagnosis: data.diagnosis || (data.doctorNotes?.startsWith('Diagnosis:') ? data.doctorNotes.split('.')[0] : undefined),
+              tests: Array.isArray(data.labTests) && data.labTests.length > 0
+                ? data.labTests.map((t: any, idx: number) => ({
+                    id: t.id || `${data.id}-test-${idx}`,
+                    name: typeof t === 'string' ? t : (t.name || t.testName || 'Diagnostic Test'),
+                    category: t.category || 'Clinical Pathology',
+                    fastingRequired: Boolean(t.fastingRequired),
+                  }))
+                : (Array.isArray(data.tests) ? data.tests : undefined),
+              vitals: data.vitals || undefined,
+              lifestyleInstructions: data.lifestyleInstructions || undefined,
               medicines: (data.medicines || []).map((m: any) => ({
                 id: m.id || `${data.id}-${m.name}`,
                 name: m.name,
@@ -251,8 +263,60 @@ export default function DedicatedPrescriptionScreen() {
         {/* Doctor's Diagnosis & Notes */}
         {rx.diagnosis && (
           <View style={styles.diagnosisBox}>
-            <Text style={styles.sectionHeaderTitle}>Doctor's Diagnosis & Notes</Text>
+            <Text style={styles.sectionHeaderTitle}>Doctor's Diagnosis</Text>
             <Text style={styles.diagnosisText}>{rx.diagnosis}</Text>
+          </View>
+        )}
+
+        {/* Recorded Vitals */}
+        {rx.vitals && (
+          <View style={[styles.diagnosisBox, { backgroundColor: isDark ? 'rgba(56, 189, 248, 0.08)' : '#F0F9FF', borderColor: isDark ? 'rgba(56, 189, 248, 0.25)' : '#BAE6FD' }]}>
+            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, marginBottom: 8 }}>
+              <Activity size={16} color={colors.primary} />
+              <Text style={[styles.sectionHeaderTitle, { color: colors.primary }]}>Recorded Clinical Vitals</Text>
+            </View>
+            <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 10 }}>
+              {(rx.vitals.bpSystolic && rx.vitals.bpDiastolic) || rx.vitals.bp ? (
+                <View style={{ backgroundColor: colors.card, paddingHorizontal: 10, paddingVertical: 6, borderRadius: 8, borderWidth: 1, borderColor: colors.border }}>
+                  <Text style={{ fontSize: 10, color: colors.textSecondary, fontWeight: '700' }}>BP</Text>
+                  <Text style={{ fontSize: 13, fontWeight: '800', color: colors.text }}>
+                    {rx.vitals.bpSystolic ? `${rx.vitals.bpSystolic}/${rx.vitals.bpDiastolic} mmHg` : rx.vitals.bp}
+                  </Text>
+                </View>
+              ) : null}
+              {rx.vitals.pulse ? (
+                <View style={{ backgroundColor: colors.card, paddingHorizontal: 10, paddingVertical: 6, borderRadius: 8, borderWidth: 1, borderColor: colors.border }}>
+                  <Text style={{ fontSize: 10, color: colors.textSecondary, fontWeight: '700' }}>PULSE</Text>
+                  <Text style={{ fontSize: 13, fontWeight: '800', color: colors.text }}>
+                    {rx.vitals.pulse} bpm
+                  </Text>
+                </View>
+              ) : null}
+              {rx.vitals.temp ? (
+                <View style={{ backgroundColor: colors.card, paddingHorizontal: 10, paddingVertical: 6, borderRadius: 8, borderWidth: 1, borderColor: colors.border }}>
+                  <Text style={{ fontSize: 10, color: colors.textSecondary, fontWeight: '700' }}>TEMP</Text>
+                  <Text style={{ fontSize: 13, fontWeight: '800', color: colors.text }}>
+                    {rx.vitals.temp}°F
+                  </Text>
+                </View>
+              ) : null}
+              {rx.vitals.spo2 ? (
+                <View style={{ backgroundColor: colors.card, paddingHorizontal: 10, paddingVertical: 6, borderRadius: 8, borderWidth: 1, borderColor: colors.border }}>
+                  <Text style={{ fontSize: 10, color: colors.textSecondary, fontWeight: '700' }}>SPO2</Text>
+                  <Text style={{ fontSize: 13, fontWeight: '800', color: colors.text }}>
+                    {rx.vitals.spo2}%
+                  </Text>
+                </View>
+              ) : null}
+              {rx.vitals.weight ? (
+                <View style={{ backgroundColor: colors.card, paddingHorizontal: 10, paddingVertical: 6, borderRadius: 8, borderWidth: 1, borderColor: colors.border }}>
+                  <Text style={{ fontSize: 10, color: colors.textSecondary, fontWeight: '700' }}>WEIGHT</Text>
+                  <Text style={{ fontSize: 13, fontWeight: '800', color: colors.text }}>
+                    {rx.vitals.weight} kg
+                  </Text>
+                </View>
+              ) : null}
+            </View>
           </View>
         )}
 
@@ -313,6 +377,26 @@ export default function DedicatedPrescriptionScreen() {
                   <Text style={styles.testFasting}>
                     {test.fastingRequired ? '- Fasting Required (8-12 hrs)' : '- Standard Sample'}
                   </Text>
+                </View>
+              ))}
+            </View>
+          </View>
+        )}
+
+        {/* Lifestyle & Dietary Directions */}
+        {rx.lifestyleInstructions && rx.lifestyleInstructions.length > 0 && (
+          <View style={styles.section}>
+            <View style={styles.sectionTitleRow}>
+              <Sparkles size={18} color={colors.teal} />
+              <Text style={styles.sectionHeaderTitle}>
+                Lifestyle & Dietary Instructions ({rx.lifestyleInstructions.length})
+              </Text>
+            </View>
+
+            <View style={{ gap: 8 }}>
+              {rx.lifestyleInstructions.map((instruction, index) => (
+                <View key={index} style={[styles.testCard, { borderColor: isDark ? 'rgba(45, 212, 191, 0.25)' : '#99F6E4' }]}>
+                  <Text style={[styles.testName, { color: colors.text }]}>• {instruction}</Text>
                 </View>
               ))}
             </View>

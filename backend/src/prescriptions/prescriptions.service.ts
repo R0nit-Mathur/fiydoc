@@ -33,6 +33,27 @@ export class PrescriptionsService {
         .text(`Doctor: ${prescription.doctor?.fullName || 'Licensed Practitioner'}`)
         .text(`Patient: ${prescription.patient?.fullName || 'Patient'}`)
         .text(`Issued: ${new Date((prescription as any).issuedAt || (prescription as any).signedAt || prescription.createdAt || Date.now()).toLocaleString('en-IN')}`);
+
+      if (prescription.diagnosis) {
+        pdf.moveDown().fontSize(13).fillColor('#3055A8').text('Diagnosis');
+        pdf.moveDown(0.4).fontSize(10).fillColor('#172033').text(prescription.diagnosis);
+      }
+
+      if (prescription.vitals) {
+        const v = prescription.vitals;
+        const vitalsList = [
+          v.bpSystolic && v.bpDiastolic ? `BP: ${v.bpSystolic}/${v.bpDiastolic} mmHg` : (v.bp ? `BP: ${v.bp}` : null),
+          v.pulse || v.heartRate ? `Pulse: ${v.pulse || v.heartRate} bpm` : null,
+          v.temp || v.temperature ? `Temp: ${v.temp || v.temperature}°F` : null,
+          v.spO2 || v.spo2 ? `SpO2: ${v.spO2 || v.spo2}%` : null,
+          v.weight ? `Weight: ${v.weight} kg` : null,
+        ].filter(Boolean).join('  |  ');
+        if (vitalsList) {
+          pdf.moveDown().fontSize(13).fillColor('#3055A8').text('Recorded Vitals');
+          pdf.moveDown(0.4).fontSize(10).fillColor('#172033').text(vitalsList);
+        }
+      }
+
       pdf.moveDown().fontSize(13).fillColor('#3055A8').text('Medicines');
       pdf.moveDown(0.4).fontSize(10).fillColor('#172033');
       if (!prescription.medicines || prescription.medicines.length === 0) {
@@ -45,7 +66,26 @@ export class PrescriptionsService {
           pdf.moveDown(0.5);
         });
       }
-      pdf.moveDown().fontSize(13).fillColor('#3055A8').text('Clinical notes');
+
+      const tests = Array.isArray(prescription.labTests) ? prescription.labTests : (Array.isArray(prescription.tests) ? prescription.tests : []);
+      if (tests.length > 0) {
+        pdf.moveDown().fontSize(13).fillColor('#3055A8').text('Recommended Diagnostic Tests');
+        pdf.moveDown(0.4).fontSize(10).fillColor('#172033');
+        tests.forEach((t: any, idx: number) => {
+          const testName = typeof t === 'string' ? t : (t.name || t.testName || 'Laboratory Investigation');
+          pdf.text(`• ${testName}`);
+        });
+      }
+
+      if (prescription.lifestyleInstructions && prescription.lifestyleInstructions.length > 0) {
+        pdf.moveDown().fontSize(13).fillColor('#3055A8').text('Lifestyle & Dietary Advice');
+        pdf.moveDown(0.4).fontSize(10).fillColor('#172033');
+        prescription.lifestyleInstructions.forEach((inst: string) => {
+          pdf.text(`• ${inst}`);
+        });
+      }
+
+      pdf.moveDown().fontSize(13).fillColor('#3055A8').text('Clinical Notes & Advice');
       pdf.moveDown(0.4).fontSize(10).fillColor('#172033').text(prescription.doctorNotes || '—');
       pdf.moveDown().fontSize(13).fillColor('#3055A8').text('Follow-up');
       pdf.moveDown(0.4).fontSize(10).fillColor('#172033').text(prescription.followUpInstructions || 'As advised by your clinician.');
@@ -56,6 +96,7 @@ export class PrescriptionsService {
   async createPrescription(
     dto: {
       consultationId: string;
+      diagnosis?: string;
       doctorNotes?: string;
       followUpInstructions?: string;
       medicines?: {
@@ -65,10 +106,10 @@ export class PrescriptionsService {
         durationDays: number;
         instructions?: string;
       }[];
-      tests?: {
-        name: string;
-        category?: string;
-      }[];
+      tests?: any[];
+      labTests?: any[];
+      lifestyleInstructions?: string[];
+      vitals?: any;
     },
     currentUser: any,
   ) {
@@ -198,8 +239,12 @@ export class PrescriptionsService {
         consultationId: consultation.id,
         patientId: consultation.patientId,
         doctorId: consultation.doctorId,
-        doctorNotes: dto.doctorNotes,
-        followUpInstructions: dto.followUpInstructions,
+        diagnosis: dto.diagnosis || null,
+        doctorNotes: dto.doctorNotes || null,
+        followUpInstructions: dto.followUpInstructions || null,
+        labTests: dto.labTests || dto.tests || [],
+        lifestyleInstructions: dto.lifestyleInstructions || [],
+        vitals: dto.vitals || null,
         verificationCode,
         issuedAt: issuedTimestamp,
         medicines: {

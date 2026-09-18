@@ -7,10 +7,10 @@ export const healthService = {
   },
 
   async createPrescription(payload: {
-
     consultationId?: string;
     patientId?: string;
     doctorId?: string;
+    diagnosis?: string;
     doctorNotes?: string;
     followUpInstructions?: string;
     medicines?: Array<{
@@ -24,6 +24,9 @@ export const healthService = {
       name: string;
       category?: string;
     }>;
+    labTests?: any[];
+    lifestyleInstructions?: string[];
+    vitals?: any;
   }): Promise<any> {
     return apiClient<any>('/prescriptions', {
       method: 'POST',

@@ -201,6 +201,54 @@ export default function DoctorConsultationScreen() {
     Array<{ id: string; name: string; detail: string; status: string }>
   >([]);
 
+  // Sync patient allergies and conditions from appointment booking data
+  useEffect(() => {
+    if (!currentApt) return;
+
+    // 1. Load patient recorded allergies from appointment or notes
+    const allergyList: string[] = [];
+    if (currentApt.patientAllergies && Array.isArray(currentApt.patientAllergies)) {
+      allergyList.push(...currentApt.patientAllergies);
+    }
+    const notesAllergyMatch = currentApt.notes?.match(/\[Allergies:\s*([^\]]+)\]/i);
+    if (notesAllergyMatch && notesAllergyMatch[1]) {
+      notesAllergyMatch[1].split(',').forEach((s) => allergyList.push(s.trim()));
+    }
+    const cleanAllergies = Array.from(new Set(allergyList.filter(Boolean)));
+    if (cleanAllergies.length > 0) {
+      setAllergies((prev) => {
+        if (prev.length > 0) return prev;
+        return cleanAllergies.map((name, i) => ({
+          id: `al-${i}`,
+          name,
+          isSevere: name.toLowerCase().includes('severe') || name.toLowerCase().includes('penicillin'),
+        }));
+      });
+    }
+
+    // 2. Load chronic conditions
+    const conditionList: string[] = [];
+    if (currentApt.patientConditions && Array.isArray(currentApt.patientConditions)) {
+      conditionList.push(...currentApt.patientConditions);
+    }
+    const notesCondMatch = currentApt.notes?.match(/\[Conditions:\s*([^\]]+)\]/i);
+    if (notesCondMatch && notesCondMatch[1]) {
+      notesCondMatch[1].split(',').forEach((s) => conditionList.push(s.trim()));
+    }
+    const cleanConditions = Array.from(new Set(conditionList.filter(Boolean)));
+    if (cleanConditions.length > 0) {
+      setChronicConditions((prev) => {
+        if (prev.length > 0) return prev;
+        return cleanConditions.map((name, i) => ({
+          id: `cond-${i}`,
+          name,
+          detail: 'Patient Reported',
+          status: 'Active',
+        }));
+      });
+    }
+  }, [currentApt]);
+
   // Consultation Tabs
   const [activeTab, setActiveTab] = useState<'today' | 'history' | 'labs'>('today');
 
@@ -328,10 +376,24 @@ export default function DoctorConsultationScreen() {
       });
 
       // Step 2: Issue the prescription using the authoritative server consultation ID
+      const diagnosisString = diagnoses.map((d) => `${d.name} (${d.code})`).join(', ');
+
       const serverRx = await healthService.createPrescription({
         consultationId: consultation.id,
-        doctorNotes: assessmentText,
+        diagnosis: diagnosisString,
+        doctorNotes: chiefComplaint || assessmentText,
         followUpInstructions: `Review after ${followUpDays} in clinic. ${emergencyWarning}`,
+        vitals: {
+          bpSystolic: vitals.bpSystolic,
+          bpDiastolic: vitals.bpDiastolic,
+          pulse: vitals.pulse,
+          temp: vitals.temp,
+          weight: vitals.weight,
+          spO2: vitals.spO2,
+        },
+        labTests: labTests.map((t) => ({ name: t })),
+        tests: labTests.map((t) => ({ name: t })),
+        lifestyleInstructions: lifestyleInstructions.filter((l) => l.checked).map((l) => l.text),
         medicines: medications.map((m) => ({
           name: m.name,
           dosage: m.dosage,
@@ -350,17 +412,19 @@ export default function DoctorConsultationScreen() {
         doctorId: consultation.doctorId,
         doctorName,
         clinicName: clinicName ?? undefined,
-        diagnosis: diagnoses.map((d) => `${d.name} (${d.code})`).join(', '),
+        diagnosis: diagnosisString,
         doctorNotes: chiefComplaint,
         followUpInstructions: `Review after ${followUpDays} in clinic. ${emergencyWarning}`,
         vitals: {
           bpSystolic: vitals.bpSystolic,
           bpDiastolic: vitals.bpDiastolic,
-          heartRate: vitals.pulse,
-          temperature: vitals.temp,
+          pulse: vitals.pulse,
+          temp: vitals.temp,
           weight: vitals.weight,
-          spO2: vitals.spO2,
+          spo2: vitals.spO2,
         },
+        tests: labTests.map((t) => ({ id: t, name: t })),
+        lifestyleInstructions: lifestyleInstructions.filter((l) => l.checked).map((l) => l.text),
         verificationCode: serverRx.verificationCode,
         createdAt: new Date().toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' }),
         signedAt: new Date().toISOString(),
@@ -399,12 +463,9 @@ export default function DoctorConsultationScreen() {
       setTimeout(() => {
         setRxPadVisible(false);
         setSignSuccess(false);
-        if (nextPatient) {
-          router.replace(`/(doctor)/consultation/${nextPatient.id}` as any);
-        } else {
-          router.replace('/(doctor)/(tabs)/appointments');
-        }
-      }, 2000);
+        // Navigate back to Patient Roster as requested
+        router.replace('/(doctor)/(tabs)/directory');
+      }, 1500);
     } catch (err: any) {
       setIsSigning(false);
       const message = err?.message || 'Failed to complete consultation or issue prescription.';
@@ -444,9 +505,9 @@ export default function DoctorConsultationScreen() {
         </Text>
         <Pressable
           style={{ backgroundColor: StitchColors.primaryContainer, paddingHorizontal: 24, paddingVertical: 12, borderRadius: 12 }}
-          onPress={() => router.replace('/(doctor)/(tabs)/appointments')}
+          onPress={() => router.replace('/(doctor)/(tabs)/directory')}
         >
-          <Text style={{ color: '#ffffff', fontWeight: '600', fontSize: 15 }}>Return to Appointments Queue</Text>
+          <Text style={{ color: '#ffffff', fontWeight: '600', fontSize: 15 }}>Return to Patient Roster</Text>
         </Pressable>
       </SafeAreaView>
     );
@@ -457,7 +518,10 @@ export default function DoctorConsultationScreen() {
       {/* 1. Top Bar: Back, "Consultation", Active Timer & Doctor Avatar */}
       <View style={[styles.headerBar, { borderBottomColor: colors.border, backgroundColor: colors.card }]}>
         <Pressable
-          onPress={() => router.back()}
+          onPress={() => {
+            if (router.canGoBack()) router.back();
+            else router.replace('/(doctor)/(tabs)/directory');
+          }}
           hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
           style={[styles.backBtn, { backgroundColor: colors.backgroundElement }]}
         >

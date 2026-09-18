@@ -95,6 +95,8 @@ export default function BookingConfirmScreen() {
     patientRelation?: string;
     attachedFile?: string;
     attachedFileUri?: string;
+    allergies?: string;
+    chronicConditions?: string;
   }>();
   const { colors, isDark } = useAppTheme();
   const insets = useSafeAreaInsets();
@@ -196,9 +198,27 @@ export default function BookingConfirmScreen() {
       '9876543210'
     ).trim();
 
+    let parsedAllergies: string[] = [];
+    if (params.allergies) {
+      try {
+        parsedAllergies = JSON.parse(params.allergies as string);
+      } catch {}
+    }
+    let parsedConditions: string[] = [];
+    if (params.chronicConditions) {
+      try {
+        parsedConditions = JSON.parse(params.chronicConditions as string);
+      } catch {}
+    }
+
+    const allergyTag = parsedAllergies.length > 0 ? `[Allergies: ${parsedAllergies.join(', ')}]` : null;
+    const conditionTag = parsedConditions.length > 0 ? `[Conditions: ${parsedConditions.join(', ')}]` : null;
+
     const patientInfoNotes = [
       effectivePatientName !== user?.name ? `Patient Name: ${effectivePatientName}` : null,
       effectivePatientPhone !== user?.phone ? `Contact Phone: ${effectivePatientPhone}` : null,
+      allergyTag,
+      conditionTag,
       bookingDraft.patientNotes || params.notes || null,
       'Payment Mode: Pay at Clinic Reception (Direct Token)',
     ].filter(Boolean).join(' • ');

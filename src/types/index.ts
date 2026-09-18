@@ -102,6 +102,8 @@ export interface Appointment {
   delayReason?: string | null;
   isDoctorOnLeave?: boolean;
   cancelReason?: string | null;
+  patientAllergies?: string[];
+  patientConditions?: string[];
 }
 
 export interface ClinicalNote {
@@ -156,8 +158,11 @@ export interface Prescription {
   patientGender?: string;
   diagnosis?: string;
   tests?: { id: string; name: string; category?: string; turnaroundTime?: string; fastingRequired?: boolean }[];
+  lifestyleInstructions?: string[];
   vitals?: {
     bp?: string;
+    bpSystolic?: string;
+    bpDiastolic?: string;
     pulse?: string;
     temp?: string;
     spo2?: string;

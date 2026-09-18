@@ -178,6 +178,14 @@ function AppointmentCard({
             <Text style={[styles.symptomsText, { color: colors.textSecondary }]} numberOfLines={1}>
               {item.symptoms?.join(' · ') || 'General consultation'}
             </Text>
+            {((item.patientAllergies && item.patientAllergies.length > 0) || item.notes?.includes('[Allergies:')) && (
+              <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4, marginTop: 2 }}>
+                <AlertCircle size={11} color="#DC2626" />
+                <Text style={{ fontSize: 11, fontWeight: '700', color: '#DC2626' }} numberOfLines={1}>
+                  Allergies: {item.patientAllergies?.join(', ') || item.notes?.match(/\[Allergies:\s*([^\]]+)\]/)?.[1]}
+                </Text>
+              </View>
+            )}
             <View style={styles.modeRow}>
               {item.mode === 'video' ? (
                 <>

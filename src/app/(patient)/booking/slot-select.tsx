@@ -25,6 +25,7 @@ import {
   KeyboardAvoidingView,
 } from 'react-native';
 import { pickClinicalDocument } from '@/utils/mediaPicker';
+import { apiClient } from '@/services/apiClient';
 import { useRouter, useLocalSearchParams } from 'expo-router';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Image } from 'expo-image';
@@ -247,6 +248,19 @@ export default function MedicalIntakeScreen() {
     if (selectedReason) {
       useAppointmentStore.getState().setBookingSymptoms([selectedReason], symptomNotes);
     }
+    const combinedAllergies = Array.from(new Set([...severeAllergies, ...allergies]));
+    const combinedConditions = Array.from(new Set([...activeConditions, ...conditions]));
+    // Persist to patient profile in background
+    if (user?.id && (combinedAllergies.length > 0 || combinedConditions.length > 0)) {
+      apiClient('/patients/me/profile', {
+        method: 'PATCH',
+        body: JSON.stringify({
+          allergies: combinedAllergies,
+          chronicConditions: combinedConditions.join(', '),
+        }),
+      }).catch((e: any) => console.warn('[slot-select] Profile allergy update notice:', e?.message));
+    }
+
     router.push({
       pathname: '/(patient)/booking/confirm',
       params: {
@@ -261,6 +275,8 @@ export default function MedicalIntakeScreen() {
         patientName: finalPatientName,
         patientRelation: patientType === 'family' ? (familyMemberRelation.trim() || 'Family Member') : 'Self',
         notes: symptomNotes,
+        allergies: JSON.stringify(combinedAllergies),
+        chronicConditions: JSON.stringify(combinedConditions),
         attachedFile: attachedFile || '',
         attachedFileUri: attachedFileUri || '',
       },
