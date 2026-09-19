@@ -1,5 +1,5 @@
 import React from 'react';
-import { View, Text, TouchableOpacity, StyleSheet } from 'react-native';
+import { View, Text, TouchableOpacity, StyleSheet, ActivityIndicator } from 'react-native';
 import { useRouter } from 'expo-router';
 import { Pill, CheckCircle2 } from 'lucide-react-native';
 import { Badge } from '@/components/ui/Badge';
@@ -9,9 +9,10 @@ import { useAppTheme } from '@/hooks/useAppTheme';
 
 interface PrescriptionsTabProps {
   prescriptions: Prescription[];
+  isLoading?: boolean;
 }
 
-export function PrescriptionsTab({ prescriptions }: PrescriptionsTabProps) {
+export function PrescriptionsTab({ prescriptions, isLoading }: PrescriptionsTabProps) {
   const router = useRouter();
   const { colors } = useAppTheme();
   const styles = useStyles(colors);
@@ -22,7 +23,12 @@ export function PrescriptionsTab({ prescriptions }: PrescriptionsTabProps) {
         <Text style={styles.sectionHeaderTitle}>Your Prescriptions</Text>
       </View>
 
-      {prescriptions.length === 0 ? (
+      {isLoading && prescriptions.length === 0 ? (
+        <View style={[styles.emptyCard, { paddingVertical: 40, alignItems: 'center', justifyContent: 'center' }]}>
+          <ActivityIndicator size="small" color={Palette.healthcareTeal} />
+          <Text style={[styles.emptySubtitle, { marginTop: 10 }]}>Loading prescriptions from server...</Text>
+        </View>
+      ) : prescriptions.length === 0 ? (
         <View style={styles.emptyCard}>
           <Pill size={32} color={colors.textMuted} />
           <Text style={styles.emptyTitle}>No Prescriptions Issued Yet</Text>

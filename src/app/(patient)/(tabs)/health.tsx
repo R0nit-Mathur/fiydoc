@@ -38,7 +38,7 @@ export default function HealthHubScreen() {
   const router = useRouter();
   const { user } = useAuthStore();
   const { records, prescriptions: storePrescriptions } = useHealthStore();
-  const { data: serverPrescriptions = [], refetch: refetchPrescriptions } = usePrescriptionsQuery();
+  const { data: serverPrescriptions = [], isLoading: isLoadingPrescriptions, refetch: refetchPrescriptions } = usePrescriptionsQuery();
   const { colors } = useAppTheme();
   const queryClient = useQueryClient();
 
@@ -180,7 +180,7 @@ export default function HealthHubScreen() {
         }
       >
         {activeTab === 'PRESCRIPTIONS' ? (
-          <PrescriptionsTab prescriptions={patientPrescriptions} />
+          <PrescriptionsTab prescriptions={patientPrescriptions} isLoading={isLoadingPrescriptions} />
         ) : (
           <HealthHistoryTab records={records} prescriptions={patientPrescriptions} />
         )}

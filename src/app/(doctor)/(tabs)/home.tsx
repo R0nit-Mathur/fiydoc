@@ -57,6 +57,7 @@ import { doctorService } from '@/services/doctorService';
 import { useAppTheme } from '@/hooks/useAppTheme';
 import { BorderRadius, Shadows, Spacing, StitchColors, Palette, DEFAULT_DOCTOR_AVATAR } from '@/constants/theme';
 import { AppUpdateModal } from '@/components/ui/AppUpdateModal';
+import { LoadingDialog } from '@/components/ui/LoadingDialog';
 import { FiYLogo } from '@/components/ui/FiYLogo';
 import { Avatar } from '@/components/ui/Avatar';
 import { getDoctorFirstName } from '@/utils/formatters';
@@ -70,7 +71,7 @@ export default function DoctorHomeScreen() {
   const { colors, isDark } = useAppTheme();
   const { user, updateUser, setVerificationStatus } = useAuthStore();
   const { appointments: storeAppointments } = useAppointmentStore();
-  const { data: serverAppointments = [] } = useAppointmentsQuery(undefined, user?.id);
+  const { data: serverAppointments = [], isLoading: isLoadingAppointments, refetch: refetchAppointments } = useAppointmentsQuery(undefined, user?.id);
   const queryClient = useQueryClient();
   const [drawerOpen, setDrawerOpen] = useState(false);
   const [updateModalVisible, setUpdateModalVisible] = useState(false);
@@ -106,10 +107,14 @@ export default function DoctorHomeScreen() {
 
   const handleRefresh = async () => {
     setRefreshing(true);
+    if (Platform.OS !== 'web') {
+      Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+    }
     try {
       await Promise.all([
         queryClient.invalidateQueries({ queryKey: ['appointments'] }),
         queryClient.invalidateQueries({ queryKey: ['notifications'] }),
+        refetchAppointments(),
       ]);
       await new Promise((r) => setTimeout(r, 400));
     } finally {
@@ -569,7 +574,14 @@ export default function DoctorHomeScreen() {
           </View>
 
           <View style={[styles.upcomingListCard, { backgroundColor: colors.card, borderColor: colors.border }]}>
-            {upcomingPatients.length === 0 ? (
+            {isLoadingAppointments && upcomingPatients.length === 0 ? (
+              <View style={{ padding: 24, alignItems: 'center', justifyContent: 'center', gap: 8 }}>
+                <ActivityIndicator size="small" color={StitchColors.primaryContainer} />
+                <Text style={[styles.patientRowReason, { color: colors.textSecondary }]}>
+                  Loading today's queue...
+                </Text>
+              </View>
+            ) : upcomingPatients.length === 0 ? (
               <View style={{ padding: 20, alignItems: 'center' }}>
                 <Text style={[styles.patientRowReason, { color: colors.textSecondary }]}>
                   No upcoming appointments for today.
@@ -714,6 +726,12 @@ export default function DoctorHomeScreen() {
       <AppUpdateModal
         visible={updateModalVisible}
         onClose={() => setUpdateModalVisible(false)}
+      />
+
+      <LoadingDialog
+        visible={checkingVerification}
+        title="Checking Verification"
+        message="Verifying credentials with medical registry..."
       />
     </SafeAreaView>
   );

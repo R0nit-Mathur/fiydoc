@@ -12,7 +12,8 @@ export function usePrescriptionsQuery(patientId?: string) {
   const effectivePatientId = patientId || (user?.role === 'patient' ? user.id : 'me');
 
   return useQuery<Prescription[]>({
-    queryKey: ['prescriptions', effectivePatientId, storePrescriptions.length],
+    queryKey: ['prescriptions', effectivePatientId],
+    enabled: Boolean(user?.id),
     queryFn: async () => {
       try {
         const rawList = await healthService.getPrescriptions(effectivePatientId);

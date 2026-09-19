@@ -15,8 +15,7 @@ export function useDoctorsQuery(filters?: DoctorFilters) {
   return useQuery({
     queryKey: ['doctors', mergedFilters],
     queryFn: () => doctorService.getDoctors(mergedFilters),
-    staleTime: 0,
-    refetchOnMount: 'always',
+    staleTime: 60_000,
   });
 }
 
@@ -25,7 +24,6 @@ export function useDoctorDetailQuery(id: string) {
     queryKey: ['doctor', id],
     queryFn: () => doctorService.getDoctorById(id),
     enabled: Boolean(id),
-    staleTime: 0,
-    refetchOnMount: 'always',
+    staleTime: 60_000,
   });
 }

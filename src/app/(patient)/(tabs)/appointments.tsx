@@ -14,6 +14,7 @@ import {
   Modal,
   RefreshControl,
   Alert,
+  ActivityIndicator,
 } from 'react-native';
 import { useRouter } from 'expo-router';
 import { SafeAreaView } from 'react-native-safe-area-context';
@@ -43,6 +44,7 @@ import { useAppointmentsQuery } from '@/hooks/queries/useAppointmentsQuery';
 import { usePrescriptionsQuery } from '@/hooks/queries/usePrescriptionsQuery';
 import { appointmentService } from '@/services/appointmentService';
 import { ConfirmationDialog } from '@/components/ui/ConfirmationDialog';
+import { LoadingDialog } from '@/components/ui/LoadingDialog';
 import { Appointment } from '@/types/index';
 
 function AppointmentCard({
@@ -200,7 +202,7 @@ export default function PatientAppointmentsScreen() {
   const { appointments, cancelAppointment: cancelInStore } = useAppointmentStore();
   const { user } = useAuthStore();
   const { prescriptions: storePrescriptions } = useHealthStore();
-  const { data: serverAppointments = [], refetch: refetchAppointments } = useAppointmentsQuery();
+  const { data: serverAppointments = [], isLoading: isLoadingAppointments, refetch: refetchAppointments } = useAppointmentsQuery();
   const { data: serverPrescriptions = [], refetch: refetchPrescriptions } = usePrescriptionsQuery();
   const queryClient = useQueryClient();
   const [activeTab, setActiveTab] = useState<'upcoming' | 'completed' | 'cancelled'>('upcoming');
@@ -391,7 +393,14 @@ export default function PatientAppointmentsScreen() {
 
           {/* Appointment List */}
           <View style={styles.sectionWrap}>
-            {currentList.length === 0 ? (
+            {isLoadingAppointments && currentList.length === 0 ? (
+              <View style={{ padding: 48, alignItems: 'center', justifyContent: 'center', gap: 14 }}>
+                <ActivityIndicator size="large" color={StitchColors.primaryContainer} />
+                <Text style={{ fontSize: 14, fontWeight: '600', color: StitchColors.onSurface }}>
+                  Loading your appointments...
+                </Text>
+              </View>
+            ) : currentList.length === 0 ? (
               <View style={{ padding: 32, alignItems: 'center', gap: 12 }}>
                 <Calendar size={40} color={StitchColors.outline} />
                 <Text style={{ fontSize: 16, fontWeight: '600', color: StitchColors.onSurface }}>
@@ -589,6 +598,12 @@ export default function PatientAppointmentsScreen() {
           setCancelModalVisible(false);
           setCancelTargetApt(null);
         }}
+      />
+
+      <LoadingDialog
+        visible={cancelling}
+        title="Cancelling Appointment"
+        message="Please wait while your appointment is cancelled and the refund is initiated..."
       />
     </SafeAreaView>
   );

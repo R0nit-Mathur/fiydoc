@@ -44,6 +44,7 @@ import { useAuthStore } from '@/store/useAuthStore';
 import { adminService, AdminStats, AdminDoctorItem, AuditLogItem } from '@/services/adminService';
 import { authService } from '@/services/authService';
 import { ConfirmationDialog } from '@/components/ui/ConfirmationDialog';
+import { LoadingDialog } from '@/components/ui/LoadingDialog';
 
 type TabKey = 'verifications' | 'all-doctors' | 'audit-logs';
 
@@ -238,7 +239,14 @@ export default function AdminDashboardScreen() {
       <ScrollView
         contentContainerStyle={styles.scrollContent}
         showsVerticalScrollIndicator={false}
-        refreshControl={<RefreshControl refreshing={refreshing} onRefresh={handleRefresh} />}
+        refreshControl={
+          <RefreshControl
+            refreshing={refreshing}
+            onRefresh={handleRefresh}
+            colors={[StitchColors.primaryContainer]}
+            tintColor={StitchColors.primaryContainer}
+          />
+        }
       >
         {/* System Overview KPI Cards */}
         <View style={styles.kpiGrid}>
@@ -705,6 +713,12 @@ export default function AdminDashboardScreen() {
         loading={loggingOut}
         onConfirm={handleConfirmLogout}
         onCancel={() => setLogoutModalVisible(false)}
+      />
+
+      <LoadingDialog
+        visible={submittingAction}
+        title="Processing Decision"
+        message="Updating doctor credentials and system records..."
       />
     </SafeAreaView>
   );

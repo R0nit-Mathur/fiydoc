@@ -10,10 +10,9 @@ export function useAppointmentsQuery(patientId?: string, doctorId?: string) {
   const effectivePatientId = patientId || (currentUser?.role === 'patient' ? currentUser.id : undefined);
   const effectiveDoctorId = doctorId || (currentUser?.role === 'doctor' ? currentUser.id : undefined);
 
-  const storeSignature = storeAppointments.map((a) => `${a.id}:${a.status}`).join(',');
-
   return useQuery({
-    queryKey: ['appointments', effectivePatientId, effectiveDoctorId, storeSignature],
+    queryKey: ['appointments', effectivePatientId || 'all', effectiveDoctorId || 'all'],
+    staleTime: 30_000,
     queryFn: async () => {
       let fetched: any[] = [];
       try {
@@ -77,7 +76,7 @@ export function useAppointmentsQuery(patientId?: string, doctorId?: string) {
       const custom = relevantStoreAppointments.filter((a) => !ids.has(a.id));
       return [...custom, ...mergedFetched];
     },
-    enabled: Boolean(effectiveDoctorId || effectivePatientId),
+    enabled: Boolean(effectiveDoctorId || effectivePatientId || currentUser?.id),
   });
 }
 

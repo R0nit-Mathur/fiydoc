@@ -27,6 +27,7 @@ import {
   StatusBar,
   Modal,
   RefreshControl,
+  ActivityIndicator,
 } from 'react-native';
 import { useRouter } from 'expo-router';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -98,8 +99,8 @@ export default function PatientHomeScreen() {
   const hasPromptedGuideRef = useRef(false);
 
   const { formattedAddress, city, area, permissionStatus } = useLocationStore();
-  const { data: doctors = [], refetch: refetchDoctors } = useDoctorsQuery();
-  const { data: serverAppointments = [], refetch: refetchAppointments } = useAppointmentsQuery();
+  const { data: doctors = [], isLoading: isLoadingDoctors, refetch: refetchDoctors } = useDoctorsQuery();
+  const { data: serverAppointments = [], isLoading: isLoadingAppointments, refetch: refetchAppointments } = useAppointmentsQuery();
   const user = useAuthStore((s) => s.user);
   const appointments = useAppointmentStore((s) => s.appointments);
   const records = useHealthStore((s) => s.records);
@@ -302,7 +303,16 @@ export default function PatientHomeScreen() {
         </View>
 
         {/* 2. Upcoming Clinic Visit Card (Dynamic from Appointments Store) */}
-        {upcomingAppointment ? (
+        {isLoadingAppointments ? (
+          <View style={styles.sectionSpacer}>
+            <View style={[styles.upcomingCard, { opacity: 0.85, minHeight: 110, justifyContent: 'center', alignItems: 'center' }]}>
+              <ActivityIndicator size="small" color="#5eead4" />
+              <Text style={{ marginTop: 8, color: '#e0e7ff', fontSize: 13, fontWeight: '600' }}>
+                Checking upcoming appointments...
+              </Text>
+            </View>
+          </View>
+        ) : upcomingAppointment ? (
           <View style={styles.sectionSpacer}>
             <Pressable
               onPress={() => router.push('/(patient)/(tabs)/appointments')}
@@ -547,16 +557,23 @@ export default function PatientHomeScreen() {
           </View>
 
           <View style={styles.doctorsListContainer}>
-            {doctors.slice(0, 3).map((doc, idx) => (
-              <DoctorCard
-                key={doc.id}
-                doctor={doc}
-                onPress={() => router.push(`/(patient)/doctor/${doc.id}`)}
-                onBookPress={() => router.push(`/(patient)/doctor/${doc.id}`)}
-                tokenNumber={`Token #${10 + idx}`}
-                nextSlot="Today, 04:15 PM"
-              />
-            ))}
+            {isLoadingDoctors ? (
+              <>
+                <DoctorCardSkeleton />
+                <DoctorCardSkeleton />
+              </>
+            ) : (
+              doctors.slice(0, 3).map((doc, idx) => (
+                <DoctorCard
+                  key={doc.id}
+                  doctor={doc}
+                  onPress={() => router.push(`/(patient)/doctor/${doc.id}`)}
+                  onBookPress={() => router.push(`/(patient)/doctor/${doc.id}`)}
+                  tokenNumber={`Token #${10 + idx}`}
+                  nextSlot="Today, 04:15 PM"
+                />
+              ))
+            )}
           </View>
         </Animated.View>
       </ScrollView>

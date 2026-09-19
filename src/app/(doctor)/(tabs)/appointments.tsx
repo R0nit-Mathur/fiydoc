@@ -20,6 +20,7 @@ import {
   StyleSheet,
   Platform,
   Alert,
+  ActivityIndicator,
 } from 'react-native';
 import { useRouter } from 'expo-router';
 import { SafeAreaView } from 'react-native-safe-area-context';
@@ -49,6 +50,7 @@ import { Pill } from '@/components/ui/Pill';
 import { Avatar } from '@/components/ui/Avatar';
 import { StitchCard } from '@/components/ui/StitchCard';
 import { EmptyState } from '@/components/ui/EmptyState';
+import { LoadingDialog } from '@/components/ui/LoadingDialog';
 import {
   useAppointmentsQuery,
   useApproveAppointmentMutation,
@@ -414,7 +416,7 @@ export default function DoctorAppointmentsScreen() {
   const queryClient = useQueryClient();
   const { user } = useAuthStore();
   const { colors, isDark } = useAppTheme();
-  const { data: appointments, isRefetching, refetch } = useAppointmentsQuery(undefined, user?.id);
+  const { data: appointments, isLoading, isRefetching, refetch } = useAppointmentsQuery(undefined, user?.id);
   const [activeFilter, setActiveFilter] = useState<FilterKey>('today');
   const [refreshing, setRefreshing] = useState(false);
 
@@ -661,7 +663,14 @@ export default function DoctorAppointmentsScreen() {
           />
         }
       >
-        {filtered.length === 0 ? (
+        {isLoading && (!appointments || (appointments as any[]).length === 0) ? (
+          <View style={{ padding: 48, alignItems: 'center', justifyContent: 'center', gap: 14 }}>
+            <ActivityIndicator size="large" color={StitchColors.primaryContainer} />
+            <Text style={{ fontSize: 14, fontWeight: '600', color: colors.textSecondary }}>
+              Loading patient queue...
+            </Text>
+          </View>
+        ) : filtered.length === 0 ? (
           <Animated.View entering={FadeIn.duration(300)} style={styles.emptyWrap}>
             <EmptyState
               title={`No ${activeFilter} appointments`}
@@ -691,6 +700,17 @@ export default function DoctorAppointmentsScreen() {
           ))
         )}
       </ScrollView>
+
+      <LoadingDialog
+        visible={
+          approveMutation.isPending ||
+          rejectMutation.isPending ||
+          cancelMutation.isPending ||
+          updateStatusMutation.isPending
+        }
+        title="Updating Appointment"
+        message="Synchronizing appointment status with clinical queue..."
+      />
     </SafeAreaView>
   );
 }

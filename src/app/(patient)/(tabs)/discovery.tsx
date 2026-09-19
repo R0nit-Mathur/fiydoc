@@ -172,7 +172,12 @@ export default function DoctorDiscoveryScreen() {
         contentContainerStyle={styles.scrollContainer}
         showsVerticalScrollIndicator={false}
         refreshControl={
-          <RefreshControl refreshing={refreshing} onRefresh={handleRefresh} />
+          <RefreshControl
+            refreshing={refreshing}
+            onRefresh={handleRefresh}
+            colors={[StitchColors.primaryContainer]}
+            tintColor={StitchColors.primaryContainer}
+          />
         }
       >
         <View style={styles.contentWrap}>
