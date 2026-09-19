@@ -44,14 +44,19 @@ import {
   Wallet,
   Building,
   Banknote,
+  Smartphone,
   ChevronRight,
-  X,
   Sparkles,
+  Download,
   Info,
+  Check,
+  X,
+  Upload,
   FileText,
   Eye,
 } from 'lucide-react-native';
 
+import { Avatar } from '@/components/ui/Avatar';
 import { useAppointmentStore } from '@/store/useAppointmentStore';
 import { useAuthStore } from '@/store/useAuthStore';
 import { useBookAppointmentMutation } from '@/hooks/queries/useAppointmentsQuery';
@@ -237,6 +242,34 @@ export default function BookingConfirmScreen() {
         if (!doctor.id || doctor.id === 'doc-1') {
           throw new Error('Doctor ID is missing — booking saved to device.');
         }
+        let uploadedUrl: string | undefined = undefined;
+        let uploadedName: string | undefined = undefined;
+
+        // Authoritatively upload any pre-consultation document attached during booking
+        if (params.attachedFileUri && user?.id) {
+          try {
+            uploadedName = params.attachedFile || 'Medical_Record.pdf';
+            const uploadRes = await fileUploadService.uploadFile({
+              uri: params.attachedFileUri,
+              name: uploadedName,
+            }, 'documents');
+            if (uploadRes?.url) {
+              uploadedUrl = uploadRes.url;
+              healthService.createRecord({
+                patientId: user.id,
+                title: `Pre-consultation Record: ${uploadedName}`,
+                type: 'UPLOADED_DOCUMENT',
+                documentUrl: uploadedUrl,
+                fileUrl: uploadedUrl,
+                summary: `Attached by patient during booking with ${doctorDisplayName} on ${date}.`,
+                tags: ['APPOINTMENT_ATTACHMENT', 'PRE_CONSULTATION'],
+              }).catch((e) => console.warn('[confirm] Health record background save:', e));
+            }
+          } catch (uploadErr) {
+            console.warn('[confirm] Attachment cloud upload notice:', uploadErr);
+          }
+        }
+
         const bookedAppointment = await bookMutation.mutateAsync({
           patientId: user.id,
           doctorId: doctor.id,
@@ -251,6 +284,8 @@ export default function BookingConfirmScreen() {
           doctorSpecialty: doctor.specialty || doctor.specialization || 'General Physician',
           doctorAvatar: doctor.avatar || doctor.profilePhoto,
           hospital: hospitalName,
+          attachmentUrl: uploadedUrl,
+          attachmentName: uploadedName,
         });
 
         if (bookedAppointment?.id) finalAppointmentId = bookedAppointment.id;
@@ -258,28 +293,9 @@ export default function BookingConfirmScreen() {
           finalToken = (bookedAppointment as any).tokenNumber;
         }
 
-        // Authoritatively persist any pre-consultation document attached during booking
-        if (params.attachedFileUri && user?.id) {
-          try {
-            const uploadRes = await fileUploadService.uploadFile({
-              uri: params.attachedFileUri,
-              name: params.attachedFile || 'Pre_Consultation_Doc.pdf',
-            }, 'documents');
-            if (uploadRes?.url) {
-              await healthService.createRecord({
-                patientId: user.id,
-                title: `Pre-consultation Record: ${params.attachedFile || 'Medical Document'}`,
-                type: 'UPLOADED_DOCUMENT',
-                documentUrl: uploadRes.url,
-                fileUrl: uploadRes.url,
-                summary: `Attached by patient during booking with ${doctorDisplayName} on ${date}.`,
-                tags: ['APPOINTMENT_ATTACHMENT', 'PRE_CONSULTATION'],
-              });
-            }
-          } catch (uploadErr) {
-            console.warn('[confirm] Attachment cloud sync notice:', uploadErr);
-          }
-        }
+        queryClient.invalidateQueries({ queryKey: ['doctor-slots'] });
+        queryClient.invalidateQueries({ queryKey: ['appointments'] });
+        queryClient.invalidateQueries({ queryKey: ['patient-appointments'] });
       } else {
         throw new Error('User not logged in, booking saved to device.');
       }
@@ -377,10 +393,11 @@ export default function BookingConfirmScreen() {
           </View>
 
           <View style={styles.doctorInfoRow}>
-            <Image
-              source={{ uri: doctor.avatar }}
+            <Avatar
+              uri={doctor.avatar || doctor.profilePhoto || (doctor as any).avatarUrl || (doctor as any).user?.profilePhoto}
+              name={doctorDisplayName}
+              size="lg"
               style={styles.doctorAvatar}
-              resizeMode="cover"
             />
             <View style={{ flex: 1, marginLeft: 14 }}>
               <Text style={[styles.doctorName, { color: colors.text }]}>{doctorDisplayName}</Text>

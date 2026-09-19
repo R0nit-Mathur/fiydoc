@@ -834,56 +834,60 @@ export default function MedicalIntakeScreen() {
                   <Text style={styles.uploaderOptional}>Optional</Text>
                 </View>
 
-                <Pressable
-                  onPress={handlePickDocument}
-                  style={styles.dropzone}
-                >
-                  <View style={styles.dropzoneIconWrap}>
-                    <FileUp size={20} color={StitchColors.primary} />
-                  </View>
-                  <Text style={styles.dropzoneTitle}>Upload ECG, Blood Reports or Prescriptions</Text>
-                  <Text style={styles.dropzoneSubtitle}>
-                    PDF, JPG up to 15MB • Reviewed by doctor before OPD
-                  </Text>
+                {attachedFile ? (
+                  <View style={styles.attachedCard}>
+                    <View style={styles.attachedCardLeft}>
+                      <View style={styles.attachedIconWrap}>
+                        <FileText size={20} color={StitchColors.primary} />
+                      </View>
+                      <View style={styles.attachedTextWrap}>
+                        <Text style={styles.attachedFileName} numberOfLines={1}>
+                          {attachedFile}
+                        </Text>
+                        <Text style={styles.attachedFileSub}>
+                          Ready for doctor review • 1 document attached
+                        </Text>
+                      </View>
+                    </View>
 
-                  {attachedFile && (
-                    <View style={styles.filePill}>
-                      <FileText size={14} color={StitchColors.secondary} />
-                      <Text style={styles.fileNameText} numberOfLines={1}>{attachedFile}</Text>
+                    <View style={styles.attachedCardActions}>
                       <Pressable
-                        onPress={(e) => {
-                          e.stopPropagation();
-                          setViewerVisible(true);
-                        }}
-                        style={{
-                          flexDirection: 'row',
-                          alignItems: 'center',
-                          gap: 3,
-                          backgroundColor: '#EFF6FF',
-                          paddingHorizontal: 7,
-                          paddingVertical: 3,
-                          borderRadius: 6,
-                          marginHorizontal: 4,
-                        }}
+                        onPress={() => setViewerVisible(true)}
+                        style={styles.attachedViewBtn}
                         hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
                         accessibilityLabel="View attached document"
                       >
-                        <Eye size={12} color={StitchColors.primary} />
-                        <Text style={{ fontSize: 11, fontWeight: '700', color: StitchColors.primary }}>View</Text>
+                        <Eye size={13} color={StitchColors.primary} />
+                        <Text style={styles.attachedViewText}>View</Text>
                       </Pressable>
+
                       <Pressable
-                        onPress={(e) => {
-                          e.stopPropagation();
+                        onPress={() => {
                           setAttachedFile(null);
                           setAttachedFileUri(null);
                         }}
+                        style={styles.attachedRemoveBtn}
                         hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+                        accessibilityLabel="Remove attached document"
                       >
-                        <X size={13} color={StitchColors.outline} />
+                        <X size={14} color="#DC2626" />
                       </Pressable>
                     </View>
-                  )}
-                </Pressable>
+                  </View>
+                ) : (
+                  <Pressable
+                    onPress={handlePickDocument}
+                    style={styles.dropzone}
+                  >
+                    <View style={styles.dropzoneIconWrap}>
+                      <FileUp size={20} color={StitchColors.primary} />
+                    </View>
+                    <Text style={styles.dropzoneTitle}>Upload ECG, Blood Reports or Prescriptions</Text>
+                    <Text style={styles.dropzoneSubtitle}>
+                      PDF, JPG up to 15MB • Reviewed by doctor before OPD
+                    </Text>
+                  </Pressable>
+                )}
               </View>
             </View>
           )}
@@ -1724,21 +1728,70 @@ const styles = StyleSheet.create({
     textAlign: 'center',
     marginTop: 2,
   },
-  filePill: {
+  attachedCard: {
+    backgroundColor: '#F0F7FF',
+    borderRadius: 16,
+    padding: 12,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    borderWidth: 1,
+    borderColor: '#BFDBFE',
+  },
+  attachedCardLeft: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 10,
+    flex: 1,
+    marginRight: 8,
+  },
+  attachedIconWrap: {
+    width: 38,
+    height: 38,
+    borderRadius: 12,
+    backgroundColor: '#DBEAFE',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  attachedTextWrap: {
+    flex: 1,
+  },
+  attachedFileName: {
+    fontSize: 13,
+    fontWeight: '700',
+    color: StitchColors.onSurface,
+  },
+  attachedFileSub: {
+    fontSize: 11,
+    color: StitchColors.primary,
+    marginTop: 2,
+  },
+  attachedCardActions: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: 6,
-    backgroundColor: StitchColors.surfaceContainerLowest,
-    paddingHorizontal: 10,
-    paddingVertical: 4,
-    borderRadius: 12,
-    marginTop: 8,
-    borderWidth: 1,
-    borderColor: 'rgba(195, 198, 211, 0.3)',
   },
-  fileNameText: {
-    fontSize: 11,
-    color: StitchColors.onSurface,
+  attachedViewBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    backgroundColor: '#DBEAFE',
+    paddingHorizontal: 10,
+    paddingVertical: 6,
+    borderRadius: 8,
+  },
+  attachedViewText: {
+    fontSize: 12,
+    fontWeight: '700',
+    color: StitchColors.primary,
+  },
+  attachedRemoveBtn: {
+    width: 30,
+    height: 30,
+    borderRadius: 8,
+    backgroundColor: '#FEE2E2',
+    alignItems: 'center',
+    justifyContent: 'center',
   },
 
   /* Short on Time Notice */

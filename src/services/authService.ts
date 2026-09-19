@@ -126,6 +126,7 @@ export const authService = {
       clinicLongitude?: number;
       clinicTimings?: string;
       consultationFee?: number;
+      profilePhoto?: string;
     }
   ): Promise<UserSession> {
     try {

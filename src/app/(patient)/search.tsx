@@ -22,11 +22,13 @@ import {
   StyleSheet,
   ActivityIndicator,
   Platform,
+  RefreshControl,
 } from 'react-native';
 import { useRouter } from 'expo-router';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import Animated, { FadeIn, FadeInDown, FadeInUp } from 'react-native-reanimated';
 import * as Haptics from 'expo-haptics';
+import { LoadingDialog } from '@/components/ui/LoadingDialog';
 import {
   ArrowLeft,
   Search as SearchIcon,
@@ -85,7 +87,17 @@ export default function SearchScreen() {
   const [recentList, setRecentList] = useState<string[]>(RECENT_SEARCHES);
   const [locationModalVisible, setLocationModalVisible] = useState(false);
 
-  const { data: doctors = [], isLoading } = useDoctorsQuery();
+  const { data: doctors = [], isLoading, refetch } = useDoctorsQuery();
+  const [refreshing, setRefreshing] = useState(false);
+
+  const handleRefresh = async () => {
+    setRefreshing(true);
+    try {
+      await refetch();
+    } finally {
+      setRefreshing(false);
+    }
+  };
 
   const displayLocation = formattedAddress || (area ? `${area}, ${city}` : city) || 'Location not set';
 
@@ -111,7 +123,7 @@ export default function SearchScreen() {
       const match = rawDist.match(/([0-9.]+)/);
       if (match) return parseFloat(match[1]);
     }
-    return 999;
+    return 999999;
   };
 
   // Filtered doctors list sorted in increasing order of distance (nearest first)
@@ -246,6 +258,14 @@ export default function SearchScreen() {
         contentContainerStyle={styles.scrollContent}
         showsVerticalScrollIndicator={false}
         keyboardShouldPersistTaps="handled"
+        refreshControl={
+          <RefreshControl
+            refreshing={refreshing}
+            onRefresh={handleRefresh}
+            colors={[StitchColors.primaryContainer]}
+            tintColor={StitchColors.primaryContainer}
+          />
+        }
       >
         {/* If query is empty, show Recent Searches & Quick Symptom Tags */}
         {!query.trim() && (
@@ -376,6 +396,13 @@ export default function SearchScreen() {
       <LocationPermissionModal
         visible={locationModalVisible}
         onClose={() => setLocationModalVisible(false)}
+      />
+
+      {/* Universal Blocking Loading Dialog */}
+      <LoadingDialog
+        visible={isLoading && doctors.length === 0}
+        title="Finding Verified Doctors..."
+        message="Fetching doctors near you in ascending order of distance..."
       />
     </SafeAreaView>
   );

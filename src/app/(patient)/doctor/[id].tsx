@@ -8,7 +8,7 @@
  * - Zero cancellation charge reassurance
  * - Sticky Bottom Checkout Action Card: Fee ₹800, "Book 04:15 PM • Token #12"
  */
-import React, { useState, useMemo, useEffect } from 'react';
+import React, { useState, useMemo, useEffect, useCallback } from 'react';
 import {
   View,
   Text,
@@ -21,7 +21,7 @@ import {
   ActivityIndicator,
   RefreshControl,
 } from 'react-native';
-import { useRouter, useLocalSearchParams } from 'expo-router';
+import { useRouter, useLocalSearchParams, useFocusEffect } from 'expo-router';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Image } from 'expo-image';
 import { BlurView } from 'expo-blur';
@@ -39,6 +39,7 @@ import {
   Clock,
   Sun,
   Moon,
+  Coffee,
   CheckCircle2,
   Circle,
   Shield,
@@ -146,6 +147,7 @@ export default function DoctorProfileScreen() {
         : Promise.resolve({} as Record<string, any>),
     enabled: Boolean(doctor?.id),
     staleTime: 0,
+    refetchInterval: 4000,
     refetchOnMount: 'always',
   });
 
@@ -157,8 +159,17 @@ export default function DoctorProfileScreen() {
         : Promise.resolve({ slots: [], isOnLeave: false, delayMinutes: 0 }),
     enabled: Boolean(doctor?.id && currentDate?.isoDate),
     staleTime: 0,
+    refetchInterval: 4000,
     refetchOnMount: 'always',
   });
+
+  useFocusEffect(
+    useCallback(() => {
+      refetchSlots();
+      refetchWeek();
+      refetchDetail();
+    }, [refetchSlots, refetchWeek, refetchDetail])
+  );
 
   const handleRefresh = async () => {
     setRefreshing(true);
@@ -194,25 +205,18 @@ export default function DoctorProfileScreen() {
     return trimmed;
   };
 
-  const isMorningSlot = (slotStr: string): boolean => {
-    const upper = slotStr.toUpperCase();
-    if (upper.includes('AM')) return true;
-    if (upper.includes('PM')) {
-      const match = upper.match(/^(\d{1,2})/);
-      if (match && match[1] === '12') return true;
-      return false;
-    }
-    const match24 = slotStr.match(/^(\d{1,2})/);
-    if (match24) {
-      return parseInt(match24[1], 10) < 14;
-    }
-    return true;
+  const getSlotSession = (slotStr: string): 'morning' | 'evening' => {
+    const mins = parseSlotToMinutes(slotStr);
+    if (mins < 0) return 'morning';
+    const hours = mins / 60;
+    if (hours < 15) return 'morning';
+    return 'evening';
   };
 
   const formattedServerSlots = (serverSlots || []).map(formatDisplaySlot);
 
   // Standard fallback slots if server slot table is empty for this date, UNLESS doctor is on leave
-  const fallbackMorning = ['09:30 AM', '10:00 AM', '10:30 AM', '11:00 AM', '11:30 AM', '12:00 PM', '12:30 PM'];
+  const fallbackMorning = ['09:30 AM', '10:00 AM', '10:30 AM', '11:00 AM', '11:30 AM', '12:00 PM', '12:30 PM', '01:00 PM'];
   const fallbackEvening = ['05:00 PM', '05:30 PM', '06:00 PM', '06:30 PM', '07:00 PM', '07:30 PM', '08:00 PM'];
 
   const shiftTimeString = (timeStr: string, shiftMins: number): string => {
@@ -273,17 +277,19 @@ export default function DoctorProfileScreen() {
     return slotMins - currentMinutes >= 15;
   });
 
-  const morningSlots = allAvailableSlots.filter(isMorningSlot);
-  const eveningSlots = allAvailableSlots.filter((s) => !isMorningSlot(s));
+  const morningSlots = allAvailableSlots.filter((s) => getSlotSession(s) === 'morning');
+  const eveningSlots = allAvailableSlots.filter((s) => getSlotSession(s) === 'evening');
 
-  // Auto-switch to evening if morning is empty for today
+  // Auto-switch to next available session if active session has 0 slots today
   useEffect(() => {
     if (isSelectedDateToday) {
-      if (morningSlots.length === 0 && eveningSlots.length > 0 && selectedSession === 'morning') {
-        setSelectedSession('evening');
+      if (selectedSession === 'morning' && morningSlots.length === 0) {
+        if (eveningSlots.length > 0) setSelectedSession('evening');
+      } else if (selectedSession === 'evening' && eveningSlots.length === 0) {
+        if (morningSlots.length > 0) setSelectedSession('morning');
       }
     }
-  }, [isSelectedDateToday, morningSlots.length, eveningSlots.length]);
+  }, [isSelectedDateToday, morningSlots.length, eveningSlots.length, selectedSession]);
 
   const currentSlots = selectedSession === 'morning' ? morningSlots : eveningSlots;
   const currentSlotTime = currentSlots[selectedSlotIndex] || currentSlots[0] || allAvailableSlots[0] || null;
@@ -435,17 +441,21 @@ export default function DoctorProfileScreen() {
           <View style={styles.headerCard}>
             <View style={styles.doctorHeaderRow}>
               <View style={styles.avatarWrap}>
-                {doctor.avatar ? (
-                  <Image
-                    source={{ uri: doctor.avatar }}
-                    style={styles.doctorAvatar}
-                    contentFit="cover"
-                  />
-                ) : (
-                  <View style={[styles.doctorAvatar, { backgroundColor: '#e2e8f0', alignItems: 'center', justifyContent: 'center' }]}>
-                    <Text style={{ fontSize: 28, fontWeight: '700', color: '#64748b' }}>{(doctor.name || 'D').charAt(0)}</Text>
-                  </View>
-                )}
+                {(() => {
+                  const docPhoto = doctor.avatar || doctor.profilePhoto || (doctor as any).avatarUrl || (doctor as any).user?.profilePhoto;
+                  return docPhoto ? (
+                    <Image
+                      source={{ uri: docPhoto }}
+                      style={styles.doctorAvatar}
+                      contentFit="cover"
+                      cachePolicy="memory-disk"
+                    />
+                  ) : (
+                    <View style={[styles.doctorAvatar, { backgroundColor: '#e2e8f0', alignItems: 'center', justifyContent: 'center' }]}>
+                      <Text style={{ fontSize: 28, fontWeight: '700', color: '#64748b' }}>{(doctor.name || 'D').charAt(0)}</Text>
+                    </View>
+                  );
+                })()}
                 <View style={styles.verifiedIconBadge}>
                   <ShieldCheck size={14} color="#ffffff" />
                 </View>
@@ -651,6 +661,21 @@ export default function DoctorProfileScreen() {
               </View>
             )}
 
+            {/* Active Breaks Banner */}
+            {slotData?.breaks && slotData.breaks.length > 0 && !isOnLeave && (
+              <View style={{ backgroundColor: '#FFFBEB', borderColor: '#FDE68A', borderWidth: 1, padding: 12, borderRadius: 14, marginBottom: 14, flexDirection: 'row', alignItems: 'center', gap: 10 }}>
+                <Coffee size={18} color="#D97706" />
+                <View style={{ flex: 1 }}>
+                  <Text style={{ fontSize: 13, fontWeight: '700', color: '#92400E' }}>
+                    Scheduled Doctor Break
+                  </Text>
+                  <Text style={{ fontSize: 11.5, color: '#B45309', marginTop: 2, lineHeight: 16 }}>
+                    {slotData.breaks.map((b: any) => `${b.title || 'Break'} (${b.startTime} - ${b.endTime})`).join(' • ')} — slots during breaks are closed.
+                  </Text>
+                </View>
+              </View>
+            )}
+
             {/* Morning / Evening Toggle Tabs */}
             <View style={styles.sessionToggleWrap}>
               <Pressable
@@ -664,7 +689,7 @@ export default function DoctorProfileScreen() {
                 }}
               >
                 <Sun
-                  size={15}
+                  size={14}
                   color={selectedSession === 'morning' ? StitchColors.primary : StitchColors.onSurfaceVariant}
                 />
                 <Text
@@ -672,6 +697,7 @@ export default function DoctorProfileScreen() {
                     styles.sessionTabText,
                     selectedSession === 'morning' && styles.sessionTabTextActive,
                   ]}
+                  numberOfLines={1}
                 >
                   Morning ({morningSlots.length})
                 </Text>
@@ -688,7 +714,7 @@ export default function DoctorProfileScreen() {
                 }}
               >
                 <Moon
-                  size={15}
+                  size={14}
                   color={selectedSession === 'evening' ? StitchColors.primary : StitchColors.onSurfaceVariant}
                 />
                 <Text
@@ -696,6 +722,7 @@ export default function DoctorProfileScreen() {
                     styles.sessionTabText,
                     selectedSession === 'evening' && styles.sessionTabTextActive,
                   ]}
+                  numberOfLines={1}
                 >
                   Evening ({eveningSlots.length})
                 </Text>
@@ -707,7 +734,9 @@ export default function DoctorProfileScreen() {
               <View style={styles.slotGroupTitleRow}>
                 <View style={styles.slotGroupDot} />
                 <Text style={styles.slotGroupTitle}>
-                  {selectedSession === 'morning' ? 'Morning OPD Consultation' : 'Evening OPD Consultation'}
+                  {selectedSession === 'morning'
+                    ? 'Morning OPD Consultation'
+                    : 'Evening OPD Consultation'}
                 </Text>
               </View>
               <Text style={styles.slotGroupWait}>Live OPD schedule</Text>

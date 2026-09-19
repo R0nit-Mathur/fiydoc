@@ -7,6 +7,7 @@ import { Role, VerificationStatus } from '@prisma/client';
 import { RegisterDto, PublicRegisterRole } from './dto/register.dto';
 import { GoogleAuthDto } from './dto/google-auth.dto';
 import { OAuth2Client } from 'google-auth-library';
+import { NotificationsService } from '../notifications/notifications.service';
 
 @Injectable()
 export class AuthService {
@@ -14,7 +15,8 @@ export class AuthService {
 
   constructor(
     private prisma: PrismaService,
-    private jwtService: JwtService
+    private jwtService: JwtService,
+    private notificationsService: NotificationsService
   ) {}
 
   async register(dto: RegisterDto) {
@@ -78,20 +80,43 @@ export class AuthService {
         const clinicLatitude = dto.clinicLatitude !== undefined && dto.clinicLatitude !== null ? Number(dto.clinicLatitude) : null;
         const clinicLongitude = dto.clinicLongitude !== undefined && dto.clinicLongitude !== null ? Number(dto.clinicLongitude) : null;
 
-        for (let day = 1; day <= 6; day++) {
-          defaultAvailabilities.push(
-            { dayOfWeek: day, startTime: '09:00', endTime: '13:00', slotDurationMinutes: 30 },
-            { dayOfWeek: day, startTime: '17:00', endTime: '20:00', slotDurationMinutes: 30 },
-          );
+        const resolvedDuration = dto.slotDurationMinutes && dto.slotDurationMinutes > 0 ? Number(dto.slotDurationMinutes) : 15;
+        const parsedIntervals = this.parseTimingsToIntervals(clinicTimings);
+
+        if (parsedIntervals.length > 0) {
+          for (let day = 1; day <= 6; day++) {
+            for (const interval of parsedIntervals) {
+              defaultAvailabilities.push({
+                dayOfWeek: day,
+                startTime: interval.startTime,
+                endTime: interval.endTime,
+                slotDurationMinutes: resolvedDuration,
+              });
+            }
+          }
+        } else {
+          for (let day = 1; day <= 6; day++) {
+            defaultAvailabilities.push(
+              { dayOfWeek: day, startTime: '09:00', endTime: '13:00', slotDurationMinutes: resolvedDuration },
+              { dayOfWeek: day, startTime: '17:00', endTime: '20:00', slotDurationMinutes: resolvedDuration },
+            );
+          }
         }
 
         const qualString = dto.qualifications
           ? (Array.isArray(dto.qualifications) ? dto.qualifications.join(', ') : String(dto.qualifications).trim())
           : null;
 
+        let strippedName = cleanName;
+        while (/^(dr\.?|doctor)\s+/i.test(strippedName)) {
+          strippedName = strippedName.replace(/^(dr\.?|doctor)\s+/i, '').trim();
+        }
+        const formattedDocName = `Dr. ${strippedName || 'Doctor'}`;
+
         doctorDataToCreate = {
-          fullName: cleanName.startsWith('Dr.') ? cleanName : `Dr. ${cleanName}`,
+          fullName: formattedDocName,
           specialization,
+          profilePhoto: dto.profilePhoto?.trim() || null,
           consultationFee: fee,
           experienceYears: dto.experienceYears ? Number(dto.experienceYears) : 0,
           patientsPerSlot: dto.patientsPerSlot ? Number(dto.patientsPerSlot) : 1,
@@ -139,6 +164,7 @@ export class AuthService {
               data: {
                 userId: user.id,
                 fullName: dto.fullName?.trim() || 'Patient User',
+                profilePhoto: dto.profilePhoto?.trim() || null,
               },
             });
           } else if (roleToSet === Role.DOCTOR && doctorDataToCreate) {
@@ -179,6 +205,32 @@ export class AuthService {
       );
 
       this.logger.log(`✅ Registered new ${fullUser?.role}: ${fullUser?.email || fullUser?.phone}`);
+
+      // Dispatch real-time welcome and onboarding notification
+      try {
+        if (fullUser?.id) {
+          if (roleToSet === Role.DOCTOR) {
+            this.notificationsService.create({
+              userId: fullUser.id,
+              type: 'DOCTOR_REGISTRATION_STARTED',
+              title: '🏥 Welcome to FiYDoc Practice!',
+              message: 'Your doctor registration is active. Complete your clinical profile and OPD schedule to begin receiving bookings.',
+              payload: { role: 'doctor' },
+            }).catch(() => {});
+          } else {
+            this.notificationsService.create({
+              userId: fullUser.id,
+              type: 'WELCOME',
+              title: '🎉 Welcome to FiYDoc!',
+              message: 'Your health account is active. Discover certified doctors, check live clinic OPD queues, and book slots.',
+              payload: { role: 'patient' },
+            }).catch(() => {});
+          }
+        }
+      } catch (notifErr: any) {
+        this.logger.warn(`[auth] Welcome notification notice: ${notifErr?.message}`);
+      }
+
       return this.generateTokenResponse(fullUser);
     } catch (err: any) {
       this.logger.error(`❌ [register] Failed for ${dto?.email || dto?.phone}: ${err?.message}`);
@@ -442,6 +494,42 @@ export class AuthService {
       patient: user.patient,
       doctor: user.doctor,
     };
+  }
+
+  private parseTimingsToIntervals(timings: string): { startTime: string; endTime: string }[] {
+    const intervals: { startTime: string; endTime: string }[] = [];
+    const parts = timings.split(/[,;•|]|\band\b/i);
+    for (const part of parts) {
+      const match = part.match(/(\d{1,2}(?::\d{2})?\s*(?:AM|PM)?)\s*[-–—to]+\s*(\d{1,2}(?::\d{2})?\s*(?:AM|PM)?)/i);
+      if (match) {
+        const start = this.normalizeTimeTo24h(match[1].trim());
+        const end = this.normalizeTimeTo24h(match[2].trim());
+        if (start && end) {
+          intervals.push({ startTime: start, endTime: end });
+        }
+      }
+    }
+    return intervals;
+  }
+
+  private normalizeTimeTo24h(str: string): string | null {
+    const clean = str.trim().toUpperCase();
+    const match12 = clean.match(/^(\d{1,2})(?::(\d{2}))?\s*(AM|PM)$/);
+    if (match12) {
+      let h = parseInt(match12[1], 10);
+      const m = match12[2] ? parseInt(match12[2], 10) : 0;
+      const meridian = match12[3];
+      if (meridian === 'PM' && h < 12) h += 12;
+      if (meridian === 'AM' && h === 12) h = 0;
+      return `${String(h).padStart(2, '0')}:${String(m).padStart(2, '0')}`;
+    }
+    const match24 = clean.match(/^(\d{1,2}):(\d{2})$/);
+    if (match24) {
+      const h = parseInt(match24[1], 10);
+      const m = parseInt(match24[2], 10);
+      return `${String(h).padStart(2, '0')}:${String(m).padStart(2, '0')}`;
+    }
+    return null;
   }
 
   private generateTokenResponse(user: any) {

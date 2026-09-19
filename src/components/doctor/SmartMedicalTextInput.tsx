@@ -6,7 +6,7 @@
  * Diagnosis, and Doctor's Advice.
  */
 
-import React, { useState } from 'react';
+import React, { useState, useRef } from 'react';
 import {
   View,
   Text,
@@ -49,8 +49,20 @@ export default function SmartMedicalTextInput({
 }: SmartMedicalTextInputProps) {
   const { colors, isDark } = useAppTheme();
   const [isFocused, setIsFocused] = useState(false);
+  const blurTimeoutRef = useRef<any>(null);
 
-  // Compute ghost suggestion
+  const handleFocus = () => {
+    if (blurTimeoutRef.current) clearTimeout(blurTimeoutRef.current);
+    setIsFocused(true);
+  };
+
+  const handleBlur = () => {
+    blurTimeoutRef.current = setTimeout(() => {
+      setIsFocused(false);
+    }, 300);
+  };
+
+  // Compute ghost suggestion with flexible prefix & token matching
   const getGhostSuggestion = (input: string): string | null => {
     if (!input || input.trim().length < 2) return null;
     const lower = input.toLowerCase().trim();
@@ -60,12 +72,21 @@ export default function SmartMedicalTextInput({
     const lastWord = words[words.length - 1];
 
     for (const [key, fullPhrase] of Object.entries(MEDICAL_AUTOCOMPLETES)) {
-      if (lower.startsWith(key) && fullPhrase.toLowerCase().startsWith(lower)) {
+      const phraseLower = fullPhrase.toLowerCase();
+      // 1. Direct prefix match of entire input with the recommendation
+      if (phraseLower.startsWith(lower)) {
         return fullPhrase;
       }
-      if (lastWord.length >= 3 && key.startsWith(lastWord)) {
-        const prefix = input.substring(0, input.lastIndexOf(lastWord));
-        return prefix + fullPhrase;
+      if (lower.startsWith(key) && phraseLower.startsWith(lower)) {
+        return fullPhrase;
+      }
+      // 2. Last word / medical keyword match
+      if (lastWord.length >= 2) {
+        if (key.startsWith(lastWord) || lastWord.startsWith(key) || phraseLower.startsWith(lastWord)) {
+          const lastIndex = input.toLowerCase().lastIndexOf(lastWord);
+          const prefix = input.substring(0, lastIndex);
+          return (prefix + fullPhrase).trim();
+        }
       }
     }
     return null;
@@ -79,6 +100,19 @@ export default function SmartMedicalTextInput({
         Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
       }
       onChangeText(ghostSuggestion);
+    }
+  };
+
+  const handleInsertQuickSuggestion = (suggestion: string) => {
+    if (Platform.OS !== 'web') {
+      Haptics.selectionAsync();
+    }
+    if (!value || value.trim().length === 0) {
+      onChangeText(suggestion);
+    } else {
+      const cleanVal = value.trim();
+      const separator = cleanVal.endsWith('.') || cleanVal.endsWith(',') ? ' ' : ', ';
+      onChangeText(`${cleanVal}${separator}${suggestion}`);
     }
   };
 
@@ -96,7 +130,11 @@ export default function SmartMedicalTextInput({
         <View style={styles.labelRow}>
           <Text style={[styles.label, { color: colors.textSecondary }]}>{label}</Text>
           {ghostSuggestion && (
-            <Pressable onPress={handleAcceptSuggestion} style={styles.acceptChip}>
+            <Pressable
+              onPressIn={handleAcceptSuggestion}
+              onPress={handleAcceptSuggestion}
+              style={styles.acceptChip}
+            >
               <Sparkles size={11} color={StitchColors.primaryContainer} />
               <Text style={styles.acceptChipText}>Tap to auto-complete (Tab)</Text>
             </Pressable>
@@ -120,8 +158,8 @@ export default function SmartMedicalTextInput({
           placeholderTextColor={colors.textMuted}
           multiline={multiline}
           numberOfLines={numberOfLines}
-          onFocus={() => setIsFocused(true)}
-          onBlur={() => setIsFocused(false)}
+          onFocus={handleFocus}
+          onBlur={handleBlur}
           onKeyPress={handleKeyPress}
           style={[
             styles.input,
@@ -135,6 +173,7 @@ export default function SmartMedicalTextInput({
       {/* Ghost suggestion hint box */}
       {ghostSuggestion && ghostSuggestion !== value && isFocused && (
         <Pressable
+          onPressIn={handleAcceptSuggestion}
           onPress={handleAcceptSuggestion}
           style={[styles.suggestionBox, { backgroundColor: isDark ? '#0F172A' : '#F0F9FF', borderColor: '#BAE6FD' }]}
         >
@@ -158,11 +197,7 @@ export default function SmartMedicalTextInput({
           {quickSuggestions.map((suggestion) => (
             <Pressable
               key={suggestion}
-              onPress={() => {
-                const updated = value ? `${value} ${suggestion}` : suggestion;
-                onChangeText(updated);
-                if (Platform.OS !== 'web') Haptics.selectionAsync();
-              }}
+              onPress={() => handleInsertQuickSuggestion(suggestion)}
               style={[styles.quickChip, { backgroundColor: colors.backgroundElement, borderColor: colors.border }]}
             >
               <Text style={[styles.quickChipText, { color: StitchColors.primaryContainer }]}>

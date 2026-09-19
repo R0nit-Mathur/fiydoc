@@ -149,12 +149,11 @@ function SettingsRow({ icon, iconBg, title, subtitle, right, onPress, danger }: 
 export default function DoctorSettingsScreen() {
   const router = useRouter();
   const { colors, isDark } = useAppTheme();
-  const { logout } = useAuthStore();
+  const { user, logout } = useAuthStore();
 
   const [pushNotifs, setPushNotifs] = useState(true);
   const [emailNotifs, setEmailNotifs] = useState(false);
   const [autoApprove, setAutoApprove] = useState(false);
-  const [biometric, setBiometric] = useState(true);
   const [saved, setSaved] = useState(false);
 
   const handleSafeBack = () => {
@@ -247,15 +246,15 @@ export default function DoctorSettingsScreen() {
               icon={<CreditCard size={16} color={StitchColors.secondary} />}
               iconBg={isDark ? 'rgba(0,168,150,0.18)' : Palette.healthcareTealLight}
               title="Payout Account"
-              subtitle="HDFC Bank •••• 8849"
-              onPress={() => {}}
+              subtitle={(user as any)?.upiId || 'Not configured (Tap to setup)'}
+              onPress={() => router.push('/(doctor)/(tabs)/profile')}
             />
             <SettingsRow
               icon={<ShieldCheck size={16} color="#9D174D" />}
               iconBg={isDark ? 'rgba(157,23,77,0.18)' : '#FCE7F3'}
               title="Medical License"
-              subtitle="NMC-MH-2024-DOC-8910"
-              onPress={() => {}}
+              subtitle={user?.licenseNumber || 'Verified Medical License'}
+              onPress={() => router.push('/(doctor)/(tabs)/profile')}
             />
           </View>
         </View>
@@ -315,19 +314,6 @@ export default function DoctorSettingsScreen() {
             PRIVACY & SECURITY
           </Text>
           <View style={styles.sectionGroup}>
-            <SettingsRow
-              icon={<Lock size={16} color={StitchColors.primaryContainer} />}
-              title="Biometric Login"
-              subtitle="Use Face ID / fingerprint"
-              right={
-                <Switch
-                  value={biometric}
-                  onValueChange={() => handleToggle(setBiometric, biometric)}
-                  trackColor={{ true: StitchColors.primaryContainer, false: colors.border }}
-                  thumbColor={Platform.OS === 'android' ? '#fff' : undefined}
-                />
-              }
-            />
             <SettingsRow
               icon={<FileText size={16} color={StitchColors.primaryContainer} />}
               title="Data & Privacy"

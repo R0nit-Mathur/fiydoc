@@ -71,6 +71,15 @@ export class DoctorsController {
     return this.doctorsService.applyScheduleLeave(body.doctorId, startDate, body.reason, req.user, body.endDate);
   }
 
+  @Post('schedule/early-departure')
+  @UseGuards(JwtAuthGuard)
+  async applyEarlyDeparture(
+    @Request() req: any,
+    @Body() body: { doctorId?: string; date: string; cutoffTime: string; reason?: string }
+  ) {
+    return this.doctorsService.applyEarlyDeparture(body.doctorId, body.date, body.cutoffTime, body.reason, req.user);
+  }
+
   @Post('schedule/undo')
   @UseGuards(JwtAuthGuard)
   async undoSchedule(
@@ -118,6 +127,33 @@ export class DoctorsController {
     }
   ) {
     return this.doctorsService.updateScheduleSettings(body, req.user);
+  }
+
+  @Post('schedule/break')
+  @UseGuards(JwtAuthGuard)
+  async manageBreak(
+    @Request() req: any,
+    @Body()
+    body: {
+      doctorId?: string;
+      date: string;
+      break: { id?: string; title: string; startTime: string; endTime: string };
+      action: 'add' | 'remove';
+    }
+  ) {
+    return this.doctorsService.manageDoctorBreak(
+      body.doctorId,
+      body.date,
+      body.break,
+      body.action,
+      req.user
+    );
+  }
+
+  @Get('patient/:patientId/consultations')
+  @UseGuards(JwtAuthGuard)
+  async getPatientConsultations(@Param('patientId') patientId: string) {
+    return this.doctorsService.getPatientPastConsultations(patientId);
   }
 
   @Get(':id/schedule/overrides')

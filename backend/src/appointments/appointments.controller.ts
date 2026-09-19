@@ -22,6 +22,8 @@ export class AppointmentsController {
       fee: number;
       symptoms?: string[];
       notes?: string;
+      attachmentUrl?: string;
+      attachmentName?: string;
     }
   ) {
     return this.appointmentsService.createAppointment(

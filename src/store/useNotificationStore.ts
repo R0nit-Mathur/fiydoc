@@ -1,3 +1,5 @@
+import { Platform } from 'react-native';
+import * as Notifications from 'expo-notifications';
 import { create } from 'zustand';
 import { createJSONStorage, persist } from 'zustand/middleware';
 import AsyncStorage from '@react-native-async-storage/async-storage';
@@ -33,7 +35,20 @@ export const useNotificationStore = create<NotificationState>()(
     (set, get) => ({
       notifications: initialNotifications,
 
-      addNotification: (notif) =>
+      addNotification: (notif) => {
+        if (Platform.OS !== 'web') {
+          Notifications.scheduleNotificationAsync({
+            content: {
+              title: notif.title,
+              body: notif.message,
+              sound: 'default',
+              data: { type: notif.type, link: notif.link, recipientId: notif.recipientId },
+            },
+            trigger: null,
+          }).catch((err) => {
+            console.warn('[useNotificationStore] Local push banner notice:', err?.message);
+          });
+        }
         set((state) => {
           const newNotif: NotificationItem = {
             id: notif.id || `notif_${Date.now()}_${Math.random().toString(36).substring(2, 6)}`,
@@ -48,7 +63,8 @@ export const useNotificationStore = create<NotificationState>()(
             link: notif.link,
           };
           return { notifications: [newNotif, ...state.notifications] };
-        }),
+        });
+      },
 
       markAsRead: (id) =>
         set((state) => ({

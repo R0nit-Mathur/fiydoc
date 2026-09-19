@@ -26,6 +26,11 @@ import * as Haptics from 'expo-haptics';
 import { useQueryClient } from '@tanstack/react-query';
 import { useNotificationStore } from '@/store/useNotificationStore';
 import { useAuthStore } from '@/store/useAuthStore';
+import {
+  useNotificationsQuery,
+  useMarkNotificationReadMutation,
+  useMarkAllNotificationsReadMutation,
+} from '@/hooks/queries/useNotificationsQuery';
 import { NotificationItem } from '@/types/index';
 import { Badge } from '@/components/ui/Badge';
 import {
@@ -58,16 +63,27 @@ export default function DoctorNotificationsScreen() {
   const markAsRead = useNotificationStore((s) => s.markAsRead);
   const markAllAsRead = useNotificationStore((s) => s.markAllAsRead);
 
+  const { data: serverNotifications, refetch } = useNotificationsQuery();
+  const markReadMut = useMarkNotificationReadMutation();
+  const markAllMut = useMarkAllNotificationsReadMutation();
+
   const [activeFilter, setActiveFilter] = useState<string>('all');
   const [refreshing, setRefreshing] = useState(false);
 
+  const activeNotificationList = useMemo(() => {
+    if (serverNotifications && serverNotifications.length > 0) {
+      return serverNotifications;
+    }
+    return notifications;
+  }, [serverNotifications, notifications]);
+
   const doctorNotifications = useMemo(() => {
-    return notifications.filter((n) => {
+    return activeNotificationList.filter((n) => {
       if (n.recipientId && user?.id && n.recipientId !== user.id) return false;
       if (n.recipientRole && n.recipientRole !== 'all' && n.recipientRole !== 'doctor') return false;
       return true;
     });
-  }, [notifications, user?.id]);
+  }, [activeNotificationList, user?.id]);
 
   const filteredNotifications = useMemo(() => {
     if (activeFilter === 'all') return doctorNotifications;
@@ -85,11 +101,11 @@ export default function DoctorNotificationsScreen() {
     setRefreshing(true);
     try {
       await queryClient.invalidateQueries({ queryKey: ['notifications'] });
-      await new Promise((r) => setTimeout(r, 400));
+      await refetch();
     } finally {
       setRefreshing(false);
     }
-  }, [queryClient]);
+  }, [queryClient, refetch]);
 
   const getIcon = (type: NotificationItem['type']) => {
     switch (type) {
@@ -124,6 +140,7 @@ export default function DoctorNotificationsScreen() {
     if (Platform.OS !== 'web') {
       Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
     }
+    markReadMut.mutate(item.id);
     markAsRead(item.id);
     if (item.link) {
       router.push(item.link as any);
@@ -136,6 +153,7 @@ export default function DoctorNotificationsScreen() {
     if (Platform.OS !== 'web') {
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
     }
+    markAllMut.mutate();
     markAllAsRead(user?.id, 'doctor');
   };
 

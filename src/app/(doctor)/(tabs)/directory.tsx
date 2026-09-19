@@ -50,6 +50,7 @@ import {
 
 import { useAppTheme } from '@/hooks/useAppTheme';
 import { BorderRadius, Shadows, Spacing, StitchColors, Palette, DEFAULT_DOCTOR_AVATAR } from '@/constants/theme';
+import { useQueryClient } from '@tanstack/react-query';
 import { useAuthStore } from '@/store/useAuthStore';
 import { useAppointmentsQuery } from '@/hooks/queries/useAppointmentsQuery';
 import { Avatar } from '@/components/ui/Avatar';
@@ -85,6 +86,7 @@ const FILTER_TABS = [
 
 export default function DoctorPatientsScreen() {
   const router = useRouter();
+  const queryClient = useQueryClient();
   const { colors, isDark } = useAppTheme();
   const user = useAuthStore((state) => state.user);
   const { data: appointments = [], isLoading: appointmentsLoading, error: appointmentsError, refetch } = useAppointmentsQuery(undefined, user?.id);
@@ -102,7 +104,10 @@ export default function DoctorPatientsScreen() {
     if (Platform.OS !== 'web') {
       Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
     }
-    await refetch();
+    await Promise.all([
+      queryClient.invalidateQueries({ queryKey: ['appointments'] }),
+      refetch(),
+    ]);
     setRefreshing(false);
   };
 

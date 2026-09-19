@@ -91,7 +91,7 @@ export function DoctorCard({
       {/* Middle Row: Avatar & Doctor Info */}
       <View style={styles.infoRow}>
         <Avatar
-          uri={doctor.avatar}
+          uri={doctor.avatar || doctor.profilePhoto || (doctor as any).avatarUrl || (doctor as any).user?.profilePhoto}
           name={doctor.name}
           size="md"
           style={styles.avatar}

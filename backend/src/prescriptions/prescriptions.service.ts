@@ -7,7 +7,8 @@ import {
 } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
 import { SupabaseService } from '../supabase/supabase.service';
-import { Role, VerificationStatus } from '@prisma/client';
+import { NotificationsService } from '../notifications/notifications.service';
+import { VerificationStatus, Role } from '@prisma/client';
 import PDFDocument from 'pdfkit';
 import * as crypto from 'crypto';
 
@@ -16,6 +17,7 @@ export class PrescriptionsService {
   constructor(
     private prisma: PrismaService,
     private supabase: SupabaseService,
+    private notificationsService: NotificationsService,
   ) {}
 
   private buildPrescriptionDocument(prescription: any): Promise<Buffer> {
@@ -254,7 +256,12 @@ export class PrescriptionsService {
 
       return tx.prescription.create({
         data: rxData,
-        include: { medicines: true, doctor: true, patient: true },
+        include: {
+          medicines: true,
+          doctor: { include: { clinic: true, verification: true } },
+          patient: true,
+          consultation: true,
+        },
       });
     });
 
@@ -272,6 +279,21 @@ export class PrescriptionsService {
       });
     } catch (recordErr: any) {
       console.warn('[prescriptions] Timeline MedicalRecord creation failed (non-fatal):', recordErr?.message);
+    }
+
+    // Trigger push notification to patient (non-fatal)
+    try {
+      if (consultation.patient?.userId) {
+        await this.notificationsService.create({
+          userId: consultation.patient.userId,
+          type: 'PRESCRIPTION_ISSUED',
+          title: '💊 New Prescription Issued',
+          message: `Dr. ${consultation.doctor.fullName} has issued your official digital prescription with ${dto.medicines.length} prescribed medication(s).`,
+          payload: { prescriptionId: createdPrescription.id, consultationId: consultation.id },
+        });
+      }
+    } catch (notifErr: any) {
+      console.warn('[prescriptions] Notification dispatch failed (non-fatal):', notifErr?.message);
     }
 
     // Audit log entry (non-fatal)
@@ -352,7 +374,12 @@ export class PrescriptionsService {
   async getPrescriptionById(id: string, currentUser: any) {
     const rx = await this.prisma.prescription.findUnique({
       where: { id },
-      include: { medicines: true, doctor: true, patient: true },
+      include: {
+        medicines: true,
+        doctor: { include: { clinic: true, verification: true } },
+        patient: true,
+        consultation: true,
+      },
     });
     if (!rx) throw new NotFoundException('Prescription not found.');
 
@@ -462,6 +489,7 @@ export class PrescriptionsService {
             verification: true,
           },
         },
+        consultation: true,
       },
       orderBy: { createdAt: 'desc' },
     });

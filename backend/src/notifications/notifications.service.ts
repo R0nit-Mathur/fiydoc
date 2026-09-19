@@ -93,8 +93,13 @@ export class NotificationsService {
       if (!user?.pushToken) return;
 
       const token = user.pushToken.trim();
-      // Verify valid Expo push token format
-      if (!token.startsWith('ExponentPushToken[') && !token.startsWith('ExpoPushToken[')) {
+      const isExpoToken =
+        token.startsWith('ExponentPushToken[') ||
+        token.startsWith('ExpoPushToken[') ||
+        /^[a-z\d]{8}-[a-z\d]{4}-[a-z\d]{4}-[a-z\d]{4}-[a-z\d]{12}$/i.test(token);
+
+      if (!isExpoToken) {
+        console.warn('[notifications] Skipping invalid Expo push token format for user:', userId, token);
         return;
       }
 
@@ -116,8 +121,11 @@ export class NotificationsService {
         }),
       });
 
+      const resData = await response.json().catch(() => null);
       if (!response.ok) {
-        console.warn('[notifications] Expo push service responded with HTTP', response.status);
+        console.warn('[notifications] Expo push service responded with HTTP', response.status, resData);
+      } else {
+        console.log('[notifications] Dispatched push to user', userId, ':', title);
       }
     } catch (err: any) {
       console.warn('[notifications] Failed to send push to device:', err?.message);

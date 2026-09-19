@@ -1,10 +1,14 @@
 import { Injectable, NotFoundException } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
+import { NotificationsService } from '../notifications/notifications.service';
 import { VerificationStatus, Role } from '@prisma/client';
 
 @Injectable()
 export class AdminService {
-  constructor(private prisma: PrismaService) {}
+  constructor(
+    private prisma: PrismaService,
+    private notificationsService: NotificationsService
+  ) {}
 
   async getVerificationQueue() {
     return this.prisma.doctorVerification.findMany({
@@ -162,19 +166,18 @@ export class AdminService {
       }
     }
 
-    // Notify doctor (non-fatal)
+    // Notify doctor with push notification (non-fatal)
     if (existing.doctor?.userId) {
       try {
-        await this.prisma.notification.create({
-          data: {
-            userId: existing.doctor.userId,
-            type: 'VERIFICATION_UPDATE',
-            title: `Doctor Verification Update: ${newStatus}`,
-            message:
-              newStatus === VerificationStatus.VERIFIED
-                ? 'Congratulations! Your medical credentials have been verified by administration. You are now discoverable to patients.'
-                : `Status: ${newStatus}. ${dto.rejectionReason || 'Please review your uploaded documents.'}`,
-          },
+        await this.notificationsService.create({
+          userId: existing.doctor.userId,
+          type: 'VERIFICATION_UPDATE',
+          title: newStatus === VerificationStatus.VERIFIED ? '🎉 Credentials Verified & Approved!' : `Doctor Verification Update: ${newStatus}`,
+          message:
+            newStatus === VerificationStatus.VERIFIED
+              ? 'Congratulations! Your medical credentials have been verified by administration. You are now discoverable to patients and live on FiYDoc.'
+              : `Status: ${newStatus}. ${dto.rejectionReason || 'Please review your uploaded documents.'}`,
+          payload: { status: newStatus, rejectionReason: dto.rejectionReason },
         });
       } catch (notifErr: any) {
         console.warn('[admin] Verification notification failed (non-fatal):', notifErr?.message);

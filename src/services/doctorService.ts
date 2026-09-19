@@ -4,11 +4,14 @@ import { Doctor } from '@/types/index';
 export interface DoctorFilters {
   query?: string;
   specialty?: string;
+  lat?: number;
+  lng?: number;
 }
 
 export interface SlotDetails {
   slots: string[];
   allGeneratedSlots?: string[];
+  breaks?: { id: string; title: string; startTime: string; endTime: string }[];
   slotDurationMinutes?: number;
   patientsPerSlot?: number;
   delayMinutes?: number;
@@ -47,6 +50,8 @@ export const doctorService = {
     const params = new URLSearchParams();
     if (filters?.query) params.append('q', filters.query);
     if (filters?.specialty && filters.specialty !== 'All') params.append('specialty', filters.specialty);
+    if (filters?.lat != null) params.append('lat', String(filters.lat));
+    if (filters?.lng != null) params.append('lng', String(filters.lng));
 
     // Discovery is server-authoritative. Do not hide a failed API call behind a
     // synthetic local doctor or an empty result; the screen can then retry and
@@ -140,6 +145,35 @@ export const doctorService = {
     eveningEnd?: string;
   }): Promise<any> => {
     return apiClient('/doctors/schedule/settings', {
+      method: 'POST',
+      body: JSON.stringify(data),
+    });
+  },
+
+  manageBreak: async (data: {
+    doctorId?: string;
+    date: string;
+    break?: { id?: string; title?: string; startTime?: string; endTime?: string };
+    breakId?: string;
+    action: 'add' | 'remove';
+  }): Promise<SlotDetails> => {
+    return apiClient<SlotDetails>('/doctors/schedule/break', {
+      method: 'POST',
+      body: JSON.stringify(data),
+    });
+  },
+
+  getPatientPastConsultations: async (patientId: string): Promise<any[]> => {
+    return apiClient<any[]>(`/doctors/patient/${patientId}/consultations`);
+  },
+
+  applyEarlyDeparture: async (data: {
+    doctorId?: string;
+    date: string;
+    cutoffTime: string;
+    reason?: string;
+  }): Promise<any> => {
+    return apiClient('/doctors/schedule/early-departure', {
       method: 'POST',
       body: JSON.stringify(data),
     });

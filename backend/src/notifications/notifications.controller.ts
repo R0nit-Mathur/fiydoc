@@ -18,8 +18,9 @@ export class NotificationsController {
   }
 
   @Post('push-token')
-  async registerPushToken(@Request() req: any, @Body() body: { pushToken: string }) {
-    return this.notificationsService.registerPushToken(req.user.id, body.pushToken);
+  async registerPushToken(@Request() req: any, @Body() body: { pushToken?: string; token?: string }) {
+    const token = body.pushToken || body.token;
+    return this.notificationsService.registerPushToken(req.user.id, token as string);
   }
 
   @Post('me/read-all')

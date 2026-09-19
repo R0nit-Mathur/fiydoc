@@ -151,7 +151,7 @@ export function usePushNotifications() {
       try {
         await apiClient('/notifications/push-token', {
           method: 'POST',
-          body: JSON.stringify({ token: expoPushToken }),
+          body: JSON.stringify({ pushToken: expoPushToken, token: expoPushToken }),
         });
         console.log('[PushNotifications] Registered push token with server for user:', user?.id);
       } catch (err: any) {

@@ -22,6 +22,8 @@ import {
   Modal,
   TextInput,
   RefreshControl,
+  Alert,
+  ActivityIndicator,
 } from 'react-native';
 import { useRouter } from 'expo-router';
 import { SafeAreaView } from 'react-native-safe-area-context';
@@ -48,6 +50,8 @@ import {
   Calendar as CalendarIcon,
   RotateCcw,
   FastForward,
+  Coffee,
+  Trash2,
 } from 'lucide-react-native';
 
 import { useAppTheme } from '@/hooks/useAppTheme';
@@ -60,6 +64,7 @@ import { doctorService } from '@/services/doctorService';
 import { BorderRadius, Shadows, StitchColors, DEFAULT_DOCTOR_AVATAR } from '@/constants/theme';
 import UndoToast from '@/components/ui/UndoToast';
 import { Avatar } from '@/components/ui/Avatar';
+import { LoadingDialog } from '@/components/ui/LoadingDialog';
 import { toLocalDateString } from '@/utils/formatters';
 
 const DOCTOR_AVATAR = DEFAULT_DOCTOR_AVATAR;
@@ -72,14 +77,25 @@ export interface ScheduleSlot {
   time: string;
   meridiem: string;
   reason?: string;
-  status: 'booked' | 'available' | 'blocked';
+  status: 'booked' | 'available' | 'blocked' | 'passed';
   delayMins?: number;
   consultationId?: string;
   rawTime?: string;
 }
 
+export function to24(t: string): string {
+  const m = t.trim().match(/^(\d{1,2}):(\d{2})\s*(AM|PM)?$/i);
+  if (!m) return t.trim();
+  let h = Number(m[1]);
+  const min = Number(m[2]);
+  const meri = m[3]?.toUpperCase();
+  if (meri === 'PM' && h !== 12) h += 12;
+  if (meri === 'AM' && h === 12) h = 0;
+  return `${String(h).padStart(2, '0')}:${String(min).padStart(2, '0')}`;
+}
+
 type ScheduleUndo =
-  | { kind: 'slots'; day: string; session: 'morning' | 'evening'; slots: ScheduleSlot[]; label: string }
+  | { kind: 'slots'; day: string; session: 'all' | 'morning' | 'evening'; slots: ScheduleSlot[]; label: string }
   | { kind: 'leave'; day: string; label: string };
 
 function shiftTime(timeStr: string, meridiem: string, shiftMins: number): { time: string; meridiem: string } {
@@ -104,6 +120,26 @@ function shiftTime(timeStr: string, meridiem: string, shiftMins: number): { time
 
   const formattedTime = `${newH.toString().padStart(2, '0')}:${newM.toString().padStart(2, '0')}`;
   return { time: formattedTime, meridiem: newMeridiem };
+}
+
+function parseSlotToMinutes(raw: string): number {
+  const trimmed = raw.trim();
+  const match = trimmed.match(/^(\d{1,2}):(\d{2})\s*(AM|PM)?$/i);
+  if (!match) return -1;
+  let h = parseInt(match[1], 10);
+  const m = parseInt(match[2], 10);
+  const meridiem = match[3]?.toUpperCase();
+  if (meridiem === 'PM' && h !== 12) h += 12;
+  if (meridiem === 'AM' && h === 12) h = 0;
+  return h * 60 + m;
+}
+
+function getSlotSession(raw: string): 'morning' | 'evening' {
+  const mins = parseSlotToMinutes(raw);
+  if (mins < 0) return 'morning';
+  const hours = Math.floor(mins / 60);
+  if (hours < 15) return 'morning';
+  return 'evening';
 }
 
 // Generate dynamic 14 days starting from a given base date using live system clock
@@ -145,13 +181,21 @@ export default function DoctorScheduleScreen() {
 
   const [weekDays, setWeekDays] = useState(DYNAMIC_WEEK_DAYS);
   const [selectedDay, setSelectedDay] = useState(DYNAMIC_WEEK_DAYS[0]?.key || toLocalDateString(new Date()));
-  const [selectedSession, setSelectedSession] = useState<'morning' | 'evening'>('morning');
+  const [selectedSession, setSelectedSession] = useState<'all' | 'morning' | 'evening'>('all');
   const [leaveDates, setLeaveDates] = useState<string[]>([]);
   const [activeDelayMinutes, setActiveDelayMinutes] = useState<number>(0);
   const [activeDelayReason, setActiveDelayReason] = useState<string | null>(null);
   const [isDayOnLeave, setIsDayOnLeave] = useState<boolean>(false);
   const [leaveReasonText, setLeaveReasonText] = useState<string | null>(null);
   const [refreshing, setRefreshing] = useState(false);
+  const [loadingDialog, setLoadingDialog] = useState<{ visible: boolean; title?: string; message?: string }>({ visible: false });
+
+  // Breaks Management State
+  const [breakModalVisible, setBreakModalVisible] = useState(false);
+  const [breakTitle, setBreakTitle] = useState('Lunch Break');
+  const [breakStartTime, setBreakStartTime] = useState('01:00 PM');
+  const [breakEndTime, setBreakEndTime] = useState('02:00 PM');
+  const [isSubmittingBreak, setIsSubmittingBreak] = useState(false);
 
   // Sync server schedule status for the entire week and the selected day
   const syncScheduleStatus = useCallback(async (dayKey: string) => {
@@ -241,82 +285,9 @@ export default function DoctorScheduleScreen() {
     }
   }, []);
 
-  // Dynamic Session Slots
-  const [morningSlots] = useState<ScheduleSlot[]>([
-    {
-      id: 's1',
-      patientId: '',
-      patientName: '',
-      token: '#01',
-      time: '10:30',
-      meridiem: 'AM',
-      reason: 'Open OPD Consultation',
-      status: 'available',
-    },
-    {
-      id: 's2',
-      patientId: '',
-      patientName: '',
-      token: '#02',
-      time: '10:45',
-      meridiem: 'AM',
-      reason: 'Open OPD Consultation',
-      status: 'available',
-    },
-    {
-      id: 's3',
-      patientId: '',
-      patientName: '',
-      token: '#03',
-      time: '11:00',
-      meridiem: 'AM',
-      reason: 'Open OPD Consultation',
-      status: 'available',
-    },
-    {
-      id: 's4',
-      patientId: '',
-      patientName: '',
-      token: '#04',
-      time: '11:15',
-      meridiem: 'AM',
-      reason: 'Open OPD Consultation',
-      status: 'available',
-    },
-  ]);
-
-  const [eveningSlots] = useState<ScheduleSlot[]>([
-    {
-      id: 'e1',
-      patientId: '',
-      patientName: '',
-      token: '#01',
-      time: '05:00',
-      meridiem: 'PM',
-      reason: 'Open Evening Slot',
-      status: 'available',
-    },
-    {
-      id: 'e2',
-      patientId: '',
-      patientName: '',
-      token: '#02',
-      time: '05:20',
-      meridiem: 'PM',
-      reason: 'Open Evening Slot',
-      status: 'available',
-    },
-    {
-      id: 'e3',
-      patientId: '',
-      patientName: '',
-      token: '#03',
-      time: '05:40',
-      meridiem: 'PM',
-      reason: 'Open Evening Slot',
-      status: 'available',
-    },
-  ]);
+  // Dynamic Session Slots (seeded dynamically from server availability)
+  const [morningSlots] = useState<ScheduleSlot[]>([]);
+  const [eveningSlots] = useState<ScheduleSlot[]>([]);
   const { data: serverAppointments = [] } = useAppointmentsQuery(undefined, user?.id);
   const storeAppointments = useAppointmentStore((s) => s.appointments);
 
@@ -366,15 +337,22 @@ export default function DoctorScheduleScreen() {
     return match ? `${match[1].padStart(2, '0')}:${match[2]}` : t.trim();
   };
 
-  const selectedMorningSlots: ScheduleSlot[] = useMemo(() => {
+  const selectedAllSlots: ScheduleSlot[] = useMemo(() => {
     const dayApts = allAppointments.filter((a) => a.date?.slice(0, 10) === selectedDay);
     if (serverSlotsData?.allGeneratedSlots && serverSlotsData.allGeneratedSlots.length > 0) {
-      const morningTimes = serverSlotsData.allGeneratedSlots.filter((t: string) => {
-        const [h] = t.split(':').map(Number);
-        return h < 13;
-      });
       const availSet = new Set(serverSlotsData.slots || []);
-      return morningTimes.map((timeStr: string, idx: number): ScheduleSlot => {
+      const activeBreaks = serverSlotsData.breaks || [];
+
+      const now = new Date();
+      const currentHours = now.getHours();
+      const currentMinutes = currentHours * 60 + now.getMinutes();
+      const y = now.getFullYear();
+      const mStr = String(now.getMonth() + 1).padStart(2, '0');
+      const dStr = String(now.getDate()).padStart(2, '0');
+      const todayDateStr = `${y}-${mStr}-${dStr}`;
+      const isToday = selectedDay === todayDateStr;
+
+      return serverSlotsData.allGeneratedSlots.map((timeStr: string, idx: number): ScheduleSlot => {
         const [h, m] = timeStr.split(':').map(Number);
         const meri = h >= 12 ? 'PM' : 'AM';
         const displayH = h % 12 === 0 ? 12 : h % 12;
@@ -383,9 +361,19 @@ export default function DoctorScheduleScreen() {
           (a) => normalizeTimeForMatch(a.time) === timeStr || normalizeTimeForMatch(a.time) === formattedTime
         );
         const isAvail = availSet.has(timeStr);
+        const slotMins = h * 60 + m;
+        const isPast = isToday && slotMins <= currentMinutes;
+
+        // Check if slot overlaps any active break
+        const overlappingBreak = activeBreaks.find((b: any) => {
+          const bStart = parseSlotToMinutes(b.startTime);
+          const bEnd = parseSlotToMinutes(b.endTime);
+          return bStart >= 0 && bEnd >= 0 && slotMins >= bStart && slotMins < bEnd;
+        });
+
         if (match) {
           return {
-            id: `srv-m-${idx}-${timeStr}`,
+            id: `srv-${idx}-${timeStr}`,
             rawTime: timeStr,
             time: formattedTime,
             meridiem: meri,
@@ -398,20 +386,48 @@ export default function DoctorScheduleScreen() {
             delayMins: activeDelayMinutes,
           };
         }
+
+        if (isPast) {
+          return {
+            id: `srv-${idx}-${timeStr}`,
+            rawTime: timeStr,
+            time: formattedTime,
+            meridiem: meri,
+            token: `#0${idx + 1}`,
+            status: 'passed' as const,
+            reason: 'Time Passed',
+            delayMins: activeDelayMinutes,
+          };
+        }
+
+        if (overlappingBreak) {
+          return {
+            id: `srv-${idx}-${timeStr}`,
+            rawTime: timeStr,
+            time: formattedTime,
+            meridiem: meri,
+            token: `#0${idx + 1}`,
+            status: 'blocked' as const,
+            reason: `Break: ${overlappingBreak.title || 'Doctor Break'}`,
+            delayMins: activeDelayMinutes,
+          };
+        }
+
         return {
-          id: `srv-m-${idx}-${timeStr}`,
+          id: `srv-${idx}-${timeStr}`,
           rawTime: timeStr,
           time: formattedTime,
           meridiem: meri,
           token: `#0${idx + 1}`,
           status: isAvail ? ('available' as const) : ('blocked' as const),
-          reason: isAvail ? 'Open OPD Consultation' : 'Blocked / Capacity Full',
+          reason: isAvail ? 'Open OPD Consultation' : 'Capacity Full / Blocked',
           delayMins: activeDelayMinutes,
         };
       });
     }
 
-    return rawMorningSlots.map((slot) => {
+    const fallback = [...rawMorningSlots, ...rawEveningSlots];
+    return fallback.map((slot) => {
       const displaySlot = activeDelayMinutes > 0
         ? {
             ...slot,
@@ -436,79 +452,105 @@ export default function DoctorScheduleScreen() {
       }
       return displaySlot;
     });
-  }, [rawMorningSlots, allAppointments, selectedDay, activeDelayMinutes, serverSlotsData]);
+  }, [allAppointments, selectedDay, serverSlotsData, activeDelayMinutes, rawMorningSlots, rawEveningSlots]);
+
+  const selectedMorningSlots: ScheduleSlot[] = useMemo(() => {
+    return selectedAllSlots.filter((s) => getSlotSession(s.rawTime || `${s.time} ${s.meridiem}`) === 'morning');
+  }, [selectedAllSlots]);
 
   const selectedEveningSlots: ScheduleSlot[] = useMemo(() => {
-    const dayApts = allAppointments.filter((a) => a.date?.slice(0, 10) === selectedDay);
-    if (serverSlotsData?.allGeneratedSlots && serverSlotsData.allGeneratedSlots.length > 0) {
-      const eveningTimes = serverSlotsData.allGeneratedSlots.filter((t: string) => {
-        const [h] = t.split(':').map(Number);
-        return h >= 13;
-      });
-      const availSet = new Set(serverSlotsData.slots || []);
-      return eveningTimes.map((timeStr: string, idx: number): ScheduleSlot => {
-        const [h, m] = timeStr.split(':').map(Number);
-        const meri = h >= 12 ? 'PM' : 'AM';
-        const displayH = h % 12 === 0 ? 12 : h % 12;
-        const formattedTime = `${String(displayH).padStart(2, '0')}:${String(m).padStart(2, '0')}`;
-        const match = dayApts.find(
-          (a) => normalizeTimeForMatch(a.time) === timeStr || normalizeTimeForMatch(a.time) === formattedTime
-        );
-        const isAvail = availSet.has(timeStr);
-        if (match) {
-          return {
-            id: `srv-e-${idx}-${timeStr}`,
-            rawTime: timeStr,
-            time: formattedTime,
-            meridiem: meri,
-            token: match.tokenNumber ? String(match.tokenNumber).replace(/^Token\s*/i, '') : `#0${idx + 1}`,
-            status: 'booked' as const,
-            patientId: match.patientId,
-            patientName: match.patientName,
-            consultationId: match.id,
-            reason: match.symptoms?.join(', ') || match.notes || 'OPD Consultation',
-            delayMins: activeDelayMinutes,
-          };
-        }
-        return {
-          id: `srv-e-${idx}-${timeStr}`,
-          rawTime: timeStr,
-          time: formattedTime,
-          meridiem: meri,
-          token: `#0${idx + 1}`,
-          status: isAvail ? ('available' as const) : ('blocked' as const),
-          reason: isAvail ? 'Open Evening Slot' : 'Blocked / Capacity Full',
-          delayMins: activeDelayMinutes,
-        };
-      });
+    return selectedAllSlots.filter((s) => getSlotSession(s.rawTime || `${s.time} ${s.meridiem}`) === 'evening');
+  }, [selectedAllSlots]);
+
+  const displayedSlots: ScheduleSlot[] = useMemo(() => {
+    if (selectedSession === 'morning') return selectedMorningSlots;
+    if (selectedSession === 'evening') return selectedEveningSlots;
+    return selectedAllSlots;
+  }, [selectedSession, selectedMorningSlots, selectedEveningSlots, selectedAllSlots]);
+
+  const handleAddBreak = async () => {
+    const targetDocId = user?.doctorId || user?.id;
+    if (!targetDocId || !selectedDay) return;
+    if (!breakTitle.trim()) {
+      Alert.alert('Missing Title', 'Please enter a title for the break (e.g., Lunch Break).');
+      return;
     }
+    setIsSubmittingBreak(true);
+    try {
+      if (Platform.OS !== 'web') Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+      await doctorService.manageBreak({
+        doctorId: targetDocId,
+        date: selectedDay,
+        action: 'add',
+        break: {
+          title: breakTitle.trim(),
+          startTime: breakStartTime.trim(),
+          endTime: breakEndTime.trim(),
+        },
+      });
+      setBreakModalVisible(false);
+      await refetchServerSlots();
+      queryClient.invalidateQueries({ queryKey: ['doctor-slots'] });
+      queryClient.invalidateQueries({ queryKey: ['doctor-schedule-week'] });
+      setDelayNotice(`Break "${breakTitle}" scheduled. Slots within this period are closed.`);
+      setTimeout(() => setDelayNotice(null), 3000);
+    } catch (err: any) {
+      Alert.alert('Break Error', err?.response?.data?.message || err?.message || 'Failed to add break');
+    } finally {
+      setIsSubmittingBreak(false);
+    }
+  };
 
-    return rawEveningSlots.map((slot) => {
-      const displaySlot = activeDelayMinutes > 0
-        ? {
-            ...slot,
-            ...shiftTime(slot.time, slot.meridiem, activeDelayMinutes),
-            delayMins: activeDelayMinutes,
-          }
-        : slot;
+  const handleDeleteBreak = async (breakId: string, title?: string) => {
+    const targetDocId = user?.doctorId || user?.id;
+    if (!targetDocId || !selectedDay) return;
+    try {
+      if (Platform.OS !== 'web') Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+      await doctorService.manageBreak({
+        doctorId: targetDocId,
+        date: selectedDay,
+        action: 'remove',
+        breakId,
+      });
+      await refetchServerSlots();
+      queryClient.invalidateQueries({ queryKey: ['doctor-slots'] });
+      queryClient.invalidateQueries({ queryKey: ['doctor-schedule-week'] });
+      setDelayNotice(`Break "${title || 'Break'}" removed. Slots reopened.`);
+      setTimeout(() => setDelayNotice(null), 3000);
+    } catch (err: any) {
+      Alert.alert('Error', err?.response?.data?.message || err?.message || 'Failed to remove break');
+    }
+  };
 
-      const match = dayApts.find((a) =>
-        normalizeTimeForMatch(a.time) === normalizeTimeForMatch(slot.time) ||
-        normalizeTimeForMatch(a.time) === normalizeTimeForMatch(displaySlot.time)
-      );
-      if (match) {
-        return {
-          ...displaySlot,
-          status: 'booked' as const,
-          patientId: match.patientId,
-          patientName: match.patientName,
-          token: match.tokenNumber ? String(match.tokenNumber).replace(/^Token\s*/i, '') : displaySlot.token,
-          reason: match.symptoms?.join(', ') || match.notes || 'OPD Consultation',
-        };
-      }
-      return displaySlot;
-    });
-  }, [rawEveningSlots, allAppointments, selectedDay, activeDelayMinutes, serverSlotsData]);
+  const handleQuickDuration = async (minutes: number) => {
+    const targetDocId = user?.doctorId || user?.id;
+    if (!targetDocId || !selectedDay) return;
+    try {
+      setLoadingDialog({
+        visible: true,
+        title: 'Updating Slot Duration...',
+        message: `Configuring ${minutes} min appointments and synchronizing server slots...`,
+      });
+      if (Platform.OS !== 'web') Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+      setSlotDuration(String(minutes));
+      setSlotDurationMins(String(minutes % 60));
+      setSlotDurationHours(String(Math.floor(minutes / 60)));
+      await doctorService.updateScheduleSettings({
+        doctorId: targetDocId,
+        date: selectedDay,
+        slotDurationMinutes: minutes,
+      });
+      await refetchServerSlots();
+      queryClient.invalidateQueries({ queryKey: ['doctor-slots'] });
+      queryClient.invalidateQueries({ queryKey: ['doctor-schedule-week'] });
+      setDelayNotice(`Slot duration updated to ${minutes}m for ${selectedDay}.`);
+      setTimeout(() => setDelayNotice(null), 3000);
+    } catch (err: any) {
+      Alert.alert('Error', err?.response?.data?.message || err?.message || 'Failed to update slot duration');
+    } finally {
+      setLoadingDialog({ visible: false });
+    }
+  };
 
   const updateSelectedSessionSlots = (session: 'morning' | 'evening', updater: (slots: ScheduleSlot[]) => ScheduleSlot[]) => {
     setSlotsByDate((previous) => {
@@ -532,12 +574,52 @@ export default function DoctorScheduleScreen() {
   const [eveningStart, setEveningStart] = useState('05:00 PM');
   const [eveningEnd, setEveningEnd] = useState('08:00 PM');
 
+  useEffect(() => {
+    if (user?.clinicTimings) {
+      const parts = user.clinicTimings.split(/[,•]/).map((s) => s.trim()).filter(Boolean);
+      for (const part of parts) {
+        const match = part.match(/(\d{1,2}:\d{2}\s*(?:AM|PM)?)\s*[–-]\s*(\d{1,2}:\d{2}\s*(?:AM|PM)?)/i);
+        if (match) {
+          const sTime = match[1].trim();
+          const eTime = match[2].trim();
+          const s24 = to24(sTime);
+          const [h] = s24.split(':').map(Number);
+          if (h < 15) {
+            setMorningStart(sTime);
+            setMorningEnd(eTime);
+          } else {
+            setEveningStart(sTime);
+            setEveningEnd(eTime);
+          }
+        }
+      }
+    }
+  }, [user?.clinicTimings]);
+
   // Modals & Notifications
   const [capacityModalVisible, setCapacityModalVisible] = useState(false);
   const [leaveModalVisible, setLeaveModalVisible] = useState(false);
   const [customDelayModalVisible, setCustomDelayModalVisible] = useState(false);
   const [customDelayMins, setCustomDelayMins] = useState('20');
   const [rescheduleSlot, setRescheduleSlot] = useState<ScheduleSlot | null>(null);
+  const [earlyDepartureModalVisible, setEarlyDepartureModalVisible] = useState(false);
+  const [earlyCutoffTime, setEarlyCutoffTime] = useState('14:00');
+  const [earlyReason, setEarlyReason] = useState('Emergency surgery / Hospital round');
+  const [isSubmittingEarly, setIsSubmittingEarly] = useState(false);
+
+  // Dynamic cutoff options: only future times starting from next +15 min onwards
+  const availableCutoffTimes = useMemo(() => {
+    const now = new Date();
+    const currentMins = now.getHours() * 60 + now.getMinutes();
+    const times: string[] = [];
+    const startMins = Math.ceil((currentMins + 15) / 15) * 15;
+    for (let m = Math.max(startMins, 9 * 60); m <= 22 * 60; m += 30) {
+      const h = Math.floor(m / 60);
+      const min = m % 60;
+      times.push(`${String(h).padStart(2, '0')}:${String(min).padStart(2, '0')}`);
+    }
+    return times;
+  }, [earlyDepartureModalVisible]);
 
   // Add Custom Slot Modal State
   const [addSlotModalVisible, setAddSlotModalVisible] = useState(false);
@@ -661,7 +743,7 @@ export default function DoctorScheduleScreen() {
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Warning);
     }
 
-    const originalSlots = (selectedSession === 'morning' ? selectedMorningSlots : selectedEveningSlots).map((slot) => ({ ...slot }));
+    const originalSlots = displayedSlots.map((slot) => ({ ...slot }));
     setLastUndo({ kind: 'slots', day: selectedDay, session: selectedSession, slots: originalSlots, label: `Undo +${mins}m delay` });
     const updater = (prev: ScheduleSlot[]) =>
       prev.map((s) => {
@@ -775,6 +857,35 @@ export default function DoctorScheduleScreen() {
     setTimeout(() => setDelayNotice(null), 4500);
   };
 
+  // 2B. EARLY DEPARTURE: Doctor ends clinic early, closes remaining slots & cancels appointments
+  const handleApplyEarlyDeparture = async () => {
+    const docId = user?.doctorId || user?.id;
+    if (!docId) return;
+    setIsSubmittingEarly(true);
+    try {
+      await doctorService.applyEarlyDeparture({
+        doctorId: docId,
+        date: selectedDay,
+        cutoffTime: earlyCutoffTime,
+        reason: earlyReason,
+      });
+      setEarlyDepartureModalVisible(false);
+      await Promise.all([
+        syncScheduleStatus(selectedDay),
+        queryClient.invalidateQueries({ queryKey: ['appointments'] }),
+        queryClient.invalidateQueries({ queryKey: ['doctor-slots'] }),
+        queryClient.invalidateQueries({ queryKey: ['doctor-schedule-week'] }),
+      ]);
+      setDelayNotice(`Clinic ended at ${earlyCutoffTime}. Affected appointments cancelled & patients notified.`);
+      if (Platform.OS !== 'web') Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+    } catch (err: any) {
+      Alert.alert('Error', err?.message || 'Failed to apply early departure');
+    } finally {
+      setIsSubmittingEarly(false);
+      setTimeout(() => setDelayNotice(null), 4500);
+    }
+  };
+
   // 3. POSTPONE / PREPONE RESCHEDULING: Shifts single slot earlier or later
   const handleReschedule = (mins: number) => {
     if (!rescheduleSlot) return;
@@ -791,7 +902,7 @@ export default function DoctorScheduleScreen() {
       };
     };
 
-    const originalSlots = (selectedSession === 'morning' ? selectedMorningSlots : selectedEveningSlots).map((slot) => ({ ...slot }));
+    const originalSlots = displayedSlots.map((slot) => ({ ...slot }));
     setLastUndo({ kind: 'slots', day: selectedDay, session: selectedSession, slots: originalSlots, label: 'Undo reschedule' });
     if (selectedSession === 'morning') {
       updateSelectedSessionSlots('morning', (previous) => previous.map(updateSlot));
@@ -835,7 +946,8 @@ export default function DoctorScheduleScreen() {
           morning: morningSlots.map((slot) => ({ ...slot })),
           evening: eveningSlots.map((slot) => ({ ...slot })),
         };
-        return { ...previous, [lastUndo.day]: { ...current, [lastUndo.session]: lastUndo.slots } };
+        const sessionKey = lastUndo.session === 'evening' ? 'evening' : 'morning';
+        return { ...previous, [lastUndo.day]: { ...current, [sessionKey]: lastUndo.slots } };
       });
     }
 
@@ -1125,15 +1237,45 @@ export default function DoctorScheduleScreen() {
           <Info size={16} color={colors.textMuted} />
         </Pressable>
 
-        {/* 5. OPD Session Selector (Morning vs Evening) */}
+        {/* 5. OPD Session Selector (All, Morning, Evening) */}
         <View style={styles.sessionSection}>
-          <View style={[styles.sessionToggleGrid, { backgroundColor: colors.backgroundElement }]}>
+          <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap: 8, paddingVertical: 2 }}>
+            {/* All Sessions */}
+            <Pressable
+              onPress={() => setSelectedSession('all')}
+              style={[
+                styles.sessionCard,
+                { minWidth: 120 },
+                selectedSession === 'all' && [styles.sessionCardActive, { backgroundColor: colors.card, borderWidth: 1.5, borderColor: StitchColors.primaryContainer }],
+              ]}
+            >
+              <View style={styles.sessionCardHeader}>
+                <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+                  <Clock size={16} color={selectedSession === 'all' ? StitchColors.primaryContainer : colors.textSecondary} />
+                  <Text
+                    style={[
+                      styles.sessionTitle,
+                      { color: selectedSession === 'all' ? StitchColors.primaryContainer : colors.text },
+                    ]}
+                  >
+                    All Slots
+                  </Text>
+                </View>
+                <View style={[styles.statusDot, { backgroundColor: StitchColors.primaryContainer }]} />
+              </View>
+              <Text style={[styles.sessionTiming, { color: colors.textSecondary }]}>Whole Day</Text>
+              <Text style={[styles.sessionStats, { color: StitchColors.primaryContainer }]}>
+                {selectedAllSlots.filter((s) => s.status === 'booked').length} of {selectedAllSlots.length} Booked
+              </Text>
+            </Pressable>
+
             {/* Morning Session */}
             <Pressable
               onPress={() => setSelectedSession('morning')}
               style={[
                 styles.sessionCard,
-                selectedSession === 'morning' && [styles.sessionCardActive, { backgroundColor: colors.card }],
+                { minWidth: 120 },
+                selectedSession === 'morning' && [styles.sessionCardActive, { backgroundColor: colors.card, borderWidth: 1.5, borderColor: StitchColors.primaryContainer }],
               ]}
             >
               <View style={styles.sessionCardHeader}>
@@ -1161,7 +1303,8 @@ export default function DoctorScheduleScreen() {
               onPress={() => setSelectedSession('evening')}
               style={[
                 styles.sessionCard,
-                selectedSession === 'evening' && [styles.sessionCardActive, { backgroundColor: colors.card }],
+                { minWidth: 120 },
+                selectedSession === 'evening' && [styles.sessionCardActive, { backgroundColor: colors.card, borderWidth: 1.5, borderColor: StitchColors.primaryContainer }],
               ]}
             >
               <View style={styles.sessionCardHeader}>
@@ -1183,32 +1326,47 @@ export default function DoctorScheduleScreen() {
                 {selectedEveningSlots.filter((s) => s.status === 'booked').length} of {selectedEveningSlots.length} Booked
               </Text>
             </Pressable>
-          </View>
-
-          {/* Quick Metrics Bar */}
-          <View style={[styles.metricsStrip, { backgroundColor: colors.card, borderColor: colors.border }]}>
-            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
-              <Clock size={16} color={StitchColors.secondaryContainer} />
-              <Text style={[styles.metricText, { color: colors.text }]}>{slotDuration} min slot duration</Text>
-              <Text style={styles.metricDot}>•</Text>
-              <Text style={[styles.metricSub, { color: colors.textSecondary }]}>4 slots/hr cadence</Text>
-            </View>
-            <View style={[styles.regularOpdBadge, { backgroundColor: colors.backgroundElement }]}>
-              <Text style={[styles.regularOpdText, { color: colors.textSecondary }]}>Regular OPD</Text>
-            </View>
-          </View>
+          </ScrollView>
         </View>
 
         {/* 6. Slot Timeline Visual Grid */}
         <View style={styles.timelineSection}>
           <View style={styles.timelineHeaderRow}>
             <Text style={[styles.timelineSectionTitle, { color: colors.textSecondary }]}>
-              {selectedSession === 'morning' ? 'MORNING SLOTS TIMELINE' : 'EVENING SLOTS TIMELINE'}
+              {selectedSession === 'all'
+                ? 'ALL SLOTS TIMELINE'
+                : selectedSession === 'morning'
+                ? 'MORNING SLOTS TIMELINE'
+                : 'EVENING SLOTS TIMELINE'}
             </Text>
-            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
-              <Text style={[styles.timelineDateText, { color: colors.textSecondary }]}>
-                {weekDays.find((w) => w.key === selectedDay)?.fullDate || selectedDay}
-              </Text>
+            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+              <Pressable
+                onPress={() => setCapacityModalVisible(true)}
+                style={[
+                  styles.addSlotBtn,
+                  {
+                    backgroundColor: colors.surfaceContainer,
+                    borderWidth: 1,
+                    borderColor: colors.border,
+                  },
+                ]}
+                accessibilityRole="button"
+                accessibilityLabel="Adjust slot duration and shift timings"
+              >
+                <Plus size={12} color={StitchColors.primaryContainer} />
+                <Text style={[styles.addSlotBtnText, { color: colors.text }]}>
+                  Timing ({serverSlotsData?.slotDurationMinutes || slotDuration}m)
+                </Text>
+              </Pressable>
+              <Pressable
+                onPress={() => setBreakModalVisible(true)}
+                style={[styles.addSlotBtn, { backgroundColor: '#D97706' }]}
+                accessibilityRole="button"
+                accessibilityLabel="Add doctor break"
+              >
+                <Coffee size={12} color="#FFFFFF" />
+                <Text style={styles.addSlotBtnText}>+ Break</Text>
+              </Pressable>
               <Pressable
                 onPress={() => {
                   setCustomSlotMeridiem(selectedSession === 'morning' ? 'AM' : 'PM');
@@ -1261,10 +1419,71 @@ export default function DoctorScheduleScreen() {
             </View>
           ) : (
             <View style={styles.slotsList}>
-              {(selectedSession === 'morning' ? selectedMorningSlots : selectedEveningSlots).map((slot) => {
+              {/* Active Breaks Cards */}
+              {serverSlotsData?.breaks && serverSlotsData.breaks.length > 0 && (
+                <View style={{ gap: 8, marginBottom: 12 }}>
+                  {serverSlotsData.breaks.map((b: any) => (
+                    <View
+                      key={b.id || `${b.startTime}-${b.endTime}`}
+                      style={{
+                        flexDirection: 'row',
+                        alignItems: 'center',
+                        justifyContent: 'space-between',
+                        padding: 12,
+                        borderRadius: BorderRadius.xl,
+                        backgroundColor: isDark ? '#2D2006' : '#FEF3C7',
+                        borderWidth: 1,
+                        borderColor: isDark ? '#78350F' : '#FDE68A',
+                      }}
+                    >
+                      <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10, flex: 1 }}>
+                        <View
+                          style={{
+                            width: 34,
+                            height: 34,
+                            borderRadius: 17,
+                            backgroundColor: isDark ? '#78350F' : '#FBBF24',
+                            alignItems: 'center',
+                            justifyContent: 'center',
+                          }}
+                        >
+                          <Coffee size={16} color="#FFFFFF" />
+                        </View>
+                        <View style={{ flex: 1 }}>
+                          <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+                            <Text style={{ fontSize: 13, fontWeight: '700', color: isDark ? '#FDE68A' : '#92400E' }}>
+                              {b.title || 'Doctor Break'}
+                            </Text>
+                            <View style={{ backgroundColor: isDark ? '#78350F' : '#FDE68A', paddingHorizontal: 6, paddingVertical: 2, borderRadius: 4 }}>
+                              <Text style={{ fontSize: 9, fontWeight: '800', color: isDark ? '#FDE68A' : '#78350F' }}>BREAK</Text>
+                            </View>
+                          </View>
+                          <Text style={{ fontSize: 11, color: isDark ? '#FCD34D' : '#B45309', marginTop: 2 }}>
+                            {b.startTime} - {b.endTime} • Slots closed for booking
+                          </Text>
+                        </View>
+                      </View>
+                      <Pressable
+                        onPress={() => handleDeleteBreak(b.id, b.title)}
+                        style={{
+                          padding: 6,
+                          borderRadius: 8,
+                          backgroundColor: isDark ? '#451A03' : '#FEE2E2',
+                        }}
+                        accessibilityLabel="Remove break"
+                      >
+                        <Trash2 size={14} color="#DC2626" />
+                      </Pressable>
+                    </View>
+                  ))}
+                </View>
+              )}
+
+              {displayedSlots.map((slot) => {
                 const isBooked = slot.status === 'booked';
                 const isAvailable = slot.status === 'available';
                 const isBlocked = slot.status === 'blocked';
+                const isPassed = slot.status === 'passed';
 
                 return (
                   <View
@@ -1272,13 +1491,18 @@ export default function DoctorScheduleScreen() {
                     style={[
                       styles.slotCard,
                       {
-                        backgroundColor: isBlocked ? colors.backgroundElement : colors.card,
-                        borderColor: colors.border,
-                        opacity: isBlocked ? 0.85 : 1,
+                        backgroundColor: isPassed
+                          ? (isDark ? '#1e293b' : '#f8fafc')
+                          : isBlocked
+                          ? colors.backgroundElement
+                          : colors.card,
+                        borderColor: isPassed ? (isDark ? '#334155' : '#e2e8f0') : colors.border,
+                        opacity: isPassed ? 0.6 : isBlocked ? 0.85 : 1,
                       },
                     ]}
                   >
                     <Pressable
+                      disabled={isPassed}
                       onPress={() => {
                         if (isBooked && slot.consultationId) {
                           router.push(`/(doctor)/consultation/${slot.consultationId}` as any);
@@ -1286,12 +1510,14 @@ export default function DoctorScheduleScreen() {
                       }}
                       style={styles.slotLeft}
                     >
-                      <View style={[styles.timeBox, { backgroundColor: isBlocked ? colors.card : colors.backgroundElement }]}>
+                      <View style={[styles.timeBox, { backgroundColor: isPassed || isBlocked ? colors.card : colors.backgroundElement }]}>
                         <Text
                           style={[
                             styles.timeDigit,
                             {
-                              color: isBooked
+                              color: isPassed
+                                ? colors.textMuted
+                                : isBooked
                                 ? StitchColors.primaryContainer
                                 : isAvailable
                                 ? colors.textSecondary
@@ -1310,7 +1536,9 @@ export default function DoctorScheduleScreen() {
                             style={[
                               styles.slotPatientName,
                               {
-                                color: isBooked
+                                color: isPassed
+                                  ? colors.textMuted
+                                  : isBooked
                                   ? colors.text
                                   : isAvailable
                                   ? StitchColors.secondary
@@ -1319,11 +1547,11 @@ export default function DoctorScheduleScreen() {
                             ]}
                             numberOfLines={1}
                           >
-                            {isBooked ? slot.patientName : isAvailable ? 'Available Slot' : slot.patientName}
+                            {isBooked ? slot.patientName : isAvailable ? 'Available Slot' : isPassed ? 'Time Passed' : slot.patientName || 'Reserved Slot'}
                           </Text>
                           {slot.token ? (
-                            <View style={[styles.tokenBadge, { backgroundColor: '#CCFBF1' }]}>
-                              <Text style={styles.tokenText}>{slot.token}</Text>
+                            <View style={[styles.tokenBadge, { backgroundColor: isPassed ? '#f1f5f9' : '#CCFBF1' }]}>
+                              <Text style={[styles.tokenText, isPassed && { color: colors.textMuted }]}>{slot.token}</Text>
                             </View>
                           ) : null}
                           {slot.delayMins ? (
@@ -1345,13 +1573,17 @@ export default function DoctorScheduleScreen() {
                           ) : null}
                         </View>
                         <Text style={[styles.slotPatientReason, { color: colors.textSecondary }]} numberOfLines={1}>
-                          {slot.reason || (isAvailable ? 'Open for patient allocation' : 'Internal reserved slot')}
+                          {isPassed ? 'Slot duration has elapsed' : slot.reason || (isAvailable ? 'Open for patient allocation' : 'Internal reserved slot')}
                         </Text>
                       </View>
                     </Pressable>
 
                     <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
-                      {isBooked ? (
+                      {isPassed ? (
+                        <View style={{ paddingHorizontal: 8, paddingVertical: 4, borderRadius: 6, backgroundColor: colors.backgroundElement }}>
+                          <Text style={{ fontSize: 11, fontWeight: '600', color: colors.textMuted }}>Passed</Text>
+                        </View>
+                      ) : isBooked ? (
                         <>
                           <Pressable
                             onPress={() => setRescheduleSlot(slot)}
@@ -1497,6 +1729,28 @@ export default function DoctorScheduleScreen() {
             </View>
             <ChevronRight size={18} color={StitchColors.error} />
           </Pressable>
+
+          {/* End Clinic Early */}
+          <Pressable
+            onPress={() => {
+              if (availableCutoffTimes.length > 0) {
+                setEarlyCutoffTime(availableCutoffTimes[0]);
+              }
+              setEarlyDepartureModalVisible(true);
+            }}
+            style={[styles.opsRow, { backgroundColor: colors.card, borderColor: colors.border }]}
+          >
+            <View style={styles.opsCardLeft}>
+              <View style={[styles.opsIconBox, { backgroundColor: '#FEF3C7' }]}>
+                <Clock size={18} color="#D97706" />
+              </View>
+              <View>
+                <Text style={[styles.opsTitle, { color: '#B45309' }]}>End Clinic Early Today</Text>
+                <Text style={[styles.opsSub, { color: colors.textSecondary }]}>Cancel remaining slots & alert booked patients</Text>
+              </View>
+            </View>
+            <ChevronRight size={18} color="#D97706" />
+          </Pressable>
         </View>
       </ScrollView>
 
@@ -1586,6 +1840,37 @@ export default function DoctorScheduleScreen() {
               </View>
             </View>
 
+            {/* Quick Duration Presets */}
+            <Text style={[styles.fieldLabel, { color: colors.textSecondary }]}>QUICK DURATION PRESETS</Text>
+            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, flexWrap: 'wrap', marginBottom: 12 }}>
+              {[10, 15, 20, 30, 45, 60].map((mins) => {
+                const currentDur = (parseInt(slotDurationHours, 10) || 0) * 60 + (parseInt(slotDurationMins, 10) || 15);
+                const isSelected = currentDur === mins;
+                return (
+                  <Pressable
+                    key={mins}
+                    onPress={() => {
+                      setSlotDuration(String(mins));
+                      setSlotDurationMins(String(mins % 60));
+                      setSlotDurationHours(String(Math.floor(mins / 60)));
+                    }}
+                    style={{
+                      paddingHorizontal: 10,
+                      paddingVertical: 6,
+                      borderRadius: 8,
+                      backgroundColor: isSelected ? StitchColors.primaryContainer : colors.backgroundElement,
+                      borderWidth: 1,
+                      borderColor: isSelected ? StitchColors.primaryContainer : colors.border,
+                    }}
+                  >
+                    <Text style={{ fontSize: 12, fontWeight: '700', color: isSelected ? '#FFFFFF' : colors.text }}>
+                      {mins}m
+                    </Text>
+                  </Pressable>
+                );
+              })}
+            </View>
+
             <View style={styles.counterRow}>
               <Text style={[styles.counterLabel, { color: colors.text }]}>Max Patients / Window</Text>
               <View style={[styles.counterControl, { backgroundColor: colors.backgroundElement }]}>
@@ -1626,6 +1911,11 @@ export default function DoctorScheduleScreen() {
 
                 const targetDocId = user?.doctorId || user?.id;
                 try {
+                  setLoadingDialog({
+                    visible: true,
+                    title: 'Saving Shift Timings...',
+                    message: `Updating OPD shift timings (${totalMins}m slots) across server schedules...`,
+                  });
                   const morningStart24 = to24(morningStart);
                   const morningEnd24 = to24(morningEnd);
                   const eveningStart24 = to24(eveningStart);
@@ -1655,6 +1945,8 @@ export default function DoctorScheduleScreen() {
                 } catch (err: any) {
                   console.warn('[schedule] Server availability sync error:', err?.message);
                   setDelayNotice(`Shifts updated locally: ${totalMins}m slot duration.`);
+                } finally {
+                  setLoadingDialog({ visible: false });
                 }
                 setTimeout(() => setDelayNotice(null), 3500);
               }}
@@ -1798,6 +2090,98 @@ export default function DoctorScheduleScreen() {
             >
               <Check size={16} color="#FFFFFF" />
               <Text style={styles.applySettingsBtnText}>Confirm Leave & Notify Patients</Text>
+            </Pressable>
+          </View>
+        </View>
+      </Modal>
+
+      {/* MODAL: End Clinic Early */}
+      <Modal visible={earlyDepartureModalVisible} transparent animationType="slide">
+        <View style={styles.modalBackdrop}>
+          <View style={[styles.modalCard, { backgroundColor: colors.card, borderColor: colors.border }]}>
+            <View style={styles.modalHeader}>
+              <Text style={[styles.modalTitle, { color: colors.text }]}>End Clinic Early Today</Text>
+              <Pressable onPress={() => setEarlyDepartureModalVisible(false)}>
+                <X size={18} color={colors.text} />
+              </Pressable>
+            </View>
+
+            <Text style={[styles.fieldLabel, { color: colors.textSecondary }]}>CLOSING TIME (CUTOFF)</Text>
+            {availableCutoffTimes.length === 0 ? (
+              <View style={[styles.autoNoticeBox, { backgroundColor: colors.backgroundElement, marginBottom: 12 }]}>
+                <Text style={[styles.autoNoticeBoxText, { color: colors.textSecondary }]}>
+                  All OPD sessions for today have concluded. Early departure cutoff cannot be applied.
+                </Text>
+              </View>
+            ) : (
+              <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 6, marginBottom: 12 }}>
+                {availableCutoffTimes.map((time) => (
+                  <Pressable
+                    key={time}
+                    onPress={() => setEarlyCutoffTime(time)}
+                    style={[
+                      styles.leaveChip,
+                      earlyCutoffTime === time
+                        ? [styles.leaveChipActive, { backgroundColor: StitchColors.primaryContainer }]
+                        : { backgroundColor: colors.backgroundElement, borderColor: colors.border },
+                    ]}
+                  >
+                    <Text style={[styles.leaveChipText, { color: earlyCutoffTime === time ? '#FFFFFF' : colors.text }]}>
+                      {time}
+                    </Text>
+                  </Pressable>
+                ))}
+              </View>
+            )}
+
+            <Text style={[styles.fieldLabel, { color: colors.textSecondary }]}>REASON FOR EARLY CLOSURE</Text>
+            <View style={styles.leaveChipsRow}>
+              {[
+                'Emergency Surgery / Rounds',
+                'Personal / Family Emergency',
+                'Hospital Committee Meeting',
+                'Feeling Unwell',
+              ].map((r) => (
+                <Pressable
+                  key={r}
+                  onPress={() => setEarlyReason(r)}
+                  style={[
+                    styles.leaveChip,
+                    earlyReason === r
+                      ? [styles.leaveChipActive, { backgroundColor: '#B45309' }]
+                      : { backgroundColor: colors.backgroundElement, borderColor: colors.border },
+                  ]}
+                >
+                  <Text style={[styles.leaveChipText, { color: earlyReason === r ? '#FFFFFF' : colors.text }]}>
+                    {r}
+                  </Text>
+                </Pressable>
+              ))}
+            </View>
+
+            <View style={[styles.autoNoticeBox, { backgroundColor: '#FEF3C7', marginTop: 12, borderColor: '#FDE68A', borderWidth: 1 }]}>
+              <AlertTriangle size={16} color="#B45309" />
+              <Text style={[styles.autoNoticeBoxText, { color: '#92400E' }]}>
+                Closing clinic at {earlyCutoffTime} on {selectedDay}. All active appointments from {earlyCutoffTime} onwards will be automatically cancelled, and patients will receive high-priority push notifications.
+              </Text>
+            </View>
+
+            <Pressable
+              disabled={isSubmittingEarly || availableCutoffTimes.length === 0}
+              onPress={handleApplyEarlyDeparture}
+              style={[
+                styles.applySettingsBtn,
+                { backgroundColor: '#DC2626', marginTop: 14, opacity: isSubmittingEarly || availableCutoffTimes.length === 0 ? 0.5 : 1 },
+              ]}
+            >
+              {isSubmittingEarly ? (
+                <ActivityIndicator color="#FFFFFF" size="small" />
+              ) : (
+                <>
+                  <Check size={16} color="#FFFFFF" />
+                  <Text style={styles.applySettingsBtnText}>Confirm Early Closure & Alert Patients</Text>
+                </>
+              )}
             </Pressable>
           </View>
         </View>
@@ -1983,12 +2367,126 @@ export default function DoctorScheduleScreen() {
         </View>
       </Modal>
 
+      {/* MODAL: Schedule Doctor Break */}
+      <Modal visible={breakModalVisible} transparent animationType="slide">
+        <View style={styles.modalBackdrop}>
+          <View style={[styles.modalCard, { backgroundColor: colors.card, borderColor: colors.border }]}>
+            <View style={styles.modalHeader}>
+              <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+                <Coffee size={20} color="#D97706" />
+                <Text style={[styles.modalTitle, { color: colors.text }]}>Schedule Doctor Break</Text>
+              </View>
+              <Pressable onPress={() => setBreakModalVisible(false)}>
+                <X size={18} color={colors.text} />
+              </Pressable>
+            </View>
+
+            <Text style={{ fontSize: 13, color: colors.textSecondary, marginBottom: 14 }}>
+              Set a break window (e.g. Lunch, Tea, Rounds). Slots falling within this window will be closed for patient booking.
+            </Text>
+
+            <Text style={[styles.fieldLabel, { color: colors.textSecondary }]}>TARGET DATE</Text>
+            <View style={[styles.autoNoticeBox, { backgroundColor: colors.backgroundElement, marginBottom: 12 }]}>
+              <CalendarIcon size={16} color={StitchColors.primaryContainer} />
+              <Text style={[styles.autoNoticeBoxText, { color: colors.text, fontWeight: '700' }]}>
+                {weekDays.find((w) => w.key === selectedDay)?.fullDate || selectedDay}
+              </Text>
+            </View>
+
+            <Text style={[styles.fieldLabel, { color: colors.textSecondary }]}>QUICK PRESETS</Text>
+            <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 6, marginBottom: 14 }}>
+              {[
+                { title: 'Lunch Break', start: '01:00 PM', end: '02:00 PM' },
+                { title: 'Tea Break', start: '04:30 PM', end: '05:00 PM' },
+                { title: 'Hospital Rounds', start: '02:00 PM', end: '03:00 PM' },
+                { title: 'Emergency Break', start: '12:00 PM', end: '12:45 PM' },
+              ].map((p) => (
+                <Pressable
+                  key={p.title}
+                  onPress={() => {
+                    setBreakTitle(p.title);
+                    setBreakStartTime(p.start);
+                    setBreakEndTime(p.end);
+                  }}
+                  style={{
+                    paddingHorizontal: 10,
+                    paddingVertical: 6,
+                    borderRadius: BorderRadius.full,
+                    backgroundColor: breakTitle === p.title ? '#FEF3C7' : colors.backgroundElement,
+                    borderWidth: 1,
+                    borderColor: breakTitle === p.title ? '#F59E0B' : colors.border,
+                  }}
+                >
+                  <Text style={{ fontSize: 11, fontWeight: '600', color: breakTitle === p.title ? '#B45309' : colors.text }}>
+                    {p.title} ({p.start.slice(0, 5)} - {p.end.slice(0, 5)})
+                  </Text>
+                </Pressable>
+              ))}
+            </View>
+
+            <Text style={[styles.fieldLabel, { color: colors.textSecondary }]}>BREAK TITLE</Text>
+            <TextInput
+              value={breakTitle}
+              onChangeText={setBreakTitle}
+              placeholder="e.g. Lunch Break, Ward Rounds"
+              placeholderTextColor={colors.textMuted}
+              style={[styles.miniTextInput, { borderColor: colors.border, color: colors.text, marginBottom: 12, paddingHorizontal: 12 }]}
+            />
+
+            <View style={{ flexDirection: 'row', gap: 10, marginBottom: 18 }}>
+              <View style={{ flex: 1 }}>
+                <Text style={[styles.fieldLabel, { color: colors.textSecondary }]}>START TIME</Text>
+                <TextInput
+                  value={breakStartTime}
+                  onChangeText={setBreakStartTime}
+                  placeholder="01:00 PM"
+                  placeholderTextColor={colors.textMuted}
+                  style={[styles.miniTextInput, { textAlign: 'center', borderColor: colors.border, color: colors.text }]}
+                />
+              </View>
+              <View style={{ flex: 1 }}>
+                <Text style={[styles.fieldLabel, { color: colors.textSecondary }]}>END TIME</Text>
+                <TextInput
+                  value={breakEndTime}
+                  onChangeText={setBreakEndTime}
+                  placeholder="02:00 PM"
+                  placeholderTextColor={colors.textMuted}
+                  style={[styles.miniTextInput, { textAlign: 'center', borderColor: colors.border, color: colors.text }]}
+                />
+              </View>
+            </View>
+
+            <Pressable
+              onPress={handleAddBreak}
+              disabled={isSubmittingBreak}
+              style={[styles.applySettingsBtn, { backgroundColor: '#D97706', opacity: isSubmittingBreak ? 0.7 : 1 }]}
+            >
+              <Coffee size={16} color="#FFFFFF" />
+              <Text style={styles.applySettingsBtnText}>
+                {isSubmittingBreak ? 'Scheduling Break...' : 'Confirm & Close Overlapping Slots'}
+              </Text>
+            </Pressable>
+          </View>
+        </View>
+      </Modal>
+
       <UndoToast
         visible={Boolean(lastUndo && lastUndo.kind === 'slots')}
         message={delayNotice || (lastUndo ? `${lastUndo.label.replace('Undo ', '')} applied.` : '')}
         onUndo={handleUndoScheduleChange}
         onDismiss={() => setLastUndo(null)}
         durationMs={12000}
+      />
+
+      {/* Universal Blocking Loading Dialog */}
+      <LoadingDialog
+        visible={isSubmittingBreak || loadingDialog.visible}
+        title={isSubmittingBreak ? 'Scheduling OPD Break...' : loadingDialog.title || 'Updating Schedule...'}
+        message={
+          isSubmittingBreak
+            ? 'Blocking slots and updating clinic OPD calendar...'
+            : loadingDialog.message || 'Saving schedule changes to server...'
+        }
       />
     </SafeAreaView>
   );

@@ -16,6 +16,8 @@ export interface BookAppointmentInput {
   doctorAvatar?: string;
   hospital?: string;
   patientAvatar?: string;
+  attachmentUrl?: string;
+  attachmentName?: string;
 }
 
 function to24Hour(time: string): string {
@@ -85,6 +87,8 @@ export const appointmentService = {
         fee: input.fee,
         symptoms: input.symptoms,
         notes: input.notes,
+        attachmentUrl: input.attachmentUrl,
+        attachmentName: input.attachmentName,
       }),
     });
   },

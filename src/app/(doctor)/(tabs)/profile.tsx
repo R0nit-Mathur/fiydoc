@@ -41,7 +41,6 @@ import {
   BadgeAlert,
   Receipt,
   MessageSquare,
-  Fingerprint,
   LogOut,
   ChevronRight,
   Edit2,
@@ -91,7 +90,6 @@ export default function DoctorProfileScreen() {
   // Toggles
   const [activeForOpd, setActiveForOpd] = useState(true);
   const [whatsappAlerts, setWhatsappAlerts] = useState(true);
-  const [biometricAuth, setBiometricAuth] = useState(true);
   const [settlementCycle, setSettlementCycle] = useState<'weekly' | 'monthly'>((user as any)?.settlementCycle || 'weekly');
   const completedConsultations = appointments.filter((appointment) => appointment.status === 'completed').length;
   const cyclePayout = completedConsultations * (Number(opdFee) || 0);
@@ -176,6 +174,33 @@ export default function DoctorProfileScreen() {
     }
     await fetchDocProfile();
     setRefreshing(false);
+  };
+
+  const handlePickDoctorAvatarDirect = async () => {
+    try {
+      const uri = await pickImageFromGallery();
+      if (!uri) return;
+      if (Platform.OS !== 'web') Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+      setDocAvatar(uri);
+      setTempAvatar(uri);
+      updateUser({ avatar: uri });
+
+      // Upload to storage and sync to server
+      const uploadRes = await fileUploadService.uploadFile(
+        { uri, name: `doctor_${user?.id || 'avatar'}_${Date.now()}.jpg` },
+        'doctors'
+      );
+      if (uploadRes?.url) {
+        setDocAvatar(uploadRes.url);
+        setTempAvatar(uploadRes.url);
+        updateUser({ avatar: uploadRes.url });
+        await doctorService.updateMyProfile({ profilePhoto: uploadRes.url });
+        if (Platform.OS !== 'web') Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+        Alert.alert('Profile Photo Updated', 'Your new profile picture has been saved.');
+      }
+    } catch (err: any) {
+      console.warn('[DoctorProfile] Direct avatar upload error:', err?.message);
+    }
   };
 
   // Sync profile data from server on mount
@@ -351,18 +376,43 @@ export default function DoctorProfileScreen() {
           style={[styles.identityCard, { backgroundColor: colors.card, borderColor: colors.border }]}
         >
           <View style={styles.identityTopRow}>
-            <Pressable
-              onPress={() => {
-                if (docAvatar) setViewerAvatarVisible(true);
-              }}
-              style={styles.avatarWrap}
-              accessibilityLabel="View profile photo"
-            >
-              <Avatar uri={docAvatar || null} name={docName || 'Doctor'} size="xl" />
-              <View style={styles.verifiedMiniBadge}>
-                <ShieldCheck size={12} color="#FFFFFF" />
-              </View>
-            </Pressable>
+            <View style={styles.avatarWrap}>
+              <Pressable
+                onPress={() => {
+                  if (docAvatar) setViewerAvatarVisible(true);
+                  else handlePickDoctorAvatarDirect();
+                }}
+                accessibilityLabel="View profile photo"
+              >
+                <Avatar uri={docAvatar || null} name={docName || 'Doctor'} size="xl" />
+                <View style={styles.verifiedMiniBadge}>
+                  <ShieldCheck size={12} color="#FFFFFF" />
+                </View>
+              </Pressable>
+
+              {/* Direct Camera Edit Button */}
+              <Pressable
+                onPress={handlePickDoctorAvatarDirect}
+                style={{
+                  position: 'absolute',
+                  bottom: -2,
+                  right: -2,
+                  width: 28,
+                  height: 28,
+                  borderRadius: 14,
+                  backgroundColor: StitchColors.primaryContainer,
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  borderWidth: 2,
+                  borderColor: '#FFFFFF',
+                  ...Shadows.subtle,
+                }}
+                accessibilityRole="button"
+                accessibilityLabel="Change profile picture"
+              >
+                <Camera size={13} color="#FFFFFF" />
+              </Pressable>
+            </View>
 
             <View style={{ flex: 1, marginLeft: 14 }}>
               <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
@@ -456,45 +506,52 @@ export default function DoctorProfileScreen() {
           </View>
 
           <View style={[styles.payoutCard, { backgroundColor: colors.card, borderColor: colors.border }]}>
-            {/* Primary UPI */}
-            <View style={styles.payoutAccountRow}>
-              <View style={[styles.accountIconBox, { backgroundColor: '#EFF6FF' }]}>
-                <Zap size={18} color={StitchColors.primaryContainer} />
-              </View>
-              <View style={{ flex: 1, marginLeft: 12 }}>
-                <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
-                  <Text style={[styles.accountName, { color: colors.text }]}>Instant UPI Settlement</Text>
-                  <View style={[styles.defaultTag, { backgroundColor: '#CCFBF1' }]}>
-                    <Text style={styles.defaultTagText}>Default</Text>
-                  </View>
+            {upiId ? (
+              /* Configured UPI / Bank */
+              <View style={styles.payoutAccountRow}>
+                <View style={[styles.accountIconBox, { backgroundColor: '#EFF6FF' }]}>
+                  <Zap size={18} color={StitchColors.primaryContainer} />
                 </View>
-                <Text style={[styles.accountVpa, { color: colors.textSecondary }]}>{upiId}</Text>
+                <View style={{ flex: 1, marginLeft: 12 }}>
+                  <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+                    <Text style={[styles.accountName, { color: colors.text }]}>Instant UPI Settlement</Text>
+                    <View style={[styles.defaultTag, { backgroundColor: '#CCFBF1' }]}>
+                      <Text style={styles.defaultTagText}>Active</Text>
+                    </View>
+                  </View>
+                  <Text style={[styles.accountVpa, { color: colors.textSecondary }]}>{upiId}</Text>
+                </View>
+                <Pressable
+                  onPress={() => { setTempUpi(upiId); setShowPayoutModal(true); }}
+                  style={[styles.manageBtn, { backgroundColor: colors.backgroundElement }]}
+                >
+                  <Text style={[styles.manageBtnText, { color: StitchColors.primaryContainer }]}>Manage</Text>
+                </Pressable>
               </View>
-              <Pressable
-                onPress={() => { setTempUpi(upiId); setShowPayoutModal(true); }}
-                style={[styles.manageBtn, { backgroundColor: colors.backgroundElement }]}
-              >
-                <Text style={[styles.manageBtnText, { color: StitchColors.primaryContainer }]}>Manage</Text>
-              </Pressable>
-            </View>
+            ) : (
+              /* Setup Payout Prompt */
+              <View style={styles.payoutAccountRow}>
+                <View style={[styles.accountIconBox, { backgroundColor: '#EFF6FF' }]}>
+                  <Building2 size={18} color={StitchColors.primaryContainer} />
+                </View>
+                <View style={{ flex: 1, marginLeft: 12 }}>
+                  <Text style={[styles.accountName, { color: colors.text }]}>Setup Payout Account</Text>
+                  <Text style={[styles.accountVpa, { color: colors.textSecondary }]}>Link UPI VPA or bank for consultation settlements</Text>
+                </View>
+                <Pressable
+                  onPress={() => { setTempUpi(''); setShowPayoutModal(true); }}
+                  style={[styles.manageBtn, { backgroundColor: StitchColors.primaryContainer }]}
+                >
+                  <Text style={[styles.manageBtnText, { color: '#FFFFFF' }]}>Setup</Text>
+                </Pressable>
+              </View>
+            )}
 
             <View style={[styles.autoNoticePill, { backgroundColor: colors.backgroundElement }]}>
               <ShieldCheck size={14} color={StitchColors.secondaryContainer} />
               <Text style={[styles.autoNoticeText, { color: colors.textSecondary }]}>
-                Automated instant payout after consultation conclusion
+                {upiId ? 'Automated instant payout after consultation conclusion' : 'Direct credit to your verified Indian bank account / UPI VPA'}
               </Text>
-            </View>
-
-            {/* Secondary Bank */}
-            <View style={[styles.bankRow, { borderTopColor: colors.border }]}>
-              <Building2 size={18} color={colors.textSecondary} />
-              <View style={{ flex: 1, marginLeft: 12 }}>
-                <Text style={[styles.bankName, { color: colors.text }]}>HDFC Bank •••• 4920</Text>
-                <Text style={[styles.bankIfsc, { color: colors.textMuted }]}>IFSC: HDFC0001245 • Secondary fallback</Text>
-              </View>
-              <View style={[styles.activePill, { backgroundColor: colors.backgroundElement }]}>
-                <Text style={[styles.activePillText, { color: colors.textSecondary }]}>Active</Text>
-              </View>
             </View>
 
             {/* Settlement Cycle Selector (Weekly / Monthly only) */}
@@ -633,20 +690,6 @@ export default function DoctorProfileScreen() {
               <Switch
                 value={whatsappAlerts}
                 onValueChange={setWhatsappAlerts}
-                trackColor={{ false: colors.border, true: StitchColors.primaryContainer }}
-                thumbColor="#FFFFFF"
-              />
-            </View>
-
-            <View style={[styles.groupItem, { borderTopColor: colors.border, borderTopWidth: StyleSheet.hairlineWidth }]}>
-              <Fingerprint size={18} color={StitchColors.primaryContainer} />
-              <View style={{ flex: 1, marginLeft: 12 }}>
-                <Text style={[styles.groupItemMain, { color: colors.text }]}>Biometric Two-Factor Authentication</Text>
-                <Text style={[styles.groupItemSub, { color: colors.textMuted }]}>Require FaceID / Fingerprint for payouts</Text>
-              </View>
-              <Switch
-                value={biometricAuth}
-                onValueChange={setBiometricAuth}
                 trackColor={{ false: colors.border, true: StitchColors.primaryContainer }}
                 thumbColor="#FFFFFF"
               />

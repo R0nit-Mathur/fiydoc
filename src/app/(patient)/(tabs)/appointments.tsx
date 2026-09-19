@@ -73,7 +73,12 @@ function AppointmentCard({
     ? 'Completed'
     : 'Upcoming';
 
-  const avatarUri = apt.doctorAvatar || `https://ui-avatars.com/api/?name=${encodeURIComponent(apt.doctorName || 'D')}&background=DBEAFE&color=1D4ED8`;
+  const avatarUri =
+    apt.doctorAvatar ||
+    (apt as any).doctor?.profilePhoto ||
+    (apt as any).profilePhoto ||
+    (apt as any).doctor?.avatar ||
+    `https://ui-avatars.com/api/?name=${encodeURIComponent(apt.doctorName || 'D')}&background=DBEAFE&color=1D4ED8`;
 
   return (
     <View style={styles.bookingCard}>

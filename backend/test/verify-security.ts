@@ -83,12 +83,12 @@ import { DoctorsService } from '../src/doctors/doctors.service';
 
 const notificationsService = new NotificationsService(mockPrisma);
 const appointmentsService = new AppointmentsService(mockPrisma, notificationsService);
-const prescriptionsService = new PrescriptionsService(mockPrisma, mockSupabase);
+const prescriptionsService = new PrescriptionsService(mockPrisma, mockSupabase, notificationsService);
 const consultationsService = new ConsultationsService(mockPrisma);
 const recordsService = new RecordsService(mockPrisma);
 const patientsService = new PatientsService(mockPrisma);
-const authService = new AuthService(mockPrisma, { sign: () => 'mock_token' } as any);
-const doctorsService = new DoctorsService(mockPrisma);
+const authService = new AuthService(mockPrisma, { sign: () => 'mock_token' } as any, notificationsService);
+const doctorsService = new DoctorsService(mockPrisma, notificationsService);
 
 async function runTests() {
   let passed = 0;

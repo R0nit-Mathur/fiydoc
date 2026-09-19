@@ -1,5 +1,6 @@
-import React, { useState } from 'react';
-import { View, Text, Image, StyleSheet, StyleProp, ViewStyle, ImageStyle } from 'react-native';
+import React, { useState, useEffect } from 'react';
+import { View, Text, StyleSheet, StyleProp, ViewStyle, ImageStyle } from 'react-native';
+import { Image } from 'expo-image';
 import { Palette, BorderRadius, Shadows } from '@/constants/theme';
 
 interface AvatarProps {
@@ -19,6 +20,10 @@ const SIZE_MAP = {
 
 export function Avatar({ uri, name = 'User', size = 'md', style }: AvatarProps) {
   const [hasError, setHasError] = useState(false);
+
+  useEffect(() => {
+    setHasError(false);
+  }, [uri]);
 
   const getInitials = (text: string) => {
     const clean = text.replace(/^(Dr\.|Mr\.|Mrs\.|Ms\.)\s*/i, '').trim();
@@ -62,6 +67,9 @@ export function Avatar({ uri, name = 'User', size = 'md', style }: AvatarProps) 
     <Image
       source={{ uri }}
       onError={() => setHasError(true)}
+      contentFit="cover"
+      cachePolicy="memory-disk"
+      transition={200}
       style={[
         styles.image,
         {
@@ -71,7 +79,6 @@ export function Avatar({ uri, name = 'User', size = 'md', style }: AvatarProps) 
         },
         style as StyleProp<ImageStyle>,
       ]}
-      resizeMode="cover"
     />
   );
 }

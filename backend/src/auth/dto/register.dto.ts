@@ -84,4 +84,12 @@ export class RegisterDto {
 
   @IsOptional()
   qualifications?: string[] | string;
+
+  @IsOptional()
+  @IsString()
+  profilePhoto?: string;
+
+  @IsOptional()
+  @Type(() => Number)
+  slotDurationMinutes?: number;
 }

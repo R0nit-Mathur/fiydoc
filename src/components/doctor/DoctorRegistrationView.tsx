@@ -8,6 +8,9 @@ import {
   StyleSheet,
   Platform,
   ScrollView,
+  Image,
+  Switch,
+  Alert,
 } from 'react-native';
 import { useRouter } from 'expo-router';
 import * as Haptics from 'expo-haptics';
@@ -28,6 +31,7 @@ import {
   ChevronDown,
   Edit2,
   X,
+  Camera,
 } from 'lucide-react-native';
 import { Modal } from 'react-native';
 import { StepProgressTracker } from '@/components/ui/StepProgressTracker';
@@ -41,9 +45,47 @@ import { authService } from '@/services/authService';
 import { apiClient } from '@/services/apiClient';
 import { fileUploadService } from '@/services/fileUploadService';
 import { StitchColors } from '@/constants/theme';
-import { pickClinicalDocument } from '@/utils/mediaPicker';
+import { pickClinicalDocument, pickImageFromGallery } from '@/utils/mediaPicker';
 import locationsData from '@/constants/locations.json';
 import { INDIAN_MEDICAL_COUNCILS } from '@/services/doctorVerificationService';
+
+const POPULAR_DEPARTMENTS = [
+  'General Medicine',
+  'Cardiology',
+  'Pediatrics',
+  'Orthopedics',
+  'Dermatology',
+  'Neurology',
+  'Obstetrics & Gynecology',
+  'General Surgery',
+  'ENT',
+  'Ophthalmology',
+  'Gastroenterology',
+  'Pulmonology',
+  'Oncology',
+  'Psychiatry',
+  'Emergency Medicine',
+];
+
+const POPULAR_DESIGNATIONS = [
+  'Consultant',
+  'Senior Consultant',
+  'Visiting Consultant',
+  'Head of Department (HOD)',
+  'Associate Consultant',
+  'Attending Physician',
+  'Assistant Professor',
+  'Associate Professor',
+  'Professor',
+  'Resident Medical Officer (RMO)',
+  'Fellow / Specialist',
+];
+
+const MORNING_START_TIMES = ['08:00 AM', '08:30 AM', '09:00 AM', '09:30 AM', '10:00 AM', '10:30 AM', '11:00 AM', '11:30 AM', '12:00 PM', '12:30 PM'];
+const MORNING_END_TIMES = ['10:30 AM', '11:00 AM', '11:30 AM', '12:00 PM', '12:30 PM', '01:00 PM', '01:30 PM', '02:00 PM', '02:30 PM', '03:00 PM'];
+const EVENING_START_TIMES = ['04:00 PM', '04:30 PM', '05:00 PM', '05:30 PM', '06:00 PM', '06:30 PM', '07:00 PM'];
+const EVENING_END_TIMES = ['06:30 PM', '07:00 PM', '07:30 PM', '08:00 PM', '08:30 PM', '09:00 PM', '09:30 PM', '10:00 PM'];
+
 
 export interface DoctorRegistrationViewProps {
   onSwitchToPatient?: () => void;
@@ -99,8 +141,28 @@ export function DoctorRegistrationView({
   const [contactPhone, setContactPhone] = useState(user?.phone || '');
   const [contactEmail, setContactEmail] = useState(user?.email || '');
   const [password, setPassword] = useState('');
+  const [profilePhoto, setProfilePhoto] = useState<string | null>(null);
+  const [uploadingPhoto, setUploadingPhoto] = useState(false);
   const [step1Loading, setStep1Loading] = useState(false);
   const [step1Success, setStep1Success] = useState(false);
+
+  const handlePickProfilePhoto = async () => {
+    const uri = await pickImageFromGallery();
+    if (uri) {
+      setProfilePhoto(uri);
+      setUploadingPhoto(true);
+      try {
+        const res = await fileUploadService.uploadFile({ uri, name: `doc_reg_${Date.now()}.jpg` }, 'doctors');
+        if (res?.url) {
+          setProfilePhoto(res.url);
+        }
+      } catch (err: any) {
+        console.warn('[DoctorRegistrationView] Photo upload notice:', err?.message);
+      } finally {
+        setUploadingPhoto(false);
+      }
+    }
+  };
 
   // Step 2: 4-Card Flow State
   const [cardIndex, setCardIndex] = useState(0); // 0 = UG, 1 = Council, 2 = PG, 3 = ID Proof
@@ -115,7 +177,7 @@ export function DoctorRegistrationView({
   const [ugFileUri, setUgFileUri] = useState<string | null>(null);
 
   // Card 2: Council
-  const [primaryCouncil, setPrimaryCouncil] = useState('State Medical Council / MCI');
+  const [primaryCouncil, setPrimaryCouncil] = useState('');
   const [councilRegNumber, setCouncilRegNumber] = useState('');
   const [councilRegYear, setCouncilRegYear] = useState('');
   const [dualLicenseActive, setDualLicenseActive] = useState(false);
@@ -179,22 +241,36 @@ export function DoctorRegistrationView({
     url: null,
   });
 
+  // Practice Scope: both = Both Clinic & Hospital, clinic_only = Own Clinic Only, hospital_only = Hospital Only
+  const [practiceScope, setPracticeScope] = useState<'both' | 'clinic_only' | 'hospital_only'>('both');
+
   // Slide 3: OPD Timings & Consultation Fee
   const [consultationFee, setConsultationFee] = useState('800');
   const [slotDurationMins, setSlotDurationMins] = useState('15');
   const [selectedDays, setSelectedDays] = useState<string[]>(['M', 'T', 'W', 'T2', 'F', 'S']);
+  const [morningEnabled, setMorningEnabled] = useState(true);
+  const [eveningEnabled, setEveningEnabled] = useState(true);
+  const [morningStart, setMorningStart] = useState('10:30 AM');
+  const [morningEnd, setMorningEnd] = useState('01:30 PM');
+  const [eveningStart, setEveningStart] = useState('05:00 PM');
+  const [eveningEnd, setEveningEnd] = useState('08:00 PM');
   const [morningShiftTime, setMorningShiftTime] = useState('10:30 AM – 01:30 PM');
   const [eveningShiftTime, setEveningShiftTime] = useState('05:00 PM – 08:00 PM');
   const [morningTokens, setMorningTokens] = useState('12');
   const [eveningTokens, setEveningTokens] = useState('12');
   const [showTimingModal, setShowTimingModal] = useState(false);
-  const [tempMorningTime, setTempMorningTime] = useState('10:30 AM – 01:30 PM');
-  const [tempEveningTime, setTempEveningTime] = useState('05:00 PM – 08:00 PM');
+  const [tempMorningEnabled, setTempMorningEnabled] = useState(true);
+  const [tempEveningEnabled, setTempEveningEnabled] = useState(true);
+  const [tempMorningStart, setTempMorningStart] = useState('10:30 AM');
+  const [tempMorningEnd, setTempMorningEnd] = useState('01:30 PM');
+  const [tempEveningStart, setTempEveningStart] = useState('05:00 PM');
+  const [tempEveningEnd, setTempEveningEnd] = useState('08:00 PM');
+  const [tempSlotDuration, setTempSlotDuration] = useState('15');
   const [tempMorningTokens, setTempMorningTokens] = useState('12');
   const [tempEveningTokens, setTempEveningTokens] = useState('12');
 
   // Autocomplete Dropdown State
-  const [activeDropdown, setActiveDropdown] = useState<'city' | 'college' | 'hospital' | 'ugState' | 'pgState' | 'pgCollege' | 'primaryCouncil' | null>(null);
+  const [activeDropdown, setActiveDropdown] = useState<'city' | 'college' | 'hospital' | 'ugState' | 'pgState' | 'pgCollege' | 'primaryCouncil' | 'department' | 'designation' | null>(null);
 
   const [finalSubmitting, setFinalSubmitting] = useState(false);
   const [error, setError] = useState('');
@@ -231,6 +307,23 @@ export function DoctorRegistrationView({
       const cleanPhone = contactPhone.trim();
       const cleanPassword = password.trim();
 
+      // Ensure profile photo is uploaded to permanent cloud storage if still a local/data URI
+      let resolvedPhoto = profilePhoto;
+      if (profilePhoto && (profilePhoto.startsWith('file:') || profilePhoto.startsWith('blob:'))) {
+        try {
+          const uploadRes = await fileUploadService.uploadFile(
+            { uri: profilePhoto, name: `doc_reg_${Date.now()}.jpg` },
+            'doctors'
+          );
+          if (uploadRes?.url) {
+            resolvedPhoto = uploadRes.url;
+            setProfilePhoto(uploadRes.url);
+          }
+        } catch (uploadErr) {
+          console.warn('[DoctorRegistrationView] Cloud photo upload notice:', uploadErr);
+        }
+      }
+
       // If user is not yet logged in or registered, register immediately on backend
       const currentSession = useAuthStore.getState().user;
       if (!currentSession?.isLoggedIn || currentSession?.email !== cleanEmail) {
@@ -244,6 +337,7 @@ export function DoctorRegistrationView({
           {
             specialization: specialization.trim() || 'General Medicine',
             consultationFee: Number(consultationFee) || 500,
+            profilePhoto: resolvedPhoto || undefined,
           }
         );
         setSession(session);
@@ -329,6 +423,10 @@ export function DoctorRegistrationView({
 
   const handleSlide1Continue = () => {
     setError('');
+    if (practiceScope === 'hospital_only') {
+      setSlideIndex(1);
+      return;
+    }
     if (!clinicName.trim()) {
       setError('Clinic or Chamber Name is required.');
       return;
@@ -341,12 +439,16 @@ export function DoctorRegistrationView({
       setError('City and PIN Code are required for OPD location setup.');
       return;
     }
+    if (practiceScope === 'clinic_only') {
+      setSlideIndex(2);
+      return;
+    }
     setSlideIndex(1);
   };
 
   const handleSelectSlideTab = (targetIndex: number) => {
     if (targetIndex > slideIndex) {
-      if (slideIndex === 0 && (!clinicName.trim() || !clinicAddress.trim())) {
+      if (slideIndex === 0 && practiceScope !== 'hospital_only' && (!clinicName.trim() || !clinicAddress.trim())) {
         setError('Please provide required clinic information before moving forward.');
         return;
       }
@@ -406,15 +508,45 @@ export function DoctorRegistrationView({
         ? `${clinicAddress.trim()}, ${clinicCity.trim()} ${clinicPin.trim()}`
         : 'Clinical Practice Address Pending';
 
+      const timingParts: string[] = [];
+      if (morningEnabled && morningShiftTime && morningShiftTime !== 'Not Scheduled') timingParts.push(morningShiftTime);
+      if (eveningEnabled && eveningShiftTime && eveningShiftTime !== 'Not Scheduled') timingParts.push(eveningShiftTime);
+      const resolvedTimings = timingParts.join(', ') || '10:30 AM – 01:30 PM, 05:00 PM – 08:00 PM';
+
+      const clinicNameResolved = practiceScope === 'hospital_only'
+        ? (hospitalName.trim() || `${cleanName}'s Hospital OPD`)
+        : (clinicName.trim() || hospitalName.trim() || `${cleanName}'s Clinic`);
+      const clinicAddressResolved = practiceScope === 'hospital_only'
+        ? (clinicCity.trim() ? `${hospitalName.trim()}, ${clinicCity.trim()}` : hospitalName.trim() || 'Hospital Practice')
+        : fullClinicAddress;
+
+      let resolvedFinalPhoto = profilePhoto;
+      if (profilePhoto && (profilePhoto.startsWith('file:') || profilePhoto.startsWith('blob:'))) {
+        try {
+          const uploadRes = await fileUploadService.uploadFile(
+            { uri: profilePhoto, name: `doc_reg_${Date.now()}.jpg` },
+            'doctors'
+          );
+          if (uploadRes?.url) {
+            resolvedFinalPhoto = uploadRes.url;
+            setProfilePhoto(uploadRes.url);
+          }
+        } catch (uploadErr) {
+          console.warn('[DoctorRegistrationView] Final photo cloud upload notice:', uploadErr);
+        }
+      }
+
       const doctorFields = {
-        licenseNumber: councilRegNumber.trim() || `NMC-${Date.now()}`,
+        licenseNumber: councilRegNumber.trim() || 'Pending',
         registrationAuthority: primaryCouncil.trim() || 'National Medical Commission / State Council',
         specialization: specialization.trim() || 'General Medicine',
         qualifications: qualificationList,
-        clinicName: clinicName.trim() || hospitalName.trim() || `${cleanName}'s Clinic`,
-        clinicAddress: fullClinicAddress,
-        clinicTimings: `${morningShiftTime}, ${eveningShiftTime}`,
+        clinicName: clinicNameResolved,
+        clinicAddress: clinicAddressResolved,
+        clinicTimings: resolvedTimings,
         consultationFee: Number(consultationFee) || 800,
+        profilePhoto: resolvedFinalPhoto || undefined,
+        slotDurationMinutes: Number(slotDurationMins) || 15,
       };
 
       let currentSession = useAuthStore.getState().user;
@@ -446,6 +578,7 @@ export function DoctorRegistrationView({
               qualifications: doctorFields.qualifications,
               licenseNumber: doctorFields.licenseNumber,
               registrationAuthority: doctorFields.registrationAuthority,
+              profilePhoto: resolvedFinalPhoto || undefined,
             }),
           });
         } catch (updateErr: any) {
@@ -552,6 +685,60 @@ export function DoctorRegistrationView({
 
           {/* Form Card */}
           <View style={styles.formCard}>
+            {/* Doctor Profile Photo */}
+            <View style={{ alignItems: 'center', marginBottom: 20 }}>
+              <Pressable
+                onPress={handlePickProfilePhoto}
+                style={{
+                  position: 'relative',
+                  width: 84,
+                  height: 84,
+                  borderRadius: 42,
+                  backgroundColor: '#F1F5F9',
+                  borderWidth: 2,
+                  borderColor: profilePhoto ? StitchColors.primary : '#CBD5E1',
+                  borderStyle: profilePhoto ? 'solid' : 'dashed',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  overflow: 'hidden',
+                }}
+                accessibilityRole="button"
+                accessibilityLabel="Upload profile photo"
+              >
+                {profilePhoto ? (
+                  <Image source={{ uri: profilePhoto }} style={{ width: '100%', height: '100%' }} />
+                ) : (
+                  <View style={{ alignItems: 'center', justifyContent: 'center' }}>
+                    <Camera size={26} color="#64748B" />
+                    <Text style={{ fontSize: 10, fontWeight: '700', color: '#64748B', marginTop: 2 }}>Photo</Text>
+                  </View>
+                )}
+                {uploadingPhoto ? (
+                  <View style={[StyleSheet.absoluteFill, { backgroundColor: 'rgba(0,0,0,0.4)', alignItems: 'center', justifyContent: 'center' }]}>
+                    <ActivityIndicator size="small" color="#FFFFFF" />
+                  </View>
+                ) : (
+                  <View
+                    style={{
+                      position: 'absolute',
+                      bottom: 0,
+                      right: 0,
+                      backgroundColor: StitchColors.primary,
+                      borderRadius: 12,
+                      padding: 4,
+                      borderWidth: 2,
+                      borderColor: '#FFFFFF',
+                    }}
+                  >
+                    <Edit2 size={11} color="#FFFFFF" />
+                  </View>
+                )}
+              </Pressable>
+              <Text style={{ fontSize: 12, color: '#64748B', marginTop: 6, fontWeight: '600' }}>
+                {profilePhoto ? 'Tap to change profile photo' : 'Upload Profile Photo (Optional)'}
+              </Text>
+            </View>
+
             {/* Full Name with Title */}
             <View style={styles.inputGroup}>
               <Text style={styles.inputLabel}>Full Name with Title</Text>
@@ -1562,31 +1749,75 @@ export function DoctorRegistrationView({
                 </View>
               </View>
 
-              {/* Practice Type */}
+              {/* Practice Scope */}
               <View style={styles.inputGroup}>
-                <Text style={styles.inputLabel}>Practice Type</Text>
+                <Text style={styles.inputLabel}>Practice Setting</Text>
                 <View style={styles.radioChipsGrid}>
-                  {(['Own Clinic', 'Hospital OPD', 'Polyclinic'] as const).map((type) => (
+                  {[
+                    { key: 'both', label: 'Both Clinic & Hospital' },
+                    { key: 'clinic_only', label: 'Own Clinic Only' },
+                    { key: 'hospital_only', label: 'Hospital Only' },
+                  ].map((item) => (
                     <Pressable
-                      key={type}
-                      onPress={() => setPracticeType(type)}
+                      key={item.key}
+                      onPress={() => setPracticeScope(item.key as any)}
                       style={[
                         styles.radioChip,
-                        practiceType === type ? styles.radioChipActive : styles.radioChipInactive,
+                        practiceScope === item.key ? styles.radioChipActive : styles.radioChipInactive,
                       ]}
                     >
                       <Text
                         style={[
                           styles.radioChipText,
-                          practiceType === type && styles.radioChipTextActive,
+                          practiceScope === item.key && styles.radioChipTextActive,
                         ]}
                       >
-                        {type}
+                        {item.label}
                       </Text>
                     </Pressable>
                   ))}
                 </View>
               </View>
+
+              {practiceScope === 'hospital_only' && (
+                <View style={[styles.sealNoticeCard, { marginTop: 4, marginBottom: 12, backgroundColor: '#EFF6FF', borderColor: '#BFDBFE' }]}>
+                  <Building2 size={20} color={StitchColors.primary} style={{ marginTop: 2 }} />
+                  <View style={{ flex: 1 }}>
+                    <Text style={[styles.sealNoticeTitle, { color: '#1E3A8A' }]}>Hospital Practice Profile</Text>
+                    <Text style={[styles.sealNoticeDesc, { color: '#2563EB' }]}>
+                      You practice exclusively in a hospital setting. Private clinic establishment proof and chamber setup are not required. You can proceed directly to Hospital Affiliations.
+                    </Text>
+                  </View>
+                </View>
+              )}
+
+              {practiceScope !== 'hospital_only' && (
+                <>
+                  {/* Practice Type */}
+                  <View style={styles.inputGroup}>
+                    <Text style={styles.inputLabel}>Practice Type</Text>
+                    <View style={styles.radioChipsGrid}>
+                      {(['Own Clinic', 'Hospital OPD', 'Polyclinic'] as const).map((type) => (
+                        <Pressable
+                          key={type}
+                          onPress={() => setPracticeType(type)}
+                          style={[
+                            styles.radioChip,
+                            practiceType === type ? styles.radioChipActive : styles.radioChipInactive,
+                          ]}
+                        >
+                          <Text
+                            style={[
+                              styles.radioChipText,
+                              practiceType === type && styles.radioChipTextActive,
+                            ]}
+                          >
+                            {type}
+                          </Text>
+                        </Pressable>
+                      ))}
+                    </View>
+                  </View>
 
               {/* Clinic Name */}
               <View style={styles.inputGroup}>
@@ -1713,6 +1944,8 @@ export function DoctorRegistrationView({
                   }, 'doctors');
                 }}
               />
+                </>
+              )}
 
               {/* Slide 1 CTA */}
               <View style={[styles.buttonRowTwo, { marginTop: 12 }]}>
@@ -1724,13 +1957,15 @@ export function DoctorRegistrationView({
                   style={styles.secondaryButton}
                 >
                   <ArrowLeft size={16} color="#334155" />
-                  <Text style={styles.secondaryButtonText}>Back: Step 2</Text>
+                  <Text style={styles.secondaryButtonText}>Back</Text>
                 </Pressable>
                 <Pressable
                   onPress={handleSlide1Continue}
                   style={styles.primaryFlexButton}
                 >
-                  <Text style={styles.primaryFlexButtonText}>Next: Hospital</Text>
+                  <Text style={styles.primaryFlexButtonText}>
+                    {practiceScope === 'clinic_only' ? 'Next: Schedule' : 'Next: Hospital'}
+                  </Text>
                   <ArrowRight size={16} color="#ffffff" />
                 </Pressable>
               </View>
@@ -1810,28 +2045,97 @@ export function DoctorRegistrationView({
               {/* Department & Designation */}
               <View style={styles.rowTwoCols}>
                 <View style={[styles.inputGroup, { flex: 1 }]}>
-                  <Text style={styles.inputLabel}>Department</Text>
+                  <View style={styles.dropdownHeaderRow}>
+                    <Text style={styles.inputLabel}>Department</Text>
+                    <Pressable
+                      onPress={() => setActiveDropdown(activeDropdown === 'department' ? null : 'department')}
+                      hitSlop={8}
+                      style={styles.dropdownToggleBtn}
+                    >
+                      <Text style={styles.dropdownToggleText}>Browse</Text>
+                      <ChevronDown size={12} color={StitchColors.primary} />
+                    </Pressable>
+                  </View>
                   <View style={styles.inputWrapper}>
                     <TextInput
                       value={hospitalDept}
-                      onChangeText={setHospitalDept}
-                      placeholder="Department (e.g. Cardiology)"
+                      onChangeText={(val) => {
+                        setHospitalDept(val);
+                        if (val.trim().length > 0) setActiveDropdown('department');
+                      }}
+                      onFocus={() => setActiveDropdown('department')}
+                      placeholder="e.g. Cardiology"
                       placeholderTextColor="#94A3B8"
                       style={styles.textInput}
                     />
                   </View>
+                  {activeDropdown === 'department' && (
+                    <View style={styles.autocompleteCard}>
+                      <ScrollView style={{ maxHeight: 160 }} keyboardShouldPersistTaps="handled" nestedScrollEnabled>
+                        {POPULAR_DEPARTMENTS
+                          .filter((d) => !hospitalDept.trim() || d.toLowerCase().includes(hospitalDept.toLowerCase().trim()))
+                          .map((dept) => (
+                            <Pressable
+                              key={dept}
+                              onPress={() => {
+                                setHospitalDept(dept);
+                                setActiveDropdown(null);
+                              }}
+                              style={styles.autocompleteItem}
+                            >
+                              <Text style={styles.autocompleteItemText}>{dept}</Text>
+                            </Pressable>
+                          ))}
+                      </ScrollView>
+                    </View>
+                  )}
                 </View>
+
                 <View style={[styles.inputGroup, { flex: 1 }]}>
-                  <Text style={styles.inputLabel}>Designation</Text>
+                  <View style={styles.dropdownHeaderRow}>
+                    <Text style={styles.inputLabel}>Designation</Text>
+                    <Pressable
+                      onPress={() => setActiveDropdown(activeDropdown === 'designation' ? null : 'designation')}
+                      hitSlop={8}
+                      style={styles.dropdownToggleBtn}
+                    >
+                      <Text style={styles.dropdownToggleText}>Browse</Text>
+                      <ChevronDown size={12} color={StitchColors.primary} />
+                    </Pressable>
+                  </View>
                   <View style={styles.inputWrapper}>
                     <TextInput
                       value={hospitalDesignation}
-                      onChangeText={setHospitalDesignation}
-                      placeholder="Designation (e.g. Consultant)"
+                      onChangeText={(val) => {
+                        setHospitalDesignation(val);
+                        if (val.trim().length > 0) setActiveDropdown('designation');
+                      }}
+                      onFocus={() => setActiveDropdown('designation')}
+                      placeholder="e.g. Consultant"
                       placeholderTextColor="#94A3B8"
                       style={styles.textInput}
                     />
                   </View>
+                  {activeDropdown === 'designation' && (
+                    <View style={styles.autocompleteCard}>
+                      <ScrollView style={{ maxHeight: 160 }} keyboardShouldPersistTaps="handled" nestedScrollEnabled>
+                        {POPULAR_DESIGNATIONS
+                          .filter((des) => !hospitalDesignation.trim() || des.toLowerCase().includes(hospitalDesignation.toLowerCase().trim()))
+                          .map((des) => (
+                            <Pressable
+                              key={des}
+                              onPress={() => {
+                                setHospitalDesignation(des);
+                                setActiveDropdown(null);
+                              }}
+                              style={styles.autocompleteItem}
+                            >
+                              <Text style={styles.autocompleteItemText}>{des}</Text>
+                            </Pressable>
+                          ))}
+                      </ScrollView>
+                    </View>
+                  )}
                 </View>
               </View>
 
@@ -2008,10 +2312,15 @@ export function DoctorRegistrationView({
                   <Text style={styles.inputLabel}>Daily OPD Shift Timings</Text>
                   <Pressable
                     onPress={() => {
-                      setTempMorningTime(morningShiftTime);
-                      setTempEveningTime(eveningShiftTime);
+                      setTempMorningEnabled(morningEnabled);
+                      setTempEveningEnabled(eveningEnabled);
+                      setTempMorningStart(morningStart);
+                      setTempMorningEnd(morningEnd);
+                      setTempEveningStart(eveningStart);
+                      setTempEveningEnd(eveningEnd);
                       setTempMorningTokens(morningTokens);
                       setTempEveningTokens(eveningTokens);
+                      setTempSlotDuration(slotDurationMins);
                       setShowTimingModal(true);
                     }}
                     hitSlop={8}
@@ -2022,95 +2331,206 @@ export function DoctorRegistrationView({
                   </Pressable>
                 </View>
 
-                <View style={styles.shiftCard}>
-                  <View style={styles.shiftRow}>
-                    <View style={styles.shiftGreenDot} />
-                    <Text style={styles.shiftName}>Morning Shift:</Text>
-                    <Text style={styles.shiftTime}>{morningShiftTime}</Text>
+                {morningEnabled && (
+                  <View style={styles.shiftCard}>
+                    <View style={styles.shiftRow}>
+                      <View style={styles.shiftGreenDot} />
+                      <Text style={styles.shiftName}>Morning Shift:</Text>
+                      <Text style={styles.shiftTime}>{morningShiftTime}</Text>
+                    </View>
+                    <View style={styles.tokenBadge}>
+                      <Text style={styles.tokenBadgeText}>{morningTokens} Tokens</Text>
+                    </View>
                   </View>
-                  <View style={styles.tokenBadge}>
-                    <Text style={styles.tokenBadgeText}>{morningTokens} Tokens</Text>
-                  </View>
-                </View>
+                )}
 
-                <View style={styles.shiftCard}>
-                  <View style={styles.shiftRow}>
-                    <View style={styles.shiftGreenDot} />
-                    <Text style={styles.shiftName}>Evening Shift:</Text>
-                    <Text style={styles.shiftTime}>{eveningShiftTime}</Text>
+                {eveningEnabled && (
+                  <View style={styles.shiftCard}>
+                    <View style={styles.shiftRow}>
+                      <View style={styles.shiftGreenDot} />
+                      <Text style={styles.shiftName}>Evening Shift:</Text>
+                      <Text style={styles.shiftTime}>{eveningShiftTime}</Text>
+                    </View>
+                    <View style={styles.tokenBadge}>
+                      <Text style={styles.tokenBadgeText}>{eveningTokens} Tokens</Text>
+                    </View>
                   </View>
-                  <View style={styles.tokenBadge}>
-                    <Text style={styles.tokenBadgeText}>{eveningTokens} Tokens</Text>
-                  </View>
-                </View>
+                )}
+
+                {!morningEnabled && !eveningEnabled && (
+                  <Text style={{ fontSize: 13, color: '#ef4444', fontStyle: 'italic', marginVertical: 4 }}>
+                    Please enable at least one shift (Morning or Evening).
+                  </Text>
+                )}
               </View>
 
-              {/* Timing Modal Popup */}
+              {/* Structured Timing Modal Popup */}
               <Modal visible={showTimingModal} transparent animationType="fade">
                 <View style={styles.modalOverlay}>
-                  <View style={styles.modalContentCard}>
+                  <View style={[styles.modalContentCard, { maxHeight: '90%' }]}>
                     <View style={styles.modalHeaderRow}>
-                      <Text style={styles.modalTitleText}>Edit OPD Shift Timings</Text>
+                      <View>
+                        <Text style={styles.modalTitleText}>Set OPD Shift Timings</Text>
+                        <Text style={{ fontSize: 11, color: '#64748b', marginTop: 2 }}>Choose shifts, hours, and token capacity</Text>
+                      </View>
                       <Pressable onPress={() => setShowTimingModal(false)} hitSlop={10}>
-                        <X size={18} color="#64748b" />
+                        <X size={20} color="#64748b" />
                       </Pressable>
                     </View>
 
-                    <View style={styles.modalBody}>
-                      <View style={styles.inputGroup}>
-                        <Text style={styles.inputLabel}>Morning Shift Hours</Text>
-                        <View style={styles.inputWrapper}>
-                          <TextInput
-                            value={tempMorningTime}
-                            onChangeText={setTempMorningTime}
-                            placeholder="10:30 AM – 01:30 PM"
-                            placeholderTextColor="#737783"
-                            style={styles.textInput}
+                    <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={{ gap: 14, paddingBottom: 10 }}>
+                      {/* Morning Shift */}
+                      <View style={styles.timingSectionCard}>
+                        <View style={styles.timingSectionHeader}>
+                          <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+                            <View style={[styles.shiftGreenDot, !tempMorningEnabled && { backgroundColor: '#94a3b8' }]} />
+                            <Text style={styles.timingSectionTitle}>Morning Shift</Text>
+                          </View>
+                          <Switch
+                            value={tempMorningEnabled}
+                            onValueChange={setTempMorningEnabled}
+                            trackColor={{ false: '#e2e8f0', true: StitchColors.primary }}
+                            thumbColor="#ffffff"
                           />
                         </View>
+
+                        {tempMorningEnabled && (
+                          <View style={{ gap: 10, marginTop: 8 }}>
+                            {/* Start Time */}
+                            <View>
+                              <Text style={styles.pillGroupLabel}>Start Time: <Text style={{ fontWeight: '700', color: StitchColors.primary }}>{tempMorningStart}</Text></Text>
+                              <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.pillScrollContent}>
+                                {MORNING_START_TIMES.map((t) => (
+                                  <Pressable
+                                    key={t}
+                                    onPress={() => setTempMorningStart(t)}
+                                    style={[styles.timePill, tempMorningStart === t && styles.timePillActive]}
+                                  >
+                                    <Text style={[styles.timePillText, tempMorningStart === t && styles.timePillTextActive]}>{t}</Text>
+                                  </Pressable>
+                                ))}
+                              </ScrollView>
+                            </View>
+
+                            {/* End Time */}
+                            <View>
+                              <Text style={styles.pillGroupLabel}>End Time: <Text style={{ fontWeight: '700', color: StitchColors.primary }}>{tempMorningEnd}</Text></Text>
+                              <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.pillScrollContent}>
+                                {MORNING_END_TIMES.map((t) => (
+                                  <Pressable
+                                    key={t}
+                                    onPress={() => setTempMorningEnd(t)}
+                                    style={[styles.timePill, tempMorningEnd === t && styles.timePillActive]}
+                                  >
+                                    <Text style={[styles.timePillText, tempMorningEnd === t && styles.timePillTextActive]}>{t}</Text>
+                                  </Pressable>
+                                ))}
+                              </ScrollView>
+                            </View>
+
+                            {/* Token Capacity */}
+                            <View>
+                              <Text style={styles.pillGroupLabel}>Token Capacity: <Text style={{ fontWeight: '700', color: StitchColors.primary }}>{tempMorningTokens} Tokens</Text></Text>
+                              <View style={styles.pillWrapRow}>
+                                {['8', '10', '12', '15', '20', '25'].map((tok) => (
+                                  <Pressable
+                                    key={tok}
+                                    onPress={() => setTempMorningTokens(tok)}
+                                    style={[styles.tokenPill, tempMorningTokens === tok && styles.timePillActive]}
+                                  >
+                                    <Text style={[styles.timePillText, tempMorningTokens === tok && styles.timePillTextActive]}>{tok}</Text>
+                                  </Pressable>
+                                ))}
+                              </View>
+                            </View>
+                          </View>
+                        )}
                       </View>
 
-                      <View style={styles.inputGroup}>
-                        <Text style={styles.inputLabel}>Morning Shift Capacity (Tokens)</Text>
-                        <View style={styles.inputWrapper}>
-                          <TextInput
-                            value={tempMorningTokens}
-                            onChangeText={(t) => setTempMorningTokens(t.replace(/[^0-9]/g, ''))}
-                            placeholder="12"
-                            placeholderTextColor="#737783"
-                            keyboardType="number-pad"
-                            style={styles.textInput}
+                      {/* Evening Shift */}
+                      <View style={styles.timingSectionCard}>
+                        <View style={styles.timingSectionHeader}>
+                          <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+                            <View style={[styles.shiftGreenDot, !tempEveningEnabled && { backgroundColor: '#94a3b8' }]} />
+                            <Text style={styles.timingSectionTitle}>Evening Shift</Text>
+                          </View>
+                          <Switch
+                            value={tempEveningEnabled}
+                            onValueChange={setTempEveningEnabled}
+                            trackColor={{ false: '#e2e8f0', true: StitchColors.primary }}
+                            thumbColor="#ffffff"
                           />
                         </View>
+
+                        {tempEveningEnabled && (
+                          <View style={{ gap: 10, marginTop: 8 }}>
+                            {/* Start Time */}
+                            <View>
+                              <Text style={styles.pillGroupLabel}>Start Time: <Text style={{ fontWeight: '700', color: StitchColors.primary }}>{tempEveningStart}</Text></Text>
+                              <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.pillScrollContent}>
+                                {EVENING_START_TIMES.map((t) => (
+                                  <Pressable
+                                    key={t}
+                                    onPress={() => setTempEveningStart(t)}
+                                    style={[styles.timePill, tempEveningStart === t && styles.timePillActive]}
+                                  >
+                                    <Text style={[styles.timePillText, tempEveningStart === t && styles.timePillTextActive]}>{t}</Text>
+                                  </Pressable>
+                                ))}
+                              </ScrollView>
+                            </View>
+
+                            {/* End Time */}
+                            <View>
+                              <Text style={styles.pillGroupLabel}>End Time: <Text style={{ fontWeight: '700', color: StitchColors.primary }}>{tempEveningEnd}</Text></Text>
+                              <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.pillScrollContent}>
+                                {EVENING_END_TIMES.map((t) => (
+                                  <Pressable
+                                    key={t}
+                                    onPress={() => setTempEveningEnd(t)}
+                                    style={[styles.timePill, tempEveningEnd === t && styles.timePillActive]}
+                                  >
+                                    <Text style={[styles.timePillText, tempEveningEnd === t && styles.timePillTextActive]}>{t}</Text>
+                                  </Pressable>
+                                ))}
+                              </ScrollView>
+                            </View>
+
+                            {/* Token Capacity */}
+                            <View>
+                              <Text style={styles.pillGroupLabel}>Token Capacity: <Text style={{ fontWeight: '700', color: StitchColors.primary }}>{tempEveningTokens} Tokens</Text></Text>
+                              <View style={styles.pillWrapRow}>
+                                {['8', '10', '12', '15', '20', '25'].map((tok) => (
+                                  <Pressable
+                                    key={tok}
+                                    onPress={() => setTempEveningTokens(tok)}
+                                    style={[styles.tokenPill, tempEveningTokens === tok && styles.timePillActive]}
+                                  >
+                                    <Text style={[styles.timePillText, tempEveningTokens === tok && styles.timePillTextActive]}>{tok}</Text>
+                                  </Pressable>
+                                ))}
+                              </View>
+                            </View>
+                          </View>
+                        )}
                       </View>
 
-                      <View style={styles.inputGroup}>
-                        <Text style={styles.inputLabel}>Evening Shift Hours</Text>
-                        <View style={styles.inputWrapper}>
-                          <TextInput
-                            value={tempEveningTime}
-                            onChangeText={setTempEveningTime}
-                            placeholder="05:00 PM – 08:00 PM"
-                            placeholderTextColor="#737783"
-                            style={styles.textInput}
-                          />
+                      {/* Slot Duration */}
+                      <View style={styles.timingSectionCard}>
+                        <Text style={styles.pillGroupLabel}>Slot Duration (Minutes per Patient): <Text style={{ fontWeight: '700', color: StitchColors.primary }}>{tempSlotDuration} mins</Text></Text>
+                        <View style={styles.pillWrapRow}>
+                          {['10', '15', '20', '30', '45'].map((dur) => (
+                            <Pressable
+                              key={dur}
+                              onPress={() => setTempSlotDuration(dur)}
+                              style={[styles.tokenPill, tempSlotDuration === dur && styles.timePillActive]}
+                            >
+                              <Text style={[styles.timePillText, tempSlotDuration === dur && styles.timePillTextActive]}>{dur} min</Text>
+                            </Pressable>
+                          ))}
                         </View>
                       </View>
-
-                      <View style={styles.inputGroup}>
-                        <Text style={styles.inputLabel}>Evening Shift Capacity (Tokens)</Text>
-                        <View style={styles.inputWrapper}>
-                          <TextInput
-                            value={tempEveningTokens}
-                            onChangeText={(t) => setTempEveningTokens(t.replace(/[^0-9]/g, ''))}
-                            placeholder="12"
-                            placeholderTextColor="#737783"
-                            keyboardType="number-pad"
-                            style={styles.textInput}
-                          />
-                        </View>
-                      </View>
-                    </View>
+                    </ScrollView>
 
                     <View style={styles.modalBtnRow}>
                       <Pressable
@@ -2121,10 +2541,21 @@ export function DoctorRegistrationView({
                       </Pressable>
                       <Pressable
                         onPress={() => {
-                          setMorningShiftTime(tempMorningTime.trim() || '10:30 AM – 01:30 PM');
-                          setEveningShiftTime(tempEveningTime.trim() || '05:00 PM – 08:00 PM');
-                          setMorningTokens(tempMorningTokens.trim() || '12');
-                          setEveningTokens(tempEveningTokens.trim() || '12');
+                          if (!tempMorningEnabled && !tempEveningEnabled) {
+                            Alert.alert('Required', 'Please enable at least one shift (Morning or Evening).');
+                            return;
+                          }
+                          setMorningEnabled(tempMorningEnabled);
+                          setEveningEnabled(tempEveningEnabled);
+                          setMorningStart(tempMorningStart);
+                          setMorningEnd(tempMorningEnd);
+                          setEveningStart(tempEveningStart);
+                          setEveningEnd(tempEveningEnd);
+                          setMorningShiftTime(tempMorningEnabled ? `${tempMorningStart} – ${tempMorningEnd}` : 'Not Scheduled');
+                          setEveningShiftTime(tempEveningEnabled ? `${tempEveningStart} – ${tempEveningEnd}` : 'Not Scheduled');
+                          setMorningTokens(tempMorningTokens);
+                          setEveningTokens(tempEveningTokens);
+                          setSlotDurationMins(tempSlotDuration);
                           setShowTimingModal(false);
                           if (Platform.OS !== 'web') Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
                         }}
@@ -2746,7 +3177,8 @@ const styles = StyleSheet.create({
     marginTop: 10,
   },
   secondaryButton: {
-    width: 90,
+    minWidth: 90,
+    paddingHorizontal: 14,
     height: 46,
     borderRadius: 12,
     borderWidth: 1,
@@ -3053,5 +3485,66 @@ const styles = StyleSheet.create({
     fontSize: 13,
     fontWeight: '600',
     color: '#ffffff',
+  },
+  timingSectionCard: {
+    backgroundColor: '#f8fafc',
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: '#e2e8f0',
+    padding: 12,
+  },
+  timingSectionHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+  },
+  timingSectionTitle: {
+    fontSize: 13,
+    fontWeight: '700',
+    color: '#1e293b',
+  },
+  pillGroupLabel: {
+    fontSize: 11.5,
+    fontWeight: '600',
+    color: '#475569',
+    marginBottom: 6,
+  },
+  pillScrollContent: {
+    gap: 6,
+    paddingVertical: 2,
+  },
+  pillWrapRow: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 6,
+  },
+  timePill: {
+    paddingHorizontal: 10,
+    paddingVertical: 6,
+    borderRadius: 8,
+    backgroundColor: '#ffffff',
+    borderWidth: 1,
+    borderColor: '#cbd5e1',
+  },
+  tokenPill: {
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderRadius: 8,
+    backgroundColor: '#ffffff',
+    borderWidth: 1,
+    borderColor: '#cbd5e1',
+  },
+  timePillActive: {
+    backgroundColor: StitchColors.primary,
+    borderColor: StitchColors.primary,
+  },
+  timePillText: {
+    fontSize: 11,
+    fontWeight: '600',
+    color: '#334155',
+  },
+  timePillTextActive: {
+    color: '#ffffff',
+    fontWeight: '700',
   },
 });

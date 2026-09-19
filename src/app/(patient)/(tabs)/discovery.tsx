@@ -34,6 +34,8 @@ import {
   Star,
   Sparkles,
 } from 'lucide-react-native';
+import { useQueryClient } from '@tanstack/react-query';
+import { ALL_SPECIALTIES } from '@/constants/specialties';
 import { StitchColors } from '@/constants/theme';
 import { useDoctorsQuery } from '@/hooks/queries/useDoctorsQuery';
 import { useLocationStore } from '@/store/useLocationStore';
@@ -43,22 +45,16 @@ import { EmptyState } from '@/components/ui/EmptyState';
 import { LocationPermissionModal } from '@/components/location/LocationPermissionModal';
 import { Doctor } from '@/types/index';
 
-const FILTER_PILLS = [
-  { id: 'available_today', label: 'Available Today', hasBolt: true },
-  { id: 'exp_10', label: 'Exp 10+ yrs' },
-  { id: 'fee_1000', label: 'Fees < ₹1000' },
-  { id: 'rating_48', label: '4.8+', hasStar: true },
-  { id: 'more_filters', label: 'Filters', hasTune: true },
-];
+const SPECIALTY_OPTIONS = ['All', ...ALL_SPECIALTIES.map((s) => s.name)];
 
 export default function DoctorDiscoveryScreen() {
   const router = useRouter();
+  const queryClient = useQueryClient();
   const { area, city, formattedAddress } = useLocationStore();
   const params = useLocalSearchParams<{ specialty?: string; query?: string; filter?: string }>();
   
   const [searchQuery, setSearchQuery] = useState(params.query || '');
   const [selectedSpecialty, setSelectedSpecialty] = useState(params.specialty || 'All');
-  const [activeFilters, setActiveFilters] = useState<string[]>([]);
   const [refreshing, setRefreshing] = useState(false);
   const [locationModalVisible, setLocationModalVisible] = useState(false);
 
@@ -74,22 +70,24 @@ export default function DoctorDiscoveryScreen() {
 
   const handleRefresh = async () => {
     setRefreshing(true);
-    await refetch();
+    if (Platform.OS !== 'web') {
+      Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+    }
+    await Promise.all([
+      queryClient.invalidateQueries({ queryKey: ['doctors'] }),
+      refetch(),
+    ]);
     setRefreshing(false);
   };
 
-  const toggleFilter = (filterId: string) => {
+  const handleSelectSpecialty = (specialty: string) => {
     if (Platform.OS !== 'web') {
       Haptics.selectionAsync();
     }
-    if (activeFilters.includes(filterId)) {
-      setActiveFilters(activeFilters.filter((id) => id !== filterId));
-    } else {
-      setActiveFilters([...activeFilters, filterId]);
-    }
+    setSelectedSpecialty(specialty);
   };
 
-  // Filter doctors based on search & filter pills
+  // Filter doctors based on search & specialty, ALWAYS sorted ascending by distance
   const filteredDoctors = useMemo(() => {
     if (!doctors || doctors.length === 0) return [];
     let list = [...doctors];
@@ -104,21 +102,12 @@ export default function DoctorDiscoveryScreen() {
       );
     }
 
-    if (activeFilters.includes('exp_10')) {
-      list = list.filter((doc) => (doc.experienceYears || 0) >= 10);
-    }
-
-    if (activeFilters.includes('fee_1000')) {
-      list = list.filter((doc) => (doc.consultationFee || 0) < 1000);
-    }
-
-    if (activeFilters.includes('rating_48')) {
-      list = list.filter((doc) => (doc.rating || 0) >= 4.8);
-    }
-
-    const isNationwide = !area || area === 'All India' || city === 'All Locations';
-    if (isNationwide) {
-      return list.sort((a, b) => ((b.rating || 0) - (a.rating || 0)) || ((b.experienceYears || 0) - (a.experienceYears || 0)));
+    if (selectedSpecialty && selectedSpecialty !== 'All') {
+      const specLower = selectedSpecialty.toLowerCase();
+      list = list.filter((doc) =>
+        doc.specialty.toLowerCase().includes(specLower) ||
+        specLower.includes(doc.specialty.toLowerCase())
+      );
     }
 
     // Helper to extract numeric distance
@@ -129,11 +118,12 @@ export default function DoctorDiscoveryScreen() {
         const match = rawDist.match(/([0-9.]+)/);
         if (match) return parseFloat(match[1]);
       }
-      return 999;
+      return 999999;
     };
 
+    // Always sort in ascending order of distance
     return list.sort((a, b) => getDistanceNum(a) - getDistanceNum(b));
-  }, [doctors, searchQuery, activeFilters, area, city]);
+  }, [doctors, searchQuery, selectedSpecialty]);
 
   const displaySpecialtyTitle =
     selectedSpecialty === 'All'
@@ -174,14 +164,7 @@ export default function DoctorDiscoveryScreen() {
 
           <Text style={styles.screenTitle}>Find Doctors</Text>
 
-          <Pressable
-            accessibilityRole="button"
-            accessibilityLabel="Filters"
-            style={({ pressed }) => [styles.iconButton, pressed && styles.buttonPressed]}
-            onPress={() => toggleFilter('more_filters')}
-          >
-            <SlidersHorizontal size={18} color={StitchColors.onSurfaceVariant} />
-          </Pressable>
+          <View style={{ width: 40 }} />
         </View>
       </View>
 
@@ -242,41 +225,31 @@ export default function DoctorDiscoveryScreen() {
             </View>
           </View>
 
-          {/* Filter Pills Strip (Horizontal Scroll) */}
+          {/* Specialty Selector Strip (Horizontal Scroll) */}
           <ScrollView
             horizontal
             showsHorizontalScrollIndicator={false}
             contentContainerStyle={styles.filterPillsRow}
           >
-            {FILTER_PILLS.map((pill) => {
-              const isActive = activeFilters.includes(pill.id);
+            {SPECIALTY_OPTIONS.map((specialty) => {
+              const isActive = selectedSpecialty === specialty;
               return (
                 <Pressable
-                  key={pill.id}
-                  onPress={() => toggleFilter(pill.id)}
+                  key={specialty}
+                  onPress={() => handleSelectSpecialty(specialty)}
                   style={[
                     styles.filterChip,
                     isActive ? styles.filterChipActive : styles.filterChipInactive,
                   ]}
                 >
-                  {pill.hasBolt && (
-                    <Zap size={14} color={isActive ? '#ffffff' : StitchColors.primary} />
-                  )}
-                  {pill.hasStar && (
-                    <Star size={13} color="#f59e0b" fill="#f59e0b" />
-                  )}
-                  {pill.hasTune && (
-                    <SlidersHorizontal size={14} color={StitchColors.onSurface} />
-                  )}
                   <Text
                     style={[
                       styles.filterChipText,
                       isActive ? styles.filterChipTextActive : styles.filterChipTextInactive,
                     ]}
                   >
-                    {pill.label}
+                    {specialty}
                   </Text>
-                  {pill.hasBolt && isActive && <View style={styles.activeDot} />}
                 </Pressable>
               );
             })}
@@ -318,8 +291,7 @@ export default function DoctorDiscoveryScreen() {
                 actionTitle="Reset Filters"
                 onAction={() => {
                   setSearchQuery('');
-                  setActiveFilters(['available_today']);
-                  setSelectedSpecialty('Cardiologists');
+                  setSelectedSpecialty('All');
                 }}
               />
             )}

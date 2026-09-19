@@ -59,6 +59,7 @@ import { BorderRadius, Shadows, Spacing, StitchColors, Palette, DEFAULT_DOCTOR_A
 import { AppUpdateModal } from '@/components/ui/AppUpdateModal';
 import { FiYLogo } from '@/components/ui/FiYLogo';
 import { Avatar } from '@/components/ui/Avatar';
+import { getDoctorFirstName } from '@/utils/formatters';
 
 const DOCTOR_AVATAR = DEFAULT_DOCTOR_AVATAR;
 
@@ -166,8 +167,8 @@ export default function DoctorHomeScreen() {
   const nextPatient = todayApts.find((a) => activeStatuses.includes(a.status) && a.status !== 'completed') || null;
   const upcomingPatients = todayApts.filter((a) => activeStatuses.includes(a.status) && a.status !== 'completed').slice(0, 5);
 
-  // Get first name for greeting
-  const firstName = user?.name?.split(' ')[0] || 'Doctor';
+  // Get first name for greeting without duplicating Dr.
+  const firstName = getDoctorFirstName(user?.name);
   // Time-aware greeting
   const hour = new Date().getHours();
   const greeting = hour < 12 ? 'Good morning,' : hour < 17 ? 'Good afternoon,' : 'Good evening,';
@@ -190,7 +191,10 @@ export default function DoctorHomeScreen() {
             <FiYLogo size="md" />
           </View>
           <Pressable
-            onPress={() => signOutAll('USER_ACTION')}
+            onPress={async () => {
+              await signOutAll('USER_ACTION');
+              router.replace('/(auth)/welcome');
+            }}
             style={[styles.pendingLogoutBtn, { backgroundColor: isDark ? 'rgba(239, 68, 68, 0.15)' : '#FEF2F2' }]}
             hitSlop={8}
           >

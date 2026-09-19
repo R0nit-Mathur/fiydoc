@@ -145,3 +145,42 @@ export function toLocalDateString(d: Date = new Date()): string {
   return `${y}-${m}-${day}`;
 }
 
+/**
+ * Strips duplicate or leading "Dr." / "Doctor" prefixes cleanly.
+ */
+export function cleanDoctorName(name?: string | null): string {
+  if (!name || typeof name !== 'string') return '';
+  let cleaned = name.trim();
+  // Strip one or more leading prefixes like "Dr.", "Dr ", "Doctor "
+  while (/^(dr\.?|doctor)\s+/i.test(cleaned)) {
+    cleaned = cleaned.replace(/^(dr\.?|doctor)\s+/i, '').trim();
+  }
+  return cleaned;
+}
+
+/**
+ * Returns just the doctor's first name without any "Dr." prefix.
+ * e.g., "Dr. Ronit Mathur" -> "Ronit"
+ *       "Dr. Dr. Ronit" -> "Ronit"
+ *       "Doctor Ronit" -> "Ronit"
+ *       "Ronit" -> "Ronit"
+ */
+export function getDoctorFirstName(name?: string | null): string {
+  const cleaned = cleanDoctorName(name);
+  if (!cleaned) return 'Doctor';
+  return cleaned.split(' ')[0] || 'Doctor';
+}
+
+/**
+ * Formats doctor name with a single, properly formatted "Dr." prefix.
+ * Handles edge cases like "Dr. Dr. Ronit", "Doctor Ronit", "Ronit", etc.
+ */
+export function formatDoctorName(name?: string | null, mode: 'full' | 'first' = 'first'): string {
+  if (mode === 'first') {
+    return `Dr. ${getDoctorFirstName(name)}`;
+  }
+  const cleaned = cleanDoctorName(name);
+  return cleaned ? `Dr. ${cleaned}` : 'Dr. Doctor';
+}
+
+

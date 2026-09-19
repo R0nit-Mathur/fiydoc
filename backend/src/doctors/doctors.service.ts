@@ -1,10 +1,14 @@
 import { ForbiddenException, Injectable, NotFoundException, UnauthorizedException } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
 import { VerificationStatus, Role } from '@prisma/client';
+import { NotificationsService } from '../notifications/notifications.service';
 
 @Injectable()
 export class DoctorsService {
-  constructor(private prisma: PrismaService) {}
+  constructor(
+    private prisma: PrismaService,
+    private notificationsService: NotificationsService,
+  ) {}
 
   private calculateDistanceKm(lat1: number, lon1: number, lat2: number, lon2: number): number {
     const R = 6371;
@@ -38,8 +42,8 @@ export class DoctorsService {
       fullName: doc.fullName,
       specialty: doc.specialization,
       specialization: doc.specialization,
-      avatar: doc.profilePhoto || null,
-      profilePhoto: doc.profilePhoto || null,
+      avatar: doc.profilePhoto || doc.user?.profilePhoto || null,
+      profilePhoto: doc.profilePhoto || doc.user?.profilePhoto || null,
       consultationFee: doc.consultationFee,
       patientsPerSlot: doc.patientsPerSlot || 1,
       consultationModes: doc.consultationModes || ['CLINIC'],
@@ -95,11 +99,7 @@ export class DoctorsService {
       sortBy?: string;
     }
   ) {
-    const whereClause: any = {
-      verification: {
-        status: VerificationStatus.VERIFIED,
-      },
-    };
+    const whereClause: any = {};
 
     if (specialty && specialty !== 'All') {
       whereClause.specialization = { contains: specialty, mode: 'insensitive' };
@@ -134,6 +134,7 @@ export class DoctorsService {
     const doctors = await this.prisma.doctor.findMany({
       where: whereClause,
       include: {
+        user: true,
         qualifications: true,
         clinic: true,
         verification: true,
@@ -164,15 +165,12 @@ export class DoctorsService {
     const overrideMap = new Map((todayOverrides || []).map((o: any) => [o.doctorId, o]));
 
     const formatted = doctors.map((d) => this.formatDoctor(d, lat, lng, overrideMap.get(d.id)));
-    if (lat != null && lng != null) {
-      return formatted.sort((a, b) => {
-        if (a.distanceKm != null && b.distanceKm != null) return a.distanceKm - b.distanceKm;
-        if (a.distanceKm != null) return -1;
-        if (b.distanceKm != null) return 1;
-        return 0;
-      });
-    }
-    return formatted;
+    return formatted.sort((a, b) => {
+      if (a.distanceKm != null && b.distanceKm != null) return a.distanceKm - b.distanceKm;
+      if (a.distanceKm != null) return -1;
+      if (b.distanceKm != null) return 1;
+      return (a.name || '').localeCompare(b.name || '');
+    });
   }
 
   async getMyDoctorProfile(currentUser: any) {
@@ -313,6 +311,7 @@ export class DoctorsService {
           OR: [{ id }, { userId: id }],
         },
         include: {
+          user: true,
           qualifications: true,
           clinic: true,
           verification: true,
@@ -700,6 +699,20 @@ export class DoctorsService {
       candidateSlotsCombined = candidateSlotsCombined.map((slot) => this.shift24hTime(slot, delayMinutes));
     }
 
+    // Parse break intervals configured by doctor
+    let activeBreaks: { id: string; title: string; startTime: string; endTime: string }[] = [];
+    if (override?.breaks) {
+      if (Array.isArray(override.breaks)) {
+        activeBreaks = override.breaks;
+      } else if (typeof override.breaks === 'string') {
+        try {
+          activeBreaks = JSON.parse(override.breaks);
+        } catch {}
+      }
+    }
+
+    const slotDurationMins = override?.slotDurationMinutes || 15;
+
     const bookedAppointments = await this.prisma.appointment.findMany({
       where: {
         doctorId: { in: [doctor.id, doctor.userId] },
@@ -727,16 +740,28 @@ export class DoctorsService {
     const currentMinutes = now.getHours() * 60 + now.getMinutes();
 
     const availableSlots = candidateSlotsCombined.filter((slot) => {
+      // Check if slot falls in any break
+      const [h, m] = slot.split(':').map(Number);
+      const slotStart = h * 60 + m;
+      const slotEnd = slotStart + slotDurationMins;
+
+      const inBreak = activeBreaks.some((b) => {
+        const [bh, bm] = b.startTime.split(':').map(Number);
+        const [eh, em] = b.endTime.split(':').map(Number);
+        const bStart = bh * 60 + bm;
+        const bEnd = eh * 60 + em;
+        return slotStart < bEnd && slotEnd > bStart;
+      });
+      if (inBreak) return false;
+
       // Check if slot is still under patient capacity
       const bookedCount = bookedCountByTime.get(slot) || 0;
       if (bookedCount >= patientsPerSlot) return false;
 
       // If slot is for today, enforce that past slots and slots within 15 mins are hidden
       if (isToday) {
-        const [h, m] = slot.split(':').map(Number);
-        const slotMinutes = h * 60 + m;
         // Only allow booking before 15 mins (slot time - current time >= 15)
-        if (slotMinutes - currentMinutes < 15) {
+        if (slotStart - currentMinutes < 15) {
           return false;
         }
       }
@@ -747,9 +772,10 @@ export class DoctorsService {
       date: cleanDate,
       doctorId: doctor.id,
       patientsPerSlot,
-      slotDurationMinutes: override?.slotDurationMinutes || 15,
+      slotDurationMinutes: slotDurationMins,
       slots: availableSlots,
       allGeneratedSlots: candidateSlotsCombined,
+      breaks: activeBreaks,
       delayMinutes,
       delayReason: override?.reason || null,
       isOnLeave: false,
@@ -853,17 +879,16 @@ export class DoctorsService {
         data: { notes: updatedNotes },
       });
 
-      // Send patient notification
+      // Send patient notification and dispatch push
       if (apt.patient?.userId) {
         try {
           const shiftedTime = this.shift24hTime(apt.startTime, delayMinutes);
-          await this.prisma.notification.create({
-            data: {
-              userId: apt.patient.userId,
-              type: 'SCHEDULE_DELAY',
-              title: `⚠️ OPD Delay (+${delayMinutes}m)`,
-              message: `Dr. ${doctor.fullName} is delayed by ~${delayMinutes} mins on ${cleanDate}. Your updated appointment time is approximately ${shiftedTime}. Reason: ${cleanReason}.`,
-            },
+          await this.notificationsService.create({
+            userId: apt.patient.userId,
+            type: 'SCHEDULE_DELAY',
+            title: `⚠️ OPD Delay (+${delayMinutes}m)`,
+            message: `Dr. ${doctor.fullName} is delayed by ~${delayMinutes} mins on ${cleanDate}. Your updated appointment time is approximately ${shiftedTime}. Reason: ${cleanReason}.`,
+            payload: { appointmentId: apt.id, date: cleanDate, delayMinutes },
           });
         } catch (notifErr: any) {
           console.warn('[doctors] Notification failed:', notifErr?.message);
@@ -991,13 +1016,12 @@ export class DoctorsService {
 
         if (apt.patient?.userId) {
           try {
-            await this.prisma.notification.create({
-              data: {
-                userId: apt.patient.userId,
-                type: 'SCHEDULE_LEAVE',
-                title: '❌ Appointment Cancelled — Doctor on Leave',
-                message: `Dr. ${doctor.fullName} will be on leave on ${cleanDate} (${cleanReason}). Your appointment has been cancelled. Full refund/rescheduling is enabled in the app.`,
-              },
+            await this.notificationsService.create({
+              userId: apt.patient.userId,
+              type: 'SCHEDULE_LEAVE',
+              title: '❌ Appointment Cancelled — Doctor on Leave',
+              message: `Dr. ${doctor.fullName} will be on leave on ${cleanDate} (${cleanReason}). Your appointment has been cancelled. Full refund/rescheduling is enabled in the app.`,
+              payload: { appointmentId: apt.id, date: cleanDate },
             });
           } catch (notifErr: any) {
             console.warn('[doctors] Notification failed:', notifErr?.message);
@@ -1017,6 +1041,120 @@ export class DoctorsService {
       isOnLeave: true,
       reason: cleanReason,
       cancelledAppointments: totalCancelled,
+    };
+  }
+
+  async applyEarlyDeparture(
+    doctorId: string | undefined,
+    date: string,
+    cutoffTime: string,
+    reason?: string,
+    currentUser?: any
+  ) {
+    const doctor = await this.prisma.doctor.findFirst({
+      where: {
+        OR: [
+          ...(doctorId ? [{ id: doctorId }, { userId: doctorId }] : []),
+          ...(currentUser?.id ? [{ userId: currentUser.id }, { id: currentUser.id }] : []),
+        ],
+      },
+    });
+    if (!doctor) throw new NotFoundException('Doctor not found.');
+
+    if (currentUser) {
+      const isOwner = currentUser.id === doctor.userId || currentUser.doctor?.id === doctor.id;
+      const isAdmin = currentUser.role === 'ADMIN';
+      if (!isOwner && !isAdmin) {
+        throw new ForbiddenException('You can only modify schedule overrides for your own doctor account.');
+      }
+    }
+
+    const cleanReason = reason?.trim() || 'Doctor ended clinic early / Emergency departure';
+    const cleanDate = (date ? String(date).split('T')[0] : new Date().toISOString().split('T')[0]).trim();
+    const cleanCutoff = (cutoffTime || '12:00').trim().slice(0, 5);
+
+    // Cancel all active appointments on this date with startTime >= cutoffTime
+    const appointments = await this.prisma.appointment.findMany({
+      where: {
+        doctorId: { in: [doctor.id, doctor.userId] },
+        date: cleanDate,
+        status: { in: ['PENDING', 'CONFIRMED'] },
+      },
+      include: { patient: true },
+    });
+
+    let affectedCount = 0;
+    const cancelledSlotTimes: string[] = [];
+
+    for (const apt of appointments) {
+      if (apt.startTime >= cleanCutoff) {
+        affectedCount++;
+        cancelledSlotTimes.push(apt.startTime);
+        const cleanNotes = (apt.notes || '').replace(/\[Cancelled:[^\]]*\]/gi, '').trim();
+        const updatedNotes = cleanNotes
+          ? `${cleanNotes} [Cancelled: Clinic ended early at ${cleanCutoff} - ${cleanReason}]`
+          : `[Cancelled: Clinic ended early at ${cleanCutoff} - ${cleanReason}]`;
+
+        await this.prisma.appointment.update({
+          where: { id: apt.id },
+          data: {
+            status: 'CANCELLED',
+            notes: updatedNotes,
+          },
+        });
+
+        if (apt.patient?.userId) {
+          try {
+            await this.notificationsService.create({
+              userId: apt.patient.userId,
+              type: 'SCHEDULE_EARLY_DEPARTURE',
+              title: '❌ Appointment Cancelled — Clinic Ended Early',
+              message: `Dr. ${doctor.fullName} ended clinic early at ${cleanCutoff} today (${cleanReason}). Your appointment was cancelled. Rescheduling options are open in the app.`,
+              payload: { appointmentId: apt.id, date: cleanDate },
+            });
+          } catch (notifErr: any) {
+            console.warn('[doctors] Early departure notification failed:', notifErr?.message);
+          }
+        }
+      }
+    }
+
+    // Persist early departure in DoctorScheduleOverride
+    const id = (require('crypto').randomUUID ? require('crypto').randomUUID() : `dso_${Date.now()}`);
+    try {
+      const existing = await (this.prisma as any).doctorScheduleOverride?.findUnique({
+        where: { doctorId_date: { doctorId: doctor.id, date: cleanDate } },
+      });
+      const prevBlocked = Array.isArray(existing?.blockedSlots) ? existing.blockedSlots : [];
+      const updatedBlocked = Array.from(new Set([...prevBlocked, ...cancelledSlotTimes]));
+
+      await (this.prisma as any).doctorScheduleOverride?.upsert({
+        where: { doctorId_date: { doctorId: doctor.id, date: cleanDate } },
+        create: {
+          id,
+          doctorId: doctor.id,
+          date: cleanDate,
+          delayMinutes: 0,
+          isOnLeave: false,
+          blockedSlots: updatedBlocked,
+          reason: `[EarlyCutoff:${cleanCutoff}] ${cleanReason}`,
+        },
+        update: {
+          blockedSlots: updatedBlocked,
+          reason: `[EarlyCutoff:${cleanCutoff}] ${cleanReason}`,
+        },
+      });
+    } catch (err: any) {
+      console.warn('[doctors] Early departure override upsert warning:', err?.message);
+    }
+
+    return {
+      success: true,
+      doctorId: doctor.id,
+      date: cleanDate,
+      cutoffTime: cleanCutoff,
+      reason: cleanReason,
+      affectedAppointments: affectedCount,
     };
   }
 
@@ -1314,6 +1452,136 @@ export class DoctorsService {
     }
 
     return this.generateAvailableSlots(doctor.id, cleanDate);
+  }
+
+  private normalizeTimeTo24(t: string): string {
+    if (!t) return '12:00';
+    const trimmed = t.trim();
+    const match12 = trimmed.match(/^(\d{1,2}):(\d{2})\s*(AM|PM)?$/i);
+    if (match12) {
+      let h = parseInt(match12[1], 10);
+      const m = match12[2];
+      const meri = match12[3]?.toUpperCase();
+      if (meri === 'PM' && h !== 12) h += 12;
+      if (meri === 'AM' && h === 12) h = 0;
+      return `${String(h).padStart(2, '0')}:${m}`;
+    }
+    return trimmed.slice(0, 5);
+  }
+
+  async manageDoctorBreak(
+    targetDocId: string,
+    date: string,
+    breakData: { id?: string; title: string; startTime: string; endTime: string },
+    action: 'add' | 'remove',
+    currentUser: any
+  ) {
+    const doctor = await this.prisma.doctor.findFirst({
+      where: {
+        OR: [{ id: targetDocId }, { userId: targetDocId }, { userId: currentUser?.id }],
+      },
+    });
+    if (!doctor) throw new NotFoundException('Doctor profile not found.');
+
+    const cleanDate = (date ? String(date).split('T')[0] : new Date().toISOString().split('T')[0]).trim();
+
+    const existing = await this.prisma.doctorScheduleOverride.findFirst({
+      where: {
+        doctorId: { in: [doctor.id, doctor.userId] },
+        date: cleanDate,
+      },
+    });
+
+    let currentBreaks: any[] = [];
+    if (existing?.breaks) {
+      if (Array.isArray(existing.breaks)) currentBreaks = [...existing.breaks];
+      else if (typeof existing.breaks === 'string') {
+        try { currentBreaks = JSON.parse(existing.breaks); } catch {}
+      }
+    }
+
+    const normStartTime = this.normalizeTimeTo24(breakData.startTime);
+    const normEndTime = this.normalizeTimeTo24(breakData.endTime);
+    const breakId = breakData.id || `brk_${Date.now()}`;
+
+    if (action === 'add') {
+      currentBreaks = currentBreaks.filter((b) => b.id !== breakId && !(b.startTime === normStartTime && b.endTime === normEndTime));
+      currentBreaks.push({
+        id: breakId,
+        title: breakData.title?.trim() || 'Break',
+        startTime: normStartTime,
+        endTime: normEndTime,
+      });
+    } else if (action === 'remove') {
+      currentBreaks = currentBreaks.filter((b) => b.id !== breakId && b.id !== breakData.id && !(b.startTime === normStartTime && b.endTime === normEndTime));
+    }
+
+    await this.prisma.doctorScheduleOverride.upsert({
+      where: {
+        doctorId_date: {
+          doctorId: doctor.id,
+          date: cleanDate,
+        },
+      },
+      create: {
+        doctorId: doctor.id,
+        date: cleanDate,
+        breaks: currentBreaks,
+      },
+      update: {
+        breaks: currentBreaks,
+      },
+    });
+
+    return this.generateAvailableSlots(doctor.id, cleanDate);
+  }
+
+  async getPatientPastConsultations(patientId: string) {
+    const consultations = await this.prisma.consultation.findMany({
+      where: {
+        OR: [
+          { patientId: patientId },
+          { patient: { userId: patientId } },
+        ],
+      },
+      include: {
+        doctor: {
+          select: {
+            id: true,
+            fullName: true,
+            specialization: true,
+            profilePhoto: true,
+          },
+        },
+        prescription: true,
+        appointment: {
+          select: {
+            id: true,
+            date: true,
+            startTime: true,
+            status: true,
+            symptoms: true,
+            notes: true,
+          },
+        },
+      },
+      orderBy: { createdAt: 'desc' },
+      take: 10,
+    });
+
+    return consultations.map((c) => ({
+      id: c.id,
+      appointmentId: c.appointmentId,
+      date: c.appointment?.date || c.createdAt.toISOString().slice(0, 10),
+      time: c.appointment?.startTime || '10:00',
+      doctorName: c.doctor?.fullName || 'Doctor',
+      doctorSpecialty: c.doctor?.specialization || 'General',
+      doctorAvatar: c.doctor?.profilePhoto || null,
+      diagnosis: c.prescription?.diagnosis || c.chiefComplaint || 'Consultation Record',
+      notes: c.assessment || c.observations || c.appointment?.notes || '',
+      vitals: c.prescription?.vitals || null,
+      status: 'completed',
+    }));
   }
 
   async updateScheduleSettings(

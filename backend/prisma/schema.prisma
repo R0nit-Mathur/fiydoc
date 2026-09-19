@@ -179,6 +179,8 @@ model Appointment {
   fee              Decimal           @db.Decimal(10, 2)
   symptoms         String[]          @default([])
   notes            String?
+  attachmentUrl    String?
+  attachmentName   String?
   rejectionReason  String?
   cancelledBy      String?
   createdAt        DateTime          @default(now())
@@ -313,6 +315,7 @@ model DoctorScheduleOverride {
   blockedSlots        String[] @default([])
   patientsPerSlot     Int?
   slotDurationMinutes Int?
+  breaks              Json?    @default("[]")
   updatedAt           DateTime @updatedAt
   createdAt           DateTime @default(now())
 

@@ -21,7 +21,13 @@ import { useRouter } from 'expo-router';
 import * as Haptics from 'expo-haptics';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import Animated, { FadeIn, FadeInDown } from 'react-native-reanimated';
+import { useQueryClient } from '@tanstack/react-query';
 import { useNotificationStore } from '@/store/useNotificationStore';
+import {
+  useNotificationsQuery,
+  useMarkNotificationReadMutation,
+  useMarkAllNotificationsReadMutation,
+} from '@/hooks/queries/useNotificationsQuery';
 import { NotificationItem } from '@/types/index';
 import { Badge } from '@/components/ui/Badge';
 import {
@@ -47,11 +53,16 @@ const FILTERS = [
 
 export default function PatientNotificationsScreen() {
   const router = useRouter();
+  const queryClient = useQueryClient();
   const { colors, isDark } = useAppTheme();
   const { user } = useAuthStore();
   const notifications = useNotificationStore((s) => s.notifications);
   const markAsRead = useNotificationStore((s) => s.markAsRead);
   const markAllAsRead = useNotificationStore((s) => s.markAllAsRead);
+
+  const { data: serverNotifications, refetch } = useNotificationsQuery();
+  const markReadMut = useMarkNotificationReadMutation();
+  const markAllMut = useMarkAllNotificationsReadMutation();
 
   const [activeFilter, setActiveFilter] = useState<string>('all');
   const [refreshing, setRefreshing] = useState(false);
@@ -61,17 +72,28 @@ export default function PatientNotificationsScreen() {
     if (Platform.OS !== 'web') {
       Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
     }
-    await new Promise((resolve) => setTimeout(resolve, 600));
-    setRefreshing(false);
+    try {
+      await queryClient.invalidateQueries({ queryKey: ['notifications'] });
+      await refetch();
+    } finally {
+      setRefreshing(false);
+    }
   };
 
+  const activeNotificationList = useMemo(() => {
+    if (serverNotifications && serverNotifications.length > 0) {
+      return serverNotifications;
+    }
+    return notifications;
+  }, [serverNotifications, notifications]);
+
   const patientNotifications = useMemo(() => {
-    return notifications.filter((n) => {
+    return activeNotificationList.filter((n) => {
       if (n.recipientId && user?.id && n.recipientId !== user.id) return false;
       if (n.recipientRole && n.recipientRole !== 'all' && n.recipientRole !== 'patient') return false;
       return true;
     });
-  }, [notifications, user?.id]);
+  }, [activeNotificationList, user?.id]);
 
   const filteredNotifications = useMemo(() => {
     if (activeFilter === 'all') return patientNotifications;
@@ -113,12 +135,24 @@ export default function PatientNotificationsScreen() {
   };
 
   const handleNotificationPress = (item: NotificationItem) => {
+    if (Platform.OS !== 'web') {
+      Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+    }
+    markReadMut.mutate(item.id);
     markAsRead(item.id);
     if (item.type === 'prescription' || item.link === '/(patient)/health' || item.link === '/(patient)/(tabs)/health') {
       router.push('/(patient)/(tabs)/health');
     } else if (item.link) {
       router.push(item.link as any);
     }
+  };
+
+  const handleMarkAllRead = () => {
+    if (Platform.OS !== 'web') {
+      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+    }
+    markAllMut.mutate();
+    markAllAsRead(user?.id, 'patient');
   };
 
   return (
@@ -153,7 +187,7 @@ export default function PatientNotificationsScreen() {
 
         {unreadCount > 0 && (
           <Pressable
-            onPress={() => markAllAsRead(user?.id, 'patient')}
+            onPress={handleMarkAllRead}
             hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
             style={[styles.markAllBtn, { backgroundColor: Palette.primaryBlueLight, borderColor: Palette.primaryBlueBorder }]}
             accessibilityRole="button"

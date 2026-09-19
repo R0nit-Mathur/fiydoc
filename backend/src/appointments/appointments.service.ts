@@ -65,13 +65,13 @@ export class AppointmentsService {
       id: apt.id,
       patientId: apt.patientId,
       patientName: apt.patient?.fullName || null,
-      patientAvatar: apt.patient?.profilePhoto || null,
+      patientAvatar: apt.patient?.profilePhoto || apt.patient?.user?.profilePhoto || null,
       patientAllergies,
       patientConditions,
       doctorId: apt.doctorId,
       doctorName: apt.doctor?.fullName || null,
       doctorSpecialty: apt.doctor?.specialization || null,
-      doctorAvatar: apt.doctor?.profilePhoto || null,
+      doctorAvatar: apt.doctor?.profilePhoto || apt.doctor?.user?.profilePhoto || null,
       hospital: apt.doctor?.clinic?.name || null,
       location: apt.doctor?.clinic?.address || null,
       date: apt.date,
@@ -91,6 +91,8 @@ export class AppointmentsService {
       fee: apt.fee,
       symptoms: apt.symptoms || [],
       notes: apt.notes,
+      attachmentUrl: apt.attachmentUrl || null,
+      attachmentName: apt.attachmentName || null,
       createdAt: apt.createdAt,
       updatedAt: apt.updatedAt,
       hasConsultation: Boolean(apt.consultation),
@@ -108,6 +110,8 @@ export class AppointmentsService {
       fee?: number;
       symptoms?: string[];
       notes?: string;
+      attachmentUrl?: string;
+      attachmentName?: string;
     },
     currentUser?: any
   ) {
@@ -225,37 +229,76 @@ export class AppointmentsService {
     }
     dto.patientId = patient.id;
 
-    // Derive authoritative slot duration and end time
-    let slotDuration = 30;
+    // Check schedule override for this date (breaks, custom slots, delay, slot duration)
+    const override = await this.prisma.doctorScheduleOverride.findFirst({
+      where: {
+        doctorId: { in: [doctor.id, doctor.userId] },
+        date: dto.date,
+      },
+    });
 
-    // Check doctor availability rules if configured
-    if (doctor.availabilities && doctor.availabilities.length > 0) {
+    if (override?.isOnLeave) {
+      throw new BadRequestException(override.reason || 'The doctor is on leave on this date.');
+    }
+
+    const slotStartNorm = dto.startTime.slice(0, 5);
+
+    // 1. Check if slot is explicitly blocked
+    const blockedSlots = Array.isArray(override?.blockedSlots) ? override.blockedSlots : [];
+    if (blockedSlots.includes(slotStartNorm)) {
+      throw new BadRequestException('The requested slot has been blocked or is unavailable.');
+    }
+
+    // 2. Check if slot falls in any break
+    let breaksList: any[] = [];
+    if (override?.breaks) {
+      if (Array.isArray(override.breaks)) breaksList = override.breaks;
+      else if (typeof override.breaks === 'string') {
+        try { breaksList = JSON.parse(override.breaks); } catch {}
+      }
+    }
+
+    const [slotH, slotM] = slotStartNorm.split(':').map(Number);
+    const slotMins = slotH * 60 + slotM;
+
+    // Derive authoritative slot duration
+    let slotDuration = override?.slotDurationMinutes || 15;
+
+    for (const b of breaksList) {
+      const [bh, bm] = (b.startTime || '00:00').split(':').map(Number);
+      const [eh, em] = (b.endTime || '00:00').split(':').map(Number);
+      const bStart = bh * 60 + bm;
+      const bEnd = eh * 60 + em;
+      if (slotMins < bEnd && (slotMins + slotDuration) > bStart) {
+        throw new BadRequestException(`Doctor has a scheduled break (${b.title || 'Break'}) during this time.`);
+      }
+    }
+
+    // Check doctor availability rules if configured and not custom slot
+    const customSlots = Array.isArray(override?.customSlots) ? override.customSlots : [];
+    const isCustomSlot = customSlots.includes(slotStartNorm);
+
+    if (!isCustomSlot && doctor.availabilities && doctor.availabilities.length > 0) {
       const appointmentDayOfWeek = parsedStart.getDay(); // 0 = Sun, 1 = Mon ...
       const matchingDayAvailabilities = doctor.availabilities.filter(
         (a) => a.dayOfWeek === appointmentDayOfWeek
       );
 
-      if (matchingDayAvailabilities.length === 0) {
-        throw new BadRequestException('The doctor does not have scheduled availability for the selected day of the week.');
+      if (matchingDayAvailabilities.length > 0) {
+        const matchedSlot = matchingDayAvailabilities.find((avail) => {
+          const availStartNorm = avail.startTime.slice(0, 5);
+          const availEndNorm = avail.endTime.slice(0, 5);
+          return slotStartNorm >= availStartNorm && slotStartNorm < availEndNorm;
+        });
+
+        if (matchedSlot) {
+          slotDuration = override?.slotDurationMinutes || matchedSlot.slotDurationMinutes || slotDuration;
+        }
       }
-
-      const slotStartNorm = dto.startTime.slice(0, 5);
-      const matchedSlot = matchingDayAvailabilities.find((avail) => {
-        const availStartNorm = avail.startTime.slice(0, 5);
-        const availEndNorm = avail.endTime.slice(0, 5);
-        return slotStartNorm >= availStartNorm && slotStartNorm < availEndNorm;
-      });
-
-      if (!matchedSlot) {
-        throw new BadRequestException("Requested slot is outside the doctor's scheduled availability.");
-      }
-
-      slotDuration = matchedSlot.slotDurationMinutes || 30;
     }
 
     // Authoritatively compute endTime from startTime + slotDuration
-    const [startH, startM] = dto.startTime.slice(0, 5).split(':').map(Number);
-    const totalMinutes = startH * 60 + startM + slotDuration;
+    const totalMinutes = slotH * 60 + slotM + slotDuration;
     const endH = Math.floor(totalMinutes / 60);
     const endM = totalMinutes % 60;
     const authoritativeEndTime = `${String(endH).padStart(2, '0')}:${String(endM).padStart(2, '0')}`;
@@ -332,11 +375,13 @@ export class AppointmentsService {
             fee: authoritativeFee,
             symptoms: dto.symptoms || [],
             notes: canonicalNotes,
+            attachmentUrl: dto.attachmentUrl || null,
+            attachmentName: dto.attachmentName || null,
             status: AppointmentStatus.CONFIRMED,
           },
           include: {
-            doctor: { include: { clinic: true } },
-            patient: true,
+            doctor: { include: { clinic: true, user: true } },
+            patient: { include: { user: true } },
           },
         });
       }, {
@@ -464,7 +509,7 @@ export class AppointmentsService {
 
     const appointments = await this.prisma.appointment.findMany({
       where: { patientId: resolvedPatientId },
-      include: { doctor: { include: { clinic: true } }, patient: true, consultation: true },
+      include: { doctor: { include: { clinic: true, user: true } }, patient: { include: { user: true } }, consultation: true },
       orderBy: [{ date: 'asc' }, { startTime: 'asc' }],
     });
 
@@ -498,7 +543,7 @@ export class AppointmentsService {
       where: {
         doctorId: { in: possibleDoctorIds },
       },
-      include: { patient: true, doctor: { include: { clinic: true } }, consultation: true },
+      include: { patient: { include: { user: true } }, doctor: { include: { clinic: true, user: true } }, consultation: true },
       orderBy: [{ date: 'asc' }, { startTime: 'asc' }],
     });
 
@@ -509,7 +554,7 @@ export class AppointmentsService {
   async getAppointmentById(id: string, currentUser: any) {
     const apt = await this.prisma.appointment.findUnique({
       where: { id },
-      include: { doctor: { include: { clinic: true } }, patient: true, consultation: true },
+      include: { doctor: { include: { clinic: true, user: true } }, patient: { include: { user: true } }, consultation: true },
     });
     if (!apt) throw new NotFoundException('Appointment not found.');
 
@@ -523,16 +568,30 @@ export class AppointmentsService {
     try {
       const apt = await this.prisma.appointment.findUnique({
         where: { id },
-        include: { doctor: { include: { clinic: true } }, patient: true, consultation: true },
+        include: { doctor: { include: { clinic: true, user: true } }, patient: { include: { user: true } }, consultation: true },
       });
       if (!apt) throw new NotFoundException('Appointment not found.');
 
       this.checkAppointmentActorAccess(apt, currentUser);
 
-      // Validate state transition for cancellation
-      if (String(apt.status).toUpperCase() === 'CANCELLED') {
-        return this.formatAppointment(apt);
+      // Rule: Only the appointment's patient, assigned doctor, or admin can cancel
+      const isOwnerPatient =
+        (currentUser.patient && currentUser.patient.id === apt.patientId) ||
+        (apt.patient && apt.patient.userId === currentUser.id);
+      const isOwnerDoctor =
+        (currentUser.doctor && currentUser.doctor.id === apt.doctorId) ||
+        (apt.doctor && apt.doctor.userId === currentUser.id) ||
+        apt.doctorId === currentUser.id;
+      const isAdmin = currentUser.role === Role.ADMIN;
+
+      if (!isOwnerPatient && !isOwnerDoctor && !isAdmin) {
+        throw new ForbiddenException('Only the appointment patient, doctor, or an admin can cancel an appointment.');
       }
+
+      if (apt.status === AppointmentStatus.CANCELLED || String(apt.status).toUpperCase() === 'CANCELLED') {
+        throw new BadRequestException('This appointment has already been cancelled.');
+      }
+
       const cancellableStatuses: string[] = ['PENDING', 'CONFIRMED', 'UPCOMING', 'CHECKED_IN', 'IN_PROGRESS'];
       if (!cancellableStatuses.includes(String(apt.status).toUpperCase())) {
         throw new BadRequestException(
@@ -543,7 +602,7 @@ export class AppointmentsService {
       const updated = await this.prisma.appointment.update({
         where: { id },
         data: { status: AppointmentStatus.CANCELLED },
-        include: { doctor: { include: { clinic: true } }, patient: true, consultation: true },
+        include: { doctor: { include: { clinic: true, user: true } }, patient: { include: { user: true } }, consultation: true },
       });
 
       // Audit log entry (non-fatal)
@@ -601,7 +660,7 @@ export class AppointmentsService {
 
       const apt = await this.prisma.appointment.findUnique({
         where: { id },
-        include: { doctor: { include: { clinic: true } }, patient: true, consultation: true },
+        include: { doctor: { include: { clinic: true, user: true } }, patient: { include: { user: true } }, consultation: true },
       });
       if (!apt) throw new NotFoundException('Appointment not found.');
 
@@ -646,7 +705,7 @@ export class AppointmentsService {
       const updated = await this.prisma.appointment.update({
         where: { id },
         data: { status: normalizedStatus },
-        include: { doctor: { include: { clinic: true } }, patient: true, consultation: true },
+        include: { doctor: { include: { clinic: true, user: true } }, patient: { include: { user: true } }, consultation: true },
       });
 
       // Audit log entry (non-fatal)
@@ -695,7 +754,7 @@ export class AppointmentsService {
   async rejectAppointment(id: string, reason?: string, currentUser?: any) {
     const apt = await this.prisma.appointment.findUnique({
       where: { id },
-      include: { doctor: { include: { clinic: true } }, patient: true },
+      include: { doctor: { include: { clinic: true, user: true } }, patient: { include: { user: true } } },
     });
     if (!apt) throw new NotFoundException('Appointment not found.');
 
@@ -724,7 +783,7 @@ export class AppointmentsService {
         rejectionReason,
         notes: apt.notes ? `${apt.notes} [Rejected: ${rejectionReason}]` : `[Rejected: ${rejectionReason}]`,
       },
-      include: { doctor: { include: { clinic: true } }, patient: true },
+      include: { doctor: { include: { clinic: true, user: true } }, patient: { include: { user: true } } },
     });
 
     if (currentUser?.id) {

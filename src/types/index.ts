@@ -51,6 +51,7 @@ export interface Doctor {
   consultationFee: number;
   hospital: string;
   avatar: string;
+  profilePhoto?: string | null;
   about?: string;
   verificationStatus: 'registered' | 'pending' | 'verified' | 'rejected' | 'info_required';
   languages: string[];
@@ -104,6 +105,8 @@ export interface Appointment {
   cancelReason?: string | null;
   patientAllergies?: string[];
   patientConditions?: string[];
+  attachmentUrl?: string | null;
+  attachmentName?: string | null;
 }
 
 export interface ClinicalNote {
@@ -156,7 +159,12 @@ export interface Prescription {
   patientName?: string;
   patientAge?: number;
   patientGender?: string;
+  chiefComplaint?: string;
+  symptoms?: string[];
+  observations?: string;
   diagnosis?: string;
+  emergencyWarning?: string;
+  doctorQualifications?: string[] | string;
   tests?: { id: string; name: string; category?: string; turnaroundTime?: string; fastingRequired?: boolean }[];
   lifestyleInstructions?: string[];
   vitals?: {

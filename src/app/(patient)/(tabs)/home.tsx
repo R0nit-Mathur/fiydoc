@@ -34,6 +34,7 @@ import { BlurView } from 'expo-blur';
 import Animated, { FadeInDown, FadeInUp } from 'react-native-reanimated';
 import * as Haptics from 'expo-haptics';
 
+import { useQueryClient } from '@tanstack/react-query';
 import { useAppTheme } from '@/hooks/useAppTheme';
 import { useDoctorsQuery } from '@/hooks/queries/useDoctorsQuery';
 import { useAppointmentsQuery } from '@/hooks/queries/useAppointmentsQuery';
@@ -43,10 +44,10 @@ import { useAppointmentStore } from '@/store/useAppointmentStore';
 import { useHealthStore } from '@/store/useHealthStore';
 import { WelcomeGuideModal } from '@/components/ui/WelcomeGuideModal';
 import { LocationPermissionModal } from '@/components/location/LocationPermissionModal';
+import { BorderRadius, Spacing, StitchColors, Shadows, Palette } from '@/constants/theme';
 import { DoctorCard } from '@/components/ui/DoctorCard';
 import { Avatar } from '@/components/ui/Avatar';
 import { signOutAll } from '@/services/authService';
-import { BorderRadius, Spacing, StitchColors, Shadows, Palette } from '@/constants/theme';
 import {
   Menu,
   Bell,
@@ -74,9 +75,10 @@ import {
   RefreshCw,
   LogOut,
 } from 'lucide-react-native';
-
 import { SPECIALTIES, ALL_SPECIALTIES } from '@/constants/specialties';
 import { AllSpecialtiesModal } from '@/components/patient/AllSpecialtiesModal';
+import { DoctorCardSkeleton } from '@/components/ui/Skeleton';
+import { Doctor } from '@/types/index';
 import { FiYLogo } from '@/components/ui/FiYLogo';
 import { AppUpdateModal } from '@/components/ui/AppUpdateModal';
 
@@ -84,6 +86,7 @@ import { AppUpdateModal } from '@/components/ui/AppUpdateModal';
 
 export default function PatientHomeScreen() {
   const router = useRouter();
+  const queryClient = useQueryClient();
   const insets = useSafeAreaInsets();
   const { colors, isDark } = useAppTheme();
   const [drawerOpen, setDrawerOpen] = useState(false);
@@ -106,8 +109,17 @@ export default function PatientHomeScreen() {
     if (Platform.OS !== 'web') {
       Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
     }
-    await Promise.all([refetchDoctors(), refetchAppointments()]);
-    setRefreshing(false);
+    try {
+      await Promise.all([
+        queryClient.invalidateQueries({ queryKey: ['doctors'] }),
+        queryClient.invalidateQueries({ queryKey: ['appointments'] }),
+        queryClient.invalidateQueries({ queryKey: ['notifications'] }),
+        refetchDoctors(),
+        refetchAppointments(),
+      ]);
+    } finally {
+      setRefreshing(false);
+    }
   };
 
   // Prompt for location on first visit if permission is undetermined

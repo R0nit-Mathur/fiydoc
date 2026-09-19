@@ -33,7 +33,8 @@ import {
 } from 'react-native';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { useQueryClient } from '@tanstack/react-query';
+import { useQuery, useQueryClient } from '@tanstack/react-query';
+import { doctorService } from '@/services/doctorService';
 import Animated, { FadeIn, FadeInUp } from 'react-native-reanimated';
 import * as Haptics from 'expo-haptics';
 import {
@@ -77,6 +78,7 @@ import { healthService } from '@/services/healthService';
 import { consultationService } from '@/services/consultationService';
 
 import { BorderRadius, Shadows, Spacing, StitchColors } from '@/constants/theme';
+import { LoadingDialog } from '@/components/ui/LoadingDialog';
 import {
   MEDICAL_DIAGNOSES,
   MEDICATIONS_CATALOG,
@@ -88,6 +90,7 @@ import SmartMedicalTextInput from '@/components/doctor/SmartMedicalTextInput';
 import ClinicalDrawingNotepad from '@/components/doctor/ClinicalDrawingNotepad';
 import { isNegationAllergy } from '@/utils/allergyNormalizer';
 import { ConfirmationDialog } from '@/components/ui/ConfirmationDialog';
+import { DocumentViewerModal } from '@/components/ui/DocumentViewerModal';
 
 
 
@@ -113,6 +116,15 @@ export default function DoctorConsultationScreen() {
   const { user } = useAuthStore();
   const { data: remoteApt, isLoading: isAptLoading } = useAppointmentDetailQuery(appointmentId);
   const currentApt = remoteApt || appointments.find((a) => a.id === appointmentId);
+
+  const { data: pastConsultations = [], isLoading: isPastConsultationsLoading } = useQuery({
+    queryKey: ['patient-past-consultations', currentApt?.patientId],
+    queryFn: () =>
+      currentApt?.patientId
+        ? doctorService.getPatientPastConsultations(currentApt.patientId)
+        : Promise.resolve([]),
+    enabled: Boolean(currentApt?.patientId),
+  });
 
   // Determine next patient in today's queue (same doctor, confirmed/checked_in, future in the list)
   const nextPatient = (() => {
@@ -194,6 +206,7 @@ export default function DoctorConsultationScreen() {
   const [chiefComplaint, setChiefComplaint] = useState(
     currentApt?.symptoms?.length ? currentApt.symptoms.join(', ') : (currentApt?.notes || '')
   );
+  const [clinicalImpression, setClinicalImpression] = useState('');
   const [physicalObservation, setPhysicalObservation] = useState('');
 
   // Attached Clinical Examination Images (Lesions, Throat, Radiographs) — clean by default
@@ -204,6 +217,7 @@ export default function DoctorConsultationScreen() {
   const [selectedPreviewImage, setSelectedPreviewImage] = useState<{ title: string; uri: string } | null>(null);
   const [customImageTitle, setCustomImageTitle] = useState('');
   const [customImageUri, setCustomImageUri] = useState('');
+  const [showAttachmentViewer, setShowAttachmentViewer] = useState(false);
 
   // Dedicated Patient Clinical History — clean by default
   const [patientClinicalHistory, setPatientClinicalHistory] = useState('');
@@ -218,9 +232,22 @@ export default function DoctorConsultationScreen() {
     Array<{ id: string; name: string; detail: string; status: string }>
   >([]);
 
-  // Sync patient allergies and conditions from appointment booking data
+  // Sync patient allergies, conditions & symptoms from appointment booking data
   useEffect(() => {
     if (!currentApt) return;
+
+    // 0. Auto-populate Chief Complaint if still empty
+    setChiefComplaint((prev) => {
+      if (prev && prev.trim().length > 0) return prev;
+      if (currentApt.symptoms && currentApt.symptoms.length > 0) {
+        return currentApt.symptoms.join(', ');
+      }
+      if (currentApt.notes) {
+        const clean = currentApt.notes.replace(/\[[^\]]*\]/g, '').trim();
+        return clean;
+      }
+      return '';
+    });
 
     // 1. Load patient recorded allergies from appointment or notes
     const allergyList: string[] = [];
@@ -355,9 +382,30 @@ export default function DoctorConsultationScreen() {
 
   const handleSaveMedicationEdit = () => {
     if (!editingMed) return;
-    setMedications(medications.map((m) => (m.id === editingMed.id ? editingMed : m)));
+    if (!editingMed.name?.trim()) {
+      Alert.alert('Medicine Name Required', 'Please enter a medicine name before saving.');
+      return;
+    }
+    const cleanMed = {
+      ...editingMed,
+      name: editingMed.name.trim(),
+      dosage: editingMed.dosage?.trim() || '1 - 0 - 1',
+      timing: editingMed.timing?.trim() || 'After meals',
+      duration: editingMed.duration?.trim() || '5 Days',
+      instructions: editingMed.instructions?.trim() || 'Complete course',
+      frequency: editingMed.frequency?.trim() || 'Twice daily',
+    };
+    const exists = medications.some((m) => m.id === cleanMed.id);
+    if (exists) {
+      setMedications(medications.map((m) => (m.id === cleanMed.id ? cleanMed : m)));
+    } else {
+      setMedications([...medications, cleanMed]);
+    }
     setShowMedModal(false);
     setEditingMed(null);
+    if (Platform.OS !== 'web') {
+      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+    }
   };
 
   const handleSignAndSend = async () => {
@@ -408,7 +456,7 @@ export default function DoctorConsultationScreen() {
       const serverRx = await healthService.createPrescription({
         consultationId: consultation.id,
         diagnosis: diagnosisString,
-        doctorNotes: chiefComplaint || assessmentText,
+        doctorNotes: clinicalImpression || chiefComplaint || assessmentText,
         followUpInstructions: `Review after ${followUpDays} in clinic. ${emergencyWarning}`,
         vitals: {
           bpSystolic: vitals.bpSystolic,
@@ -438,9 +486,17 @@ export default function DoctorConsultationScreen() {
         patientName: currentApt?.patientName || 'Patient',
         doctorId: consultation.doctorId,
         doctorName,
+        doctorSpecialty: user?.specialization || 'General Medicine',
+        doctorMciNumber: (user as any)?.licenseNumber || undefined,
+        doctorQualifications: user?.qualification || (user as any)?.qualifications || [],
         clinicName: clinicName ?? undefined,
+        clinicAddress: (user as any)?.clinicAddress || undefined,
+        chiefComplaint: chiefComplaint || undefined,
+        symptoms: currentApt?.symptoms || [],
+        observations: physicalObservation || undefined,
         diagnosis: diagnosisString,
         doctorNotes: chiefComplaint,
+        emergencyWarning: emergencyWarning || undefined,
         followUpInstructions: `Review after ${followUpDays} in clinic. ${emergencyWarning}`,
         vitals: {
           bpSystolic: vitals.bpSystolic,
@@ -510,10 +566,14 @@ export default function DoctorConsultationScreen() {
     return matchesCategory && matchesSearch;
   });
 
-  // Filter medicines
-  const filteredMeds = MEDICATIONS_CATALOG.filter((m) =>
-    medSearch ? m.name.toLowerCase().includes(medSearch.toLowerCase()) || m.generic.toLowerCase().includes(medSearch.toLowerCase()) : false
-  );
+  // Filter medicines - show top recommendations if medSearch is empty
+  const filteredMeds = medSearch.trim()
+    ? MEDICATIONS_CATALOG.filter((m) =>
+        m.name.toLowerCase().includes(medSearch.toLowerCase()) ||
+        m.generic.toLowerCase().includes(medSearch.toLowerCase()) ||
+        m.category.toLowerCase().includes(medSearch.toLowerCase())
+      )
+    : MEDICATIONS_CATALOG.slice(0, 8);
 
   // Filter tests
   const filteredTests = LAB_TESTS_CATALOG.filter((t) =>
@@ -938,42 +998,53 @@ export default function DoctorConsultationScreen() {
               </View>
             </View>
 
-            {/* Recent Visits */}
+            {/* Recent Consultations */}
             <View style={[styles.sectionCard, { backgroundColor: colors.card, borderColor: colors.border }]}>
               <View style={styles.sectionCardHeader}>
                 <Text style={[styles.sectionCardTitle, { color: colors.text }]}>Recent Consultations</Text>
-                <Text style={[styles.viewAllLink, { color: StitchColors.primaryContainer }]}>View Full Timeline</Text>
+                {pastConsultations.length > 0 && (
+                  <Text style={[styles.viewAllLink, { color: StitchColors.primaryContainer }]}>
+                    {pastConsultations.length} {pastConsultations.length === 1 ? 'Record' : 'Records'}
+                  </Text>
+                )}
               </View>
 
-              <View style={styles.recentVisitsList}>
-                <View style={[styles.recentVisitItem, { backgroundColor: colors.backgroundElement }]}>
-                  <View style={styles.recentVisitLeft}>
-                    <View style={[styles.recentVisitIcon, { backgroundColor: '#EFF6FF' }]}>
-                      <Calendar size={16} color={StitchColors.primaryContainer} />
+              {pastConsultations.length > 0 ? (
+                <View style={styles.recentVisitsList}>
+                  {pastConsultations.map((visit: any, index: number) => (
+                    <View key={visit.id || index} style={[styles.recentVisitItem, { backgroundColor: colors.backgroundElement }]}>
+                      <View style={styles.recentVisitLeft}>
+                        <View style={[styles.recentVisitIcon, { backgroundColor: '#EFF6FF' }]}>
+                          <Calendar size={16} color={StitchColors.primaryContainer} />
+                        </View>
+                        <View style={{ flex: 1, minWidth: 0 }}>
+                          <Text style={[styles.recentVisitName, { color: colors.text }]} numberOfLines={1}>
+                            {visit.diagnosis || 'Clinical Consultation'}
+                          </Text>
+                          <Text style={[styles.recentVisitDate, { color: colors.textSecondary }]} numberOfLines={1}>
+                            {visit.date} • {visit.doctorName || 'Doctor'}
+                          </Text>
+                        </View>
+                      </View>
+                      {visit.vitals?.bp ? (
+                        <Text style={[styles.recentVisitBp, { color: colors.textSecondary }]}>
+                          BP {visit.vitals.bp}
+                        </Text>
+                      ) : (
+                        <View style={[styles.resolvedBadge, { backgroundColor: '#CCFBF1' }]}>
+                          <Text style={styles.resolvedBadgeText}>Completed</Text>
+                        </View>
+                      )}
                     </View>
-                    <View>
-                      <Text style={[styles.recentVisitName, { color: colors.text }]}>Routine Checkup</Text>
-                      <Text style={[styles.recentVisitDate, { color: colors.textSecondary }]}>12 Jan 2026 • {user?.name || 'Doctor'}</Text>
-                    </View>
-                  </View>
-                  <Text style={[styles.recentVisitBp, { color: colors.textSecondary }]}>BP 124/82</Text>
+                  ))}
                 </View>
-
-                <View style={[styles.recentVisitItem, { backgroundColor: colors.backgroundElement }]}>
-                  <View style={styles.recentVisitLeft}>
-                    <View style={[styles.recentVisitIcon, { backgroundColor: '#EFF6FF' }]}>
-                      <Stethoscope size={16} color={StitchColors.primaryContainer} />
-                    </View>
-                    <View>
-                      <Text style={[styles.recentVisitName, { color: colors.text }]}>Acute Gastritis</Text>
-                      <Text style={[styles.recentVisitDate, { color: colors.textSecondary }]}>04 Oct 2025 • Dr. Anita Roy</Text>
-                    </View>
-                  </View>
-                  <View style={[styles.resolvedBadge, { backgroundColor: '#CCFBF1' }]}>
-                    <Text style={styles.resolvedBadgeText}>Resolved</Text>
-                  </View>
+              ) : (
+                <View style={{ paddingVertical: 14, alignItems: 'center', justifyContent: 'center' }}>
+                  <Text style={{ fontSize: 13, color: colors.textSecondary, textAlign: 'center' }}>
+                    First consultation with this patient. No prior consultation records found.
+                  </Text>
                 </View>
-              </View>
+              )}
             </View>
           </Animated.View>
         )}
@@ -1017,6 +1088,31 @@ export default function DoctorConsultationScreen() {
               <Text style={[styles.sectionCardTitle, { color: colors.text, marginBottom: 12 }]}>Diagnostic Reports</Text>
 
               <View style={styles.labsList}>
+                {currentApt?.attachmentUrl ? (
+                  <View style={[styles.labReportCard, { backgroundColor: '#EFF6FF', borderColor: StitchColors.primaryContainer, borderWidth: 1, marginBottom: 10 }]}>
+                    <View style={{ flex: 1, marginRight: 8 }}>
+                      <Text style={[styles.labReportTitle, { color: StitchColors.primaryContainer, fontWeight: '700' }]}>
+                        {currentApt.attachmentName || 'Pre-Consultation Record / ECG'}
+                      </Text>
+                      <Text style={[styles.labReportMeta, { color: colors.textSecondary }]}>
+                        Attached by patient during booking
+                      </Text>
+                    </View>
+                    <Pressable
+                      onPress={() => setShowAttachmentViewer(true)}
+                      style={{
+                        backgroundColor: StitchColors.primaryContainer,
+                        paddingHorizontal: 12,
+                        paddingVertical: 6,
+                        borderRadius: 8,
+                      }}
+                      hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+                    >
+                      <Text style={{ color: '#FFFFFF', fontWeight: '700', fontSize: 12 }}>View</Text>
+                    </Pressable>
+                  </View>
+                ) : null}
+
                 <View style={[styles.labReportCard, { backgroundColor: colors.backgroundElement }]}>
                   <View>
                     <Text style={[styles.labReportTitle, { color: colors.text }]}>Complete Blood Count (CBC)</Text>
@@ -1390,8 +1486,8 @@ export default function DoctorConsultationScreen() {
                   {/* Clinical Impression Note with Smart Autocompletion */}
                   <SmartMedicalTextInput
                     label="Doctor's Clinical Impression / Notes"
-                    value={chiefComplaint}
-                    onChangeText={setChiefComplaint}
+                    value={clinicalImpression}
+                    onChangeText={setClinicalImpression}
                     placeholder="Type clinical summary..."
                     multiline
                     numberOfLines={3}
@@ -1422,8 +1518,42 @@ export default function DoctorConsultationScreen() {
                     />
                   </View>
 
+                  {/* Recommended Medications (Shown when search is empty) */}
+                  {medSearch.trim().length === 0 && (
+                    <View style={{ marginTop: 10, marginBottom: 12 }}>
+                      <Text style={[styles.cardHeaderSub, { color: colors.textSecondary, marginBottom: 8, fontWeight: '600' }]}>
+                        Recommended OPD Medications:
+                      </Text>
+                      <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap: 8, paddingVertical: 2 }}>
+                        {MEDICATIONS_CATALOG.slice(0, 8).map((med) => (
+                          <Pressable
+                            key={med.name}
+                            onPress={() => handleAddMedicationFromCatalog(med)}
+                            style={{
+                              backgroundColor: colors.backgroundElement,
+                              borderColor: colors.border,
+                              borderWidth: 1,
+                              borderRadius: 10,
+                              paddingHorizontal: 12,
+                              paddingVertical: 8,
+                              flexDirection: 'row',
+                              alignItems: 'center',
+                              gap: 6,
+                            }}
+                          >
+                            <View>
+                              <Text style={{ fontSize: 13, fontWeight: '700', color: colors.text }}>{med.name}</Text>
+                              <Text style={{ fontSize: 11, color: colors.textMuted }}>{med.defaultDosage} • {med.defaultDuration}</Text>
+                            </View>
+                            <Plus size={14} color={StitchColors.primaryContainer} />
+                          </Pressable>
+                        ))}
+                      </ScrollView>
+                    </View>
+                  )}
+
                   {/* Search Results from MEDICATIONS_CATALOG */}
-                  {filteredMeds.length > 0 && (
+                  {filteredMeds.length > 0 && medSearch.trim().length > 0 && (
                     <View style={[styles.medsDropdown, { backgroundColor: colors.card, borderColor: colors.border }]}>
                       {filteredMeds.slice(0, 5).map((med) => (
                         <Pressable
@@ -1440,6 +1570,67 @@ export default function DoctorConsultationScreen() {
                           <Plus size={16} color={StitchColors.primaryContainer} />
                         </Pressable>
                       ))}
+
+                      {/* Quick Add as Custom Medication */}
+                      <Pressable
+                        onPress={() => {
+                          setEditingMed({
+                            id: `med_${Date.now()}`,
+                            name: medSearch.trim(),
+                            generic: '',
+                            dosage: '1 - 0 - 1',
+                            frequency: 'Twice daily',
+                            duration: '5 Days',
+                            timing: 'After meals',
+                            instructions: 'Complete course',
+                          });
+                          setMedSearch('');
+                          setShowMedModal(true);
+                        }}
+                        style={[styles.medDropdownItem, { borderBottomColor: 'transparent', backgroundColor: colors.backgroundElement }]}
+                      >
+                        <View style={{ flex: 1 }}>
+                          <Text style={[styles.medDropdownName, { color: StitchColors.primaryContainer, fontWeight: '700' }]}>
+                            + Add "{medSearch.trim()}" as custom medication
+                          </Text>
+                          <Text style={[styles.medDropdownGeneric, { color: colors.textSecondary }]}>
+                            Configure custom dosage, frequency & duration
+                          </Text>
+                        </View>
+                        <Plus size={16} color={StitchColors.primaryContainer} />
+                      </Pressable>
+                    </View>
+                  )}
+
+                  {filteredMeds.length === 0 && medSearch.trim().length > 1 && (
+                    <View style={[styles.medsDropdown, { backgroundColor: colors.card, borderColor: colors.border }]}>
+                      <Pressable
+                        onPress={() => {
+                          setEditingMed({
+                            id: `med_${Date.now()}`,
+                            name: medSearch.trim(),
+                            generic: '',
+                            dosage: '1 - 0 - 1',
+                            frequency: 'Twice daily',
+                            duration: '5 Days',
+                            timing: 'After meals',
+                            instructions: 'Complete course',
+                          });
+                          setMedSearch('');
+                          setShowMedModal(true);
+                        }}
+                        style={[styles.medDropdownItem, { borderBottomColor: 'transparent', backgroundColor: colors.backgroundElement }]}
+                      >
+                        <View style={{ flex: 1 }}>
+                          <Text style={[styles.medDropdownName, { color: StitchColors.primaryContainer, fontWeight: '700' }]}>
+                            + Add "{medSearch.trim()}" as custom medication
+                          </Text>
+                          <Text style={[styles.medDropdownGeneric, { color: colors.textSecondary }]}>
+                            Not in standard catalog • Configure dosage & instructions
+                          </Text>
+                        </View>
+                        <Plus size={16} color={StitchColors.primaryContainer} />
+                      </Pressable>
                     </View>
                   )}
 
@@ -2143,6 +2334,22 @@ export default function DoctorConsultationScreen() {
           else router.replace('/(doctor)/(tabs)/directory');
         }}
         onCancel={() => setExitConfirmVisible(false)}
+      />
+
+      {/* 12. PRE-CONSULTATION ATTACHMENT VIEWER */}
+      <DocumentViewerModal
+        visible={showAttachmentViewer}
+        title={currentApt?.attachmentName || 'Pre-Consultation Attached Document'}
+        subtitle={`Attached by ${currentApt?.patientName || 'Patient'} during booking`}
+        documentUrl={currentApt?.attachmentUrl}
+        onClose={() => setShowAttachmentViewer(false)}
+      />
+
+      {/* 13. DIGITAL SIGNING BLOCKING LOADER */}
+      <LoadingDialog
+        visible={isSigning}
+        title="Digitally Signing Prescription..."
+        message="Locking consultation details and generating secure digital Rx verification..."
       />
     </SafeAreaView>
   );
