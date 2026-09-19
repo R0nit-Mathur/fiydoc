@@ -817,6 +817,91 @@ export class AppointmentsService {
     return this.formatAppointment(updated);
   }
 
+  async rescheduleAppointment(
+    id: string,
+    body: {
+      date?: string;
+      startTime: string;
+      endTime?: string;
+      delayMinutes?: number;
+      reason?: string;
+    },
+    currentUser?: any
+  ) {
+    const apt = await this.prisma.appointment.findUnique({
+      where: { id },
+      include: { doctor: { include: { clinic: true, user: true } }, patient: { include: { user: true } } },
+    });
+
+    if (!apt) {
+      throw new NotFoundException('Appointment not found.');
+    }
+
+    this.checkAppointmentActorAccess(apt, currentUser);
+
+    if (apt.status === AppointmentStatus.CANCELLED || apt.status === AppointmentStatus.REJECTED) {
+      throw new BadRequestException(`Cannot reschedule an appointment that has been ${apt.status.toLowerCase()}.`);
+    }
+
+    const newDate = body.date || apt.date;
+    const newStartTime = body.startTime;
+    const newEndTime =
+      body.endTime ||
+      (body.delayMinutes ? this.calculateShiftedTime(apt.endTime, body.delayMinutes) : apt.endTime);
+    const reason = body.reason || (body.delayMinutes ? `Postponed by ${body.delayMinutes} mins` : 'Rescheduled by doctor');
+
+    const updated = await this.prisma.appointment.update({
+      where: { id },
+      data: {
+        date: newDate,
+        startTime: newStartTime,
+        endTime: newEndTime,
+        notes: apt.notes ? `${apt.notes} [Rescheduled: ${reason}]` : `[Rescheduled: ${reason}]`,
+        status: AppointmentStatus.CONFIRMED,
+      },
+      include: { doctor: { include: { clinic: true, user: true } }, patient: { include: { user: true } } },
+    });
+
+    if (currentUser?.id) {
+      try {
+        await this.prisma.auditLog.create({
+          data: {
+            actorUserId: currentUser.id,
+            action: 'APPOINTMENT_RESCHEDULED',
+            targetType: 'APPOINTMENT',
+            targetId: id,
+            metadata: {
+              previousDate: apt.date,
+              previousStartTime: apt.startTime,
+              newDate,
+              newStartTime,
+              reason,
+            },
+          },
+        });
+      } catch {}
+    }
+
+    if (updated.patient?.userId) {
+      try {
+        this.notificationsService.create({
+          userId: updated.patient.userId,
+          type: 'APPOINTMENT_CONFIRMED',
+          title: 'Appointment Rescheduled',
+          message: `Dr. ${updated.doctor.fullName} has rescheduled your appointment to ${newDate} at ${newStartTime}.${reason ? ` Reason: ${reason}` : ''}`,
+          payload: {
+            appointmentId: updated.id,
+            date: newDate,
+            startTime: newStartTime,
+            reason,
+          },
+        }).catch(() => {});
+      } catch {}
+    }
+
+    return this.formatAppointment(updated);
+  }
+
   private checkAppointmentActorAccess(apt: any, currentUser: any) {
     if (!currentUser) {
       throw new ForbiddenException('Authentication required.');

@@ -61,6 +61,7 @@ import { useAppointmentStore } from '@/store/useAppointmentStore';
 import { useAppointmentsQuery } from '@/hooks/queries/useAppointmentsQuery';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { doctorService } from '@/services/doctorService';
+import { appointmentService } from '@/services/appointmentService';
 import { BorderRadius, Shadows, StitchColors, DEFAULT_DOCTOR_AVATAR } from '@/constants/theme';
 import UndoToast from '@/components/ui/UndoToast';
 import { Avatar } from '@/components/ui/Avatar';
@@ -73,6 +74,7 @@ export interface ScheduleSlot {
   id: string;
   patientId?: string;
   patientName?: string;
+  appointmentId?: string;
   token: string;
   time: string;
   meridiem: string;
@@ -142,27 +144,40 @@ function getSlotSession(raw: string): 'morning' | 'evening' {
   return 'evening';
 }
 
-// Generate dynamic 14 days starting from a given base date using live system clock
-function generateDynamicWeek(baseDate?: Date) {
+// Generate all days in a month, strictly respecting the doctor profile creation date
+function generateMonthDays(targetMonth: Date, doctorCreationDate: Date) {
   const days: { day: string; date: string; key: string; dot: string; fullDate: string; isToday: boolean }[] = [];
   const dayNames = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
   const now = new Date();
-  const base = baseDate || now;
 
-  for (let i = 0; i < 14; i++) {
-    const d = new Date(base);
-    d.setDate(base.getDate() + i);
+  const year = targetMonth.getFullYear();
+  const month = targetMonth.getMonth();
+  const totalDaysInMonth = new Date(year, month + 1, 0).getDate();
+
+  const creationYear = doctorCreationDate.getFullYear();
+  const creationMonth = doctorCreationDate.getMonth();
+  const creationDay = doctorCreationDate.getDate();
+
+  // If viewing a month strictly before doctor creation, return empty list
+  if (year < creationYear || (year === creationYear && month < creationMonth)) {
+    return [];
+  }
+
+  const startDay = (year === creationYear && month === creationMonth) ? creationDay : 1;
+
+  for (let dayNum = startDay; dayNum <= totalDaysInMonth; dayNum++) {
+    const d = new Date(year, month, dayNum);
     const dayLetter = dayNames[d.getDay()];
-    const dateNum = d.getDate().toString();
     const fullDate = d.toLocaleDateString('en-IN', { weekday: 'short', day: 'numeric', month: 'short' });
     const isToday =
       d.getDate() === now.getDate() &&
       d.getMonth() === now.getMonth() &&
       d.getFullYear() === now.getFullYear();
+    const key = `${year}-${String(month + 1).padStart(2, '0')}-${String(dayNum).padStart(2, '0')}`;
     days.push({
       day: dayLetter,
-      date: dateNum,
-      key: `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`,
+      date: String(dayNum),
+      key,
       dot: isToday ? 'active' : d.getDay() === 0 ? 'off' : 'teal',
       fullDate,
       isToday,
@@ -171,16 +186,38 @@ function generateDynamicWeek(baseDate?: Date) {
   return days;
 }
 
-const DYNAMIC_WEEK_DAYS = generateDynamicWeek();
-
 export default function DoctorScheduleScreen() {
   const router = useRouter();
   const { colors, isDark } = useAppTheme();
   const { user } = useAuthStore();
   const queryClient = useQueryClient();
 
-  const [weekDays, setWeekDays] = useState(DYNAMIC_WEEK_DAYS);
-  const [selectedDay, setSelectedDay] = useState(DYNAMIC_WEEK_DAYS[0]?.key || toLocalDateString(new Date()));
+  const doctorCreationDate = useMemo(() => {
+    const raw = (user as any)?.doctor?.createdAt || (user as any)?.createdAt;
+    if (raw) {
+      const parsed = new Date(raw);
+      if (!isNaN(parsed.getTime())) {
+        return new Date(parsed.getFullYear(), parsed.getMonth(), parsed.getDate());
+      }
+    }
+    const today = new Date();
+    return new Date(today.getFullYear(), today.getMonth(), today.getDate());
+  }, [user]);
+
+  const [currentMonth, setCurrentMonth] = useState(() => {
+    const d = new Date();
+    d.setDate(1);
+    return d;
+  });
+
+  const isPrevMonthDisabled = useMemo(() => {
+    const prevMonthDate = new Date(currentMonth.getFullYear(), currentMonth.getMonth() - 1, 1);
+    const creationMonthDate = new Date(doctorCreationDate.getFullYear(), doctorCreationDate.getMonth(), 1);
+    return prevMonthDate < creationMonthDate;
+  }, [currentMonth, doctorCreationDate]);
+
+  const [weekDays, setWeekDays] = useState<ReturnType<typeof generateMonthDays>>([]);
+  const [selectedDay, setSelectedDay] = useState(toLocalDateString(new Date()));
   const [selectedSession, setSelectedSession] = useState<'all' | 'morning' | 'evening'>('all');
   const [leaveDates, setLeaveDates] = useState<string[]>([]);
   const [activeDelayMinutes, setActiveDelayMinutes] = useState<number>(0);
@@ -248,42 +285,33 @@ export default function DoctorScheduleScreen() {
       setRefreshing(false);
     }
   };
-  const [currentMonth, setCurrentMonth] = useState(() => {
-    const d = new Date();
-    d.setDate(1);
-    return d;
-  });
+  // Synchronize month days whenever currentMonth or doctorCreationDate changes
+  useEffect(() => {
+    const updatedDays = generateMonthDays(currentMonth, doctorCreationDate);
+    setWeekDays(updatedDays);
+    const todayKey = toLocalDateString(new Date());
+    const todayInMonth = updatedDays.find((d) => d.key === todayKey);
+    if (todayInMonth) {
+      setSelectedDay(todayInMonth.key);
+    } else if (updatedDays.length > 0 && !updatedDays.some((d) => d.key === selectedDay)) {
+      setSelectedDay(updatedDays[0].key);
+    }
+  }, [currentMonth, doctorCreationDate]);
 
   const handlePrevMonth = () => {
+    if (isPrevMonthDisabled) return;
     setCurrentMonth((prev) => {
-      const d = new Date(prev);
-      d.setMonth(d.getMonth() - 1);
-      const newWeek = generateDynamicWeek(d);
-      setWeekDays(newWeek);
-      setSelectedDay(newWeek[0]?.key || d.toISOString().slice(0, 10));
+      const d = new Date(prev.getFullYear(), prev.getMonth() - 1, 1);
       return d;
     });
   };
 
   const handleNextMonth = () => {
     setCurrentMonth((prev) => {
-      const d = new Date(prev);
-      d.setMonth(d.getMonth() + 1);
-      const newWeek = generateDynamicWeek(d);
-      setWeekDays(newWeek);
-      setSelectedDay(newWeek[0]?.key || d.toISOString().slice(0, 10));
+      const d = new Date(prev.getFullYear(), prev.getMonth() + 1, 1);
       return d;
     });
   };
-
-  // Update dynamic week from live clock on mount
-  useEffect(() => {
-    const updated = generateDynamicWeek();
-    setWeekDays(updated);
-    if (updated[0]?.date) {
-      setSelectedDay(updated[0].key);
-    }
-  }, []);
 
   // Dynamic Session Slots (seeded dynamically from server availability)
   const [morningSlots] = useState<ScheduleSlot[]>([]);
@@ -338,7 +366,9 @@ export default function DoctorScheduleScreen() {
   };
 
   const selectedAllSlots: ScheduleSlot[] = useMemo(() => {
-    const dayApts = allAppointments.filter((a) => a.date?.slice(0, 10) === selectedDay);
+    const dayApts = allAppointments.filter(
+      (a) => a.date?.slice(0, 10) === selectedDay && a.status !== 'cancelled' && a.status !== 'rejected'
+    );
     if (serverSlotsData?.allGeneratedSlots && serverSlotsData.allGeneratedSlots.length > 0) {
       const availSet = new Set(serverSlotsData.slots || []);
       const activeBreaks = serverSlotsData.breaks || [];
@@ -381,6 +411,7 @@ export default function DoctorScheduleScreen() {
             status: 'booked' as const,
             patientId: match.patientId,
             patientName: match.patientName,
+            appointmentId: match.id,
             consultationId: match.id,
             reason: match.symptoms?.join(', ') || match.notes || 'OPD Consultation',
             delayMins: activeDelayMinutes,
@@ -444,6 +475,8 @@ export default function DoctorScheduleScreen() {
         return {
           ...displaySlot,
           status: 'booked' as const,
+          appointmentId: match.id,
+          consultationId: match.id,
           patientId: match.patientId,
           patientName: match.patientName,
           token: match.tokenNumber ? String(match.tokenNumber).replace(/^Token\s*/i, '') : displaySlot.token,
@@ -887,10 +920,11 @@ export default function DoctorScheduleScreen() {
   };
 
   // 3. POSTPONE / PREPONE RESCHEDULING: Shifts single slot earlier or later
-  const handleReschedule = (mins: number) => {
+  const handleReschedule = async (mins: number) => {
     if (!rescheduleSlot) return;
     const isPostpone = mins > 0;
     const shifted = shiftTime(rescheduleSlot.time, rescheduleSlot.meridiem, mins);
+    const newFormattedTime = `${shifted.time} ${shifted.meridiem}`;
 
     const updateSlot = (s: ScheduleSlot) => {
       if (s.id !== rescheduleSlot.id) return s;
@@ -910,12 +944,36 @@ export default function DoctorScheduleScreen() {
       updateSelectedSessionSlots('evening', (previous) => previous.map(updateSlot));
     }
 
-    if (rescheduleSlot.patientName) {
+    const aptId = rescheduleSlot.appointmentId;
+    if (aptId) {
+      try {
+        await appointmentService.rescheduleAppointment(aptId, {
+          date: selectedDay,
+          startTime: newFormattedTime,
+          delayMinutes: mins,
+          reason: `${isPostpone ? 'Postponed' : 'Preponed'} by ${Math.abs(mins)} mins by doctor`,
+        });
+        useAppointmentStore.getState().updateAppointment(aptId, {
+          time: newFormattedTime,
+          date: selectedDay,
+          delayMinutes: mins,
+        });
+        queryClient.invalidateQueries({ queryKey: ['appointments'] });
+        queryClient.invalidateQueries({ queryKey: ['appointment', aptId] });
+        queryClient.invalidateQueries({ queryKey: ['doctor-slots'] });
+      } catch (err) {
+        console.warn('[schedule] Failed to reschedule on server:', err);
+      }
+    }
+
+    if (rescheduleSlot.patientId || rescheduleSlot.patientName) {
       useNotificationStore.getState().addNotification({
-        title: `Appointment ${isPostpone ? 'Postponed' : 'Preponed'}`,
-        message: `Your appointment with ${doctorName} has been ${isPostpone ? 'postponed' : 'preponed'} by ${Math.abs(mins)} mins. New estimated time: ${shifted.time} ${shifted.meridiem}.`,
-        type: 'appointment_update',
+        recipientId: rescheduleSlot.patientId,
         recipientRole: 'patient',
+        title: `Appointment ${isPostpone ? 'Postponed' : 'Preponed'}`,
+        message: `Your appointment with Dr. ${doctorName} on ${selectedDay} has been ${isPostpone ? 'postponed' : 'preponed'} by ${Math.abs(mins)} mins. New estimated time: ${newFormattedTime}.`,
+        type: 'appointment_update',
+        link: aptId ? `/(patient)/appointments/${aptId}` : undefined,
       });
     }
 
@@ -924,7 +982,7 @@ export default function DoctorScheduleScreen() {
     }
 
     setDelayNotice(
-      `Slot for ${rescheduleSlot.patientName || rescheduleSlot.token} ${isPostpone ? 'postponed' : 'preponed'} to ${shifted.time} ${shifted.meridiem}`
+      `Slot for ${rescheduleSlot.patientName || rescheduleSlot.token} ${isPostpone ? 'postponed' : 'preponed'} to ${newFormattedTime}`
     );
     setTimeout(() => setDelayNotice(null), 3500);
     setRescheduleSlot(null);
@@ -1083,9 +1141,14 @@ export default function DoctorScheduleScreen() {
 
         {/* 2. Top Controls & Month Navigator */}
         <View style={styles.monthControlRow}>
-        <View style={[styles.monthPill, { backgroundColor: colors.backgroundElement, borderColor: colors.border }]}>
-            <Pressable onPress={handlePrevMonth} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }} style={styles.navArrow}>
-              <ChevronLeft size={16} color={colors.text} />
+          <View style={[styles.monthPill, { backgroundColor: colors.backgroundElement, borderColor: colors.border }]}>
+            <Pressable
+              onPress={handlePrevMonth}
+              disabled={isPrevMonthDisabled}
+              hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+              style={[styles.navArrow, isPrevMonthDisabled && { opacity: 0.3 }]}
+            >
+              <ChevronLeft size={16} color={isPrevMonthDisabled ? colors.textMuted : colors.text} />
             </Pressable>
             <Text style={[styles.monthText, { color: colors.text }]}>
               {currentMonth.toLocaleDateString('en-IN', { month: 'long', year: 'numeric' })}
@@ -1101,9 +1164,9 @@ export default function DoctorScheduleScreen() {
                 const today = new Date();
                 const firstOfMonth = new Date(today.getFullYear(), today.getMonth(), 1);
                 setCurrentMonth(firstOfMonth);
-                const todayWeek = generateDynamicWeek();
-                setWeekDays(todayWeek);
-                setSelectedDay(todayWeek[0]?.key || toLocalDateString(today));
+                const todayDays = generateMonthDays(firstOfMonth, doctorCreationDate);
+                setWeekDays(todayDays);
+                setSelectedDay(toLocalDateString(today));
               }}
               style={[styles.todayBtn, { backgroundColor: colors.backgroundElement }]}
             >
@@ -1120,10 +1183,12 @@ export default function DoctorScheduleScreen() {
           </View>
         </View>
 
-        {/* 3. Horizontal Weekly Calendar Strip */}
+        {/* 3. Horizontal Calendar Strip for the Month */}
         <View style={styles.weekSection}>
           <View style={styles.weekHeaderRow}>
-            <Text style={[styles.weekLabel, { color: colors.textSecondary }]}>SCHEDULE 7-DAY OUTLOOK</Text>
+            <Text style={[styles.weekLabel, { color: colors.textSecondary }]}>
+              {`SCHEDULE — ${currentMonth.toLocaleDateString('en-IN', { month: 'long' }).toUpperCase()} ${currentMonth.getFullYear()}`}
+            </Text>
             <View style={{ flexDirection: 'row', alignItems: 'center', gap: 5 }}>
               <View style={styles.pingDot} />
               <Text style={[styles.activeApptText, { color: StitchColors.secondaryContainer }]}>

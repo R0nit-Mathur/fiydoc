@@ -1178,11 +1178,14 @@ const styles = StyleSheet.create({
   },
   verifiedMiniBadge: {
     position: 'absolute',
-    bottom: -4,
-    right: -4,
+    top: -2,
+    right: -2,
     backgroundColor: StitchColors.secondary,
     borderRadius: BorderRadius.full,
-    padding: 2,
+    padding: 3,
+    borderWidth: 1.5,
+    borderColor: '#FFFFFF',
+    zIndex: 5,
   },
   docName: {
     fontSize: 17,

@@ -77,4 +77,20 @@ export class AppointmentsController {
   ) {
     return this.appointmentsService.updateAppointmentStatus(id, body.status, req.user);
   }
+
+  @Post(':id/reschedule')
+  async reschedule(
+    @Param('id') id: string,
+    @Body()
+    body: {
+      date?: string;
+      startTime: string;
+      endTime?: string;
+      delayMinutes?: number;
+      reason?: string;
+    },
+    @Request() req
+  ) {
+    return this.appointmentsService.rescheduleAppointment(id, body, req.user);
+  }
 }

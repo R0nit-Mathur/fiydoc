@@ -10,6 +10,7 @@ import { Palette, BorderRadius } from '@/constants/theme';
 import { useAppTheme } from '@/hooks/useAppTheme';
 import { useQueryClient } from '@tanstack/react-query';
 import { doctorService } from '@/services/doctorService';
+import { appointmentService } from '@/services/appointmentService';
 import { Clock3 } from 'lucide-react-native';
 
 const POSTPONE_PRESETS = [
@@ -95,7 +96,23 @@ export function PostponeModal({ visible, onClose, selectedApt, onSuccess }: Post
     };
     aptStore.addAppointment(updatedApt);
 
-    // Sync delay to backend server
+    // Sync appointment reschedule to backend server
+    appointmentService
+      .rescheduleAppointment(selectedApt.id, {
+        date: selectedApt.date,
+        startTime: newTime,
+        delayMinutes: selectedMinutes,
+        reason: finalReason,
+      })
+      .then(() => {
+        queryClient.invalidateQueries({ queryKey: ['appointments'] });
+        queryClient.invalidateQueries({ queryKey: ['appointment', selectedApt.id] });
+      })
+      .catch((err) => {
+        console.warn('[PostponeModal] Server reschedule error:', err?.message);
+      });
+
+    // Sync delay override to backend server
     doctorService
       .applyScheduleDelay({
         doctorId: user?.id || selectedApt.doctorId,

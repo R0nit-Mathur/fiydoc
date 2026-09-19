@@ -175,3 +175,42 @@ export function useUpdateAppointmentStatusMutation() {
   });
 }
 
+export function useRescheduleAppointmentMutation() {
+  const queryClient = useQueryClient();
+  const updateAppointment = useAppointmentStore((s) => s.updateAppointment);
+
+  return useMutation({
+    mutationFn: async ({
+      id,
+      date,
+      startTime,
+      endTime,
+      delayMinutes,
+      reason,
+    }: {
+      id: string;
+      date?: string;
+      startTime: string;
+      endTime?: string;
+      delayMinutes?: number;
+      reason?: string;
+    }) => {
+      return await appointmentService.rescheduleAppointment(id, {
+        date,
+        startTime,
+        endTime,
+        delayMinutes,
+        reason,
+      });
+    },
+    onSuccess: (updatedApt, { id }) => {
+      if (updatedApt) {
+        updateAppointment(id, updatedApt);
+      }
+      queryClient.invalidateQueries({ queryKey: ['appointments'] });
+      queryClient.invalidateQueries({ queryKey: ['appointment', id] });
+    },
+  });
+}
+
+

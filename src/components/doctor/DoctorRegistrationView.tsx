@@ -32,6 +32,9 @@ import {
   Edit2,
   X,
   Camera,
+  Stethoscope,
+  Building,
+  Check,
 } from 'lucide-react-native';
 import { Modal } from 'react-native';
 import { StepProgressTracker } from '@/components/ui/StepProgressTracker';
@@ -447,6 +450,10 @@ export function DoctorRegistrationView({
   };
 
   const handleSelectSlideTab = (targetIndex: number) => {
+    if (practiceScope === 'clinic_only' && targetIndex === 1) {
+      setError('Hospital affiliations are locked because "Own Clinic Only" was selected.');
+      return;
+    }
     if (targetIndex > slideIndex) {
       if (slideIndex === 0 && practiceScope !== 'hospital_only' && (!clinicName.trim() || !clinicAddress.trim())) {
         setError('Please provide required clinic information before moving forward.');
@@ -693,44 +700,60 @@ export function DoctorRegistrationView({
                   position: 'relative',
                   width: 84,
                   height: 84,
-                  borderRadius: 42,
-                  backgroundColor: '#F1F5F9',
-                  borderWidth: 2,
-                  borderColor: profilePhoto ? StitchColors.primary : '#CBD5E1',
-                  borderStyle: profilePhoto ? 'solid' : 'dashed',
                   alignItems: 'center',
                   justifyContent: 'center',
-                  overflow: 'hidden',
                 }}
                 accessibilityRole="button"
                 accessibilityLabel="Upload profile photo"
               >
-                {profilePhoto ? (
-                  <Image source={{ uri: profilePhoto }} style={{ width: '100%', height: '100%' }} />
-                ) : (
-                  <View style={{ alignItems: 'center', justifyContent: 'center' }}>
-                    <Camera size={26} color="#64748B" />
-                    <Text style={{ fontSize: 10, fontWeight: '700', color: '#64748B', marginTop: 2 }}>Photo</Text>
-                  </View>
-                )}
-                {uploadingPhoto ? (
-                  <View style={[StyleSheet.absoluteFill, { backgroundColor: 'rgba(0,0,0,0.4)', alignItems: 'center', justifyContent: 'center' }]}>
-                    <ActivityIndicator size="small" color="#FFFFFF" />
-                  </View>
-                ) : (
+                <View
+                  style={{
+                    width: 84,
+                    height: 84,
+                    borderRadius: 42,
+                    backgroundColor: '#F1F5F9',
+                    borderWidth: 2,
+                    borderColor: profilePhoto ? StitchColors.primary : '#CBD5E1',
+                    borderStyle: profilePhoto ? 'solid' : 'dashed',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    overflow: 'hidden',
+                  }}
+                >
+                  {profilePhoto ? (
+                    <Image source={{ uri: profilePhoto }} style={{ width: '100%', height: '100%' }} />
+                  ) : (
+                    <View style={{ alignItems: 'center', justifyContent: 'center' }}>
+                      <Camera size={26} color="#64748B" />
+                      <Text style={{ fontSize: 10, fontWeight: '700', color: '#64748B', marginTop: 2 }}>Photo</Text>
+                    </View>
+                  )}
+                  {uploadingPhoto && (
+                    <View style={[StyleSheet.absoluteFill, { backgroundColor: 'rgba(0,0,0,0.4)', alignItems: 'center', justifyContent: 'center' }]}>
+                      <ActivityIndicator size="small" color="#FFFFFF" />
+                    </View>
+                  )}
+                </View>
+                {!uploadingPhoto && (
                   <View
                     style={{
                       position: 'absolute',
-                      bottom: 0,
-                      right: 0,
+                      bottom: -2,
+                      right: -2,
                       backgroundColor: StitchColors.primary,
-                      borderRadius: 12,
-                      padding: 4,
+                      borderRadius: 14,
+                      padding: 5,
                       borderWidth: 2,
                       borderColor: '#FFFFFF',
+                      shadowColor: '#000',
+                      shadowOffset: { width: 0, height: 1 },
+                      shadowOpacity: 0.2,
+                      shadowRadius: 2,
+                      elevation: 3,
+                      zIndex: 10,
                     }}
                   >
-                    <Edit2 size={11} color="#FFFFFF" />
+                    <Edit2 size={12} color="#FFFFFF" />
                   </View>
                 )}
               </Pressable>
@@ -1725,8 +1748,16 @@ export function DoctorRegistrationView({
             activeIndex={slideIndex}
             onSelectTab={handleSelectSlideTab}
             tabs={[
-              { id: 1, label: '1. Clinic' },
-              { id: 2, label: '2. Hospital' },
+              {
+                id: 1,
+                label: practiceScope === 'hospital_only' ? '1. Clinic (Skipped)' : '1. Clinic',
+                locked: practiceScope === 'hospital_only',
+              },
+              {
+                id: 2,
+                label: practiceScope === 'clinic_only' ? '2. Hospital (Locked)' : '2. Hospital',
+                locked: practiceScope === 'clinic_only',
+              },
               { id: 3, label: '3. Schedule' },
             ]}
           />
@@ -1751,31 +1782,128 @@ export function DoctorRegistrationView({
 
               {/* Practice Scope */}
               <View style={styles.inputGroup}>
-                <Text style={styles.inputLabel}>Practice Setting</Text>
-                <View style={styles.radioChipsGrid}>
+                <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 }}>
+                  <Text style={styles.inputLabel}>Practice Setting</Text>
+                  <Text style={{ fontSize: 11, color: '#64748B', fontWeight: '500' }}>Select your operational setup</Text>
+                </View>
+                <View style={{ gap: 8 }}>
                   {[
-                    { key: 'both', label: 'Both Clinic & Hospital' },
-                    { key: 'clinic_only', label: 'Own Clinic Only' },
-                    { key: 'hospital_only', label: 'Hospital Only' },
-                  ].map((item) => (
-                    <Pressable
-                      key={item.key}
-                      onPress={() => setPracticeScope(item.key as any)}
-                      style={[
-                        styles.radioChip,
-                        practiceScope === item.key ? styles.radioChipActive : styles.radioChipInactive,
-                      ]}
-                    >
-                      <Text
-                        style={[
-                          styles.radioChipText,
-                          practiceScope === item.key && styles.radioChipTextActive,
-                        ]}
+                    {
+                      key: 'both',
+                      title: 'Both Clinic & Hospital',
+                      desc: 'Private chamber consultations & hospital OPD visits',
+                      badge: 'All Active',
+                      icon: Stethoscope,
+                      color: StitchColors.primary,
+                      bg: '#EFF6FF',
+                      border: '#BFDBFE',
+                    },
+                    {
+                      key: 'clinic_only',
+                      title: 'Own Clinic Only',
+                      desc: 'Private clinic practice only · Hospital affiliations locked',
+                      badge: 'Hospital Locked',
+                      icon: Building2,
+                      color: '#0D9488',
+                      bg: '#F0FDFA',
+                      border: '#99F6E4',
+                    },
+                    {
+                      key: 'hospital_only',
+                      title: 'Hospital Only',
+                      desc: 'Hospital consultant/OPD · Private clinic setup skipped',
+                      badge: 'Clinic Skipped',
+                      icon: Building,
+                      color: '#6366F1',
+                      bg: '#EEF2FF',
+                      border: '#C7D2FE',
+                    },
+                  ].map((item) => {
+                    const isSelected = practiceScope === item.key;
+                    const IconComp = item.icon;
+                    return (
+                      <Pressable
+                        key={item.key}
+                        onPress={() => {
+                          setPracticeScope(item.key as any);
+                          setError('');
+                        }}
+                        style={{
+                          flexDirection: 'row',
+                          alignItems: 'center',
+                          padding: 12,
+                          borderRadius: 12,
+                          borderWidth: isSelected ? 2 : 1,
+                          borderColor: isSelected ? StitchColors.primary : '#E2E8F0',
+                          backgroundColor: isSelected ? '#F8FAFC' : '#FFFFFF',
+                          shadowColor: '#000',
+                          shadowOffset: { width: 0, height: 1 },
+                          shadowOpacity: isSelected ? 0.08 : 0.03,
+                          shadowRadius: 2,
+                          elevation: isSelected ? 2 : 1,
+                        }}
                       >
-                        {item.label}
-                      </Text>
-                    </Pressable>
-                  ))}
+                        <View
+                          style={{
+                            width: 40,
+                            height: 40,
+                            borderRadius: 10,
+                            backgroundColor: isSelected ? StitchColors.primary : item.bg,
+                            alignItems: 'center',
+                            justifyContent: 'center',
+                            marginRight: 12,
+                          }}
+                        >
+                          <IconComp size={20} color={isSelected ? '#FFFFFF' : item.color} />
+                        </View>
+                        <View style={{ flex: 1 }}>
+                          <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+                            <Text
+                              style={{
+                                fontSize: 14,
+                                fontWeight: '700',
+                                color: isSelected ? StitchColors.primary : '#1E293B',
+                              }}
+                            >
+                              {item.title}
+                            </Text>
+                            <View
+                              style={{
+                                paddingHorizontal: 6,
+                                paddingVertical: 2,
+                                borderRadius: 6,
+                                backgroundColor: item.bg,
+                                borderWidth: 1,
+                                borderColor: item.border,
+                              }}
+                            >
+                              <Text style={{ fontSize: 10, fontWeight: '700', color: item.color }}>
+                                {item.badge}
+                              </Text>
+                            </View>
+                          </View>
+                          <Text style={{ fontSize: 11, color: isSelected ? '#475569' : '#64748B', marginTop: 2, lineHeight: 15 }}>
+                            {item.desc}
+                          </Text>
+                        </View>
+                        <View
+                          style={{
+                            width: 20,
+                            height: 20,
+                            borderRadius: 10,
+                            borderWidth: 2,
+                            borderColor: isSelected ? StitchColors.primary : '#CBD5E1',
+                            backgroundColor: isSelected ? StitchColors.primary : '#FFFFFF',
+                            alignItems: 'center',
+                            justifyContent: 'center',
+                            marginLeft: 8,
+                          }}
+                        >
+                          {isSelected && <Check size={12} color="#FFFFFF" strokeWidth={3} />}
+                        </View>
+                      </Pressable>
+                    );
+                  })}
                 </View>
               </View>
 
@@ -1787,6 +1915,13 @@ export function DoctorRegistrationView({
                     <Text style={[styles.sealNoticeDesc, { color: '#2563EB' }]}>
                       You practice exclusively in a hospital setting. Private clinic establishment proof and chamber setup are not required. You can proceed directly to Hospital Affiliations.
                     </Text>
+                    <Pressable
+                      onPress={() => setSlideIndex(1)}
+                      style={[styles.primaryFlexButton, { marginTop: 10, alignSelf: 'flex-start', paddingHorizontal: 16, paddingVertical: 8 }]}
+                    >
+                      <Text style={styles.primaryFlexButtonText}>Proceed to Hospital Affiliations</Text>
+                      <ArrowRight size={14} color="#FFFFFF" />
+                    </Pressable>
                   </View>
                 </View>
               )}
@@ -2582,7 +2717,7 @@ export function DoctorRegistrationView({
               {/* Final Submit Actions */}
               <View style={styles.buttonRowTwo}>
                 <Pressable
-                  onPress={() => setSlideIndex(1)}
+                  onPress={() => setSlideIndex(practiceScope === 'clinic_only' ? 0 : 1)}
                   style={styles.secondaryButton}
                 >
                   <ArrowLeft size={16} color="#334155" />

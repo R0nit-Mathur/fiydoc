@@ -1,11 +1,13 @@
 import React from 'react';
 import { View, Text, Pressable, StyleSheet } from 'react-native';
-import { Check } from 'lucide-react-native';
+import { Check, Lock } from 'lucide-react-native';
 import { StitchColors } from '@/constants/theme';
 
 export interface CarouselTabItem {
   id: number;
   label: string;
+  disabled?: boolean;
+  locked?: boolean;
 }
 
 export interface CardCarouselTabsProps {
@@ -26,16 +28,19 @@ export function CardCarouselTabs({
       {tabs.map((tab, idx) => {
         const isActive = idx === activeIndex;
         const isCompleted = idx < activeIndex;
+        const isLocked = Boolean(tab.locked || tab.disabled);
 
         return (
           <Pressable
             key={tab.id}
+            disabled={isLocked}
             onPress={() => onSelectTab(idx)}
             style={[
               styles.tabButton,
               isActive && styles.tabButtonActive,
               isCompleted && styles.tabButtonCompleted,
               !isActive && !isCompleted && styles.tabButtonUpcoming,
+              isLocked && styles.tabButtonLocked,
             ]}
           >
             <View style={styles.tabContent}>
@@ -45,9 +50,12 @@ export function CardCarouselTabs({
                   isActive && styles.tabBadgeActive,
                   isCompleted && styles.tabBadgeCompleted,
                   !isActive && !isCompleted && styles.tabBadgeUpcoming,
+                  isLocked && styles.tabBadgeLocked,
                 ]}
               >
-                {isCompleted ? (
+                {isLocked ? (
+                  <Lock size={9} color="#94A3B8" strokeWidth={2.5} />
+                ) : isCompleted ? (
                   <Check size={10} color="#ffffff" strokeWidth={3} />
                 ) : (
                   <Text
@@ -150,6 +158,11 @@ const styles = StyleSheet.create({
     backgroundColor: 'transparent',
     borderColor: 'transparent',
   },
+  tabButtonLocked: {
+    backgroundColor: '#f8fafc',
+    borderColor: '#e2e8f0',
+    opacity: 0.55,
+  },
   tabContent: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -171,6 +184,9 @@ const styles = StyleSheet.create({
   },
   tabBadgeUpcoming: {
     backgroundColor: '#e2e8f0',
+  },
+  tabBadgeLocked: {
+    backgroundColor: '#f1f5f9',
   },
   tabBadgeText: {
     fontSize: 9,

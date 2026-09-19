@@ -600,6 +600,26 @@ export default function DoctorConsultationScreen() {
     );
   }
 
+  if (!isAptLoading && currentApt && (currentApt.status === 'cancelled' || currentApt.status === 'rejected')) {
+    return (
+      <SafeAreaView style={[styles.safeArea, { alignItems: 'center', justifyContent: 'center', padding: 24 }]} edges={['top']}>
+        <AlertTriangle size={48} color={StitchColors.error} style={{ marginBottom: 16 }} />
+        <Text style={{ fontSize: 20, fontWeight: '700', color: colors.text, marginBottom: 8, textAlign: 'center' }}>
+          Appointment Cancelled
+        </Text>
+        <Text style={{ fontSize: 14, color: colors.textSecondary, textAlign: 'center', marginBottom: 24, lineHeight: 20 }}>
+          This appointment was cancelled or rejected. Clinical consultations cannot be conducted on cancelled visits.
+        </Text>
+        <Pressable
+          style={{ backgroundColor: StitchColors.primaryContainer, paddingHorizontal: 24, paddingVertical: 12, borderRadius: 12 }}
+          onPress={() => router.replace('/(doctor)/(tabs)/directory')}
+        >
+          <Text style={{ color: '#ffffff', fontWeight: '600', fontSize: 15 }}>Return to Patient Roster</Text>
+        </Pressable>
+      </SafeAreaView>
+    );
+  }
+
   return (
     <SafeAreaView style={[styles.safeArea, { backgroundColor: colors.background }]} edges={['top']}>
       {/* 1. Top Bar: Back, "Consultation", Active Timer & Doctor Avatar */}

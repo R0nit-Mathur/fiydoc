@@ -114,4 +114,20 @@ export const appointmentService = {
       body: JSON.stringify({ status }),
     });
   },
+
+  rescheduleAppointment: async (
+    id: string,
+    data: {
+      date?: string;
+      startTime: string;
+      endTime?: string;
+      delayMinutes?: number;
+      reason?: string;
+    }
+  ): Promise<Appointment> => {
+    return apiClient<Appointment>(`/appointments/${id}/reschedule`, {
+      method: 'POST',
+      body: JSON.stringify(data),
+    });
+  },
 };

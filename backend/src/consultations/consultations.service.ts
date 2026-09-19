@@ -60,12 +60,13 @@ export class ConsultationsService {
       }
     }
 
+    if (apt.status === AppointmentStatus.CANCELLED || apt.status === AppointmentStatus.REJECTED) {
+      throw new BadRequestException(
+        `Cannot conduct or update consultation. Appointment is '${apt.status}'.`
+      );
+    }
+
     if (dto.completeNow) {
-      if (apt.status === AppointmentStatus.CANCELLED) {
-        throw new BadRequestException(
-          `Cannot complete consultation. Appointment is in '${apt.status}' status and cannot be conducted.`
-        );
-      }
       if (!dto.assessment || dto.assessment.trim().length === 0) {
         dto.assessment = dto.chiefComplaint?.trim() || 'Clinical Consultation Encounter Completed';
       }
