@@ -48,23 +48,33 @@ export class RecordsService {
     }
 
     if (currentUser.role === Role.DOCTOR) {
-      const doc = await this.prisma.doctor.findUnique({ where: { userId: currentUser.id } });
+      const doc = await this.prisma.doctor.findFirst({
+        where: {
+          OR: [
+            { userId: currentUser.id },
+            { id: currentUser.id },
+            ...(currentUser.doctor?.id ? [{ id: currentUser.doctor.id }] : []),
+          ],
+        },
+      });
       if (!doc) {
         throw new ForbiddenException('Doctor profile not found.');
       }
 
-      // Doctor can only access records if there is an active/completed clinical encounter
+      // Doctor can access records if there is an appointment relationship between doctor and patient
       const hasRelationship = await this.prisma.appointment.findFirst({
         where: {
-          patientId: resolvedId,
-          doctorId: doc.id,
-          status: { in: ['CONFIRMED', 'COMPLETED'] },
+          OR: [
+            { patientId: resolvedId },
+            { patient: { userId: resolvedId } },
+          ],
+          doctorId: { in: [doc.id, doc.userId] },
         },
       });
 
       if (!hasRelationship) {
         throw new ForbiddenException(
-          'You are not authorized to view this patient’s medical records without an active or completed appointment relationship.',
+          'You are not authorized to view this patient’s medical records without a clinical appointment relationship.',
         );
       }
     }

@@ -329,21 +329,37 @@ export function DoctorRegistrationView({
 
       // If user is not yet logged in or registered, register immediately on backend
       const currentSession = useAuthStore.getState().user;
-      if (!currentSession?.isLoggedIn || currentSession?.email !== cleanEmail) {
+      if (!currentSession?.isLoggedIn || currentSession?.email?.toLowerCase() !== cleanEmail.toLowerCase()) {
         console.log('[DoctorRegistrationView] Registering doctor account at Step 1 for:', cleanEmail);
-        const session = await authService.registerWithEmail(
-          cleanEmail,
-          cleanPassword,
-          'doctor',
-          cleanName,
-          cleanPhone,
-          {
-            specialization: specialization.trim() || 'General Medicine',
-            consultationFee: Number(consultationFee) || 500,
-            profilePhoto: resolvedPhoto || undefined,
+        try {
+          const session = await authService.registerWithEmail(
+            cleanEmail,
+            cleanPassword,
+            'doctor',
+            cleanName,
+            cleanPhone,
+            {
+              specialization: specialization.trim() || 'General Medicine',
+              consultationFee: Number(consultationFee) || 500,
+              profilePhoto: resolvedPhoto || undefined,
+            }
+          );
+          setSession(session);
+        } catch (regErr: any) {
+          const errMsg = String(regErr?.message || '');
+          // If the email is already registered with these credentials, attempt seamless login
+          if (errMsg.toLowerCase().includes('email is already registered') || errMsg.includes('EMAIL_ALREADY_REGISTERED')) {
+            try {
+              console.log('[DoctorRegistrationView] Email exists, attempting resume login for:', cleanEmail);
+              const loginSession = await authService.loginWithEmail(cleanEmail, cleanPassword);
+              setSession(loginSession);
+            } catch {
+              throw regErr;
+            }
+          } else {
+            throw regErr;
           }
-        );
-        setSession(session);
+        }
       }
 
       setStep1Loading(false);
@@ -356,7 +372,10 @@ export function DoctorRegistrationView({
     } catch (err: any) {
       setStep1Loading(false);
       console.warn('[DoctorRegistrationView] Step 1 registration error:', err?.message);
-      if (err?.message?.includes('already registered')) {
+      const msg = String(err?.message || '').toLowerCase();
+      if (msg.includes('phone') && (msg.includes('already registered') || msg.includes('phone_already_registered'))) {
+        setError('[Phone In Use] This phone number is already registered. Please use a different phone number.');
+      } else if (msg.includes('email') && (msg.includes('already registered') || msg.includes('email_already_registered'))) {
         setError('[Account Exists] This email is already registered. Please sign in or use a different email.');
       } else {
         setError(err?.message || 'Failed to create doctor account. Please check your connection and try again.');
@@ -629,7 +648,10 @@ export function DoctorRegistrationView({
       router.replace('/(doctor)/(tabs)/home');
     } catch (err: any) {
       console.warn('[DoctorRegistrationView] Backend registration error:', err.message);
-      if (err.message?.includes('already registered')) {
+      const msg = String(err?.message || '').toLowerCase();
+      if (msg.includes('phone') && (msg.includes('already registered') || msg.includes('phone_already_registered'))) {
+        setError('[Phone In Use] This phone number is already registered. Please sign in or use a different phone number.');
+      } else if (msg.includes('email') && (msg.includes('already registered') || msg.includes('email_already_registered'))) {
         setError('[Email/Password Auth] This email is already registered. Please sign in or use a different email.');
       } else {
         setError(err.message || 'Doctor registration failed. Please check your credentials and try again.');

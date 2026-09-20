@@ -1,7 +1,7 @@
 import { Injectable, BadRequestException, ForbiddenException, NotFoundException, HttpException } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
 import { NotificationsService } from '../notifications/notifications.service';
-import { AppointmentStatus, ConsultationType, Role } from '@prisma/client';
+import { AppointmentStatus, ConsultationType, Role, MedicalRecordType } from '@prisma/client';
 
 @Injectable()
 export class AppointmentsService {
@@ -440,6 +440,25 @@ export class AppointmentsService {
       }
     } catch (notifErr: any) {
       console.warn('[appointments] Notification dispatch failed (non-fatal):', notifErr?.message);
+    }
+
+    // If appointment has an attached document, also link it into patient's MedicalRecord vault
+    if (dto.attachmentUrl) {
+      try {
+        await this.prisma.medicalRecord.create({
+          data: {
+            patientId: dto.patientId,
+            title: dto.attachmentName || 'Pre-Consultation Record',
+            type: MedicalRecordType.UPLOADED_DOCUMENT,
+            sourceId: createdApt.id,
+            documentUrl: dto.attachmentUrl,
+            summary: `Attached by patient during booking with ${createdApt.doctor?.fullName || 'Doctor'} on ${dto.date}.`,
+            tags: ['PRE_CONSULTATION', 'APPOINTMENT_ATTACHMENT'],
+          },
+        });
+      } catch (recErr: any) {
+        console.warn('[appointments] Failed to link attachment to medical records:', recErr?.message);
+      }
     }
 
     return this.formatAppointment(createdApt);

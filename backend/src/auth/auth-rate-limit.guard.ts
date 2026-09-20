@@ -14,7 +14,7 @@ interface RateLimitRecord {
 @Injectable()
 export class AuthRateLimitGuard implements CanActivate {
   private readonly rateLimits = new Map<string, RateLimitRecord>();
-  private readonly limit = 30; // Max 30 auth requests per minute (allows multi-step onboarding)
+  private readonly limit = 100; // Increased to 100 req/min for seamless multi-step onboarding and background hydration
   private readonly windowMs = 60 * 1000; // per 1 minute window
   private lastCleanup = Date.now();
 
@@ -33,6 +33,12 @@ export class AuthRateLimitGuard implements CanActivate {
   canActivate(context: ExecutionContext): boolean {
     this.cleanupExpired();
     const request = context.switchToHttp().getRequest();
+
+    // Exempt session check endpoint /auth/me from strict rate limiting
+    if (request.url?.includes('/auth/me')) {
+      return true;
+    }
+
     const ip =
       request.headers['x-forwarded-for']?.toString().split(',')[0].trim() ||
       request.ip ||

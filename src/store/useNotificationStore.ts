@@ -17,7 +17,10 @@ interface NotificationState {
     time?: string;
     recipientId?: string;
     recipientRole?: 'patient' | 'doctor' | 'all';
+    isAlert?: boolean;
+    silent?: boolean;
   }) => void;
+  syncServerNotifications: (items: NotificationItem[]) => void;
   markAsRead: (id: string) => void;
   markAllAsRead: (userId?: string, role?: 'patient' | 'doctor') => void;
   clearNotifications: () => void;
@@ -26,9 +29,22 @@ interface NotificationState {
   getUnreadCount: (userId?: string, role?: 'patient' | 'doctor') => number;
 }
 
+// Critical clinical notification types that warrant an OS push banner popup
+const CRITICAL_NOTIFICATION_TYPES = new Set([
+  'appointment',
+  'appointment_confirmed',
+  'appointment_cancelled',
+  'appointment_rescheduled',
+  'slot_rescheduled',
+  'schedule_delay',
+  'schedule_leave',
+  'arrival_confirmed',
+  'prescription_issued',
+  'emergency',
+]);
+
 // No pre-seeded notifications. All notifications are pushed dynamically by real events.
 const initialNotifications: NotificationItem[] = [];
-
 
 export const useNotificationStore = create<NotificationState>()(
   persist(
@@ -36,7 +52,12 @@ export const useNotificationStore = create<NotificationState>()(
       notifications: initialNotifications,
 
       addNotification: (notif) => {
-        if (Platform.OS !== 'web') {
+        const typeNorm = (notif.type || '').toLowerCase();
+        const shouldShowBanner =
+          !notif.silent &&
+          (notif.isAlert === true || CRITICAL_NOTIFICATION_TYPES.has(typeNorm));
+
+        if (Platform.OS !== 'web' && shouldShowBanner) {
           Notifications.scheduleNotificationAsync({
             content: {
               title: notif.title,
@@ -49,6 +70,7 @@ export const useNotificationStore = create<NotificationState>()(
             console.warn('[useNotificationStore] Local push banner notice:', err?.message);
           });
         }
+
         set((state) => {
           const newNotif: NotificationItem = {
             id: notif.id || `notif_${Date.now()}_${Math.random().toString(36).substring(2, 6)}`,
@@ -62,7 +84,23 @@ export const useNotificationStore = create<NotificationState>()(
             type: notif.type,
             link: notif.link,
           };
-          return { notifications: [newNotif, ...state.notifications] };
+          // Deduplicate by ID
+          const existing = state.notifications.filter((n) => n.id !== newNotif.id);
+          return { notifications: [newNotif, ...existing] };
+        });
+      },
+
+      syncServerNotifications: (items: NotificationItem[]) => {
+        if (!Array.isArray(items) || items.length === 0) return;
+        set((state) => {
+          const existingMap = new Map(state.notifications.map((n) => [n.id, n]));
+          for (const item of items) {
+            existingMap.set(item.id, {
+              ...item,
+              read: existingMap.get(item.id)?.read ?? item.read ?? false,
+            });
+          }
+          return { notifications: Array.from(existingMap.values()) };
         });
       },
 

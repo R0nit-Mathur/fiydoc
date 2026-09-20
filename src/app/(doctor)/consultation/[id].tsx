@@ -30,6 +30,7 @@ import {
   Platform,
   Modal,
   Alert,
+  ActivityIndicator,
 } from 'react-native';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { SafeAreaView } from 'react-native-safe-area-context';
@@ -57,6 +58,7 @@ import {
   Sparkles,
   Share2,
   FileCheck,
+  FileText,
   MessageCircle,
   Activity,
   Sliders,
@@ -122,6 +124,15 @@ export default function DoctorConsultationScreen() {
     queryFn: () =>
       currentApt?.patientId
         ? doctorService.getPatientPastConsultations(currentApt.patientId)
+        : Promise.resolve([]),
+    enabled: Boolean(currentApt?.patientId),
+  });
+
+  const { data: patientRecords = [], isLoading: isRecordsLoading } = useQuery({
+    queryKey: ['patient-medical-records', currentApt?.patientId],
+    queryFn: () =>
+      currentApt?.patientId
+        ? healthService.getMedicalRecords(currentApt.patientId)
         : Promise.resolve([]),
     enabled: Boolean(currentApt?.patientId),
   });
@@ -218,6 +229,11 @@ export default function DoctorConsultationScreen() {
   const [customImageTitle, setCustomImageTitle] = useState('');
   const [customImageUri, setCustomImageUri] = useState('');
   const [showAttachmentViewer, setShowAttachmentViewer] = useState(false);
+  const [selectedRecordToView, setSelectedRecordToView] = useState<{
+    url?: string | null;
+    title?: string;
+    subtitle?: string;
+  } | null>(null);
 
   // Dedicated Patient Clinical History — clean by default
   const [patientClinicalHistory, setPatientClinicalHistory] = useState('');
@@ -1101,25 +1117,33 @@ export default function DoctorConsultationScreen() {
           </Animated.View>
         )}
 
-        {/* TAB 3: Lab Reports */}
+        {/* TAB 3: Lab Reports & Uploaded Documents */}
         {activeTab === 'labs' && (
           <Animated.View entering={FadeIn.duration(200)} style={styles.tabContentBlock}>
             <View style={[styles.sectionCard, { backgroundColor: colors.card, borderColor: colors.border }]}>
-              <Text style={[styles.sectionCardTitle, { color: colors.text, marginBottom: 12 }]}>Diagnostic Reports</Text>
+              <Text style={[styles.sectionCardTitle, { color: colors.text, marginBottom: 12 }]}>
+                Diagnostic Reports & Patient Documents
+              </Text>
 
               <View style={styles.labsList}>
                 {currentApt?.attachmentUrl ? (
-                  <View style={[styles.labReportCard, { backgroundColor: '#EFF6FF', borderColor: StitchColors.primaryContainer, borderWidth: 1, marginBottom: 10 }]}>
+                  <View style={[styles.labReportCard, { backgroundColor: isDark ? '#1E293B' : '#EFF6FF', borderColor: StitchColors.primaryContainer, borderWidth: 1, marginBottom: 10 }]}>
                     <View style={{ flex: 1, marginRight: 8 }}>
                       <Text style={[styles.labReportTitle, { color: StitchColors.primaryContainer, fontWeight: '700' }]}>
-                        {currentApt.attachmentName || 'Pre-Consultation Record / ECG'}
+                        {currentApt.attachmentName || 'Pre-Consultation Booking Attachment'}
                       </Text>
                       <Text style={[styles.labReportMeta, { color: colors.textSecondary }]}>
-                        Attached by patient during booking
+                        Attached by patient during appointment booking
                       </Text>
                     </View>
                     <Pressable
-                      onPress={() => setShowAttachmentViewer(true)}
+                      onPress={() => {
+                        setSelectedRecordToView({
+                          url: currentApt.attachmentUrl,
+                          title: currentApt.attachmentName || 'Pre-Consultation Document',
+                          subtitle: `Attached by ${currentApt.patientName || 'Patient'} during booking`,
+                        });
+                      }}
                       style={{
                         backgroundColor: StitchColors.primaryContainer,
                         paddingHorizontal: 12,
@@ -1133,25 +1157,59 @@ export default function DoctorConsultationScreen() {
                   </View>
                 ) : null}
 
-                <View style={[styles.labReportCard, { backgroundColor: colors.backgroundElement }]}>
-                  <View>
-                    <Text style={[styles.labReportTitle, { color: colors.text }]}>Complete Blood Count (CBC)</Text>
-                    <Text style={[styles.labReportMeta, { color: colors.textSecondary }]}>12 Jan 2026 • FiYDOC Diagnostics</Text>
+                {isRecordsLoading && (
+                  <View style={{ paddingVertical: 16, alignItems: 'center' }}>
+                    <ActivityIndicator size="small" color={StitchColors.primaryContainer} />
+                    <Text style={{ fontSize: 12, color: colors.textSecondary, marginTop: 6 }}>
+                      Loading patient records...
+                    </Text>
                   </View>
-                  <View style={[styles.labStatusBadge, { backgroundColor: '#CCFBF1' }]}>
-                    <Text style={styles.labStatusBadgeText}>All Normal</Text>
-                  </View>
-                </View>
+                )}
 
-                <View style={[styles.labReportCard, { backgroundColor: colors.backgroundElement }]}>
-                  <View>
-                    <Text style={[styles.labReportTitle, { color: colors.text }]}>Lipid Profile & HbA1c</Text>
-                    <Text style={[styles.labReportMeta, { color: colors.textSecondary }]}>12 Jan 2026 • HbA1c: 5.6% | LDL: 108</Text>
+                {patientRecords
+                  .filter((r: any) => (r.documentUrl || r.fileUrl) && (r.documentUrl !== currentApt?.attachmentUrl))
+                  .map((rec: any) => (
+                    <View
+                      key={rec.id}
+                      style={[styles.labReportCard, { backgroundColor: colors.backgroundElement, marginBottom: 8 }]}
+                    >
+                      <View style={{ flex: 1, marginRight: 8 }}>
+                        <Text style={[styles.labReportTitle, { color: colors.text }]}>
+                          {rec.title || 'Uploaded Medical Record'}
+                        </Text>
+                        <Text style={[styles.labReportMeta, { color: colors.textSecondary }]}>
+                          {rec.summary || (rec.createdAt ? new Date(rec.createdAt).toLocaleDateString() : 'Patient Record Vault')}
+                          {rec.tags?.length > 0 ? ` • ${rec.tags.join(', ')}` : ''}
+                        </Text>
+                      </View>
+                      <Pressable
+                        onPress={() => {
+                          setSelectedRecordToView({
+                            url: rec.documentUrl || rec.fileUrl,
+                            title: rec.title || 'Patient Document',
+                            subtitle: rec.summary || 'Uploaded Medical Record',
+                          });
+                        }}
+                        style={{
+                          backgroundColor: StitchColors.primaryContainer,
+                          paddingHorizontal: 12,
+                          paddingVertical: 6,
+                          borderRadius: 8,
+                        }}
+                        hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+                      >
+                        <Text style={{ color: '#FFFFFF', fontWeight: '700', fontSize: 12 }}>View</Text>
+                      </Pressable>
+                    </View>
+                  ))}
+
+                {!isRecordsLoading && !currentApt?.attachmentUrl && patientRecords.filter((r: any) => r.documentUrl || r.fileUrl).length === 0 && (
+                  <View style={{ paddingVertical: 20, alignItems: 'center' }}>
+                    <Text style={{ fontSize: 13, color: colors.textSecondary, textAlign: 'center' }}>
+                      No uploaded diagnostic records or documents for this patient yet.
+                    </Text>
                   </View>
-                  <View style={[styles.labStatusBadge, { backgroundColor: '#EFF6FF' }]}>
-                    <Text style={[styles.labStatusBadgeText, { color: StitchColors.primaryContainer }]}>In Range</Text>
-                  </View>
-                </View>
+                )}
               </View>
             </View>
           </Animated.View>
@@ -2356,13 +2414,16 @@ export default function DoctorConsultationScreen() {
         onCancel={() => setExitConfirmVisible(false)}
       />
 
-      {/* 12. PRE-CONSULTATION ATTACHMENT VIEWER */}
+      {/* 12. PRE-CONSULTATION & MEDICAL RECORD ATTACHMENT VIEWER */}
       <DocumentViewerModal
-        visible={showAttachmentViewer}
-        title={currentApt?.attachmentName || 'Pre-Consultation Attached Document'}
-        subtitle={`Attached by ${currentApt?.patientName || 'Patient'} during booking`}
-        documentUrl={currentApt?.attachmentUrl}
-        onClose={() => setShowAttachmentViewer(false)}
+        visible={showAttachmentViewer || Boolean(selectedRecordToView)}
+        title={selectedRecordToView?.title || currentApt?.attachmentName || 'Pre-Consultation Attached Document'}
+        subtitle={selectedRecordToView?.subtitle || `Attached by ${currentApt?.patientName || 'Patient'} during booking`}
+        documentUrl={selectedRecordToView?.url || currentApt?.attachmentUrl}
+        onClose={() => {
+          setShowAttachmentViewer(false);
+          setSelectedRecordToView(null);
+        }}
       />
 
       {/* 13. DIGITAL SIGNING BLOCKING LOADER */}

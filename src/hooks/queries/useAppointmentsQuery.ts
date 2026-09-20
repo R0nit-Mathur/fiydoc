@@ -107,6 +107,10 @@ export function useBookAppointmentMutation() {
     onSuccess: (newApt) => {
       addAppointment(newApt);
       queryClient.invalidateQueries({ queryKey: ['appointments'] });
+      queryClient.invalidateQueries({ queryKey: ['doctor-slots'] });
+      queryClient.invalidateQueries({ queryKey: ['doctor-schedule-week'] });
+      queryClient.invalidateQueries({ queryKey: ['doctor'] });
+      queryClient.invalidateQueries({ queryKey: ['doctors'] });
     },
   });
 }
@@ -123,6 +127,8 @@ export function useApproveAppointmentMutation() {
       updateAppointmentStatus(id, 'confirmed');
       queryClient.invalidateQueries({ queryKey: ['appointments'] });
       queryClient.invalidateQueries({ queryKey: ['appointment', id] });
+      queryClient.invalidateQueries({ queryKey: ['doctor-slots'] });
+      queryClient.invalidateQueries({ queryKey: ['doctor-schedule-week'] });
     },
   });
 }
@@ -139,6 +145,8 @@ export function useRejectAppointmentMutation() {
       updateAppointmentStatus(id, 'cancelled');
       queryClient.invalidateQueries({ queryKey: ['appointments'] });
       queryClient.invalidateQueries({ queryKey: ['appointment', id] });
+      queryClient.invalidateQueries({ queryKey: ['doctor-slots'] });
+      queryClient.invalidateQueries({ queryKey: ['doctor-schedule-week'] });
     },
   });
 }
@@ -155,6 +163,8 @@ export function useCancelAppointmentMutation() {
       cancelAppointment(id);
       queryClient.invalidateQueries({ queryKey: ['appointments'] });
       queryClient.invalidateQueries({ queryKey: ['appointment', id] });
+      queryClient.invalidateQueries({ queryKey: ['doctor-slots'] });
+      queryClient.invalidateQueries({ queryKey: ['doctor-schedule-week'] });
     },
   });
 }
@@ -171,6 +181,8 @@ export function useUpdateAppointmentStatusMutation() {
       updateAppointmentStatus(id, status.toLowerCase());
       queryClient.invalidateQueries({ queryKey: ['appointments'] });
       queryClient.invalidateQueries({ queryKey: ['appointment', id] });
+      queryClient.invalidateQueries({ queryKey: ['doctor-slots'] });
+      queryClient.invalidateQueries({ queryKey: ['doctor-schedule-week'] });
     },
   });
 }
@@ -209,6 +221,8 @@ export function useRescheduleAppointmentMutation() {
       }
       queryClient.invalidateQueries({ queryKey: ['appointments'] });
       queryClient.invalidateQueries({ queryKey: ['appointment', id] });
+      queryClient.invalidateQueries({ queryKey: ['doctor-slots'] });
+      queryClient.invalidateQueries({ queryKey: ['doctor-schedule-week'] });
     },
   });
 }

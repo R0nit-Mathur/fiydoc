@@ -238,20 +238,27 @@ export class AuthService {
         throw err;
       }
       if (err?.code === 'P2002' || err?.message?.includes('P2002')) {
-        const msg = String(err?.message || '');
-        if (msg.includes('email') || (dto.email && msg.includes('User_email_key'))) {
+        const msg = String(err?.message || '').toLowerCase();
+        const targets = Array.isArray(err?.meta?.target) ? err.meta.target.map((t: string) => String(t).toLowerCase()) : [];
+        const isEmailConflict = targets.some((t: string) => t.includes('email')) || msg.includes('user_email_key') || (dto.email && msg.includes('email'));
+        const isPhoneConflict = targets.some((t: string) => t.includes('phone')) || msg.includes('user_phone_key') || (dto.phone && msg.includes('phone'));
+
+        if (isPhoneConflict && !isEmailConflict) {
+          throw new BadRequestException({
+            code: 'PHONE_ALREADY_REGISTERED',
+            message: 'This phone number is already registered. Please use a different phone number or sign in.',
+          });
+        }
+        if (isEmailConflict) {
           throw new BadRequestException({
             code: 'EMAIL_ALREADY_REGISTERED',
             message: 'This email is already registered. Please sign in instead.',
           });
         }
-        if (msg.includes('phone') || (dto.phone && msg.includes('User_phone_key'))) {
-          throw new BadRequestException({
-            code: 'PHONE_ALREADY_REGISTERED',
-            message: 'This phone number is already registered. Please sign in instead.',
-          });
-        }
-        throw new BadRequestException('An account with this email or phone number is already registered.');
+        throw new BadRequestException({
+          code: 'ACCOUNT_CONFLICT',
+          message: 'An account with these credentials already exists. Please verify your details or sign in.',
+        });
       }
       throw new BadRequestException(
         `Registration failed: ${err?.message || 'Database error during account creation'}`

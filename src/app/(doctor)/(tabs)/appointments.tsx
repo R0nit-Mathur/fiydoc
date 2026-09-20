@@ -44,6 +44,7 @@ import {
   UserCheck,
   AlertCircle,
   PlayCircle,
+  FileText,
 } from 'lucide-react-native';
 import { HeaderBar } from '@/components/ui/HeaderBar';
 import { Pill } from '@/components/ui/Pill';
@@ -51,6 +52,7 @@ import { Avatar } from '@/components/ui/Avatar';
 import { StitchCard } from '@/components/ui/StitchCard';
 import { EmptyState } from '@/components/ui/EmptyState';
 import { LoadingDialog } from '@/components/ui/LoadingDialog';
+import { DocumentViewerModal } from '@/components/ui/DocumentViewerModal';
 import {
   useAppointmentsQuery,
   useApproveAppointmentMutation,
@@ -89,6 +91,7 @@ function AppointmentCard({
   onPostpone,
   onConfirmArrival,
   onCancel,
+  onViewAttachment,
 }: {
   item: any;
   index: number;
@@ -98,6 +101,7 @@ function AppointmentCard({
   onPostpone: () => void;
   onConfirmArrival: () => void;
   onCancel: () => void;
+  onViewAttachment?: (url: string, name?: string) => void;
 }) {
   const { colors, isDark } = useAppTheme();
   const scale = useSharedValue(1);
@@ -205,6 +209,47 @@ function AppointmentCard({
                 </>
               )}
             </View>
+
+            {Boolean(item.attachmentUrl) && (
+              <Pressable
+                onPress={() => {
+                  if (Platform.OS !== 'web') {
+                    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+                  }
+                  onViewAttachment?.(item.attachmentUrl, item.attachmentName || 'Pre-Consultation Document');
+                }}
+                style={{
+                  flexDirection: 'row',
+                  alignItems: 'center',
+                  gap: 5,
+                  backgroundColor: isDark ? '#1E293B' : '#EFF6FF',
+                  borderColor: isDark ? '#3B82F6' : '#BFDBFE',
+                  borderWidth: 1,
+                  borderRadius: 6,
+                  paddingHorizontal: 8,
+                  paddingVertical: 4,
+                  marginTop: 6,
+                  alignSelf: 'flex-start',
+                }}
+                hitSlop={{ top: 6, bottom: 6, left: 6, right: 6 }}
+                accessibilityRole="button"
+                accessibilityLabel="View attached patient document"
+              >
+                <FileText size={12} color={StitchColors.primaryContainer} />
+                <Text
+                  style={{
+                    fontSize: 11,
+                    fontWeight: '700',
+                    color: StitchColors.primaryContainer,
+                    maxWidth: 180,
+                  }}
+                  numberOfLines={1}
+                >
+                  {item.attachmentName || 'Patient Document Attached'}
+                </Text>
+                <ChevronRight size={11} color={StitchColors.primaryContainer} />
+              </Pressable>
+            )}
           </View>
         </View>
 
@@ -419,6 +464,7 @@ export default function DoctorAppointmentsScreen() {
   const { data: appointments, isLoading, isRefetching, refetch } = useAppointmentsQuery(undefined, user?.id);
   const [activeFilter, setActiveFilter] = useState<FilterKey>('today');
   const [refreshing, setRefreshing] = useState(false);
+  const [viewingDocument, setViewingDocument] = useState<{ url: string; title: string } | null>(null);
 
   const approveMutation = useApproveAppointmentMutation();
   const rejectMutation = useRejectAppointmentMutation();
@@ -696,6 +742,7 @@ export default function DoctorAppointmentsScreen() {
               onPostpone={() => handlePostpone(apt)}
               onConfirmArrival={() => handleConfirmArrival(apt)}
               onCancel={() => handleCancel(apt)}
+              onViewAttachment={(url, name) => setViewingDocument({ url, title: name || 'Patient Document' })}
             />
           ))
         )}
@@ -710,6 +757,14 @@ export default function DoctorAppointmentsScreen() {
         }
         title="Updating Appointment"
         message="Synchronizing appointment status with clinical queue..."
+      />
+
+      <DocumentViewerModal
+        visible={Boolean(viewingDocument)}
+        title={viewingDocument?.title || 'Patient Document'}
+        subtitle="Pre-Consultation Medical Attachment"
+        documentUrl={viewingDocument?.url}
+        onClose={() => setViewingDocument(null)}
       />
     </SafeAreaView>
   );

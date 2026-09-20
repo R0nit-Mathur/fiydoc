@@ -67,10 +67,12 @@ import { pickImageFromGallery } from '@/utils/mediaPicker';
 import { Avatar } from '@/components/ui/Avatar';
 import { useAppointmentStore } from '@/store/useAppointmentStore';
 import { doctorService } from '@/services/doctorService';
-
+import { useQueryClient } from '@tanstack/react-query';
+import { LoadingDialog } from '@/components/ui/LoadingDialog';
 
 export default function DoctorProfileScreen() {
   const router = useRouter();
+  const queryClient = useQueryClient();
   const { colors, isDark } = useAppTheme();
   const { user, updateUser } = useAuthStore();
   const appointments = useAppointmentStore((state) => state.appointments);
@@ -120,6 +122,7 @@ export default function DoctorProfileScreen() {
   const [showCadenceModal, setShowCadenceModal] = useState(false);
   const [slotDuration, setSlotDuration] = useState('15');
   const [bufferTime, setBufferTime] = useState('5');
+  const [savingCadence, setSavingCadence] = useState(false);
   const [savingDocFee, setSavingDocFee] = useState(false);
   const [savingDocShifts, setSavingDocShifts] = useState(false);
   const [savingDocProfile, setSavingDocProfile] = useState(false);
@@ -195,6 +198,10 @@ export default function DoctorProfileScreen() {
         setTempAvatar(uploadRes.url);
         updateUser({ avatar: uploadRes.url });
         await doctorService.updateMyProfile({ profilePhoto: uploadRes.url });
+        await queryClient.invalidateQueries({ queryKey: ['doctors'] });
+        await queryClient.invalidateQueries({ queryKey: ['doctor'] });
+        await queryClient.invalidateQueries({ queryKey: ['appointments'] });
+        await queryClient.invalidateQueries({ queryKey: ['auth-me'] });
         if (Platform.OS !== 'web') Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
         Alert.alert('Profile Photo Updated', 'Your new profile picture has been saved.');
       }
@@ -266,9 +273,42 @@ export default function DoctorProfileScreen() {
     }
   };
 
-  const handleSaveCadence = () => {
+  const handleSaveCadence = async () => {
     setShowCadenceModal(false);
-    if (Platform.OS !== 'web') Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+    setSavingCadence(true);
+    try {
+      const dur = Number(slotDuration) || 15;
+      const buf = Number(bufferTime) || 0;
+      await doctorService.updateMyProfile({
+        slotDurationMinutes: dur,
+        bufferMinutes: buf,
+      });
+
+      // Synchronize all appointment, slot, and doctor caches across patient & doctor contexts
+      await queryClient.invalidateQueries({ queryKey: ['doctor-slots'] });
+      await queryClient.invalidateQueries({ queryKey: ['doctor-schedule-week'] });
+      await queryClient.invalidateQueries({ queryKey: ['doctor'] });
+      await queryClient.invalidateQueries({ queryKey: ['doctors'] });
+      await queryClient.invalidateQueries({ queryKey: ['appointments'] });
+
+      useNotificationStore.getState().addNotification({
+        title: 'Consultation Cadence Synchronized',
+        message: `OPD slots recalculated to ${dur} mins with ${buf} min buffer. Active bookings notified.`,
+        type: 'profile_updated',
+        recipientRole: 'doctor',
+        recipientId: user?.id,
+      });
+
+      if (Platform.OS !== 'web') Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+      Alert.alert(
+        'Cadence Updated',
+        `Your OPD slot timing has been updated to ${dur} minutes (${buf}m buffer). All booked patient schedules have been recalculated.`
+      );
+    } catch (err: any) {
+      Alert.alert('Notice', err?.message || 'Failed to update cadence on server.');
+    } finally {
+      setSavingCadence(false);
+    }
   };
 
   const handleSaveProfile = async () => {
@@ -304,6 +344,10 @@ export default function DoctorProfileScreen() {
           clinicAddress: cleanClinicAddress,
           clinicTimings: cleanClinicTimings,
         });
+        await queryClient.invalidateQueries({ queryKey: ['doctors'] });
+        await queryClient.invalidateQueries({ queryKey: ['doctor'] });
+        await queryClient.invalidateQueries({ queryKey: ['appointments'] });
+        await queryClient.invalidateQueries({ queryKey: ['auth-me'] });
         Alert.alert('Success', 'Profile updated successfully.');
       } catch (err: any) {
         Alert.alert('Update Notice', err?.message || 'Could not sync updates to server immediately. Changes saved locally.');
@@ -1125,6 +1169,13 @@ export default function DoctorProfileScreen() {
         subtitle="Medical Practitioner Profile"
         documentUrl={docAvatar}
         onClose={() => setViewerAvatarVisible(false)}
+      />
+
+      {/* Cadence Recalculation Blocking Dialog */}
+      <LoadingDialog
+        visible={savingCadence}
+        title="Updating Cadence..."
+        message="Recalculating OPD slots and synchronizing schedule with server..."
       />
     </SafeAreaView>
   );

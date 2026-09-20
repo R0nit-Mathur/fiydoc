@@ -14,7 +14,7 @@ export interface UploadResult {
 @Injectable()
 export class UploadService {
   private readonly logger = new Logger(UploadService.name);
-  private readonly BUCKET_NAME = 'fiydoc-documents';
+  private readonly BUCKET_NAME = process.env.SUPABASE_STORAGE_BUCKET || 'fiydoc-medical-docs';
   private readonly uploadDir = path.resolve(process.cwd(), 'uploads');
 
   constructor(private readonly supabaseService: SupabaseService) {
@@ -93,8 +93,8 @@ export class UploadService {
       }
       await fs.promises.writeFile(localFilePath, fileBuffer);
 
-      // Generate HTTP URL reachable on server
-      const host = (baseUrl || process.env.API_BASE_URL || (process.env.PORT ? `http://localhost:${process.env.PORT}` : 'https://fiydoc.onrender.com')).replace(/\/+$/, '');
+      // Generate HTTP URL reachable on server and mobile devices
+      const host = (baseUrl || process.env.API_BASE_URL || 'https://fiydoc.onrender.com').replace(/\/+$/, '');
       const publicUrl = `${host}/upload/file/${relativeStoragePath}`;
 
       this.logger.log(`✅ Stored file to server disk (${(size / 1024).toFixed(1)} KB): ${publicUrl}`);

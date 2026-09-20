@@ -39,8 +39,10 @@ export default function RootLayout() {
       new QueryClient({
         defaultOptions: {
           queries: {
-            staleTime: 1000 * 60 * 5,
+            staleTime: 1000 * 60 * 2, // 2 minutes stale time
+            gcTime: 1000 * 60 * 10,    // 10 minutes cache eviction for low-end device memory optimization
             retry: 1,
+            refetchOnWindowFocus: false, // Prevent thrashing on mobile refocus
           },
         },
       })
@@ -63,51 +65,27 @@ export default function RootLayout() {
     fetch('https://fiydoc.onrender.com/health').catch(() => {});
     checkAutoUpdate();
 
-    // App launch notification & server notification synchronization
+    // Silent server notification synchronization
     try {
       const auth = useAuthStore.getState();
-      if (auth.isAuthenticated && auth.user) {
-        const lastAppOpenKey = 'fiydoc_last_app_open_notif';
-        AsyncStorage.getItem(lastAppOpenKey).then((lastTime) => {
-          const now = Date.now();
-          // Trigger once every 30 minutes on app open
-          if (!lastTime || now - parseInt(lastTime, 10) > 30 * 60 * 1000) {
-            AsyncStorage.setItem(lastAppOpenKey, String(now)).catch(() => {});
-            const displayName = auth.role === 'doctor'
-              ? (auth.user?.name?.startsWith('Dr.') ? auth.user?.name : `Dr. ${auth.user?.name || 'Doctor'}`)
-              : (auth.user?.name || 'User');
-            useNotificationStore.getState().addNotification({
-              title: `Welcome back, ${displayName}`,
-              message: 'Your health dashboard, consultations, and OPD schedule are synchronized with the live server.',
-              type: 'app_open',
+      if (auth.isAuthenticated && auth.user?.id) {
+        notificationService.getNotifications(auth.user.id).then((serverNotifs) => {
+          if (Array.isArray(serverNotifs) && serverNotifs.length > 0) {
+            const normalized = serverNotifs.map((sn: any) => ({
+              id: sn.id,
+              title: sn.title,
+              message: sn.message,
+              type: sn.type,
+              link: sn.link,
+              read: sn.read,
               recipientId: auth.user?.id,
-              recipientRole: auth.role === 'doctor' ? 'doctor' : 'patient',
-            });
+              recipientRole: auth.role === 'doctor' ? ('doctor' as const) : ('patient' as const),
+              time: sn.createdAt ? new Date(sn.createdAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : 'Just now',
+              timestamp: new Date().toLocaleDateString('en-IN', { day: 'numeric', month: 'short' }),
+            }));
+            useNotificationStore.getState().syncServerNotifications(normalized);
           }
         }).catch(() => {});
-
-        // Fetch and merge remote server notifications
-        if (auth.user.id) {
-          notificationService.getNotifications(auth.user.id).then((serverNotifs) => {
-            if (Array.isArray(serverNotifs) && serverNotifs.length > 0) {
-              const currentIds = new Set(useNotificationStore.getState().notifications.map((n) => n.id));
-              for (const sn of serverNotifs) {
-                if (!currentIds.has(sn.id)) {
-                  useNotificationStore.getState().addNotification({
-                    id: sn.id,
-                    title: sn.title,
-                    message: sn.message,
-                    type: sn.type,
-                    link: sn.link,
-                    read: sn.read,
-                    recipientId: auth.user?.id,
-                    recipientRole: auth.role === 'doctor' ? 'doctor' : 'patient',
-                  });
-                }
-              }
-            }
-          }).catch(() => {});
-        }
       }
     } catch {}
   }, []);

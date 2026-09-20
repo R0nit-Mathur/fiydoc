@@ -31,6 +31,10 @@ export const doctorService = {
     clinicName?: string;
     clinicAddress?: string;
     clinicTimings?: string;
+    slotDurationMinutes?: number;
+    bufferMinutes?: number;
+    patientsPerSlot?: number;
+    experienceYears?: number;
   }): Promise<Doctor> => apiClient<Doctor>('/doctors/me', {
     method: 'PATCH',
     body: JSON.stringify(profile),

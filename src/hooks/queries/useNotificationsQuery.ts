@@ -32,13 +32,8 @@ export function useNotificationsQuery() {
             recipientId: n.userId || user.id,
           }));
 
-          // Sync into notification store to merge
-          const existingIds = new Set(storeNotifications.map((sn) => sn.id));
-          normalized.forEach((item) => {
-            if (!existingIds.has(item.id)) {
-              useNotificationStore.getState().addNotification(item);
-            }
-          });
+          // Silently sync server notifications into store without triggering push banners
+          useNotificationStore.getState().syncServerNotifications(normalized);
 
           return normalized;
         }
@@ -48,9 +43,8 @@ export function useNotificationsQuery() {
       return storeNotifications;
     },
     enabled: Boolean(user?.id),
-    staleTime: 0,
-    refetchInterval: 8000,
-    refetchOnMount: 'always',
+    staleTime: 60_000,
+    refetchInterval: 60_000,
   });
 }
 

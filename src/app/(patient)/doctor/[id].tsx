@@ -146,9 +146,7 @@ export default function DoctorProfileScreen() {
         ? doctorService.getScheduleWeek(doctor.id, DATES[0]?.isoDate, DATES[DATES.length - 1]?.isoDate)
         : Promise.resolve({} as Record<string, any>),
     enabled: Boolean(doctor?.id),
-    staleTime: 0,
-    refetchInterval: 4000,
-    refetchOnMount: 'always',
+    staleTime: 30_000,
   });
 
   const { data: slotData, isLoading: isLoadingSlots, refetch: refetchSlots } = useQuery({
@@ -158,9 +156,7 @@ export default function DoctorProfileScreen() {
         ? doctorService.getAvailableSlotsDetailed(doctor.id, currentDate.isoDate)
         : Promise.resolve({ slots: [], isOnLeave: false, delayMinutes: 0 }),
     enabled: Boolean(doctor?.id && currentDate?.isoDate),
-    staleTime: 0,
-    refetchInterval: 4000,
-    refetchOnMount: 'always',
+    staleTime: 30_000,
   });
 
   useFocusEffect(

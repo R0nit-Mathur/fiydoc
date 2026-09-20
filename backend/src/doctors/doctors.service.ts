@@ -1,10 +1,12 @@
-import { ForbiddenException, Injectable, NotFoundException, UnauthorizedException } from '@nestjs/common';
+import { ForbiddenException, Injectable, NotFoundException, UnauthorizedException, Logger } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
-import { VerificationStatus, Role } from '@prisma/client';
+import { VerificationStatus, Role, AppointmentStatus } from '@prisma/client';
 import { NotificationsService } from '../notifications/notifications.service';
 
 @Injectable()
 export class DoctorsService {
+  private readonly logger = new Logger(DoctorsService.name);
+
   constructor(
     private prisma: PrismaService,
     private notificationsService: NotificationsService,
@@ -248,6 +250,254 @@ export class DoctorsService {
     return this.formatDoctor(doctor);
   }
 
+  private async generateAuthoritativeSlotTimesForDate(
+    doctor: any,
+    dateStr: string,
+    slotDurationMins: number,
+    bufferMinutes = 0
+  ): Promise<{ morning: string[]; evening: string[]; all: string[] }> {
+    const dateObj = new Date(`${dateStr}T00:00:00`);
+    const dayOfWeek = isNaN(dateObj.getTime()) ? 1 : dateObj.getDay();
+
+    let override: any = null;
+    try {
+      override = await (this.prisma as any).doctorScheduleOverride?.findFirst({
+        where: {
+          doctorId: { in: [doctor.id, doctor.userId] },
+          date: dateStr,
+        },
+      });
+    } catch {}
+
+    if (override?.isOnLeave) {
+      return { morning: [], evening: [], all: [] };
+    }
+
+    const duration = override?.slotDurationMinutes || slotDurationMins || 15;
+    const step = duration + (bufferMinutes || 0);
+
+    const matchingAvailabilities = (doctor.availabilities || []).filter(
+      (a: any) => a.dayOfWeek === dayOfWeek
+    );
+
+    let candidateSlots: string[] = [];
+
+    if (matchingAvailabilities.length > 0) {
+      for (const avail of matchingAvailabilities) {
+        const [startH, startM] = avail.startTime.split(':').map(Number);
+        const [endH, endM] = avail.endTime.split(':').map(Number);
+        let currentMinutes = startH * 60 + startM;
+        const endMinutes = endH * 60 + endM;
+
+        while (currentMinutes + duration <= endMinutes) {
+          const h = Math.floor(currentMinutes / 60);
+          const m = currentMinutes % 60;
+          candidateSlots.push(`${String(h).padStart(2, '0')}:${String(m).padStart(2, '0')}`);
+          currentMinutes += step;
+        }
+      }
+    } else if (doctor.clinic?.timings) {
+      const intervals = this.parseTimingsToIntervals(doctor.clinic.timings);
+      for (const interval of intervals) {
+        const [startH, startM] = interval.startTime.split(':').map(Number);
+        const [endH, endM] = interval.endTime.split(':').map(Number);
+        let currentMinutes = startH * 60 + startM;
+        const endMinutes = endH * 60 + endM;
+        while (currentMinutes + duration <= endMinutes) {
+          const h = Math.floor(currentMinutes / 60);
+          const m = currentMinutes % 60;
+          candidateSlots.push(`${String(h).padStart(2, '0')}:${String(m).padStart(2, '0')}`);
+          currentMinutes += step;
+        }
+      }
+    } else {
+      const defaultIntervals = [{ start: 10 * 60, end: 13 * 60 }, { start: 17 * 60, end: 20 * 60 }];
+      for (const interval of defaultIntervals) {
+        let cur = interval.start;
+        while (cur + duration <= interval.end) {
+          const h = Math.floor(cur / 60);
+          const m = cur % 60;
+          candidateSlots.push(`${String(h).padStart(2, '0')}:${String(m).padStart(2, '0')}`);
+          cur += step;
+        }
+      }
+    }
+
+    const blockedSet = new Set(Array.isArray(override?.blockedSlots) ? override.blockedSlots : []);
+    const customList = Array.isArray(override?.customSlots) ? override.customSlots : [];
+
+    let combined = Array.from(new Set([...candidateSlots, ...customList]))
+      .filter((slot) => !blockedSet.has(slot));
+
+    // Handle early cutoff
+    let earlyCutoffTime: string | null = null;
+    if (override?.reason?.includes('[EarlyCutoff:')) {
+      const match = override.reason.match(/\[EarlyCutoff:\s*(\d{1,2}:\d{2})\]/);
+      if (match) earlyCutoffTime = match[1];
+    }
+    if (earlyCutoffTime) {
+      combined = combined.filter((s) => s < earlyCutoffTime);
+    }
+
+    // Handle breaks
+    let activeBreaks: { startTime: string; endTime: string }[] = [];
+    if (override?.breaks) {
+      if (Array.isArray(override.breaks)) activeBreaks = override.breaks;
+      else if (typeof override.breaks === 'string') {
+        try { activeBreaks = JSON.parse(override.breaks); } catch {}
+      }
+    }
+
+    combined = combined.filter((slot) => {
+      const [h, m] = slot.split(':').map(Number);
+      const slotStart = h * 60 + m;
+      const slotEnd = slotStart + duration;
+      return !activeBreaks.some((b) => {
+        const [bh, bm] = b.startTime.split(':').map(Number);
+        const [eh, em] = b.endTime.split(':').map(Number);
+        const bStart = bh * 60 + bm;
+        const bEnd = eh * 60 + em;
+        return slotStart < bEnd && slotEnd > bStart;
+      });
+    });
+
+    const delayMinutes = override?.delayMinutes || 0;
+    if (delayMinutes > 0) {
+      combined = combined.map((s) => this.shift24hTime(s, delayMinutes));
+    }
+
+    combined.sort((a, b) => {
+      const [ha, ma] = a.split(':').map(Number);
+      const [hb, mb] = b.split(':').map(Number);
+      return (ha * 60 + ma) - (hb * 60 + mb);
+    });
+
+    const morning = combined.filter((s) => s < '15:00');
+    const evening = combined.filter((s) => s >= '15:00');
+
+    return { morning, evening, all: combined };
+  }
+
+  async recalculateBookedAppointmentsForDoctor(
+    doctorId: string,
+    newSlotDuration: number,
+    bufferMinutes = 0,
+    targetDate?: string
+  ) {
+    if (!doctorId || newSlotDuration <= 0) return { affected: 0, notified: 0 };
+
+    try {
+      const doctor = await this.prisma.doctor.findFirst({
+        where: { OR: [{ id: doctorId }, { userId: doctorId }] },
+        include: { availabilities: true, clinic: true },
+      });
+      if (!doctor) return { affected: 0, notified: 0 };
+
+      const today = new Date().toISOString().split('T')[0];
+
+      // 1. Find all active booked appointments
+      const activeAppointments = await this.prisma.appointment.findMany({
+        where: {
+          doctorId: { in: [doctor.id, doctor.userId] },
+          ...(targetDate ? { date: targetDate } : { date: { gte: today } }),
+          status: { in: [AppointmentStatus.CONFIRMED, AppointmentStatus.PENDING] },
+        },
+        include: { patient: { include: { user: true } } },
+        orderBy: [{ date: 'asc' }, { startTime: 'asc' }],
+      });
+
+      if (activeAppointments.length === 0) {
+        return { affected: 0, notified: 0 };
+      }
+
+      // Group by date
+      const byDate: Record<string, typeof activeAppointments> = {};
+      for (const apt of activeAppointments) {
+        if (!byDate[apt.date]) byDate[apt.date] = [];
+        byDate[apt.date].push(apt);
+      }
+
+      let affectedCount = 0;
+      let notifiedCount = 0;
+
+      for (const [dateStr, apts] of Object.entries(byDate)) {
+        const validSlots = await this.generateAuthoritativeSlotTimesForDate(
+          doctor,
+          dateStr,
+          newSlotDuration,
+          bufferMinutes
+        );
+
+        if (validSlots.all.length === 0) {
+          continue;
+        }
+
+        const morningApts = apts.filter((a) => a.startTime < '15:00');
+        const eveningApts = apts.filter((a) => a.startTime >= '15:00');
+        const usedSlots = new Set<string>();
+
+        const assignSessionApts = async (sessionApts: typeof apts, preferredSlots: string[], fallbackSlots: string[]) => {
+          sessionApts.sort((a, b) => a.startTime.localeCompare(b.startTime));
+
+          for (const apt of sessionApts) {
+            const nextSlot = preferredSlots.find((s) => !usedSlots.has(s)) || fallbackSlots.find((s) => !usedSlots.has(s));
+            if (!nextSlot) break; // Reached max slots for date
+            usedSlots.add(nextSlot);
+
+            const [sh, sm] = nextSlot.split(':').map(Number);
+            const endTotal = sh * 60 + sm + newSlotDuration;
+            const newEndTime = `${String(Math.floor(endTotal / 60)).padStart(2, '0')}:${String(endTotal % 60).padStart(2, '0')}`;
+
+            const timingChanged = apt.startTime !== nextSlot || apt.endTime !== newEndTime;
+
+            if (timingChanged) {
+              affectedCount++;
+              await this.prisma.appointment.update({
+                where: { id: apt.id },
+                data: {
+                  startTime: nextSlot,
+                  endTime: newEndTime,
+                },
+              });
+
+              // Dispatch notification strictly to this booked patient
+              const patientUserId = apt.patient?.userId || apt.patient?.user?.id;
+              if (patientUserId) {
+                try {
+                  await this.notificationsService.create({
+                    userId: patientUserId,
+                    type: 'SLOT_RESCHEDULED',
+                    title: '⏰ Consultation Timing Updated',
+                    message: `Dr. ${doctor.fullName} updated consultation slot timing (${newSlotDuration} mins). Your appointment on ${dateStr} is now scheduled for ${nextSlot} – ${newEndTime}.`,
+                    payload: {
+                      appointmentId: apt.id,
+                      date: dateStr,
+                      startTime: nextSlot,
+                      endTime: newEndTime,
+                      slotDurationMinutes: newSlotDuration,
+                    },
+                  });
+                  notifiedCount++;
+                } catch (notifErr: any) {
+                  console.warn('[doctors] Booked patient notification failed:', notifErr?.message);
+                }
+              }
+            }
+          }
+        };
+
+        await assignSessionApts(morningApts, validSlots.morning, validSlots.evening);
+        await assignSessionApts(eveningApts, validSlots.evening, validSlots.morning);
+      }
+
+      this.logger.log(`✅ Recalculated schedule for Dr. ${doctor.fullName}: ${affectedCount} appointments updated, ${notifiedCount} booked patients notified.`);
+      return { affected: affectedCount, notified: notifiedCount };
+    } catch (err: any) {
+      console.warn('[doctors] Error recalculating booked appointments:', err?.message);
+      return { affected: 0, notified: 0 };
+    }
+  }
+
   async updateDoctorAvailability(
     currentUser: any,
     availabilities: { dayOfWeek: number; startTime: string; endTime: string; slotDurationMinutes?: number }[]
@@ -287,6 +537,9 @@ export class DoctorsService {
         });
       }
     }, { maxWait: 5000, timeout: 10000 });
+
+    const newDuration = availabilities?.[0]?.slotDurationMinutes || 15;
+    await this.recalculateBookedAppointmentsForDoctor(doctor.id, Number(newDuration), 0);
 
     return this.getMyDoctorProfile(currentUser);
   }
@@ -355,6 +608,7 @@ export class DoctorsService {
     clinicAddress?: string;
     clinicTimings?: string;
     slotDurationMinutes?: number;
+    bufferMinutes?: number;
     experienceYears?: number;
   }) {
     let doctor = await this.prisma.doctor.findUnique({
@@ -491,6 +745,14 @@ export class DoctorsService {
             where: { doctorId: doctor.id },
             data: { slotDurationMinutes: resolvedSlotDuration },
           });
+        }
+
+        if (dto.slotDurationMinutes && dto.slotDurationMinutes > 0) {
+          await this.recalculateBookedAppointmentsForDoctor(
+            doctor.id,
+            Number(dto.slotDurationMinutes),
+            Number(dto.bufferMinutes) || 0
+          );
         }
       } catch (err) {
         // Continue if sync encounters an error
@@ -699,6 +961,16 @@ export class DoctorsService {
       candidateSlotsCombined = candidateSlotsCombined.map((slot) => this.shift24hTime(slot, delayMinutes));
     }
 
+    // Check for early departure cutoff
+    let earlyCutoffTime: string | null = null;
+    if (override?.reason?.includes('[EarlyCutoff:')) {
+      const match = override.reason.match(/\[EarlyCutoff:\s*(\d{1,2}:\d{2})\]/);
+      if (match) earlyCutoffTime = match[1];
+    }
+    if (earlyCutoffTime) {
+      candidateSlotsCombined = candidateSlotsCombined.filter((s) => s < earlyCutoffTime);
+    }
+
     // Parse break intervals configured by doctor
     let activeBreaks: { id: string; title: string; startTime: string; endTime: string }[] = [];
     if (override?.breaks) {
@@ -740,6 +1012,8 @@ export class DoctorsService {
     const currentMinutes = now.getHours() * 60 + now.getMinutes();
 
     const availableSlots = candidateSlotsCombined.filter((slot) => {
+      if (earlyCutoffTime && slot >= earlyCutoffTime) return false;
+
       // Check if slot falls in any break
       const [h, m] = slot.split(':').map(Number);
       const slotStart = h * 60 + m;
@@ -1373,6 +1647,7 @@ export class DoctorsService {
       where: {
         OR: [{ id: targetDocId }, { userId: targetDocId }, { userId: currentUser?.id }],
       },
+      include: { availabilities: true },
     });
     if (!doctor) throw new NotFoundException('Doctor profile not found.');
 
@@ -1451,6 +1726,11 @@ export class DoctorsService {
       } catch {}
     }
 
+    if (action === 'block' || action === 'remove') {
+      const slotDuration = doctor.availabilities?.[0]?.slotDurationMinutes || 15;
+      await this.recalculateBookedAppointmentsForDoctor(doctor.id, slotDuration, 0, cleanDate);
+    }
+
     return this.generateAvailableSlots(doctor.id, cleanDate);
   }
 
@@ -1480,6 +1760,7 @@ export class DoctorsService {
       where: {
         OR: [{ id: targetDocId }, { userId: targetDocId }, { userId: currentUser?.id }],
       },
+      include: { availabilities: true },
     });
     if (!doctor) throw new NotFoundException('Doctor profile not found.');
 
@@ -1532,6 +1813,9 @@ export class DoctorsService {
         breaks: currentBreaks,
       },
     });
+
+    const slotDuration = doctor.availabilities?.[0]?.slotDurationMinutes || 15;
+    await this.recalculateBookedAppointmentsForDoctor(doctor.id, slotDuration, 0, cleanDate);
 
     return this.generateAvailableSlots(doctor.id, cleanDate);
   }
@@ -1679,6 +1963,15 @@ export class DoctorsService {
           },
         });
       } catch {}
+    }
+
+    if (dto.slotDurationMinutes || dto.morningStart || dto.eveningStart) {
+      await this.recalculateBookedAppointmentsForDoctor(
+        doctor.id,
+        slotDuration,
+        0,
+        cleanDate || undefined
+      );
     }
 
     return {
