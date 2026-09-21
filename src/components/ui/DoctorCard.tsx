@@ -136,21 +136,10 @@ export function DoctorCard({
           ) : null}
 
           <View style={styles.ratingRow}>
-            {doctor.rating != null ? (
-              <View style={styles.ratingPill}>
-                <Star size={11} color="#b45309" fill="#b45309" />
-                <Text style={styles.ratingText}>
-                  {doctor.rating.toFixed(1)}
-                </Text>
-              </View>
-            ) : (
-              <Text style={styles.reviewCountText}>New on FiYDOC</Text>
-            )}
-            {doctor.reviewCount ? (
-              <Text style={styles.reviewCountText}>
-                ({doctor.reviewCount} reviews)
-              </Text>
-            ) : null}
+            <View style={styles.ratingPill}>
+              <Star size={11} color="#64748b" fill="#64748b" />
+              <Text style={styles.ratingText}>0.0</Text>
+            </View>
           </View>
         </View>
       </View>

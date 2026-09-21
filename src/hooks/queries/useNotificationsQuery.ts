@@ -15,22 +15,44 @@ export function useNotificationsQuery() {
       try {
         const serverItems = await notificationService.getMyNotifications();
         if (Array.isArray(serverItems) && serverItems.length > 0) {
+          const isDoctor = user?.role === 'doctor';
           // Normalize server notification to NotificationItem
-          const normalized: NotificationItem[] = serverItems.map((n: any) => ({
-            id: n.id,
-            title: n.title,
-            message: n.message,
-            timestamp: n.createdAt ? new Date(n.createdAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : 'Just now',
-            time: n.createdAt ? new Date(n.createdAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : 'Just now',
-            read: Boolean(n.read),
-            type: (n.type || 'system').toLowerCase() as any,
-            link: n.payload?.appointmentId
-              ? `/appointments/${n.payload.appointmentId}`
-              : n.payload?.prescriptionId
-              ? `/health/prescription/${n.payload.prescriptionId}`
-              : undefined,
-            recipientId: n.userId || user.id,
-          }));
+          const normalized: NotificationItem[] = serverItems.map((n: any) => {
+            const aptId = n.payload?.appointmentId || n.payload?.consultationId;
+            const rxId = n.payload?.prescriptionId;
+            let link: string | undefined;
+
+            if (isDoctor) {
+              if (aptId) {
+                link = `/(doctor)/consultation/${aptId}`;
+              } else {
+                link = '/(doctor)/(tabs)/appointments';
+              }
+            } else {
+              if (rxId) {
+                link = `/(patient)/health/prescription/${rxId}`;
+              } else if (aptId) {
+                link = `/(patient)/appointments/${aptId}`;
+              } else if (n.type?.toLowerCase().includes('prescription')) {
+                link = '/(patient)/(tabs)/health';
+              } else if (n.type?.toLowerCase().includes('appointment')) {
+                link = '/(patient)/(tabs)/appointments';
+              }
+            }
+
+            return {
+              id: n.id,
+              title: n.title,
+              message: n.message,
+              timestamp: n.createdAt ? new Date(n.createdAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : 'Just now',
+              time: n.createdAt ? new Date(n.createdAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : 'Just now',
+              read: Boolean(n.read),
+              type: (n.type || 'system').toLowerCase() as any,
+              link,
+              recipientId: n.userId || user.id,
+              recipientRole: isDoctor ? 'doctor' : 'patient',
+            };
+          });
 
           // Silently sync server notifications into store without triggering push banners
           useNotificationStore.getState().syncServerNotifications(normalized);
@@ -43,8 +65,8 @@ export function useNotificationsQuery() {
       return storeNotifications;
     },
     enabled: Boolean(user?.id),
-    staleTime: 60_000,
-    refetchInterval: 60_000,
+    staleTime: 30_000,
+    refetchInterval: 30_000,
   });
 }
 
@@ -54,10 +76,26 @@ export function useMarkNotificationReadMutation() {
 
   return useMutation({
     mutationFn: async (id: string) => {
-      await notificationService.markAsRead(id);
+      try {
+        await notificationService.markAsRead(id);
+      } catch (err: any) {
+        console.warn('[useMarkNotificationReadMutation] Server mark-read notice:', err?.message);
+      }
     },
-    onSuccess: (_, id) => {
+    onMutate: async (id: string) => {
+      // Immediate local state update
       markAsRead(id);
+      // Cancel queries to avoid overwriting optimistic update
+      await queryClient.cancelQueries({ queryKey: ['notifications'] });
+      // Optimistically update React Query cache
+      queryClient.setQueriesData({ queryKey: ['notifications'] }, (oldData: any) => {
+        if (!Array.isArray(oldData)) return oldData;
+        return oldData.map((item: NotificationItem) =>
+          item.id === id ? { ...item, read: true } : item
+        );
+      });
+    },
+    onSettled: () => {
       queryClient.invalidateQueries({ queryKey: ['notifications'] });
     },
   });
@@ -66,13 +104,28 @@ export function useMarkNotificationReadMutation() {
 export function useMarkAllNotificationsReadMutation() {
   const queryClient = useQueryClient();
   const markAllAsRead = useNotificationStore((s) => s.markAllAsRead);
+  const user = useAuthStore((s) => s.user);
 
   return useMutation({
     mutationFn: async () => {
-      await notificationService.markMyAllAsRead();
+      try {
+        await notificationService.markMyAllAsRead();
+      } catch (err: any) {
+        console.warn('[useMarkAllNotificationsReadMutation] Server mark-all notice:', err?.message);
+      }
     },
-    onSuccess: () => {
-      markAllAsRead();
+    onMutate: async () => {
+      // Immediate local state update
+      markAllAsRead(user?.id, user?.role as any);
+      // Cancel queries
+      await queryClient.cancelQueries({ queryKey: ['notifications'] });
+      // Optimistically update React Query cache
+      queryClient.setQueriesData({ queryKey: ['notifications'] }, (oldData: any) => {
+        if (!Array.isArray(oldData)) return oldData;
+        return oldData.map((item: NotificationItem) => ({ ...item, read: true }));
+      });
+    },
+    onSettled: () => {
       queryClient.invalidateQueries({ queryKey: ['notifications'] });
     },
   });

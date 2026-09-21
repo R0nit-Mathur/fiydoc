@@ -258,7 +258,7 @@ export class PrescriptionsService {
         data: rxData,
         include: {
           medicines: true,
-          doctor: { include: { clinic: true, verification: true } },
+          doctor: { include: { clinic: true, verification: true, user: true } },
           patient: true,
           consultation: true,
         },
@@ -317,22 +317,6 @@ export class PrescriptionsService {
       console.warn('[prescriptions] AuditLog insert failed (non-fatal):', auditErr?.message);
     }
 
-    // Notify patient (non-fatal)
-    try {
-      if (consultation.patient?.userId) {
-        await this.prisma.notification.create({
-          data: {
-            userId: consultation.patient.userId,
-            type: 'PRESCRIPTION_ISSUED',
-            title: 'Prescription Ready',
-            message: `${consultation.doctor.fullName} has issued your digital prescription.`,
-          },
-        });
-      }
-    } catch (notifErr: any) {
-      console.warn('[prescriptions] Notification creation failed (non-fatal):', notifErr?.message);
-    }
-
     // Generate PDF and upload in background (non-blocking) for instant signing response
     let storagePath: string | null = null;
     if (this.supabase.isConfigured()) {
@@ -376,7 +360,7 @@ export class PrescriptionsService {
       where: { id },
       include: {
         medicines: true,
-        doctor: { include: { clinic: true, verification: true } },
+        doctor: { include: { clinic: true, verification: true, user: true } },
         patient: true,
         consultation: true,
       },
@@ -396,7 +380,12 @@ export class PrescriptionsService {
     }
 
     const effectiveIssuedAt = (rx as any).issuedAt || rx.createdAt;
-    return { ...rx, issuedAt: effectiveIssuedAt, signedAt: effectiveIssuedAt, pdfUrl: signedUrl };
+    return {
+      ...rx,
+      pdfUrl: signedUrl,
+      issuedAt: effectiveIssuedAt,
+      signedAt: effectiveIssuedAt,
+    };
   }
 
   async verifyPrescriptionCode(verificationCode: string) {
@@ -487,6 +476,7 @@ export class PrescriptionsService {
           include: {
             clinic: true,
             verification: true,
+            user: true,
           },
         },
         consultation: true,

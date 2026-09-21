@@ -18,7 +18,7 @@
  *    - Step 5: Digital Prescription Summary, EHR SVG signature & multi-channel delivery
  */
 
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import {
   View,
   Text,
@@ -247,6 +247,54 @@ export default function DoctorConsultationScreen() {
   const [chronicConditions, setChronicConditions] = useState<
     Array<{ id: string; name: string; detail: string; status: string }>
   >([]);
+
+  // Prescriptions stored in state for patient & visit
+  const allStoredPrescriptions = useHealthStore((s) => s.prescriptions);
+  const patientPrescriptions = useMemo(() => {
+    return allStoredPrescriptions.filter(
+      (p) => (currentApt?.patientId && p.patientId === currentApt.patientId) || p.consultationId === appointmentId || p.id === appointmentId
+    );
+  }, [allStoredPrescriptions, currentApt?.patientId, appointmentId]);
+
+  const existingRxForThisVisit = useMemo(() => {
+    return allStoredPrescriptions.find(
+      (p) => p.consultationId === appointmentId || p.id === appointmentId
+    );
+  }, [allStoredPrescriptions, appointmentId]);
+
+  const computePatientAge = (dobString?: string, directAge?: number): string | number => {
+    if (directAge && directAge > 0) return directAge;
+    if (!dobString) return '—';
+    try {
+      let dob: Date;
+      if (dobString.includes('/')) {
+        const [d, m, y] = dobString.split('/');
+        dob = new Date(`${y}-${m}-${d}`);
+      } else {
+        dob = new Date(dobString);
+      }
+      if (isNaN(dob.getTime())) return '—';
+      const calculated = Math.floor((Date.now() - dob.getTime()) / (365.25 * 24 * 60 * 60 * 1000));
+      return calculated > 0 ? calculated : '—';
+    } catch {
+      return '—';
+    }
+  };
+
+  const resolvedPatientAge = computePatientAge(
+    (currentApt as any)?.patientDob || (currentApt as any)?.patient?.dob,
+    (currentApt as any)?.patientAge || (currentApt as any)?.age || (currentApt as any)?.patient?.age
+  );
+  const resolvedPatientBloodGroup =
+    (currentApt as any)?.patientBloodGroup ||
+    (currentApt as any)?.bloodGroup ||
+    (currentApt as any)?.patient?.bloodGroup ||
+    '—';
+  const resolvedPatientGender =
+    (currentApt as any)?.patientGender ||
+    (currentApt as any)?.gender ||
+    (currentApt as any)?.patient?.gender ||
+    '—';
 
   // Sync patient allergies, conditions & symptoms from appointment booking data
   useEffect(() => {
@@ -502,6 +550,7 @@ export default function DoctorConsultationScreen() {
         patientName: currentApt?.patientName || 'Patient',
         doctorId: consultation.doctorId,
         doctorName,
+        doctorAvatar: user?.avatar || (user as any)?.profilePhoto || null,
         doctorSpecialty: user?.specialization || 'General Medicine',
         doctorMciNumber: (user as any)?.licenseNumber || undefined,
         doctorQualifications: user?.qualification || (user as any)?.qualifications || [],
@@ -546,14 +595,14 @@ export default function DoctorConsultationScreen() {
       queryClient.invalidateQueries({ queryKey: ['health-records'] });
       queryClient.invalidateQueries({ queryKey: ['notifications'] });
 
-      // Notify patient — prescription dispatched
+      // Notify patient — prescription dispatched with direct navigation link
       useNotificationStore.getState().addNotification({
         recipientId: currentApt?.patientId,
         recipientRole: 'patient',
         title: '📝 Prescription Dispatched',
         message: `${doctorName} has sent your official digital prescription. View it in Health Records.`,
         type: 'prescription',
-        link: '/(patient)/(tabs)/health',
+        link: `/(patient)/health/prescription/${serverRx.id}`,
       });
 
       setIsSigning(false);
@@ -697,17 +746,26 @@ export default function DoctorConsultationScreen() {
                 <Text style={[styles.heroPatientName, { color: colors.text }]}>
                   {currentApt?.patientName || 'Patient'}
                 </Text>
-                <View style={{ flexDirection: 'row', gap: 4 }}>
-                  {(currentApt as any)?.age ? (
+                <View style={{ flexDirection: 'row', gap: 4, alignItems: 'center' }}>
+                  {resolvedPatientGender !== '—' && (
                     <View style={[styles.demogBadge, { backgroundColor: colors.backgroundElement }]}>
-                      <Text style={[styles.demogText, { color: colors.textSecondary }]}>{(currentApt as any).age}</Text>
+                      <Text style={[styles.demogText, { color: colors.textSecondary }]}>{resolvedPatientGender}</Text>
                     </View>
-                  ) : null}
-                  {(currentApt as any)?.bloodGroup ? (
+                  )}
+                  {resolvedPatientAge !== '—' && (
+                    <View style={[styles.demogBadge, { backgroundColor: colors.backgroundElement }]}>
+                      <Text style={[styles.demogText, { color: colors.textSecondary }]}>
+                        {typeof resolvedPatientAge === 'number' ? `${resolvedPatientAge} yrs` : resolvedPatientAge}
+                      </Text>
+                    </View>
+                  )}
+                  {resolvedPatientBloodGroup !== '—' && (
                     <View style={[styles.demogBadge, { backgroundColor: '#DBEAFE' }]}>
-                      <Text style={[styles.demogText, { color: StitchColors.primaryContainer, fontWeight: '800' }]}>{(currentApt as any).bloodGroup}</Text>
+                      <Text style={[styles.demogText, { color: StitchColors.primaryContainer, fontWeight: '800' }]}>
+                        {resolvedPatientBloodGroup}
+                      </Text>
                     </View>
-                  ) : null}
+                  )}
                 </View>
               </View>
 
@@ -774,96 +832,6 @@ export default function DoctorConsultationScreen() {
               BMI: <Text style={{ color: colors.text, fontWeight: '700' }}>23.9 (Normal)</Text>
             </Text>
           </View>
-
-          {/* EDITABLE CHIEF COMPLAINT with Ghost Medical Autocomplete */}
-          <View style={[styles.complaintBox, { borderTopColor: colors.border }]}>
-            <SmartMedicalTextInput
-              label="Chief Complaint (Click to edit)"
-              value={chiefComplaint}
-              onChangeText={setChiefComplaint}
-              placeholder="e.g. Cough and cold with fever for 3 days..."
-              multiline
-              numberOfLines={2}
-              quickSuggestions={[
-                'Persistent dry cough for 4 days',
-                'Mild chest tightness on exertion',
-                'Sore throat & painful swallowing',
-                'No recorded fever',
-              ]}
-            />
-
-            {/* Allergies tags with Add/Remove action */}
-            <View style={styles.allergiesSection}>
-              <View style={styles.allergiesHeader}>
-                <Text style={[styles.allergiesLabel, { color: colors.textSecondary }]}>RECORDED ALLERGIES:</Text>
-                <Pressable
-                  onPress={() => setShowAddAllergy(!showAddAllergy)}
-                  style={styles.addAllergyBtn}
-                >
-                  <Plus size={12} color={StitchColors.primaryContainer} />
-                  <Text style={styles.addAllergyBtnText}>Add</Text>
-                </Pressable>
-              </View>
-
-              <View style={styles.allergiesRow}>
-                {allergies.length === 0 && (
-                  <Text style={{ fontSize: 13, color: colors.textMuted, fontStyle: 'italic', paddingVertical: 2 }}>
-                    0 allergies
-                  </Text>
-                )}
-                {allergies.map((al) => (
-                  <View
-                    key={al.id}
-                    style={[
-                      styles.allergyTag,
-                      { backgroundColor: al.isSevere ? '#FEE2E2' : colors.backgroundElement },
-                    ]}
-                  >
-                    {al.isSevere && <AlertTriangle size={11} color={StitchColors.error} />}
-                    <Text style={[styles.allergyTagText, al.isSevere && { color: StitchColors.error }]}>
-                      {al.name}
-                    </Text>
-                    <Pressable
-                      onPress={() => setAllergies(allergies.filter((x) => x.id !== al.id))}
-                      hitSlop={{ top: 4, bottom: 4, left: 4, right: 4 }}
-                    >
-                      <X size={12} color={al.isSevere ? StitchColors.error : colors.textMuted} />
-                    </Pressable>
-                  </View>
-                ))}
-              </View>
-
-              {showAddAllergy && (
-                <View style={styles.addAllergyInputRow}>
-                  <TextInput
-                    value={newAllergyInput}
-                    onChangeText={setNewAllergyInput}
-                    placeholder="Type allergy (e.g. Sulfa, NSAIDs)..."
-                    placeholderTextColor={colors.textMuted}
-                    style={[styles.smallInput, { color: colors.text, borderColor: colors.border }]}
-                  />
-                  <Pressable
-                    onPress={() => {
-                      const trimmed = newAllergyInput.trim();
-                      if (trimmed) {
-                        if (!isNegationAllergy(trimmed)) {
-                          setAllergies([
-                            ...allergies,
-                            { id: `a_${Date.now()}`, name: trimmed, isSevere: false },
-                          ]);
-                        }
-                        setNewAllergyInput('');
-                        setShowAddAllergy(false);
-                      }
-                    }}
-                    style={[styles.smallAddBtn, { backgroundColor: StitchColors.primaryContainer }]}
-                  >
-                    <Check size={14} color="#FFFFFF" />
-                  </Pressable>
-                </View>
-              )}
-            </View>
-          </View>
         </Animated.View>
 
         {/* 3. Segmented Navigation Tabs */}
@@ -899,7 +867,140 @@ export default function DoctorConsultationScreen() {
         {/* TAB 1: Today's Visit */}
         {activeTab === 'today' && (
           <Animated.View entering={FadeIn.duration(200)} style={styles.tabContentBlock}>
-            {/* Clinical Examination (Formerly Physical Observations) — Directly Editable + Image Attachments */}
+            {/* 1. Dedicated Patient Clinical History (Past Medical / Surgical / Illnesses — Not Family) */}
+            <View style={[styles.sectionCard, { backgroundColor: colors.card, borderColor: colors.border }]}>
+              <View style={styles.sectionCardHeader}>
+                <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+                  <History size={16} color={StitchColors.primaryContainer} />
+                  <Text style={[styles.sectionCardTitle, { color: colors.text }]}>Patient Clinical History</Text>
+                </View>
+                <View style={[styles.loggedBadge, { backgroundColor: colors.backgroundElement }]}>
+                  <Text style={[styles.loggedText, { color: colors.textSecondary }]}>Directly Editable</Text>
+                </View>
+              </View>
+
+              <Text style={[styles.sectionCardDesc, { color: colors.textSecondary }]}>
+                Record patient's personal clinical history: past surgeries, hospitalizations, prior major illnesses & long-term therapies (not family records).
+              </Text>
+
+              <SmartMedicalTextInput
+                label="Clinical Past History Notes"
+                value={patientClinicalHistory}
+                onChangeText={setPatientClinicalHistory}
+                placeholder="Record past surgeries, hospital admissions, previous illness episodes..."
+                multiline
+                numberOfLines={4}
+                quickSuggestions={[
+                  'No past surgical procedures or hospital admissions',
+                  'History of COVID-19 pneumonitis (2021, resolved)',
+                  'Appendectomy (2018, laparoscopic, uncomplicated)',
+                  'Diagnosed dyslipidemia on regular Statin therapy',
+                  'No history of TB, Asthma, Epilepsy or CAD',
+                ]}
+              />
+            </View>
+
+            {/* 2. Chief Complaint & Recorded Allergies */}
+            <View style={[styles.sectionCard, { backgroundColor: colors.card, borderColor: colors.border }]}>
+              <View style={styles.sectionCardHeader}>
+                <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+                  <FileText size={16} color={StitchColors.primaryContainer} />
+                  <Text style={[styles.sectionCardTitle, { color: colors.text }]}>Chief Complaint</Text>
+                </View>
+                <View style={[styles.loggedBadge, { backgroundColor: colors.backgroundElement }]}>
+                  <Text style={[styles.loggedText, { color: colors.textSecondary }]}>Directly Editable</Text>
+                </View>
+              </View>
+
+              <SmartMedicalTextInput
+                label="Primary Symptoms & Onset"
+                value={chiefComplaint}
+                onChangeText={setChiefComplaint}
+                placeholder="e.g. Cough and cold with fever for 3 days..."
+                multiline
+                numberOfLines={2}
+                quickSuggestions={[
+                  'Persistent dry cough for 4 days',
+                  'Mild chest tightness on exertion',
+                  'Sore throat & painful swallowing',
+                  'No recorded fever',
+                ]}
+              />
+
+              {/* Allergies tags with Add/Remove action */}
+              <View style={styles.allergiesSection}>
+                <View style={styles.allergiesHeader}>
+                  <Text style={[styles.allergiesLabel, { color: colors.textSecondary }]}>RECORDED ALLERGIES:</Text>
+                  <Pressable
+                    onPress={() => setShowAddAllergy(!showAddAllergy)}
+                    style={styles.addAllergyBtn}
+                  >
+                    <Plus size={12} color={StitchColors.primaryContainer} />
+                    <Text style={styles.addAllergyBtnText}>Add</Text>
+                  </Pressable>
+                </View>
+
+                <View style={styles.allergiesRow}>
+                  {allergies.length === 0 && (
+                    <Text style={{ fontSize: 13, color: colors.textMuted, fontStyle: 'italic', paddingVertical: 2 }}>
+                      0 allergies recorded
+                    </Text>
+                  )}
+                  {allergies.map((al) => (
+                    <View
+                      key={al.id}
+                      style={[
+                        styles.allergyTag,
+                        { backgroundColor: al.isSevere ? '#FEE2E2' : colors.backgroundElement },
+                      ]}
+                    >
+                      {al.isSevere && <AlertTriangle size={11} color={StitchColors.error} />}
+                      <Text style={[styles.allergyTagText, al.isSevere && { color: StitchColors.error }]}>
+                        {al.name}
+                      </Text>
+                      <Pressable
+                        onPress={() => setAllergies(allergies.filter((x) => x.id !== al.id))}
+                        hitSlop={{ top: 4, bottom: 4, left: 4, right: 4 }}
+                      >
+                        <X size={12} color={al.isSevere ? StitchColors.error : colors.textMuted} />
+                      </Pressable>
+                    </View>
+                  ))}
+                </View>
+
+                {showAddAllergy && (
+                  <View style={styles.addAllergyInputRow}>
+                    <TextInput
+                      value={newAllergyInput}
+                      onChangeText={setNewAllergyInput}
+                      placeholder="Type allergy (e.g. Sulfa, NSAIDs)..."
+                      placeholderTextColor={colors.textMuted}
+                      style={[styles.smallInput, { color: colors.text, borderColor: colors.border }]}
+                    />
+                    <Pressable
+                      onPress={() => {
+                        const trimmed = newAllergyInput.trim();
+                        if (trimmed) {
+                          if (!isNegationAllergy(trimmed)) {
+                            setAllergies([
+                              ...allergies,
+                              { id: `a_${Date.now()}`, name: trimmed, isSevere: false },
+                            ]);
+                          }
+                          setNewAllergyInput('');
+                          setShowAddAllergy(false);
+                        }
+                      }}
+                      style={[styles.smallAddBtn, { backgroundColor: StitchColors.primaryContainer }]}
+                    >
+                      <Check size={14} color="#FFFFFF" />
+                    </Pressable>
+                  </View>
+                )}
+              </View>
+            </View>
+
+            {/* 3. Clinical Examination (Formerly Physical Observations) — Directly Editable + Image Attachments */}
             <View style={[styles.sectionCard, { backgroundColor: colors.card, borderColor: colors.border }]}>
               <View style={styles.sectionCardHeader}>
                 <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
@@ -982,39 +1083,6 @@ export default function DoctorConsultationScreen() {
               )}
             </View>
 
-            {/* Dedicated Patient Clinical History (Past Medical / Surgical / Illnesses — Not Family) */}
-            <View style={[styles.sectionCard, { backgroundColor: colors.card, borderColor: colors.border }]}>
-              <View style={styles.sectionCardHeader}>
-                <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
-                  <History size={16} color={StitchColors.primaryContainer} />
-                  <Text style={[styles.sectionCardTitle, { color: colors.text }]}>Patient Clinical History</Text>
-                </View>
-                <View style={[styles.loggedBadge, { backgroundColor: colors.backgroundElement }]}>
-                  <Text style={[styles.loggedText, { color: colors.textSecondary }]}>Directly Editable</Text>
-                </View>
-              </View>
-
-              <Text style={[styles.sectionCardDesc, { color: colors.textSecondary }]}>
-                Record patient's personal clinical history: past surgeries, hospitalizations, prior major illnesses & long-term therapies (not family records).
-              </Text>
-
-              <SmartMedicalTextInput
-                label="Clinical Past History Notes"
-                value={patientClinicalHistory}
-                onChangeText={setPatientClinicalHistory}
-                placeholder="Record past surgeries, hospital admissions, previous illness episodes..."
-                multiline
-                numberOfLines={4}
-                quickSuggestions={[
-                  'No past surgical procedures or hospital admissions',
-                  'History of COVID-19 pneumonitis (2021, resolved)',
-                  'Appendectomy (2018, laparoscopic, uncomplicated)',
-                  'Diagnosed dyslipidemia on regular Statin therapy',
-                  'No history of TB, Asthma, Epilepsy or CAD',
-                ]}
-              />
-            </View>
-
             {/* Chronic Conditions */}
             <View style={[styles.sectionCard, { backgroundColor: colors.card, borderColor: colors.border }]}>
               <Text style={[styles.sectionCardTitle, { color: colors.text, marginBottom: 10 }]}>Chronic Conditions</Text>
@@ -1088,28 +1156,73 @@ export default function DoctorConsultationScreen() {
         {/* TAB 2: Past History */}
         {activeTab === 'history' && (
           <Animated.View entering={FadeIn.duration(200)} style={styles.tabContentBlock}>
+            {/* Prescriptions on Record */}
+            <View style={[styles.sectionCard, { backgroundColor: colors.card, borderColor: colors.border, marginBottom: 14 }]}>
+              <Text style={[styles.sectionCardTitle, { color: colors.text, marginBottom: 10 }]}>
+                Digital Prescriptions on File ({patientPrescriptions.length})
+              </Text>
+              {patientPrescriptions.length > 0 ? (
+                <View style={{ gap: 10 }}>
+                  {patientPrescriptions.map((rx: any) => (
+                    <View
+                      key={rx.id}
+                      style={[styles.historyItem, { backgroundColor: colors.backgroundElement, borderRadius: 12, padding: 12 }]}
+                    >
+                      <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 4 }}>
+                        <Text style={{ fontSize: 13, fontWeight: '700', color: colors.text }}>
+                          {rx.diagnosis || 'Clinical Consultation'}
+                        </Text>
+                        <Text style={{ fontSize: 11, color: StitchColors.primaryContainer, fontWeight: '700' }}>
+                          {rx.createdAt || 'Previous Visit'}
+                        </Text>
+                      </View>
+                      <Text style={{ fontSize: 12, color: colors.textSecondary, marginBottom: 4 }}>
+                        Doctor: {rx.doctorName} • {rx.doctorSpecialty}
+                      </Text>
+                      {rx.medicines && rx.medicines.length > 0 && (
+                        <Text style={{ fontSize: 11.5, color: colors.textSecondary }}>
+                          Rx: {rx.medicines.map((m: any) => `${m.name} (${m.dosage})`).join(' · ')}
+                        </Text>
+                      )}
+                    </View>
+                  ))}
+                </View>
+              ) : (
+                <View style={{ paddingVertical: 10, alignItems: 'center' }}>
+                  <Text style={{ fontSize: 12.5, color: colors.textMuted }}>
+                    No previous prescriptions issued yet for this patient.
+                  </Text>
+                </View>
+              )}
+            </View>
+
+            {/* Clinical Background */}
             <View style={[styles.sectionCard, { backgroundColor: colors.card, borderColor: colors.border }]}>
-              <Text style={[styles.sectionCardTitle, { color: colors.text, marginBottom: 12 }]}>Comprehensive History</Text>
+              <Text style={[styles.sectionCardTitle, { color: colors.text, marginBottom: 12 }]}>Clinical Background</Text>
 
               <View style={styles.historyList}>
                 <View style={[styles.historyItem, { backgroundColor: colors.backgroundElement }]}>
-                  <Text style={[styles.historyLabel, { color: colors.text }]}>Family History</Text>
+                  <Text style={[styles.historyLabel, { color: colors.text }]}>Known Drug & Food Allergies</Text>
                   <Text style={[styles.historyDesc, { color: colors.textSecondary }]}>
-                    Paternal: Type-2 Diabetes, CAD at 62. Maternal: No major cardiovascular issues.
+                    {allergies.length > 0
+                      ? allergies.map((a) => `${a.name}${a.isSevere ? ' (Severe)' : ''}`).join(', ')
+                      : 'No known allergies reported by patient.'}
                   </Text>
                 </View>
 
                 <View style={[styles.historyItem, { backgroundColor: colors.backgroundElement }]}>
-                  <Text style={[styles.historyLabel, { color: colors.text }]}>Surgical History</Text>
+                  <Text style={[styles.historyLabel, { color: colors.text }]}>Chronic Medical Conditions</Text>
                   <Text style={[styles.historyDesc, { color: colors.textSecondary }]}>
-                    Laparoscopic Appendectomy (2018). Uneventful recovery.
+                    {chronicConditions.length > 0
+                      ? chronicConditions.map((c) => `${c.name} (${c.status})`).join(', ')
+                      : 'No chronic conditions on record.'}
                   </Text>
                 </View>
 
                 <View style={[styles.historyItem, { backgroundColor: colors.backgroundElement }]}>
-                  <Text style={[styles.historyLabel, { color: colors.text }]}>Active Routine Medications</Text>
+                  <Text style={[styles.historyLabel, { color: colors.text }]}>Chief Clinical History Notes</Text>
                   <Text style={[styles.historyDesc, { color: colors.textSecondary }]}>
-                    Telmisartan 40mg (OD morning). Montelukast 10mg PRN for cough/wheezing.
+                    {patientClinicalHistory || chiefComplaint || 'Routine medical examination and follow-up.'}
                   </Text>
                 </View>
               </View>
@@ -1243,7 +1356,9 @@ export default function DoctorConsultationScreen() {
           }}
           style={[styles.proceedRxBtn, { backgroundColor: StitchColors.primaryContainer }]}
         >
-          <Text style={styles.proceedRxBtnText}>Proceed to Prescription</Text>
+          <Text style={styles.proceedRxBtnText}>
+            {existingRxForThisVisit ? 'Review / Update Prescription' : 'Proceed to Prescription'}
+          </Text>
           <ArrowRight size={16} color="#FFFFFF" strokeWidth={2.4} />
         </Pressable>
       </View>
@@ -1365,7 +1480,7 @@ export default function DoctorConsultationScreen() {
             <View style={{ alignItems: 'center' }}>
               <Text style={[styles.headerTitle, { color: colors.text }]}>Write Prescription</Text>
               <Text style={[styles.headerSub, { color: colors.textSecondary }]}>
-                {currentApt?.patientName || 'Patient'}{(currentApt as any)?.age ? ` · ${(currentApt as any).age}` : ''}
+                {currentApt?.patientName || 'Patient'}{resolvedPatientAge !== '—' ? ` · ${resolvedPatientAge} yrs` : ''}
               </Text>
             </View>
 
@@ -1986,7 +2101,7 @@ export default function DoctorConsultationScreen() {
                   {/* Patient Info Strip */}
                   <View style={[styles.letterheadPatientStrip, { backgroundColor: colors.backgroundElement }]}>
                     <Text style={[styles.lhPatientName, { color: colors.text }]}>
-                      Patient: {currentApt?.patientName || 'Patient'}{(currentApt as any)?.age ? ` (${(currentApt as any).age})` : ''}
+                      Patient: {currentApt?.patientName || 'Patient'}{resolvedPatientAge !== '—' ? ` (${resolvedPatientAge} yrs)` : ''}{resolvedPatientBloodGroup !== '—' ? ` • ${resolvedPatientBloodGroup}` : ''}
                     </Text>
                     <Text style={[styles.lhVitalsText, { color: colors.textSecondary }]}>
                       BP: {vitals.bpSystolic}/{vitals.bpDiastolic} • Pulse: {vitals.pulse} bpm • Temp: {vitals.temp}°F

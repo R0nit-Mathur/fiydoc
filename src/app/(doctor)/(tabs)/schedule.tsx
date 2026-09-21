@@ -654,12 +654,6 @@ export default function DoctorScheduleScreen() {
     return times;
   }, [earlyDepartureModalVisible]);
 
-  // Add Custom Slot Modal State
-  const [addSlotModalVisible, setAddSlotModalVisible] = useState(false);
-  const [customSlotHour, setCustomSlotHour] = useState('11');
-  const [customSlotMinute, setCustomSlotMinute] = useState('30');
-  const [customSlotMeridiem, setCustomSlotMeridiem] = useState<'AM' | 'PM'>('AM');
-
   const [delayNotice, setDelayNotice] = useState<string | null>(null);
   const [lastUndo, setLastUndo] = useState<ScheduleUndo | null>(null);
   const [undoDelayMins, setUndoDelayMins] = useState<number>(15);
@@ -684,28 +678,6 @@ export default function DoctorScheduleScreen() {
       setTimeout(() => setDelayNotice(null), 2500);
     } catch (err: any) {
       console.warn('[schedule] Toggle slot block error:', err?.message);
-    }
-  };
-
-  const handleAddCustomSlot = async () => {
-    const targetDocId = user?.doctorId || user?.id;
-    const timeString = `${customSlotHour}:${customSlotMinute} ${customSlotMeridiem}`;
-    try {
-      if (Platform.OS !== 'web') Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
-      await doctorService.manageCustomSlot({
-        doctorId: targetDocId,
-        date: selectedDay,
-        time: timeString,
-        action: 'add',
-      });
-      setAddSlotModalVisible(false);
-      await refetchServerSlots();
-      queryClient.invalidateQueries({ queryKey: ['doctor-slots'] });
-      queryClient.invalidateQueries({ queryKey: ['doctor-schedule-week'] });
-      setDelayNotice(`Custom slot ${timeString} added for ${selectedDay}.`);
-      setTimeout(() => setDelayNotice(null), 3000);
-    } catch (err: any) {
-      console.warn('[schedule] Add custom slot error:', err?.message);
     }
   };
 
@@ -1431,18 +1403,6 @@ export default function DoctorScheduleScreen() {
               >
                 <Coffee size={12} color="#FFFFFF" />
                 <Text style={styles.addSlotBtnText}>+ Break</Text>
-              </Pressable>
-              <Pressable
-                onPress={() => {
-                  setCustomSlotMeridiem(selectedSession === 'morning' ? 'AM' : 'PM');
-                  setAddSlotModalVisible(true);
-                }}
-                style={[styles.addSlotBtn, { backgroundColor: StitchColors.primaryContainer }]}
-                accessibilityRole="button"
-                accessibilityLabel="Add custom slot"
-              >
-                <Plus size={12} color="#FFFFFF" />
-                <Text style={styles.addSlotBtnText}>+ Slot</Text>
               </Pressable>
             </View>
           </View>
@@ -2317,120 +2277,6 @@ export default function DoctorScheduleScreen() {
           </View>
         </Modal>
       )}
-
-      {/* MODAL: Add Custom Slot */}
-      <Modal visible={addSlotModalVisible} transparent animationType="slide">
-        <View style={styles.modalBackdrop}>
-          <View style={[styles.modalCard, { backgroundColor: colors.card, borderColor: colors.border }]}>
-            <View style={styles.modalHeader}>
-              <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
-                <Plus size={18} color={StitchColors.primaryContainer} />
-                <Text style={[styles.modalTitle, { color: colors.text }]}>Add Custom OPD Slot</Text>
-              </View>
-              <Pressable onPress={() => setAddSlotModalVisible(false)}>
-                <X size={18} color={colors.text} />
-              </Pressable>
-            </View>
-
-            <Text style={[styles.fieldLabel, { color: colors.textSecondary }]}>TARGET DATE</Text>
-            <View style={[styles.autoNoticeBox, { backgroundColor: colors.backgroundElement, marginBottom: 12 }]}>
-              <CalendarIcon size={16} color={StitchColors.primaryContainer} />
-              <Text style={[styles.autoNoticeBoxText, { color: colors.text, fontWeight: '700' }]}>
-                {weekDays.find((w) => w.key === selectedDay)?.fullDate || selectedDay}
-              </Text>
-            </View>
-
-            <Text style={[styles.fieldLabel, { color: colors.textSecondary }]}>SLOT TIMING (HOUR & MINUTE)</Text>
-            <View style={{ flexDirection: 'row', gap: 10, marginBottom: 12 }}>
-              <View style={{ flex: 1 }}>
-                <Text style={{ fontSize: 11, color: colors.textSecondary, marginBottom: 4 }}>Hour (1-12)</Text>
-                <TextInput
-                  value={customSlotHour}
-                  onChangeText={setCustomSlotHour}
-                  placeholder="11"
-                  placeholderTextColor={colors.textMuted}
-                  keyboardType="number-pad"
-                  maxLength={2}
-                  style={[styles.miniTextInput, { textAlign: 'center', borderColor: colors.border, color: colors.text }]}
-                />
-              </View>
-              <View style={{ flex: 1 }}>
-                <Text style={{ fontSize: 11, color: colors.textSecondary, marginBottom: 4 }}>Minute (00-59)</Text>
-                <TextInput
-                  value={customSlotMinute}
-                  onChangeText={setCustomSlotMinute}
-                  placeholder="30"
-                  placeholderTextColor={colors.textMuted}
-                  keyboardType="number-pad"
-                  maxLength={2}
-                  style={[styles.miniTextInput, { textAlign: 'center', borderColor: colors.border, color: colors.text }]}
-                />
-              </View>
-              <View style={{ flex: 1 }}>
-                <Text style={{ fontSize: 11, color: colors.textSecondary, marginBottom: 4 }}>Period</Text>
-                <View style={{ flexDirection: 'row', height: 42, borderRadius: BorderRadius.lg, overflow: 'hidden', borderWidth: 1, borderColor: colors.border }}>
-                  <Pressable
-                    onPress={() => setCustomSlotMeridiem('AM')}
-                    style={{
-                      flex: 1,
-                      backgroundColor: customSlotMeridiem === 'AM' ? StitchColors.primaryContainer : colors.backgroundElement,
-                      alignItems: 'center',
-                      justifyContent: 'center',
-                    }}
-                  >
-                    <Text style={{ fontSize: 12, fontWeight: '700', color: customSlotMeridiem === 'AM' ? '#FFFFFF' : colors.text }}>AM</Text>
-                  </Pressable>
-                  <Pressable
-                    onPress={() => setCustomSlotMeridiem('PM')}
-                    style={{
-                      flex: 1,
-                      backgroundColor: customSlotMeridiem === 'PM' ? StitchColors.primaryContainer : colors.backgroundElement,
-                      alignItems: 'center',
-                      justifyContent: 'center',
-                    }}
-                  >
-                    <Text style={{ fontSize: 12, fontWeight: '700', color: customSlotMeridiem === 'PM' ? '#FFFFFF' : colors.text }}>PM</Text>
-                  </Pressable>
-                </View>
-              </View>
-            </View>
-
-            <Text style={[styles.fieldLabel, { color: colors.textSecondary }]}>QUICK PRESETS</Text>
-            <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 6, marginBottom: 14 }}>
-              {['10:15 AM', '11:45 AM', '12:30 PM', '04:30 PM', '06:15 PM', '07:45 PM'].map((p) => (
-                <Pressable
-                  key={p}
-                  onPress={() => {
-                    const [t, meri] = p.split(' ');
-                    const [h, m] = t.split(':');
-                    setCustomSlotHour(h);
-                    setCustomSlotMinute(m);
-                    setCustomSlotMeridiem(meri as 'AM' | 'PM');
-                  }}
-                  style={{
-                    paddingHorizontal: 10,
-                    paddingVertical: 5,
-                    borderRadius: BorderRadius.full,
-                    backgroundColor: colors.backgroundElement,
-                    borderWidth: 1,
-                    borderColor: colors.border,
-                  }}
-                >
-                  <Text style={{ fontSize: 11, fontWeight: '600', color: colors.text }}>{p}</Text>
-                </Pressable>
-              ))}
-            </View>
-
-            <Pressable
-              onPress={handleAddCustomSlot}
-              style={[styles.applySettingsBtn, { backgroundColor: StitchColors.primaryContainer }]}
-            >
-              <Check size={16} color="#FFFFFF" />
-              <Text style={styles.applySettingsBtnText}>Create Slot & Publish to OPD</Text>
-            </Pressable>
-          </View>
-        </View>
-      </Modal>
 
       {/* MODAL: Schedule Doctor Break */}
       <Modal visible={breakModalVisible} transparent animationType="slide">

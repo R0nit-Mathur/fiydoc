@@ -71,10 +71,17 @@ export default function DoctorNotificationsScreen() {
   const [refreshing, setRefreshing] = useState(false);
 
   const activeNotificationList = useMemo(() => {
-    if (serverNotifications && serverNotifications.length > 0) {
-      return serverNotifications;
-    }
-    return notifications;
+    const storeReadMap = new Map(notifications.map((n) => [n.id, n.read]));
+    const list = (serverNotifications && serverNotifications.length > 0)
+      ? serverNotifications
+      : notifications;
+    return list.map((item) => {
+      const isReadInStore = storeReadMap.get(item.id);
+      return {
+        ...item,
+        read: isReadInStore === true ? true : Boolean(item.read),
+      };
+    });
   }, [serverNotifications, notifications]);
 
   const doctorNotifications = useMemo(() => {
@@ -312,6 +319,25 @@ export default function DoctorNotificationsScreen() {
                       {isAppointment && (
                         <Badge label="CLINIC" variant="blue" size="sm" />
                       )}
+                      {!item.read && (
+                        <Pressable
+                          onPress={(e) => {
+                            e.stopPropagation();
+                            if (Platform.OS !== 'web') {
+                              Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+                            }
+                            markReadMut.mutate(item.id);
+                            markAsRead(item.id);
+                          }}
+                          hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+                          style={styles.markReadPill}
+                          accessibilityRole="button"
+                          accessibilityLabel="Mark as read"
+                        >
+                          <CheckCheck size={11} color={StitchColors.primaryContainer} />
+                          <Text style={styles.markReadPillText}>Mark read</Text>
+                        </Pressable>
+                      )}
                       {!item.read && <View style={styles.unreadDot} />}
                     </View>
                   </View>
@@ -499,5 +525,21 @@ const styles = StyleSheet.create({
     fontSize: 13,
     lineHeight: 19,
     textAlign: 'center',
+  },
+  markReadPill: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 3,
+    paddingHorizontal: 8,
+    paddingVertical: 3,
+    borderRadius: BorderRadius.full,
+    backgroundColor: Palette.primaryBlueLight,
+    borderWidth: 1,
+    borderColor: Palette.primaryBlueBorder,
+  },
+  markReadPillText: {
+    fontSize: 10,
+    fontWeight: '700',
+    color: StitchColors.primaryContainer,
   },
 });

@@ -97,7 +97,7 @@ export const useNotificationStore = create<NotificationState>()(
           for (const item of items) {
             existingMap.set(item.id, {
               ...item,
-              read: existingMap.get(item.id)?.read ?? item.read ?? false,
+              read: (existingMap.get(item.id)?.read === true) || Boolean(item.read),
             });
           }
           return { notifications: Array.from(existingMap.values()) };

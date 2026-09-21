@@ -327,6 +327,7 @@ export default function DoctorProfileScreen() {
         doctorId: doctor.id,
         doctorName: doctor.name,
         doctorSpecialty: doctor.specialty,
+        doctorAvatar: doctor.avatar || doctor.profilePhoto || (doctor as any).avatarUrl || (doctor as any).user?.profilePhoto || '',
         slotTime: currentSlotTime,
         date: currentDate.isoDate,
         dateLabel: `${currentDate.day}, ${currentDate.date} ${currentDate.month}`,
@@ -496,17 +497,15 @@ export default function DoctorProfileScreen() {
                 </View>
               ) : null}
 
-              {doctor.rating != null ? (
-                <View style={styles.statBox}>
-                  <View style={styles.ratingValRow}>
-                    <Star size={14} color="#f59e0b" fill="#f59e0b" />
-                    <Text style={[styles.statValue, { color: '#b45309' }]}>
-                      {doctor.rating.toFixed(1)}
-                    </Text>
-                  </View>
-                  <Text style={styles.statLabel}>Rating ({doctor.reviewCount || 0}+)</Text>
+              <View style={styles.statBox}>
+                <View style={styles.ratingValRow}>
+                  <Star size={14} color="#64748b" fill="#64748b" />
+                  <Text style={[styles.statValue, { color: '#64748b' }]}>
+                    0.0
+                  </Text>
                 </View>
-              ) : null}
+                <Text style={styles.statLabel}>Rating</Text>
+              </View>
             </View>
           </View>
 

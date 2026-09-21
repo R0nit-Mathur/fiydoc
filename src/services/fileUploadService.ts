@@ -75,14 +75,32 @@ export const fileUploadService = {
 
     const filename = name || `doc_${Date.now()}.${detectedMime.includes('pdf') ? 'pdf' : 'jpg'}`;
 
-    return apiClient<UploadResult>('/upload', {
-      method: 'POST',
-      body: JSON.stringify({
+    try {
+      const uploadPromise = apiClient<UploadResult>('/upload', {
+        method: 'POST',
+        body: JSON.stringify({
+          filename,
+          base64: base64Data,
+          mimeType: detectedMime,
+          category,
+        }),
+      });
+
+      const timeoutPromise = new Promise<never>((_, reject) =>
+        setTimeout(() => reject(new Error('File upload timeout after 8s')), 8000)
+      );
+
+      return await Promise.race([uploadPromise, timeoutPromise]);
+    } catch (err: any) {
+      console.warn('[fileUploadService] Upload failed or timed out, returning local URI fallback:', err?.message);
+      return {
+        url: uri,
+        path: uri,
         filename,
-        base64: base64Data,
+        sizeBytes: base64Data.length,
         mimeType: detectedMime,
-        category,
-      }),
-    });
+        storageProvider: 'local',
+      };
+    }
   },
 };

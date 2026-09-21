@@ -30,6 +30,7 @@ export function usePrescriptionsQuery(patientId?: string) {
               : `Dr. ${rx.doctor.fullName}`
             : 'Licensed Doctor',
           doctorSpecialty: rx.doctor?.specialization || 'Specialist',
+          doctorAvatar: rx.doctor?.profilePhoto || rx.doctor?.avatar || rx.doctor?.user?.profilePhoto || null,
           doctorMciNumber: rx.doctor?.verification?.registrationNumber || undefined,
           clinicName: rx.doctor?.clinic?.name || 'FiYDoc Partner Clinic',
           clinicAddress: rx.doctor?.clinic?.address || undefined,

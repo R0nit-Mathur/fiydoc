@@ -35,6 +35,8 @@ import {
   Stethoscope,
   Building,
   Check,
+  Eye,
+  EyeOff,
 } from 'lucide-react-native';
 import { Modal } from 'react-native';
 import { StepProgressTracker } from '@/components/ui/StepProgressTracker';
@@ -144,6 +146,8 @@ export function DoctorRegistrationView({
   const [contactPhone, setContactPhone] = useState(user?.phone || '');
   const [contactEmail, setContactEmail] = useState(user?.email || '');
   const [password, setPassword] = useState('');
+  const [showPassword, setShowPassword] = useState(false);
+  const [experienceYears, setExperienceYears] = useState('5');
   const [profilePhoto, setProfilePhoto] = useState<string | null>(null);
   const [uploadingPhoto, setUploadingPhoto] = useState(false);
   const [step1Loading, setStep1Loading] = useState(false);
@@ -314,10 +318,14 @@ export function DoctorRegistrationView({
       let resolvedPhoto = profilePhoto;
       if (profilePhoto && (profilePhoto.startsWith('file:') || profilePhoto.startsWith('blob:'))) {
         try {
-          const uploadRes = await fileUploadService.uploadFile(
+          const uploadPromise = fileUploadService.uploadFile(
             { uri: profilePhoto, name: `doc_reg_${Date.now()}.jpg` },
             'doctors'
           );
+          const timeoutPromise = new Promise<never>((_, reject) =>
+            setTimeout(() => reject(new Error('Photo upload timeout')), 4000)
+          );
+          const uploadRes = await Promise.race([uploadPromise, timeoutPromise]);
           if (uploadRes?.url) {
             resolvedPhoto = uploadRes.url;
             setProfilePhoto(uploadRes.url);
@@ -342,6 +350,7 @@ export function DoctorRegistrationView({
               specialization: specialization.trim() || 'General Medicine',
               consultationFee: Number(consultationFee) || 500,
               profilePhoto: resolvedPhoto || undefined,
+              experienceYears: Number(experienceYears) || 0,
             }
           );
           setSession(session);
@@ -549,10 +558,14 @@ export function DoctorRegistrationView({
       let resolvedFinalPhoto = profilePhoto;
       if (profilePhoto && (profilePhoto.startsWith('file:') || profilePhoto.startsWith('blob:'))) {
         try {
-          const uploadRes = await fileUploadService.uploadFile(
+          const uploadPromise = fileUploadService.uploadFile(
             { uri: profilePhoto, name: `doc_reg_${Date.now()}.jpg` },
             'doctors'
           );
+          const timeoutPromise = new Promise<never>((_, reject) =>
+            setTimeout(() => reject(new Error('Final photo upload timeout')), 4000)
+          );
+          const uploadRes = await Promise.race([uploadPromise, timeoutPromise]);
           if (uploadRes?.url) {
             resolvedFinalPhoto = uploadRes.url;
             setProfilePhoto(uploadRes.url);
@@ -573,6 +586,7 @@ export function DoctorRegistrationView({
         consultationFee: Number(consultationFee) || 800,
         profilePhoto: resolvedFinalPhoto || undefined,
         slotDurationMinutes: Number(slotDurationMins) || 15,
+        experienceYears: Number(experienceYears) || 0,
       };
 
       let currentSession = useAuthStore.getState().user;
@@ -875,6 +889,22 @@ export function DoctorRegistrationView({
               </View>
             </View>
 
+            {/* Years of Clinical Experience */}
+            <View style={styles.inputGroup}>
+              <Text style={styles.inputLabel}>Years of Clinical Experience</Text>
+              <View style={styles.inputWrapper}>
+                <Clock size={18} color="#737783" style={styles.inputIcon} />
+                <TextInput
+                  value={experienceYears}
+                  onChangeText={(v) => setExperienceYears(v.replace(/[^0-9]/g, ''))}
+                  placeholder="e.g. 8"
+                  placeholderTextColor="#94A3B8"
+                  style={styles.textInput}
+                  keyboardType="numeric"
+                />
+              </View>
+            </View>
+
             {/* Portal Password */}
             <View style={styles.inputGroup}>
               <Text style={styles.inputLabel}>Clinician Portal Password</Text>
@@ -886,8 +916,21 @@ export function DoctorRegistrationView({
                   placeholder="Create portal password (min. 6 characters)"
                   placeholderTextColor="#94A3B8"
                   style={styles.textInput}
-                  secureTextEntry
+                  secureTextEntry={!showPassword}
                 />
+                <Pressable
+                  onPress={() => setShowPassword((prev) => !prev)}
+                  hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+                  style={{ padding: 4 }}
+                  accessibilityRole="button"
+                  accessibilityLabel={showPassword ? 'Hide password' : 'Show password'}
+                >
+                  {showPassword ? (
+                    <EyeOff size={18} color="#737783" />
+                  ) : (
+                    <Eye size={18} color="#737783" />
+                  )}
+                </Pressable>
               </View>
             </View>
           </View>

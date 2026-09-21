@@ -3,6 +3,7 @@ import { View, Text, TouchableOpacity, StyleSheet, ActivityIndicator } from 'rea
 import { useRouter } from 'expo-router';
 import { Pill, CheckCircle2 } from 'lucide-react-native';
 import { Badge } from '@/components/ui/Badge';
+import { Avatar } from '@/components/ui/Avatar';
 import { Prescription } from '@/types/index';
 import { Palette, Typography, BorderRadius, Shadows, Spacing } from '@/constants/theme';
 import { useAppTheme } from '@/hooks/useAppTheme';
@@ -45,19 +46,26 @@ export function PrescriptionsTab({ prescriptions, isLoading }: PrescriptionsTabP
             style={styles.prescriptionCard}
           >
             <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-start' }}>
-              <View style={{ flex: 1, marginRight: Spacing.sm }}>
-                <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
-                  <Text style={styles.rxDoctorName} numberOfLines={1}>
-                    {rx.doctorName || 'Dr. Specialist'}
+              <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10, flex: 1, marginRight: Spacing.sm }}>
+                <Avatar
+                  uri={rx.doctorAvatar}
+                  name={rx.doctorName || 'Doctor'}
+                  size="md"
+                />
+                <View style={{ flex: 1 }}>
+                  <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+                    <Text style={styles.rxDoctorName} numberOfLines={1}>
+                      {rx.doctorName || 'Dr. Specialist'}
+                    </Text>
+                    <CheckCircle2 size={15} color={Palette.healthcareTeal} fill={Palette.healthcareTealLight} />
+                  </View>
+                  <Text style={styles.rxSpecialty} numberOfLines={1}>
+                    {rx.doctorSpecialty || 'Specialist Consultant'}
                   </Text>
-                  <CheckCircle2 size={15} color={Palette.healthcareTeal} fill={Palette.healthcareTealLight} />
+                  <Text style={styles.rxClinic} numberOfLines={1}>
+                    {rx.clinicName || 'FiYDoc Healthcare Clinic'}
+                  </Text>
                 </View>
-                <Text style={styles.rxSpecialty} numberOfLines={1}>
-                  {rx.doctorSpecialty || 'Specialist Consultant'}
-                </Text>
-                <Text style={styles.rxClinic} numberOfLines={1}>
-                  {rx.clinicName || 'FiYDoc Healthcare Clinic'}
-                </Text>
               </View>
               <Badge label={rx.createdAt || 'Today'} variant="blue" size="sm" />
             </View>

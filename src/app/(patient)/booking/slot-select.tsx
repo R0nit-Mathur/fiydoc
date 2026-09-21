@@ -79,6 +79,7 @@ export default function MedicalIntakeScreen() {
     doctorId?: string;
     doctorName?: string;
     doctorSpecialty?: string;
+    doctorAvatar?: string;
     slotTime?: string;
     tokenNumber?: string;
     date?: string;
@@ -86,7 +87,8 @@ export default function MedicalIntakeScreen() {
     fee?: string;
   }>();
 
-  const doctorName = params.doctorName || 'Doctor';
+  const bookingDoctor = useAppointmentStore((state) => state.bookingDraft?.doctor);
+  const doctorName = params.doctorName || bookingDoctor?.name || 'Doctor';
   const slotTime = params.slotTime || '10:30 AM';
   const tokenNumber = params.tokenNumber || null;
   const dateLabel = params.dateLabel || 'Today';
@@ -283,12 +285,21 @@ export default function MedicalIntakeScreen() {
       }).catch((e: any) => console.warn('[slot-select] Profile allergy update notice:', e?.message));
     }
 
+    const resolvedDoctorAvatar =
+      params.doctorAvatar ||
+      bookingDoctor?.avatar ||
+      bookingDoctor?.profilePhoto ||
+      (bookingDoctor as any)?.avatarUrl ||
+      (bookingDoctor as any)?.user?.profilePhoto ||
+      '';
+
     router.push({
       pathname: '/(patient)/booking/confirm',
       params: {
         doctorId: params.doctorId || '',
         doctorName,
         doctorSpecialty: params.doctorSpecialty || 'Specialist',
+        doctorAvatar: resolvedDoctorAvatar,
         slotTime,
         date: params.date || new Date().toISOString().slice(0, 10),
         dateLabel,
@@ -362,7 +373,7 @@ export default function MedicalIntakeScreen() {
           <View style={styles.miniBanner}>
             <View style={styles.miniAvatarWrap}>
               <Avatar
-                uri={null}
+                uri={params.doctorAvatar || bookingDoctor?.avatar || bookingDoctor?.profilePhoto || (bookingDoctor as any)?.avatarUrl || (bookingDoctor as any)?.user?.profilePhoto || null}
                 name={doctorName || 'Doctor'}
                 size="md"
                 style={styles.miniAvatar}

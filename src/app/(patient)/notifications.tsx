@@ -81,10 +81,17 @@ export default function PatientNotificationsScreen() {
   };
 
   const activeNotificationList = useMemo(() => {
-    if (serverNotifications && serverNotifications.length > 0) {
-      return serverNotifications;
-    }
-    return notifications;
+    const storeReadMap = new Map(notifications.map((n) => [n.id, n.read]));
+    const list = (serverNotifications && serverNotifications.length > 0)
+      ? serverNotifications
+      : notifications;
+    return list.map((item) => {
+      const isReadInStore = storeReadMap.get(item.id);
+      return {
+        ...item,
+        read: isReadInStore === true ? true : Boolean(item.read),
+      };
+    });
   }, [serverNotifications, notifications]);
 
   const patientNotifications = useMemo(() => {
@@ -140,10 +147,24 @@ export default function PatientNotificationsScreen() {
     }
     markReadMut.mutate(item.id);
     markAsRead(item.id);
-    if (item.type === 'prescription' || item.link === '/(patient)/health' || item.link === '/(patient)/(tabs)/health') {
-      router.push('/(patient)/(tabs)/health');
+
+    // Requirement 1: View prescription / details routes to prescription/medical history or appointment visit history
+    if (item.type === 'prescription' || item.link?.includes('prescription') || item.link?.includes('health')) {
+      if (item.link) {
+        router.push(item.link as any);
+      } else {
+        router.push('/(patient)/(tabs)/health');
+      }
+    } else if (item.type === 'appointment' || item.link?.includes('appointment')) {
+      if (item.link) {
+        router.push(item.link as any);
+      } else {
+        router.push('/(patient)/(tabs)/appointments');
+      }
     } else if (item.link) {
       router.push(item.link as any);
+    } else {
+      router.push('/(patient)/(tabs)/appointments');
     }
   };
 
@@ -305,6 +326,25 @@ export default function PatientNotificationsScreen() {
                     <View style={styles.badgeWrap}>
                       {isPrescription && (
                         <Badge label="DIGITAL RX" variant="teal" size="sm" />
+                      )}
+                      {!item.read && (
+                        <Pressable
+                          onPress={(e) => {
+                            e.stopPropagation();
+                            if (Platform.OS !== 'web') {
+                              Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+                            }
+                            markReadMut.mutate(item.id);
+                            markAsRead(item.id);
+                          }}
+                          hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+                          style={styles.markReadPill}
+                          accessibilityRole="button"
+                          accessibilityLabel="Mark as read"
+                        >
+                          <CheckCheck size={11} color={StitchColors.primaryContainer} />
+                          <Text style={styles.markReadPillText}>Mark read</Text>
+                        </Pressable>
                       )}
                       {!item.read && <View style={styles.unreadDot} />}
                     </View>
@@ -489,5 +529,21 @@ const styles = StyleSheet.create({
   actionText: {
     fontSize: 12,
     fontWeight: '700',
+  },
+  markReadPill: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 3,
+    paddingHorizontal: 8,
+    paddingVertical: 3,
+    borderRadius: BorderRadius.full,
+    backgroundColor: Palette.primaryBlueLight,
+    borderWidth: 1,
+    borderColor: Palette.primaryBlueBorder,
+  },
+  markReadPillText: {
+    fontSize: 10,
+    fontWeight: '700',
+    color: StitchColors.primaryContainer,
   },
 });

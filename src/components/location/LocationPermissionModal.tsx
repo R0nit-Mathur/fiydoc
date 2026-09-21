@@ -45,7 +45,6 @@ export function LocationPermissionModal({
     permissionStatus,
     isGenuineDeviceLocation,
     setHub,
-    setAllLocations,
   } = useLocationStore();
 
   const [loading, setLoading] = useState(false);
@@ -299,22 +298,6 @@ export function LocationPermissionModal({
               </TouchableOpacity>
             )}
 
-            {/* Browse All Nationwide Option */}
-            <TouchableOpacity
-              onPress={() => {
-                setAllLocations();
-                onLocationResolved?.();
-                onClose();
-              }}
-              activeOpacity={0.8}
-              style={styles.browseAllButton}
-            >
-              <Globe2 size={15} color={StitchColors.primary} />
-              <Text style={styles.browseAllButtonText}>
-                Browse All Doctors (Any Location)
-              </Text>
-            </TouchableOpacity>
-
             {/* Manual Location Selection Option */}
             <TouchableOpacity
               onPress={() => setShowManualHubs((prev) => !prev)}
@@ -508,24 +491,6 @@ const styles = StyleSheet.create({
     fontSize: 13,
     fontWeight: '700',
     color: Palette.textSecondary,
-  },
-  browseAllButton: {
-    width: '100%',
-    backgroundColor: '#F0FDFA',
-    borderWidth: 1,
-    borderColor: '#99F6E4',
-    borderRadius: BorderRadius.xl,
-    paddingVertical: 12,
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    gap: Spacing.sm,
-    marginTop: 4,
-  },
-  browseAllButtonText: {
-    fontSize: 13.5,
-    fontWeight: '700',
-    color: '#0D9488',
   },
   manualSelectToggle: {
     flexDirection: 'row',

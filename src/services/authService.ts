@@ -38,6 +38,7 @@ export interface UserSession {
   chronicConditions?: string;
   emergencyContact?: string;
   consultationFee?: string | number;
+  experienceYears?: number;
   upiId?: string;
   settlementCycle?: 'weekly' | 'monthly';
 }

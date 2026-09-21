@@ -105,13 +105,18 @@ export interface Appointment {
   cancelReason?: string | null;
   patientAllergies?: string[];
   patientConditions?: string[];
+  patientBloodGroup?: string;
+  patientDob?: string;
+  patientGender?: string;
+  patientAge?: number;
   attachmentUrl?: string | null;
   attachmentName?: string | null;
 }
 
 export interface ClinicalNote {
   id: string;
-  text: string;
+  text?: string;
+  note?: string;
   timestamp: string;
 }
 
@@ -153,6 +158,7 @@ export interface Prescription {
   createdAt: string;
   doctorName?: string;
   doctorSpecialty?: string;
+  doctorAvatar?: string | null;
   doctorMciNumber?: string;
   clinicName?: string;
   clinicAddress?: string;

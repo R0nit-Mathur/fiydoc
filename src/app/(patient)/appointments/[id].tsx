@@ -204,7 +204,11 @@ export default function AppointmentDetailScreen() {
         {/* Doctor Card */}
         <Animated.View entering={FadeIn.duration(380)}>
           <View style={[styles.doctorCard, { backgroundColor: colors.card, borderColor: colors.border }]}>
-            <Avatar uri={apt.doctorAvatar} name={apt.doctorName} size="lg" />
+            <Avatar
+              uri={apt.doctorAvatar || (apt as any).doctor?.profilePhoto || (apt as any).doctor?.avatar || (apt as any).profilePhoto}
+              name={apt.doctorName}
+              size="lg"
+            />
             <View style={{ flex: 1, marginLeft: 12 }}>
               <View style={styles.doctorNameRow}>
                 <Text style={[styles.doctorName, { color: colors.text }]} numberOfLines={1}>

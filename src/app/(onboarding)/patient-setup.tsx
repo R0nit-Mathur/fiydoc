@@ -15,6 +15,7 @@ import { normalizeAllergies } from '@/utils/allergyNormalizer';
 
 const STEPS = ['Basic Info', 'Health Details'];
 const TOTAL_STEPS = 2;
+const ALL_BLOOD_GROUPS = ['A+', 'A-', 'B+', 'B-', 'AB+', 'AB-', 'O+', 'O-'] as const;
 
 export default function PatientSetupScreen() {
   const router = useRouter();
@@ -184,15 +185,38 @@ export default function PatientSetupScreen() {
                     editable={calculatedAge === null}
                   />
                 </View>
+              </View>
 
-                <View style={styles.flex1}>
-                  <Input
-                    label="Blood Group"
-                    placeholder="e.g. O+, B+"
-                    value={bloodGroup}
-                    onChangeText={setBloodGroup}
-                    autoCapitalize="characters"
-                  />
+              <View style={{ marginBottom: Spacing.md }}>
+                <Text style={[styles.inputLabel, { color: colors.textSecondary }]}>
+                  Blood Group {bloodGroup ? `(${bloodGroup})` : ''}
+                </Text>
+                <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 8, marginTop: 6 }}>
+                  {ALL_BLOOD_GROUPS.map((bg) => {
+                    const isSelected = bloodGroup.toUpperCase() === bg;
+                    return (
+                      <Pressable
+                        key={bg}
+                        onPress={() => setBloodGroup(bg)}
+                        style={[
+                          styles.genderOption,
+                          isSelected && [styles.genderOptionActive, { backgroundColor: StitchColors.primaryContainer }],
+                          { minWidth: 64, flex: 0, paddingHorizontal: 12, paddingVertical: 10 },
+                        ]}
+                        accessibilityRole="button"
+                        accessibilityLabel={`Blood group ${bg}`}
+                      >
+                        <Text
+                          style={[
+                            styles.genderOptionText,
+                            { color: isSelected ? '#FFFFFF' : colors.text, fontWeight: isSelected ? '700' : '500' },
+                          ]}
+                        >
+                          {bg}
+                        </Text>
+                      </Pressable>
+                    );
+                  })}
                 </View>
               </View>
 

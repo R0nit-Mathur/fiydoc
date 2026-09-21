@@ -15,14 +15,6 @@ export interface LocationHub {
 
 export const INDIAN_LOCATION_HUBS: LocationHub[] = [
   {
-    id: 'hub_all_india',
-    name: 'All Locations (Nationwide)',
-    city: 'All Locations',
-    state: 'India',
-    latitude: 0,
-    longitude: 0,
-  },
-  {
     id: 'hub_delhi_cp',
     name: 'Connaught Place, New Delhi',
     city: 'New Delhi',
@@ -167,7 +159,6 @@ interface LocationState {
   detectDeviceLocation: () => Promise<boolean>;
   setHub: (hub: LocationHub) => void;
   setManualLocation: (lat: number, lng: number, city: string, address: string, area?: string) => void;
-  setAllLocations: () => void;
 }
 
 export const useLocationStore = create<LocationState>()(
@@ -201,21 +192,25 @@ export const useLocationStore = create<LocationState>()(
           }
 
           let loc: Location.LocationObject | null = null;
+          // 1. Instant check: Try last known position first (0ms latency if cached)
           try {
-            const timeoutPromise = new Promise<null>((_, reject) =>
-              setTimeout(() => reject(new Error('Location request timed out')), 4000)
-            );
-            const locationPromise = Location.getCurrentPositionAsync({
-              accuracy: Platform.OS === 'android' ? Location.Accuracy.Balanced : Location.Accuracy.High,
-              timeInterval: 4000,
-            });
-            loc = (await Promise.race([locationPromise, timeoutPromise])) as Location.LocationObject;
-          } catch (posErr) {
-            console.warn('[useLocationStore] Primary position lock timed out/failed, falling back to last known position:', posErr);
+            loc = await Location.getLastKnownPositionAsync();
+          } catch {
+            loc = null;
+          }
+
+          // 2. If no recent cached position, request fresh position with fast timeout
+          if (!loc || !loc.coords) {
             try {
-              loc = await Location.getLastKnownPositionAsync();
-            } catch {
-              loc = null;
+              const timeoutPromise = new Promise<null>((_, reject) =>
+                setTimeout(() => reject(new Error('Location request timed out')), 2200)
+              );
+              const locationPromise = Location.getCurrentPositionAsync({
+                accuracy: Platform.OS === 'android' ? Location.Accuracy.Balanced : Location.Accuracy.Balanced,
+              });
+              loc = (await Promise.race([locationPromise, timeoutPromise])) as Location.LocationObject;
+            } catch (posErr) {
+              console.warn('[useLocationStore] Fresh position timed out, falling back:', posErr);
             }
           }
 
@@ -239,13 +234,12 @@ export const useLocationStore = create<LocationState>()(
           const { latitude, longitude } = loc.coords;
 
           // Reverse geocode to exact locality name like Zomato / Blinkit / Rapido
-          let cityName = 'Bengaluru';
-          let areaName = 'Indiranagar';
-          let localityName = 'Indiranagar, Bengaluru';
+          let cityName = 'New Delhi';
+          let areaName = 'Connaught Place';
+          let localityName = 'Connaught Place, New Delhi';
 
           try {
             if (Platform.OS === 'web') {
-              // Web: Use lightweight reverse geocode without triggering Expo SDK 49 web geocode removal warning
               try {
                 const res = await fetch(`https://nominatim.openstreetmap.org/reverse?format=json&lat=${latitude}&lon=${longitude}&zoom=16&addressdetails=1`, {
                   headers: { 'Accept': 'application/json' },
@@ -253,7 +247,7 @@ export const useLocationStore = create<LocationState>()(
                 if (res.ok) {
                   const data = await res.json();
                   const addr = data.address || {};
-                  cityName = addr.city || addr.town || addr.municipality || addr.state_district || 'Bengaluru';
+                  cityName = addr.city || addr.town || addr.municipality || addr.state_district || 'New Delhi';
                   areaName = addr.suburb || addr.neighbourhood || addr.residential || addr.road || cityName;
                   localityName = `${areaName}, ${cityName}`;
                 }
@@ -266,7 +260,6 @@ export const useLocationStore = create<LocationState>()(
                 const place = geocoded[0];
                 cityName = place.city || place.subregion || place.district || 'City Center';
 
-                // Extract clean pinpoint locality / neighborhood name
                 const candidateArea = [
                   place.street,
                   place.name,
@@ -283,7 +276,6 @@ export const useLocationStore = create<LocationState>()(
               }
             }
           } catch (e) {
-            // If reverse geocode fails, find closest Indian hub name mathematically
             let closestHub = INDIAN_LOCATION_HUBS[0];
             let minDiff = Infinity;
             for (const hub of INDIAN_LOCATION_HUBS) {
@@ -341,19 +333,6 @@ export const useLocationStore = create<LocationState>()(
           area: area || formattedAddress.split(',')[0].trim() || city,
           city,
           formattedAddress,
-          permissionStatus: 'granted',
-          isGenuineDeviceLocation: true,
-          error: null,
-        });
-      },
-
-      setAllLocations: () => {
-        set({
-          latitude: null,
-          longitude: null,
-          area: 'All India',
-          city: 'All Locations',
-          formattedAddress: 'All Doctors (Nationwide)',
           permissionStatus: 'granted',
           isGenuineDeviceLocation: true,
           error: null,

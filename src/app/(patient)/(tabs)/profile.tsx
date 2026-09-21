@@ -64,7 +64,7 @@ import { AppUpdateModal } from '@/components/ui/AppUpdateModal';
 import { StitchColors, BorderRadius, Shadows, Spacing, Palette } from '@/constants/theme';
 const AVATAR_PRESETS: string[] = [];
 
-// ... existing imports remain
+const ALL_BLOOD_GROUPS = ['A+', 'A-', 'B+', 'B-', 'AB+', 'AB-', 'O+', 'O-'] as const;
 
 import { calculateAgeFromDOB, formatHumanDate } from '@/utils/formatters';
 
@@ -728,14 +728,51 @@ export default function PatientProfileScreen() {
             </View>
 
             <View style={styles.inputGroup}>
-              <Text style={[styles.modalFieldLabel, { color: colors.textSecondary }]}>Blood Group</Text>
-              <TextInput
-                style={[styles.modalInput, { backgroundColor: colors.background, borderColor: colors.border, color: colors.text }]}
-                value={editBloodGroup}
-                onChangeText={setEditBloodGroup}
-                placeholder="O+, A+, B+, AB+"
-                placeholderTextColor={colors.textMuted}
-              />
+              <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 6 }}>
+                <Text style={[styles.modalFieldLabel, { color: colors.textSecondary, marginBottom: 0 }]}>
+                  Blood Group {editBloodGroup ? `(${editBloodGroup})` : ''}
+                </Text>
+                {editBloodGroup ? (
+                  <TouchableOpacity onPress={() => setEditBloodGroup('')} hitSlop={6}>
+                    <Text style={{ fontSize: 11, color: colors.textMuted, fontWeight: '600' }}>Clear</Text>
+                  </TouchableOpacity>
+                ) : null}
+              </View>
+              <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 8, marginTop: 4 }}>
+                {ALL_BLOOD_GROUPS.map((bg) => {
+                  const isSelected = editBloodGroup.toUpperCase() === bg;
+                  return (
+                    <TouchableOpacity
+                      key={bg}
+                      onPress={() => setEditBloodGroup(bg)}
+                      activeOpacity={0.75}
+                      style={{
+                        paddingVertical: 8,
+                        paddingHorizontal: 14,
+                        borderRadius: 10,
+                        backgroundColor: isSelected ? StitchColors.primaryContainer : colors.backgroundElement,
+                        borderWidth: 1,
+                        borderColor: isSelected ? StitchColors.primaryContainer : colors.border,
+                        alignItems: 'center',
+                        justifyContent: 'center',
+                        minWidth: 54,
+                      }}
+                      accessibilityRole="button"
+                      accessibilityLabel={`Blood Group ${bg}`}
+                    >
+                      <Text
+                        style={{
+                          fontSize: 13,
+                          fontWeight: isSelected ? '800' : '600',
+                          color: isSelected ? '#FFFFFF' : colors.text,
+                        }}
+                      >
+                        {bg}
+                      </Text>
+                    </TouchableOpacity>
+                  );
+                })}
+              </View>
             </View>
 
             <View style={styles.inputGroup}>

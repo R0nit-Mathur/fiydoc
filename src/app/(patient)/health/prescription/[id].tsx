@@ -15,6 +15,7 @@ import { useAuthStore } from '@/store/useAuthStore';
 import { apiClient } from '@/services/apiClient';
 import { Prescription } from '@/types/index';
 import { LoadingDialog } from '@/components/ui/LoadingDialog';
+import { Avatar } from '@/components/ui/Avatar';
 import { BorderRadius, Shadows, Spacing, StitchColors, Palette } from '@/constants/theme';
 import { useAppTheme } from '@/hooks/useAppTheme';
 import {
@@ -64,6 +65,7 @@ export default function DedicatedPrescriptionScreen() {
                 : `Dr. ${data.doctor.fullName}`
               : 'Licensed Doctor',
             doctorSpecialty: data.doctor?.specialization || 'Consultant Specialist',
+            doctorAvatar: data.doctor?.profilePhoto || data.doctor?.avatar || (data.doctor as any)?.user?.profilePhoto || data.doctorAvatar || null,
             doctorQualifications: data.doctor?.qualifications || data.doctorQualifications || undefined,
             doctorMciNumber:
               data.doctor?.verification?.registrationNumber ||
@@ -258,7 +260,12 @@ export default function DedicatedPrescriptionScreen() {
         {/* 1. Official Clinic Letterhead */}
         <View style={styles.letterhead}>
           <View style={styles.letterheadTop}>
-            <View style={{ flex: 1, minWidth: 0 }}>
+            <Avatar
+              uri={rx?.doctorAvatar}
+              name={rx?.doctorName || 'Dr. Specialist'}
+              size="lg"
+            />
+            <View style={{ flex: 1, minWidth: 0, marginLeft: 12 }}>
               <Text style={styles.clinicName} numberOfLines={1}>
                 {rx?.clinicName || 'FiYDoc Healthcare Clinic'}
               </Text>

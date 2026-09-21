@@ -17,6 +17,7 @@ import { useAppointmentDetailQuery } from '@/hooks/queries/useAppointmentsQuery'
 import { useAppointmentStore } from '@/store/useAppointmentStore';
 import { Button } from '@/components/ui/Button';
 import { Badge } from '@/components/ui/Badge';
+import { Avatar } from '@/components/ui/Avatar';
 import { FiYLogo } from '@/components/ui/FiYLogo';
 import { ConfirmationDialog } from '@/components/ui/ConfirmationDialog';
 import { ConfirmationAnimation } from '@/components/ui/ConfirmationAnimation';
@@ -134,18 +135,25 @@ export default function BookingSuccessScreen() {
             </View>
 
             {/* Doctor Info */}
-            <View style={{ gap: 2 }}>
-              <Text style={[styles.doctorName, { color: colors.text }]}>
-                {apt?.doctorName || 'Dr. Specialist'}
-              </Text>
-              <Text style={[styles.doctorSpecialty, { color: StitchColors.secondaryContainer }]}>
-                {apt?.doctorSpecialty || 'Specialist Consultant'}
-              </Text>
-              <View style={styles.clinicRow}>
-                <Building2 size={13} color={colors.textMuted} />
-                <Text style={[styles.clinicName, { color: colors.textSecondary }]} numberOfLines={1}>
-                  {apt?.hospital || 'FiYDoc Healthcare Clinic'}
+            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 12 }}>
+              <Avatar
+                uri={apt?.doctorAvatar || (apt as any)?.doctor?.profilePhoto || (apt as any)?.doctor?.avatar || (apt as any)?.profilePhoto || null}
+                name={apt?.doctorName || 'Doctor'}
+                size="md"
+              />
+              <View style={{ flex: 1, gap: 2 }}>
+                <Text style={[styles.doctorName, { color: colors.text }]}>
+                  {apt?.doctorName || 'Dr. Specialist'}
                 </Text>
+                <Text style={[styles.doctorSpecialty, { color: StitchColors.secondaryContainer }]}>
+                  {apt?.doctorSpecialty || 'Specialist Consultant'}
+                </Text>
+                <View style={styles.clinicRow}>
+                  <Building2 size={13} color={colors.textMuted} />
+                  <Text style={[styles.clinicName, { color: colors.textSecondary }]} numberOfLines={1}>
+                    {apt?.hospital || 'FiYDoc Healthcare Clinic'}
+                  </Text>
+                </View>
               </View>
             </View>
 

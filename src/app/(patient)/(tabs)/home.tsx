@@ -96,6 +96,7 @@ export default function PatientHomeScreen() {
   const [guideModalVisible, setGuideModalVisible] = useState(false);
   const [updateModalVisible, setUpdateModalVisible] = useState(false);
   const [refreshing, setRefreshing] = useState(false);
+  const [refreshKey, setRefreshKey] = useState(0);
   const hasPromptedGuideRef = useRef(false);
 
   const { formattedAddress, city, area, permissionStatus } = useLocationStore();
@@ -118,6 +119,7 @@ export default function PatientHomeScreen() {
         refetchDoctors(),
         refetchAppointments(),
       ]);
+      setRefreshKey((k) => k + 1);
     } finally {
       setRefreshing(false);
     }
@@ -214,6 +216,21 @@ export default function PatientHomeScreen() {
           </Pressable>
           <View style={styles.headerRightRow}>
             <Pressable
+              onPress={handleRefresh}
+              disabled={refreshing}
+              hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+              style={({ pressed }) => [
+                styles.headerIconButton,
+                pressed && styles.headerIconPressed,
+              ]}
+              accessibilityLabel="Refresh data and reanimate components"
+            >
+              <RefreshCw
+                size={18}
+                color={refreshing ? StitchColors.primary : StitchColors.onSurface}
+              />
+            </Pressable>
+            <Pressable
               onPress={() => router.push('/(patient)/notifications')}
               hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
               style={({ pressed }) => [
@@ -251,7 +268,7 @@ export default function PatientHomeScreen() {
         }
       >
         {/* 1. Greeting & Location Header */}
-        <View style={styles.greetingSection}>
+        <Animated.View key={`greeting-${refreshKey}`} entering={FadeInDown.duration(300)} style={styles.greetingSection}>
           <View style={styles.locationRow}>
             <Pressable
               onPress={() => {
@@ -300,7 +317,7 @@ export default function PatientHomeScreen() {
               </Text>
             </Pressable>
           </View>
-        </View>
+        </Animated.View>
 
         {/* 2. Upcoming Clinic Visit Card (Dynamic from Appointments Store) */}
         {isLoadingAppointments ? (
@@ -318,7 +335,7 @@ export default function PatientHomeScreen() {
               onPress={() => router.push('/(patient)/(tabs)/appointments')}
               style={({ pressed }) => pressed && { transform: [{ scale: 0.99 }] }}
             >
-              <Animated.View entering={FadeInDown.delay(60).duration(380)} style={styles.upcomingCard}>
+              <Animated.View key={`upcoming-${refreshKey}`} entering={FadeInDown.delay(60).duration(380)} style={styles.upcomingCard}>
                 <View style={styles.upcomingHeader}>
                   <View style={styles.upcomingHeaderLeft}>
                     <View style={styles.upcomingPulse} />
@@ -331,18 +348,22 @@ export default function PatientHomeScreen() {
                 </View>
 
                 <View style={styles.doctorRow}>
-                  {upcomingAppointment.doctorAvatar ? (
-                    <Image
-                      source={{ uri: upcomingAppointment.doctorAvatar }}
-                      style={styles.doctorAvatar}
-                    />
-                  ) : (
-                    <View style={[styles.doctorAvatar, { backgroundColor: '#e2e8f0', alignItems: 'center', justifyContent: 'center' }]}>
-                      <Text style={{ fontSize: 16, fontWeight: '700', color: '#64748b' }}>
-                        {upcomingAppointment.doctorName?.charAt(0) || 'D'}
-                      </Text>
-                    </View>
-                  )}
+                  {(() => {
+                    const docPhoto = upcomingAppointment.doctorAvatar || (upcomingAppointment as any).doctor?.profilePhoto || (upcomingAppointment as any).doctor?.avatar || (upcomingAppointment as any).profilePhoto;
+                    return docPhoto ? (
+                      <Image
+                        source={{ uri: docPhoto }}
+                        style={styles.doctorAvatar}
+                        resizeMode="cover"
+                      />
+                    ) : (
+                      <View style={[styles.doctorAvatar, { backgroundColor: '#e2e8f0', alignItems: 'center', justifyContent: 'center' }]}>
+                        <Text style={{ fontSize: 16, fontWeight: '700', color: '#64748b' }}>
+                          {upcomingAppointment.doctorName?.charAt(0) || 'D'}
+                        </Text>
+                      </View>
+                    );
+                  })()}
                   <View style={styles.flex1}>
                     <View style={styles.doctorNameRow}>
                       <Text style={styles.doctorName}>{upcomingAppointment.doctorName}</Text>
@@ -394,7 +415,7 @@ export default function PatientHomeScreen() {
               onPress={() => router.push(`/(patient)/doctor/${doctors[0].id}`)}
               style={({ pressed }) => pressed && { transform: [{ scale: 0.99 }] }}
             >
-              <Animated.View entering={FadeInDown.delay(60).duration(380)} style={styles.upcomingCard}>
+              <Animated.View key={`featured-${refreshKey}`} entering={FadeInDown.delay(60).duration(380)} style={styles.upcomingCard}>
                 <View style={styles.upcomingHeader}>
                   <View style={styles.upcomingHeaderLeft}>
                     <View style={styles.upcomingPulse} />
@@ -407,18 +428,22 @@ export default function PatientHomeScreen() {
                 </View>
 
                 <View style={styles.doctorRow}>
-                  {doctors[0].avatar ? (
-                    <Image
-                      source={{ uri: doctors[0].avatar }}
-                      style={styles.doctorAvatar}
-                    />
-                  ) : (
-                    <View style={[styles.doctorAvatar, { backgroundColor: '#e2e8f0', alignItems: 'center', justifyContent: 'center' }]}>
-                      <Text style={{ fontSize: 16, fontWeight: '700', color: '#64748b' }}>
-                        {doctors[0].name?.charAt(0) || 'D'}
-                      </Text>
-                    </View>
-                  )}
+                  {(() => {
+                    const docPhoto = doctors[0].avatar || doctors[0].profilePhoto || (doctors[0] as any).avatarUrl || (doctors[0] as any).user?.profilePhoto;
+                    return docPhoto ? (
+                      <Image
+                        source={{ uri: docPhoto }}
+                        style={styles.doctorAvatar}
+                        resizeMode="cover"
+                      />
+                    ) : (
+                      <View style={[styles.doctorAvatar, { backgroundColor: '#e2e8f0', alignItems: 'center', justifyContent: 'center' }]}>
+                        <Text style={{ fontSize: 16, fontWeight: '700', color: '#64748b' }}>
+                          {doctors[0].name?.charAt(0) || 'D'}
+                        </Text>
+                      </View>
+                    );
+                  })()}
                   <View style={styles.flex1}>
                     <View style={styles.doctorNameRow}>
                       <Text style={styles.doctorName}>{doctors[0].name}</Text>
@@ -464,7 +489,7 @@ export default function PatientHomeScreen() {
         ) : null}
 
         {/* 3. Find by Specialty Section */}
-        <Animated.View entering={FadeInUp.delay(100).duration(380)} style={styles.sectionSpacer}>
+        <Animated.View key={`specialties-${refreshKey}`} entering={FadeInUp.delay(100).duration(380)} style={styles.sectionSpacer}>
           <View style={styles.specialtiesHeader}>
             <View>
               <Text style={styles.specialtiesTitle}>Find by Specialty</Text>
@@ -533,7 +558,7 @@ export default function PatientHomeScreen() {
         </Animated.View>
 
         {/* 4. Top Rated Doctors Available Today Section */}
-        <Animated.View entering={FadeInUp.delay(140).duration(380)} style={styles.sectionSpacer}>
+        <Animated.View key={`topdocs-${refreshKey}`} entering={FadeInUp.delay(140).duration(380)} style={styles.sectionSpacer}>
           <View style={styles.specialtiesHeader}>
             <View>
               <Text style={styles.specialtiesTitle}>Top Doctors Available Today</Text>
@@ -868,6 +893,8 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     paddingHorizontal: 12,
     paddingVertical: 6,
+    height: 32,
+    maxWidth: '75%',
     borderRadius: BorderRadius.full,
     backgroundColor: '#f1f5f9',
   },
@@ -880,6 +907,7 @@ const styles = StyleSheet.create({
     fontWeight: '600',
     color: '#1e293b',
     marginHorizontal: 5,
+    flexShrink: 1,
   },
   greetingBlock: {
     marginTop: 2,

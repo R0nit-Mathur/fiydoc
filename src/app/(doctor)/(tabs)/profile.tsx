@@ -108,6 +108,8 @@ export default function DoctorProfileScreen() {
   const [showEditProfileModal, setShowEditProfileModal] = useState(false);
   const [tempName, setTempName] = useState(docName);
   const [tempSpec, setTempSpec] = useState(docSpec);
+  const [docExperience, setDocExperience] = useState<string>((user as any)?.experienceYears ? String((user as any).experienceYears) : '');
+  const [tempExperience, setTempExperience] = useState<string>((user as any)?.experienceYears ? String((user as any).experienceYears) : '');
   const [tempAvatar, setTempAvatar] = useState(docAvatar);
   const [tempQual, setTempQual] = useState(user?.qualification || '');
   const [tempClinicName, setTempClinicName] = useState(user?.clinicName || '');
@@ -140,14 +142,17 @@ export default function DoctorProfileScreen() {
       const cAddr = data.clinic?.address || data.clinicAddress || user?.clinicAddress || '';
       const cTimings = data.clinicTimings || user?.clinicTimings || '10:30 AM – 1:30 PM • 5:00 PM – 8:00 PM';
       const qual = data.qualification || user?.qualification || '';
+      const resolvedExp = data.experienceYears != null ? String(data.experienceYears) : (user?.experienceYears != null ? String(user.experienceYears) : '');
 
       setDocName(resolvedName);
       setDocSpec(resolvedSpec);
       setDocAvatar(resolvedAvatar);
+      setDocExperience(resolvedExp);
       setOpdFee(resolvedFee);
       setTempName(resolvedName);
       setTempSpec(resolvedSpec);
       setTempAvatar(resolvedAvatar);
+      setTempExperience(resolvedExp);
       setTempFee(resolvedFee);
       setTempQual(qual);
       setTempClinicName(cName);
@@ -164,6 +169,7 @@ export default function DoctorProfileScreen() {
         clinicName: cName,
         clinicAddress: cAddr,
         clinicTimings: cTimings,
+        experienceYears: resolvedExp ? Number(resolvedExp) : undefined,
       });
     } catch (err) {
       console.warn('[DoctorProfile] Failed to load server profile:', err);
@@ -343,6 +349,7 @@ export default function DoctorProfileScreen() {
           clinicName: cleanClinicName,
           clinicAddress: cleanClinicAddress,
           clinicTimings: cleanClinicTimings,
+          experienceYears: tempExperience ? Number(tempExperience) : 0,
         });
         await queryClient.invalidateQueries({ queryKey: ['doctors'] });
         await queryClient.invalidateQueries({ queryKey: ['doctor'] });
@@ -355,6 +362,7 @@ export default function DoctorProfileScreen() {
       setDocName(cleanName);
       setDocSpec(cleanSpec);
       setDocAvatar(finalAvatarUrl);
+      setDocExperience(tempExperience);
       updateUser({
         name: cleanName,
         specialization: cleanSpec,
@@ -364,6 +372,7 @@ export default function DoctorProfileScreen() {
         clinicName: cleanClinicName,
         clinicAddress: cleanClinicAddress,
         clinicTimings: cleanClinicTimings,
+        experienceYears: tempExperience ? Number(tempExperience) : 0,
       });
       setShowEditProfileModal(false);
       useNotificationStore.getState().addNotification({
@@ -394,6 +403,7 @@ export default function DoctorProfileScreen() {
             setTempClinicName(user?.clinicName || '');
             setTempClinicAddress(user?.clinicAddress || '');
             setTempClinicTimings(user?.clinicTimings || '10:30 AM – 1:30 PM • 5:00 PM – 8:00 PM');
+            setTempExperience(docExperience);
             setShowEditProfileModal(true);
           }}
           style={[styles.editIconBtn, { backgroundColor: colors.backgroundElement }]}
@@ -475,10 +485,18 @@ export default function DoctorProfileScreen() {
               <View style={styles.verifiedTagRow}>
                 <View style={[styles.verifiedTag, { backgroundColor: '#CCFBF1' }]}>
                   <ShieldCheck size={13} color={StitchColors.secondary} />
-              <Text style={styles.verifiedTagText}>
-                {user?.verificationStatus === 'verified' ? 'Verified clinician' : 'Profile details saved'}
-              </Text>
+                  <Text style={styles.verifiedTagText}>
+                    {user?.verificationStatus === 'verified' ? 'Verified clinician' : 'Profile details saved'}
+                  </Text>
                 </View>
+                {docExperience ? (
+                  <View style={[styles.verifiedTag, { backgroundColor: '#FEF3C7', marginLeft: 6 }]}>
+                    <Clock size={12} color="#D97706" />
+                    <Text style={[styles.verifiedTagText, { color: '#B45309' }]}>
+                      {docExperience} yrs exp
+                    </Text>
+                  </View>
+                ) : null}
               </View>
             </View>
           </View>
@@ -950,6 +968,18 @@ export default function DoctorProfileScreen() {
                 <TextInput
                   value={tempSpec}
                   onChangeText={setTempSpec}
+                  style={[styles.upiTextInput, { color: colors.text, borderColor: colors.border }]}
+                />
+              </View>
+
+              <View>
+                <Text style={[styles.inputLabel, { color: colors.textSecondary }]}>Experience (Years)</Text>
+                <TextInput
+                  value={tempExperience}
+                  onChangeText={setTempExperience}
+                  placeholder="e.g. 10"
+                  placeholderTextColor={colors.textMuted}
+                  keyboardType="numeric"
                   style={[styles.upiTextInput, { color: colors.text, borderColor: colors.border }]}
                 />
               </View>

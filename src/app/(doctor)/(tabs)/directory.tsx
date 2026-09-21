@@ -62,8 +62,8 @@ interface PatientRecord {
   initials: string;
   bloodGroup: string;
   name: string;
-  age: number;
-  gender: 'Male' | 'Female';
+  age: number | string;
+  gender: string;
   uhid: string;
   lastVisit: string;
   lastVisitReason: string;
@@ -117,37 +117,63 @@ export default function DoctorPatientsScreen() {
       const key = apt.patientId || apt.patientName || apt.id;
       byPatient.set(key, [...(byPatient.get(key) || []), apt]);
     });
+
+    const computeAge = (dobString?: string, directAge?: number): string | number => {
+      if (directAge && directAge > 0) return directAge;
+      if (!dobString) return '—';
+      try {
+        let dob: Date;
+        if (dobString.includes('/')) {
+          const [d, m, y] = dobString.split('/');
+          dob = new Date(`${y}-${m}-${d}`);
+        } else {
+          dob = new Date(dobString);
+        }
+        if (isNaN(dob.getTime())) return '—';
+        const calculated = Math.floor((Date.now() - dob.getTime()) / (365.25 * 24 * 60 * 60 * 1000));
+        return calculated > 0 ? calculated : '—';
+      } catch {
+        return '—';
+      }
+    };
+
     return [...byPatient.entries()].map(([patientKey, patientAppointments]) => {
       const sortedVisits = [...patientAppointments].sort((a, b) => `${b.date} ${b.time}`.localeCompare(`${a.date} ${a.time}`));
       const apt = sortedVisits[0];
+
+      const hasPriorVisits = sortedVisits.length > 1;
+      const priorVisit = hasPriorVisits ? sortedVisits[1] : null;
+      const lastVisit = priorVisit ? `${priorVisit.date} • ${priorVisit.time}` : 'First Consultation · New Patient';
+      const lastVisitReason = priorVisit ? (priorVisit.symptoms?.join(', ') || 'Previous OPD') : '';
+
       return {
-      id: patientKey,
-      latestAppointmentId: apt.id,
-      initials: (apt.patientName || 'Patient').split(' ').map((n: string) => n[0]).join('').slice(0, 2).toUpperCase(),
-      bloodGroup: 'B+',
-      name: apt.patientName || 'Registered Patient',
-      age: 32,
-      gender: 'Male' as const,
-      uhid: `#${apt.tokenNumber || '101'}`,
-      lastVisit: `${apt.date} • ${apt.time}`,
-      lastVisitReason: (apt.symptoms && apt.symptoms.length > 0) ? apt.symptoms.join(', ') : 'OPD Consultation',
-      category: 'recent' as const,
-      tags: [
-        { label: apt.status === 'confirmed' ? 'Confirmed' : 'Active OPD', variant: 'teal' as const },
-        { label: apt.mode === 'video' ? 'Video Consult' : 'In-Clinic OPD', variant: 'blue' as const },
-      ],
-      statusLabel: apt.status.toUpperCase(),
-      statusVariant: 'teal' as const,
-      actionPrimary: 'Start Consultation',
-      actionSecondary: 'Day-wise history',
-      visits: sortedVisits.map((visit) => ({
-        id: visit.id,
-        date: visit.date,
-        time: visit.time,
-        reason: visit.symptoms?.join(', ') || 'OPD Consultation',
-        status: visit.status,
-      })),
-    };
+        id: patientKey,
+        latestAppointmentId: apt.id,
+        initials: (apt.patientName || 'Patient').split(' ').map((n: string) => n[0]).join('').slice(0, 2).toUpperCase(),
+        bloodGroup: apt.patientBloodGroup || (apt as any).patient?.bloodGroup || '—',
+        name: apt.patientName || 'Registered Patient',
+        age: computeAge(apt.patientDob, apt.patientAge),
+        gender: apt.patientGender || (apt as any).patient?.gender || 'Not specified',
+        uhid: `#${apt.tokenNumber || '101'}`,
+        lastVisit,
+        lastVisitReason,
+        category: 'recent' as const,
+        tags: [
+          { label: apt.status === 'confirmed' ? 'Confirmed' : 'Active OPD', variant: 'teal' as const },
+          { label: apt.mode === 'video' ? 'Video Consult' : 'In-Clinic OPD', variant: 'blue' as const },
+        ],
+        statusLabel: apt.status.toUpperCase(),
+        statusVariant: 'teal' as const,
+        actionPrimary: 'Start Consultation',
+        actionSecondary: 'Day-wise history',
+        visits: sortedVisits.map((visit) => ({
+          id: visit.id,
+          date: visit.date,
+          time: visit.time,
+          reason: visit.symptoms?.join(', ') || 'OPD Consultation',
+          status: visit.status,
+        })),
+      };
     });
   }, [appointments]);
 
@@ -411,7 +437,7 @@ export default function DoctorPatientsScreen() {
                     <ShieldCheck size={14} color={StitchColors.primaryContainer} />
                   </View>
                   <Text style={[styles.patientCardDemog, { color: colors.textSecondary }]}>
-                    {patient.age} Yrs, {patient.gender} • <Text style={{ fontFamily: Platform.OS === 'ios' ? 'Courier' : 'monospace', color: colors.textMuted }}>UHID: {patient.uhid}</Text>
+                    {patient.age && patient.age !== '—' ? `${patient.age} Yrs, ` : ''}{patient.gender} • <Text style={{ fontFamily: Platform.OS === 'ios' ? 'Courier' : 'monospace', color: colors.textMuted }}>UHID: {patient.uhid}</Text>
                   </Text>
                 </View>
 
@@ -427,7 +453,11 @@ export default function DoctorPatientsScreen() {
               <View style={[styles.visitSummaryStrip, { backgroundColor: colors.backgroundElement }]}>
                 <Clock size={14} color={StitchColors.secondaryContainer} />
                 <Text style={[styles.visitSummaryText, { color: colors.textSecondary }]}>
-                  Last Visit: <Text style={{ color: colors.text, fontWeight: '700' }}>{patient.lastVisit}</Text> ({patient.lastVisitReason})
+                  {patient.lastVisitReason ? (
+                    <>Last Visit: <Text style={{ color: colors.text, fontWeight: '700' }}>{patient.lastVisit}</Text> ({patient.lastVisitReason})</>
+                  ) : (
+                    <Text style={{ color: colors.text, fontWeight: '700' }}>{patient.lastVisit}</Text>
+                  )}
                 </Text>
               </View>
 
