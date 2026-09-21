@@ -35,7 +35,6 @@ import {
   CreditCard,
   Building2,
   Clock,
-  Timer,
   FileSignature,
   GraduationCap,
   BadgeAlert,
@@ -117,16 +116,7 @@ export default function DoctorProfileScreen() {
   const [tempClinicTimings, setTempClinicTimings] = useState(user?.clinicTimings || '10:30 AM – 1:30 PM • 5:00 PM – 8:00 PM');
   const [viewerAvatarVisible, setViewerAvatarVisible] = useState(false);
 
-  // Interactive OPD Shifts & Consultation Cadence state
-  const [showShiftsModal, setShowShiftsModal] = useState(false);
-  const [tempMorningShift, setTempMorningShift] = useState('10:30 AM – 01:30 PM');
-  const [tempEveningShift, setTempEveningShift] = useState('05:00 PM – 08:00 PM');
-  const [showCadenceModal, setShowCadenceModal] = useState(false);
-  const [slotDuration, setSlotDuration] = useState('15');
-  const [bufferTime, setBufferTime] = useState('5');
-  const [savingCadence, setSavingCadence] = useState(false);
   const [savingDocFee, setSavingDocFee] = useState(false);
-  const [savingDocShifts, setSavingDocShifts] = useState(false);
   const [savingDocProfile, setSavingDocProfile] = useState(false);
   const [refreshing, setRefreshing] = useState(false);
 
@@ -253,69 +243,6 @@ export default function DoctorProfileScreen() {
     if (Platform.OS !== 'web') Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
   };
 
-  const handleSaveShifts = async () => {
-    setSavingDocShifts(true);
-    try {
-      const combinedTimings = `${tempMorningShift.trim()} • ${tempEveningShift.trim()}`;
-      setTempClinicTimings(combinedTimings);
-      updateUser({ clinicTimings: combinedTimings });
-      try {
-        await doctorService.updateMyProfile({ clinicTimings: combinedTimings });
-        Alert.alert('Success', 'Practice shifts updated.');
-      } catch (err: any) {
-        Alert.alert('Notice', err?.message || 'Failed to sync shifts to server.');
-      }
-      setShowShiftsModal(false);
-      useNotificationStore.getState().addNotification({
-        title: 'Practice Shifts Updated',
-        message: `Your OPD timings are now configured as ${combinedTimings}.`,
-        type: 'profile_updated',
-        recipientRole: 'doctor',
-        recipientId: user?.id,
-      });
-      if (Platform.OS !== 'web') Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
-    } finally {
-      setSavingDocShifts(false);
-    }
-  };
-
-  const handleSaveCadence = async () => {
-    setShowCadenceModal(false);
-    setSavingCadence(true);
-    try {
-      const dur = Number(slotDuration) || 15;
-      const buf = Number(bufferTime) || 0;
-      await doctorService.updateMyProfile({
-        slotDurationMinutes: dur,
-        bufferMinutes: buf,
-      });
-
-      // Synchronize all appointment, slot, and doctor caches across patient & doctor contexts
-      await queryClient.invalidateQueries({ queryKey: ['doctor-slots'] });
-      await queryClient.invalidateQueries({ queryKey: ['doctor-schedule-week'] });
-      await queryClient.invalidateQueries({ queryKey: ['doctor'] });
-      await queryClient.invalidateQueries({ queryKey: ['doctors'] });
-      await queryClient.invalidateQueries({ queryKey: ['appointments'] });
-
-      useNotificationStore.getState().addNotification({
-        title: 'Consultation Cadence Synchronized',
-        message: `OPD slots recalculated to ${dur} mins with ${buf} min buffer. Active bookings notified.`,
-        type: 'profile_updated',
-        recipientRole: 'doctor',
-        recipientId: user?.id,
-      });
-
-      if (Platform.OS !== 'web') Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
-      Alert.alert(
-        'Cadence Updated',
-        `Your OPD slot timing has been updated to ${dur} minutes (${buf}m buffer). All booked patient schedules have been recalculated.`
-      );
-    } catch (err: any) {
-      Alert.alert('Notice', err?.message || 'Failed to update cadence on server.');
-    } finally {
-      setSavingCadence(false);
-    }
-  };
 
   const handleSaveProfile = async () => {
     setSavingDocProfile(true);
@@ -688,39 +615,7 @@ export default function DoctorProfileScreen() {
               <ChevronRight size={16} color={colors.textMuted} />
             </Pressable>
 
-            <Pressable
-              onPress={() => {
-                const timings = user?.clinicTimings || '10:30 AM – 1:30 PM • 5:00 PM – 8:00 PM';
-                const parts = timings.split(/[•,;]/);
-                setTempMorningShift(parts[0]?.trim() || '10:30 AM – 01:30 PM');
-                setTempEveningShift(parts[1]?.trim() || '05:00 PM – 08:00 PM');
-                setShowShiftsModal(true);
-              }}
-              style={[styles.groupItem, { borderTopColor: colors.border, borderTopWidth: StyleSheet.hairlineWidth }]}
-            >
-              <Clock size={18} color={StitchColors.primaryContainer} />
-              <View style={{ flex: 1, marginLeft: 12 }}>
-                <Text style={[styles.groupItemSub, { color: colors.textSecondary }]}>OPD Working Shifts</Text>
-                <Text style={[styles.groupItemMain, { color: colors.text }]}>
-                  {user?.clinicTimings || '10:30 AM – 1:30 PM • 5:00 PM – 8:00 PM'}
-                </Text>
-              </View>
-              <ChevronRight size={16} color={colors.textMuted} />
-            </Pressable>
 
-            <Pressable
-              onPress={() => setShowCadenceModal(true)}
-              style={[styles.groupItem, { borderTopColor: colors.border, borderTopWidth: StyleSheet.hairlineWidth }]}
-            >
-              <Timer size={18} color={StitchColors.primaryContainer} />
-              <View style={{ flex: 1, marginLeft: 12 }}>
-                <Text style={[styles.groupItemSub, { color: colors.textSecondary }]}>Consultation Cadence</Text>
-                <Text style={[styles.groupItemMain, { color: colors.text }]}>
-                  {slotDuration} Mins / Patient (Buffer: {bufferTime} Mins)
-                </Text>
-              </View>
-              <ChevronRight size={16} color={colors.textMuted} />
-            </Pressable>
 
             <View style={[styles.groupItem, { borderTopColor: colors.border, borderTopWidth: StyleSheet.hairlineWidth }]}>
               <FileSignature size={18} color={StitchColors.secondary} />
@@ -1061,132 +956,6 @@ export default function DoctorProfileScreen() {
         </View>
       </Modal>
 
-      {/* MODAL 5: Edit OPD Working Shifts */}
-      <Modal visible={showShiftsModal} transparent animationType="fade">
-        <View style={styles.modalBackdrop}>
-          <View style={[styles.modalCard, { backgroundColor: colors.card, borderColor: colors.border }]}>
-            <View style={styles.modalHeader}>
-              <Text style={[styles.modalTitle, { color: colors.text }]}>Edit OPD Working Shifts</Text>
-              <Pressable onPress={() => setShowShiftsModal(false)}>
-                <X size={18} color={colors.text} />
-              </Pressable>
-            </View>
-            <Text style={[styles.modalSub, { color: colors.textSecondary }]}>
-              Configure your daily morning and evening clinical shifts for patient appointment allocation.
-            </Text>
-
-            <View style={{ gap: 12, marginVertical: 12 }}>
-              <View>
-                <Text style={[styles.inputLabel, { color: colors.textSecondary }]}>Morning OPD Shift Hours</Text>
-                <TextInput
-                  value={tempMorningShift}
-                  onChangeText={setTempMorningShift}
-                  placeholder="e.g. 10:30 AM – 01:30 PM"
-                  placeholderTextColor={colors.textMuted}
-                  style={[styles.upiTextInput, { color: colors.text, borderColor: colors.border }]}
-                />
-              </View>
-
-              <View>
-                <Text style={[styles.inputLabel, { color: colors.textSecondary }]}>Evening OPD Shift Hours</Text>
-                <TextInput
-                  value={tempEveningShift}
-                  onChangeText={setTempEveningShift}
-                  placeholder="e.g. 05:00 PM – 08:00 PM"
-                  placeholderTextColor={colors.textMuted}
-                  style={[styles.upiTextInput, { color: colors.text, borderColor: colors.border }]}
-                />
-              </View>
-            </View>
-
-            <Pressable
-              onPress={handleSaveShifts}
-              disabled={savingDocShifts}
-              style={[styles.modalSaveBtn, { backgroundColor: StitchColors.primaryContainer }]}
-            >
-              {savingDocShifts ? (
-                <ActivityIndicator size="small" color="#FFFFFF" />
-              ) : (
-                <>
-                  <Check size={16} color="#FFFFFF" />
-                  <Text style={styles.modalSaveBtnText}>Save Shift Timings</Text>
-                </>
-              )}
-            </Pressable>
-          </View>
-        </View>
-      </Modal>
-
-      {/* MODAL 6: Edit Consultation Cadence */}
-      <Modal visible={showCadenceModal} transparent animationType="fade">
-        <View style={styles.modalBackdrop}>
-          <View style={[styles.modalCard, { backgroundColor: colors.card, borderColor: colors.border }]}>
-            <View style={styles.modalHeader}>
-              <Text style={[styles.modalTitle, { color: colors.text }]}>Consultation Cadence</Text>
-              <Pressable onPress={() => setShowCadenceModal(false)}>
-                <X size={18} color={colors.text} />
-              </Pressable>
-            </View>
-            <Text style={[styles.modalSub, { color: colors.textSecondary }]}>
-              Set the standard time allocated per patient and transit buffer between consecutive tokens.
-            </Text>
-
-            <View style={{ gap: 14, marginVertical: 12 }}>
-              <View>
-                <Text style={[styles.inputLabel, { color: colors.textSecondary }]}>Slot Duration (Minutes)</Text>
-                <View style={{ flexDirection: 'row', gap: 8, marginTop: 4 }}>
-                  {['10', '15', '20', '30'].map((mins) => (
-                    <Pressable
-                      key={mins}
-                      onPress={() => setSlotDuration(mins)}
-                      style={[
-                        styles.cycleTab,
-                        { flex: 1, paddingVertical: 8, borderRadius: 8, borderWidth: 1, alignItems: 'center' },
-                        slotDuration === mins
-                          ? { backgroundColor: StitchColors.primaryContainer, borderColor: StitchColors.primaryContainer }
-                          : { backgroundColor: colors.backgroundElement, borderColor: colors.border },
-                      ]}
-                    >
-                      <Text style={{ fontSize: 13, fontWeight: '700', color: slotDuration === mins ? '#FFFFFF' : colors.text }}>
-                        {mins} min
-                      </Text>
-                    </Pressable>
-                  ))}
-                </View>
-              </View>
-
-              <View>
-                <Text style={[styles.inputLabel, { color: colors.textSecondary }]}>Buffer Time Between Tokens</Text>
-                <View style={{ flexDirection: 'row', gap: 8, marginTop: 4 }}>
-                  {['0', '5', '10'].map((buf) => (
-                    <Pressable
-                      key={buf}
-                      onPress={() => setBufferTime(buf)}
-                      style={[
-                        styles.cycleTab,
-                        { flex: 1, paddingVertical: 8, borderRadius: 8, borderWidth: 1, alignItems: 'center' },
-                        bufferTime === buf
-                          ? { backgroundColor: StitchColors.primaryContainer, borderColor: StitchColors.primaryContainer }
-                          : { backgroundColor: colors.backgroundElement, borderColor: colors.border },
-                      ]}
-                    >
-                      <Text style={{ fontSize: 13, fontWeight: '700', color: bufferTime === buf ? '#FFFFFF' : colors.text }}>
-                        {buf} min
-                      </Text>
-                    </Pressable>
-                  ))}
-                </View>
-              </View>
-            </View>
-
-            <Pressable onPress={handleSaveCadence} style={[styles.modalSaveBtn, { backgroundColor: StitchColors.primaryContainer }]}>
-              <Check size={16} color="#FFFFFF" />
-              <Text style={styles.modalSaveBtnText}>Save Cadence</Text>
-            </Pressable>
-          </View>
-        </View>
-      </Modal>
-
       <AppUpdateModal
         visible={showUpdateModal}
         onClose={() => setShowUpdateModal(false)}
@@ -1199,13 +968,6 @@ export default function DoctorProfileScreen() {
         subtitle="Medical Practitioner Profile"
         documentUrl={docAvatar}
         onClose={() => setViewerAvatarVisible(false)}
-      />
-
-      {/* Cadence Recalculation Blocking Dialog */}
-      <LoadingDialog
-        visible={savingCadence}
-        title="Updating Cadence..."
-        message="Recalculating OPD slots and synchronizing schedule with server..."
       />
     </SafeAreaView>
   );

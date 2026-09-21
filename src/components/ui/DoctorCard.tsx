@@ -29,8 +29,8 @@ export function DoctorCard({
   doctor,
   onPress,
   onBookPress,
-  tokenNumber,
-  nextSlot = 'Next Available Slot',
+  tokenNumber = doctor.nextAvailableToken,
+  nextSlot = doctor.nextAvailableSlot || 'Next Available Slot',
 }: DoctorCardProps) {
   const [isFavorite, setIsFavorite] = useState(false);
 

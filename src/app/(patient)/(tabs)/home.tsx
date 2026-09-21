@@ -588,14 +588,14 @@ export default function PatientHomeScreen() {
                 <DoctorCardSkeleton />
               </>
             ) : (
-              doctors.slice(0, 3).map((doc, idx) => (
+              doctors.slice(0, 3).map((doc) => (
                 <DoctorCard
                   key={doc.id}
                   doctor={doc}
                   onPress={() => router.push(`/(patient)/doctor/${doc.id}`)}
                   onBookPress={() => router.push(`/(patient)/doctor/${doc.id}`)}
-                  tokenNumber={`Token #${10 + idx}`}
-                  nextSlot="Today, 04:15 PM"
+                  tokenNumber={doc.nextAvailableToken}
+                  nextSlot={doc.nextAvailableSlot || 'Next Available Slot'}
                 />
               ))
             )}

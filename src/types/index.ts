@@ -56,6 +56,7 @@ export interface Doctor {
   verificationStatus: 'registered' | 'pending' | 'verified' | 'rejected' | 'info_required';
   languages: string[];
   nextAvailableSlot?: string;
+  nextAvailableToken?: string;
   modes?: ('video' | 'clinic' | 'in_person')[];
   timings?: string;
   delayMinutes?: number;

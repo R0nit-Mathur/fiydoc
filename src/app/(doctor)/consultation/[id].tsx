@@ -220,14 +220,6 @@ export default function DoctorConsultationScreen() {
   const [clinicalImpression, setClinicalImpression] = useState('');
   const [physicalObservation, setPhysicalObservation] = useState('');
 
-  // Attached Clinical Examination Images (Lesions, Throat, Radiographs) — clean by default
-  const [clinicalImages, setClinicalImages] = useState<
-    Array<{ id: string; title: string; uri: string; date: string }>
-  >([]);
-  const [showAddImageModal, setShowAddImageModal] = useState(false);
-  const [selectedPreviewImage, setSelectedPreviewImage] = useState<{ title: string; uri: string } | null>(null);
-  const [customImageTitle, setCustomImageTitle] = useState('');
-  const [customImageUri, setCustomImageUri] = useState('');
   const [showAttachmentViewer, setShowAttachmentViewer] = useState(false);
   const [selectedRecordToView, setSelectedRecordToView] = useState<{
     url?: string | null;
@@ -1000,27 +992,13 @@ export default function DoctorConsultationScreen() {
               </View>
             </View>
 
-            {/* 3. Clinical Examination (Formerly Physical Observations) — Directly Editable + Image Attachments */}
+            {/* 3. Clinical Examination (Formerly Physical Observations) */}
             <View style={[styles.sectionCard, { backgroundColor: colors.card, borderColor: colors.border }]}>
               <View style={styles.sectionCardHeader}>
                 <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
                   <Stethoscope size={16} color={StitchColors.secondaryContainer} />
                   <Text style={[styles.sectionCardTitle, { color: colors.text }]}>Clinical Examination</Text>
                 </View>
-                <Pressable
-                  onPress={() => {
-                    if (Platform.OS !== 'web') {
-                      Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-                    }
-                    setShowAddImageModal(true);
-                  }}
-                  style={[styles.addImageBtn, { backgroundColor: StitchColors.primaryContainer }]}
-                  accessibilityRole="button"
-                  accessibilityLabel="Add clinical examination photo"
-                >
-                  <Camera size={13} color="#FFFFFF" />
-                  <Text style={styles.addImageBtnText}>+ Add Image</Text>
-                </Pressable>
               </View>
 
               <SmartMedicalTextInput
@@ -1037,50 +1015,6 @@ export default function DoctorConsultationScreen() {
                   'Throat mild pharyngeal erythema',
                 ]}
               />
-
-              {/* Attached Clinical Examination Images Gallery */}
-              {clinicalImages.length > 0 && (
-                <View style={styles.clinicalImagesContainer}>
-                  <Text style={[styles.clinicalImagesSubhead, { color: colors.textSecondary }]}>
-                    Attached Clinical Photos & Imaging ({clinicalImages.length})
-                  </Text>
-                  <ScrollView
-                    horizontal
-                    showsHorizontalScrollIndicator={false}
-                    contentContainerStyle={styles.clinicalImagesScroll}
-                  >
-                    {clinicalImages.map((img) => (
-                      <View
-                        key={img.id}
-                        style={[
-                          styles.clinicalImageCard,
-                          { backgroundColor: colors.backgroundElement, borderColor: colors.border },
-                        ]}
-                      >
-                        <Pressable onPress={() => setSelectedPreviewImage(img)}>
-                          <Image source={{ uri: img.uri }} style={styles.clinicalImageThumb} />
-                        </Pressable>
-                        <View style={styles.clinicalImageMeta}>
-                          <Text numberOfLines={1} style={[styles.clinicalImageTitle, { color: colors.text }]}>
-                            {img.title}
-                          </Text>
-                          <Text style={[styles.clinicalImageDate, { color: colors.textMuted }]}>
-                            {img.date}
-                          </Text>
-                        </View>
-                        <Pressable
-                          onPress={() => setClinicalImages(clinicalImages.filter((ci) => ci.id !== img.id))}
-                          style={styles.removeImageBtn}
-                          hitSlop={{ top: 6, bottom: 6, left: 6, right: 6 }}
-                          accessibilityLabel="Remove image"
-                        >
-                          <X size={12} color="#FFFFFF" />
-                        </Pressable>
-                      </View>
-                    ))}
-                  </ScrollView>
-                </View>
-              )}
             </View>
 
             {/* Chronic Conditions */}
@@ -2399,118 +2333,6 @@ export default function DoctorConsultationScreen() {
         </Modal>
       )}
 
-      {/* 9. ADD CLINICAL EXAMINATION IMAGE MODAL */}
-      <Modal visible={showAddImageModal} transparent animationType="slide">
-        <View style={styles.modalBackdrop}>
-          <View style={[styles.modalCard, { backgroundColor: colors.card, borderColor: colors.border }]}>
-            <View style={styles.modalHeader}>
-              <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
-                <Camera size={18} color={StitchColors.primaryContainer} />
-                <Text style={[styles.modalTitle, { color: colors.text }]}>Add Clinical Image</Text>
-              </View>
-              <Pressable
-                onPress={() => {
-                  setShowAddImageModal(false);
-                  setCustomImageTitle('');
-                  setCustomImageUri('');
-                }}
-                style={styles.modalCloseBtn}
-              >
-                <X size={18} color={colors.text} />
-              </Pressable>
-            </View>
-
-            <ScrollView style={{ maxHeight: 420 }} showsVerticalScrollIndicator={false}>
-              <Text style={[styles.modalSectionLabel, { color: colors.textSecondary }]}>
-                Attach a clinical image taken during examination (camera or file):
-              </Text>
-
-              <Text style={[styles.modalSectionLabel, { color: colors.textSecondary, marginTop: 14 }]}>
-                Or Add Custom Clinical Image
-              </Text>
-              <View style={styles.medFormGroup}>
-                <Text style={[styles.medFormLabel, { color: colors.textSecondary }]}>Image Description / Label</Text>
-                <TextInput
-                  value={customImageTitle}
-                  onChangeText={setCustomImageTitle}
-                  placeholder="e.g. Left forearm eczema flare"
-                  placeholderTextColor={colors.textMuted}
-                  style={[styles.medFormInput, { color: colors.text, borderColor: colors.border }]}
-                />
-              </View>
-              <View style={styles.medFormGroup}>
-                <Text style={[styles.medFormLabel, { color: colors.textSecondary }]}>Image URL / Source</Text>
-                <TextInput
-                  value={customImageUri}
-                  onChangeText={setCustomImageUri}
-                  placeholder="https://..."
-                  placeholderTextColor={colors.textMuted}
-                  style={[styles.medFormInput, { color: colors.text, borderColor: colors.border }]}
-                />
-              </View>
-            </ScrollView>
-
-            <Pressable
-              onPress={() => {
-                if (customImageTitle.trim() && customImageUri.trim()) {
-                  const newImg = {
-                    id: `img_${Date.now()}`,
-                    title: customImageTitle.trim(),
-                    uri: customImageUri.trim(),
-                    date: 'Today, ' + new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
-                  };
-                  setClinicalImages([...clinicalImages, newImg]);
-                  setCustomImageTitle('');
-                  setCustomImageUri('');
-                  setShowAddImageModal(false);
-                }
-              }}
-              style={[
-                styles.saveModalBtn,
-                {
-                  backgroundColor:
-                    customImageTitle.trim() && customImageUri.trim()
-                      ? StitchColors.primaryContainer
-                      : colors.border,
-                },
-              ]}
-              disabled={!customImageTitle.trim() || !customImageUri.trim()}
-            >
-              <Check size={16} color="#FFFFFF" />
-              <Text style={styles.saveModalBtnText}>Attach Image to Exam</Text>
-            </Pressable>
-          </View>
-        </View>
-      </Modal>
-
-      {/* 10. PREVIEW CLINICAL IMAGE MODAL */}
-      {selectedPreviewImage && (
-        <Modal visible={!!selectedPreviewImage} transparent animationType="fade">
-          <View style={styles.modalBackdrop}>
-            <View style={[styles.previewModalCard, { backgroundColor: colors.card, borderColor: colors.border }]}>
-              <View style={styles.modalHeader}>
-                <Text numberOfLines={1} style={[styles.modalTitle, { color: colors.text, flex: 1 }]}>
-                  {selectedPreviewImage.title}
-                </Text>
-                <Pressable onPress={() => setSelectedPreviewImage(null)} style={styles.modalCloseBtn}>
-                  <X size={18} color={colors.text} />
-                </Pressable>
-              </View>
-              <Image
-                source={{ uri: selectedPreviewImage.uri }}
-                style={styles.previewImageFull}
-                resizeMode="cover"
-              />
-              <Pressable
-                onPress={() => setSelectedPreviewImage(null)}
-                style={[styles.saveModalBtn, { backgroundColor: StitchColors.primaryContainer, marginTop: 12 }]}
-              >
-                <Text style={styles.saveModalBtnText}>Close Preview</Text>
-              </Pressable>
-            </View>
-          </View>
-        </Modal>
-      )}
 
       {/* 11. EXIT CONFIRMATION DIALOG */}
       <ConfirmationDialog
@@ -3670,44 +3492,5 @@ const styles = StyleSheet.create({
     textTransform: 'uppercase',
     letterSpacing: 0.5,
   },
-  imagePresetsGrid: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    gap: 8,
-    marginBottom: 10,
-  },
-  presetImageBtn: {
-    width: '48%',
-    borderRadius: BorderRadius.md,
-    overflow: 'hidden',
-    borderWidth: 1,
-    padding: 4,
-    gap: 4,
-  },
-  presetThumb: {
-    width: '100%',
-    height: 60,
-    borderRadius: BorderRadius.sm,
-    backgroundColor: '#E2E8F0',
-  },
-  presetImageTitle: {
-    fontSize: 10,
-    fontWeight: '600',
-    textAlign: 'center',
-  },
-  previewModalCard: {
-    width: '90%',
-    maxWidth: 420,
-    borderRadius: BorderRadius.xl,
-    padding: 16,
-    borderWidth: 1,
-    ...Shadows.modal,
-  },
-  previewImageFull: {
-    width: '100%',
-    height: 260,
-    borderRadius: BorderRadius.lg,
-    backgroundColor: '#E2E8F0',
-    marginTop: 8,
-  },
+
 });

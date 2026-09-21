@@ -87,6 +87,73 @@ export class DoctorsService {
     };
   }
 
+  private formatTime12h(timeStr: string): string {
+    const [hStr, mStr] = timeStr.split(':');
+    let h = parseInt(hStr, 10);
+    const m = mStr || '00';
+    const ampm = h >= 12 ? 'PM' : 'AM';
+    h = h % 12;
+    h = h ? h : 12;
+    return `${String(h).padStart(2, '0')}:${m} ${ampm}`;
+  }
+
+  async computeNextSlotForDoctor(
+    doctorId: string,
+    doctor: any,
+    override?: any
+  ): Promise<{ nextAvailableSlot: string; nextAvailableToken?: string }> {
+    const now = new Date();
+    const daysOfWeek = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
+    const months = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+
+    for (let dayOffset = 0; dayOffset < 7; dayOffset++) {
+      const checkDate = new Date(now.getTime() + dayOffset * 24 * 60 * 60 * 1000);
+      const dateKey = `${checkDate.getFullYear()}-${String(checkDate.getMonth() + 1).padStart(2, '0')}-${String(checkDate.getDate()).padStart(2, '0')}`;
+
+      try {
+        const slotData = await this.generateAvailableSlots(doctorId, dateKey);
+        if (slotData.isOnLeave) continue;
+        if (slotData.slots && slotData.slots.length > 0) {
+          const firstSlot = slotData.slots[0];
+          const time12h = this.formatTime12h(firstSlot);
+          let dayPrefix = '';
+          if (dayOffset === 0) {
+            dayPrefix = 'Today';
+          } else if (dayOffset === 1) {
+            dayPrefix = 'Tomorrow';
+          } else {
+            dayPrefix = `${daysOfWeek[checkDate.getDay()]}, ${checkDate.getDate()} ${months[checkDate.getMonth()]}`;
+          }
+
+          let tokenNum = 1;
+          try {
+            const count = await this.prisma.appointment.count({
+              where: {
+                doctorId: { in: [doctor.id, doctor.userId].filter(Boolean) },
+                date: dateKey,
+                status: { in: ['CONFIRMED', 'PENDING'] },
+              },
+            });
+            tokenNum = count + 1;
+          } catch {}
+
+          const nextAvailableToken = `Token #${String(tokenNum).padStart(2, '0')}`;
+          const nextAvailableSlot = `${dayPrefix}, ${time12h}`;
+
+          return { nextAvailableSlot, nextAvailableToken };
+        }
+      } catch {
+        // Continue to check next day
+      }
+    }
+
+    if (override?.isOnLeave) {
+      return { nextAvailableSlot: 'On Leave' };
+    }
+
+    return { nextAvailableSlot: 'Next Available Slot' };
+  }
+
   async searchDoctors(
     query?: string,
     specialty?: string,
@@ -166,7 +233,18 @@ export class DoctorsService {
     }
     const overrideMap = new Map((todayOverrides || []).map((o: any) => [o.doctorId, o]));
 
-    const formatted = doctors.map((d) => this.formatDoctor(d, lat, lng, overrideMap.get(d.id)));
+    const formatted = await Promise.all(
+      doctors.map(async (d) => {
+        const base = this.formatDoctor(d, lat, lng, overrideMap.get(d.id));
+        const slotInfo = await this.computeNextSlotForDoctor(d.id, d, overrideMap.get(d.id));
+        return {
+          ...base,
+          nextAvailableSlot: slotInfo.nextAvailableSlot,
+          nextAvailableToken: slotInfo.nextAvailableToken,
+        };
+      })
+    );
+
     return formatted.sort((a, b) => {
       if (a.distanceKm != null && b.distanceKm != null) return a.distanceKm - b.distanceKm;
       if (a.distanceKm != null) return -1;
@@ -595,7 +673,13 @@ export class DoctorsService {
       });
     } catch {}
 
-    return this.formatDoctor(doctor, undefined, undefined, todayOverride);
+    const base = this.formatDoctor(doctor, undefined, undefined, todayOverride);
+    const slotInfo = await this.computeNextSlotForDoctor(doctor.id, doctor, todayOverride);
+    return {
+      ...base,
+      nextAvailableSlot: slotInfo.nextAvailableSlot,
+      nextAvailableToken: slotInfo.nextAvailableToken,
+    };
   }
 
   async updateDoctorProfile(userId: string, dto: {

@@ -60,17 +60,18 @@ const DOCTOR_AVATAR = DEFAULT_DOCTOR_AVATAR;
 interface PatientRecord {
   id: string;
   initials: string;
-  bloodGroup: string;
+  bloodGroup: string | null;
   name: string;
   age: number | string;
-  gender: string;
+  gender: string | null;
   uhid: string;
+  tokenNumber?: string | null;
   lastVisit: string;
   lastVisitReason: string;
   category: 'recent' | 'chronic' | 'followup';
   tags: { label: string; variant: 'blue' | 'teal' | 'red' | 'gray' }[];
   statusLabel: string;
-  statusVariant: 'teal' | 'red' | 'blue';
+  statusVariant: 'teal' | 'red' | 'blue' | 'gray';
   actionPrimary: string;
   actionSecondary: string;
   latestAppointmentId: string;
@@ -143,28 +144,103 @@ export default function DoctorPatientsScreen() {
 
       const hasPriorVisits = sortedVisits.length > 1;
       const priorVisit = hasPriorVisits ? sortedVisits[1] : null;
-      const lastVisit = priorVisit ? `${priorVisit.date} • ${priorVisit.time}` : 'First Consultation · New Patient';
-      const lastVisitReason = priorVisit ? (priorVisit.symptoms?.join(', ') || 'Previous OPD') : '';
+
+      const status = (apt.status || 'confirmed').toLowerCase();
+      let statusVariant: 'teal' | 'blue' | 'red' | 'gray' = 'teal';
+      let statusLabel = status.toUpperCase();
+
+      if (status === 'completed') {
+        statusVariant = 'teal';
+        statusLabel = 'COMPLETED';
+      } else if (status === 'confirmed') {
+        statusVariant = 'blue';
+        statusLabel = 'CONFIRMED';
+      } else if (status === 'in_progress') {
+        statusVariant = 'blue';
+        statusLabel = 'IN PROGRESS';
+      } else if (status === 'cancelled' || status === 'rejected') {
+        statusVariant = 'red';
+        statusLabel = status === 'cancelled' ? 'CANCELLED' : 'REJECTED';
+      } else if (status === 'pending') {
+        statusVariant = 'gray';
+        statusLabel = 'PENDING';
+      }
+
+      const tags: { label: string; variant: 'teal' | 'red' | 'blue' | 'gray' }[] = [];
+      if (status === 'completed') {
+        tags.push({ label: 'Completed Visit', variant: 'teal' });
+      } else if (status === 'in_progress') {
+        tags.push({ label: 'In Consultation', variant: 'blue' });
+      } else if (status === 'confirmed') {
+        tags.push({ label: 'Confirmed OPD', variant: 'teal' });
+      } else if (status === 'cancelled') {
+        tags.push({ label: 'Cancelled', variant: 'red' });
+      } else {
+        tags.push({ label: 'Pending OPD', variant: 'gray' });
+      }
+
+      tags.push({
+        label: apt.mode === 'video' ? 'Video Consult' : 'In-Clinic OPD',
+        variant: apt.mode === 'video' ? 'blue' : 'gray',
+      });
+
+      let actionPrimary = 'Start Consultation';
+      if (status === 'completed') {
+        actionPrimary = 'View Consultation';
+      } else if (status === 'in_progress') {
+        actionPrimary = 'Resume Consultation';
+      } else if (status === 'cancelled' || status === 'rejected') {
+        actionPrimary = 'View Details';
+      }
+
+      let category: 'recent' | 'chronic' | 'followup' = 'recent';
+      if ((apt.patientConditions && apt.patientConditions.length > 0) || (apt.patientAllergies && apt.patientAllergies.length > 0)) {
+        category = 'chronic';
+      } else if (hasPriorVisits) {
+        category = 'followup';
+      }
+
+      let lastVisit = 'First Consultation · New Patient';
+      let lastVisitReason = '';
+      if (priorVisit) {
+        lastVisit = `${priorVisit.date} • ${priorVisit.time}`;
+        lastVisitReason = priorVisit.symptoms?.join(', ') || 'Previous OPD';
+      } else if (status === 'completed') {
+        lastVisit = `${apt.date} • ${apt.time}`;
+        lastVisitReason = apt.symptoms?.join(', ') || 'Completed OPD';
+      } else {
+        lastVisit = `${apt.date} • ${apt.time}`;
+        lastVisitReason = apt.symptoms?.join(', ') || 'Scheduled OPD';
+      }
+
+      const patientId = apt.patientId || patientKey;
+      const uhid = `FD-${patientId.replace(/[^a-zA-Z0-9]/g, '').slice(0, 8).toUpperCase()}`;
+
+      const rawBlood = apt.patientBloodGroup || (apt as any).patient?.bloodGroup;
+      const bloodGroup = rawBlood && rawBlood !== '—' ? rawBlood : null;
+
+      const rawGender = apt.patientGender || (apt as any).patient?.gender;
+      const gender = rawGender && rawGender !== 'Not specified' ? rawGender : null;
+
+      const initials = (apt.patientName || 'Patient').split(' ').filter(Boolean).map((n: string) => n[0]).join('').slice(0, 2).toUpperCase() || 'PT';
 
       return {
         id: patientKey,
         latestAppointmentId: apt.id,
-        initials: (apt.patientName || 'Patient').split(' ').map((n: string) => n[0]).join('').slice(0, 2).toUpperCase(),
-        bloodGroup: apt.patientBloodGroup || (apt as any).patient?.bloodGroup || '—',
+        initials,
+        bloodGroup,
         name: apt.patientName || 'Registered Patient',
         age: computeAge(apt.patientDob, apt.patientAge),
-        gender: apt.patientGender || (apt as any).patient?.gender || 'Not specified',
-        uhid: `#${apt.tokenNumber || '101'}`,
+        gender,
+        uhid,
+        tokenNumber: apt.tokenNumber || null,
         lastVisit,
         lastVisitReason,
-        category: 'recent' as const,
-        tags: [
-          { label: apt.status === 'confirmed' ? 'Confirmed' : 'Active OPD', variant: 'teal' as const },
-          { label: apt.mode === 'video' ? 'Video Consult' : 'In-Clinic OPD', variant: 'blue' as const },
-        ],
-        statusLabel: apt.status.toUpperCase(),
-        statusVariant: 'teal' as const,
-        actionPrimary: 'Start Consultation',
+        category,
+        tags,
+        statusLabel,
+        statusVariant,
+        actionPrimary,
         actionSecondary: 'Day-wise history',
         visits: sortedVisits.map((visit) => ({
           id: visit.id,
@@ -426,9 +502,11 @@ export default function DoctorPatientsScreen() {
                   <View style={[styles.initialsCircle, { backgroundColor: '#DBEAFE' }]}>
                     <Text style={styles.initialsText}>{patient.initials}</Text>
                   </View>
-                  <View style={[styles.bloodBadge, { backgroundColor: colors.backgroundElement }]}>
-                    <Text style={[styles.bloodText, { color: colors.text }]}>{patient.bloodGroup}</Text>
-                  </View>
+                  {patient.bloodGroup ? (
+                    <View style={[styles.bloodBadge, { backgroundColor: colors.backgroundElement }]}>
+                      <Text style={[styles.bloodText, { color: colors.text }]}>{patient.bloodGroup}</Text>
+                    </View>
+                  ) : null}
                 </View>
 
                 <View style={{ flex: 1, marginLeft: 12 }}>
@@ -437,7 +515,25 @@ export default function DoctorPatientsScreen() {
                     <ShieldCheck size={14} color={StitchColors.primaryContainer} />
                   </View>
                   <Text style={[styles.patientCardDemog, { color: colors.textSecondary }]}>
-                    {patient.age && patient.age !== '—' ? `${patient.age} Yrs, ` : ''}{patient.gender} • <Text style={{ fontFamily: Platform.OS === 'ios' ? 'Courier' : 'monospace', color: colors.textMuted }}>UHID: {patient.uhid}</Text>
+                    {(() => {
+                      const demogParts = [];
+                      if (patient.age && patient.age !== '—') demogParts.push(`${patient.age} Yrs`);
+                      if (patient.gender) demogParts.push(patient.gender);
+                      const demogText = demogParts.join(', ');
+                      return (
+                        <>
+                          {demogText ? `${demogText} • ` : ''}
+                          <Text style={{ fontFamily: Platform.OS === 'ios' ? 'Courier' : 'monospace', color: colors.textMuted }}>
+                            UHID: {patient.uhid}
+                          </Text>
+                          {patient.tokenNumber ? (
+                            <Text style={{ color: StitchColors.primaryContainer, fontWeight: '700' }}>
+                              {' '}• {patient.tokenNumber}
+                            </Text>
+                          ) : null}
+                        </>
+                      );
+                    })()}
                   </Text>
                 </View>
 
@@ -501,7 +597,9 @@ export default function DoctorPatientsScreen() {
                             ? StitchColors.secondaryContainer
                             : patient.statusVariant === 'red'
                             ? StitchColors.error
-                            : StitchColors.primaryContainer,
+                            : patient.statusVariant === 'blue'
+                            ? StitchColors.primaryContainer
+                            : colors.textMuted,
                       },
                     ]}
                   />
@@ -514,7 +612,9 @@ export default function DoctorPatientsScreen() {
                             ? StitchColors.secondaryContainer
                             : patient.statusVariant === 'red'
                             ? StitchColors.error
-                            : StitchColors.primaryContainer,
+                            : patient.statusVariant === 'blue'
+                            ? StitchColors.primaryContainer
+                            : colors.textMuted,
                       },
                     ]}
                   >

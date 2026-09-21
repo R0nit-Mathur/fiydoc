@@ -13,7 +13,7 @@ import {
   ScrollView,
 } from 'react-native';
 import * as Location from 'expo-location';
-import { useLocationStore, INDIAN_LOCATION_HUBS, LocationHub } from '@/store/useLocationStore';
+import { useLocationStore } from '@/store/useLocationStore';
 import { Palette, Typography, BorderRadius, Shadows, Spacing, StitchColors } from '@/constants/theme';
 import {
   MapPin,
@@ -22,10 +22,6 @@ import {
   Settings,
   X,
   RefreshCw,
-  Globe2,
-  ChevronDown,
-  ChevronUp,
-  Check,
 } from 'lucide-react-native';
 
 interface LocationPermissionModalProps {
@@ -44,13 +40,11 @@ export function LocationPermissionModal({
     detectCurrentLocation,
     permissionStatus,
     isGenuineDeviceLocation,
-    setHub,
   } = useLocationStore();
 
   const [loading, setLoading] = useState(false);
   const [statusState, setStatusState] = useState<'prompt' | 'denied' | 'blocked'>('prompt');
   const [errorMessage, setErrorMessage] = useState('');
-  const [showManualHubs, setShowManualHubs] = useState(false);
 
   const isLocationResolved = Boolean(
     useLocationStore.getState().latitude &&
@@ -298,58 +292,7 @@ export function LocationPermissionModal({
               </TouchableOpacity>
             )}
 
-            {/* Manual Location Selection Option */}
-            <TouchableOpacity
-              onPress={() => setShowManualHubs((prev) => !prev)}
-              activeOpacity={0.8}
-              style={styles.manualSelectToggle}
-            >
-              <MapPin size={15} color={StitchColors.primary} />
-              <Text style={styles.manualSelectToggleText}>
-                {showManualHubs ? 'Hide City Selection' : 'Choose Specific City / Medical Hub'}
-              </Text>
-              {showManualHubs ? (
-                <ChevronUp size={15} color={StitchColors.primary} />
-              ) : (
-                <ChevronDown size={15} color={StitchColors.primary} />
-              )}
-            </TouchableOpacity>
 
-            {showManualHubs && (
-              <View style={styles.hubsBox}>
-                <Text style={styles.hubsBoxTitle}>Select Medical Hub</Text>
-                <ScrollView
-                  style={{ maxHeight: 160 }}
-                  showsVerticalScrollIndicator={true}
-                  nestedScrollEnabled
-                >
-                  <View style={{ gap: 6 }}>
-                    {INDIAN_LOCATION_HUBS.map((hub) => (
-                      <TouchableOpacity
-                        key={hub.id}
-                        onPress={() => {
-                          setHub(hub);
-                          onLocationResolved?.();
-                          onClose();
-                        }}
-                        activeOpacity={0.75}
-                        style={styles.hubRow}
-                      >
-                        <View style={{ flex: 1, marginRight: 8 }}>
-                          <Text style={styles.hubRowName} numberOfLines={1}>
-                            {hub.name}
-                          </Text>
-                          <Text style={styles.hubRowSub}>
-                            {hub.city}, {hub.state}
-                          </Text>
-                        </View>
-                        <Check size={14} color={StitchColors.primary} />
-                      </TouchableOpacity>
-                    ))}
-                  </View>
-                </ScrollView>
-              </View>
-            )}
           </View>
         </View>
       </View>
@@ -490,57 +433,5 @@ const styles = StyleSheet.create({
   secondaryButtonText: {
     fontSize: 13,
     fontWeight: '700',
-    color: Palette.textSecondary,
-  },
-  manualSelectToggle: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    paddingVertical: 8,
-    gap: 6,
-    marginTop: 4,
-  },
-  manualSelectToggleText: {
-    fontSize: 13,
-    fontWeight: '700',
-    color: StitchColors.primary,
-  },
-  hubsBox: {
-    width: '100%',
-    backgroundColor: Palette.background,
-    borderRadius: BorderRadius.xl,
-    padding: Spacing.sm + 2,
-    borderWidth: 1,
-    borderColor: Palette.cardBorder,
-    marginTop: 4,
-  },
-  hubsBoxTitle: {
-    fontSize: 11,
-    fontWeight: '800',
-    color: Palette.textMuted,
-    textTransform: 'uppercase',
-    letterSpacing: 0.5,
-    marginBottom: 6,
-  },
-  hubRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    paddingVertical: 8,
-    paddingHorizontal: 10,
-    borderRadius: BorderRadius.lg,
-    backgroundColor: '#FFFFFF',
-    borderWidth: 1,
-    borderColor: Palette.cardBorderLight,
-  },
-  hubRowName: {
-    fontSize: 12.5,
-    fontWeight: '700',
-    color: Palette.textPrimary,
-  },
-  hubRowSub: {
-    fontSize: 10.5,
-    color: Palette.textSecondary,
-    marginTop: 1,
   },
 });

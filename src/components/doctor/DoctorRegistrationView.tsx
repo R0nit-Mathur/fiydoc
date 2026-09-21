@@ -917,18 +917,21 @@ export function DoctorRegistrationView({
                   placeholderTextColor="#94A3B8"
                   style={styles.textInput}
                   secureTextEntry={!showPassword}
+                  autoCapitalize="none"
+                  autoCorrect={false}
+                  textContentType="newPassword"
                 />
                 <Pressable
                   onPress={() => setShowPassword((prev) => !prev)}
-                  hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
-                  style={{ padding: 4 }}
+                  hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}
+                  style={styles.eyeButton}
                   accessibilityRole="button"
                   accessibilityLabel={showPassword ? 'Hide password' : 'Show password'}
                 >
                   {showPassword ? (
-                    <EyeOff size={18} color="#737783" />
+                    <EyeOff size={20} color="#64748B" />
                   ) : (
-                    <Eye size={18} color="#737783" />
+                    <Eye size={20} color="#64748B" />
                   )}
                 </Pressable>
               </View>
@@ -3033,6 +3036,11 @@ const styles = StyleSheet.create({
     fontSize: 14,
     color: '#0F172A',
     height: '100%',
+  },
+  eyeButton: {
+    padding: 8,
+    alignItems: 'center',
+    justifyContent: 'center',
   },
   genderRow: {
     flexDirection: 'row',
