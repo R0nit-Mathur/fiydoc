@@ -24,6 +24,7 @@ import { useRouter } from 'expo-router';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import Animated, {
   FadeIn,
+  ReduceMotion,
   useAnimatedStyle,
   useSharedValue,
   withSpring,
@@ -51,6 +52,7 @@ import { Pill } from '@/components/ui/Pill';
 import { Button } from '@/components/ui/Button';
 import { StitchCard } from '@/components/ui/StitchCard';
 import { useAuthStore } from '@/store/useAuthStore';
+import { signOutAll } from '@/services/authService';
 import { StitchColors, BorderRadius, Shadows, Spacing, Palette } from '@/constants/theme';
 import { useAppTheme } from '@/hooks/useAppTheme';
 
@@ -107,7 +109,7 @@ function SettingsRow({ icon, iconBg, title, subtitle, right, onPress, danger }: 
           </Text>
         )}
       </View>
-      {right || <ChevronRight size={16} color={colors.textMuted} />}
+      {right || (onPress ? <ChevronRight size={16} color={colors.textMuted} /> : null)}
     </View>
   );
 
@@ -128,10 +130,10 @@ function SettingsRow({ icon, iconBg, title, subtitle, right, onPress, danger }: 
     <AnimatedPressable
       onPress={onPress}
       onPressIn={() => {
-        scale.value = withSpring(0.98, { damping: 15, stiffness: 300 });
+        scale.value = withSpring(0.98, { damping: 15, stiffness: 300, reduceMotion: ReduceMotion.System });
       }}
       onPressOut={() => {
-        scale.value = withSpring(1, { damping: 15, stiffness: 300 });
+        scale.value = withSpring(1, { damping: 15, stiffness: 300, reduceMotion: ReduceMotion.System });
       }}
       style={[
         styles.settingsRow,
@@ -149,7 +151,7 @@ function SettingsRow({ icon, iconBg, title, subtitle, right, onPress, danger }: 
 export default function DoctorSettingsScreen() {
   const router = useRouter();
   const { colors, isDark } = useAppTheme();
-  const { user, logout } = useAuthStore();
+  const { user } = useAuthStore();
 
   const [pushNotifs, setPushNotifs] = useState(true);
   const [emailNotifs, setEmailNotifs] = useState(false);
@@ -188,11 +190,11 @@ export default function DoctorSettingsScreen() {
     setter(!current);
   };
 
-  const handleSignOut = () => {
+  const handleSignOut = async () => {
     if (Platform.OS !== 'web') {
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Warning);
     }
-    logout();
+    await signOutAll('USER_ACTION');
     router.replace('/(auth)/login');
   };
 
@@ -212,7 +214,7 @@ export default function DoctorSettingsScreen() {
         {/* Success toast */}
         {saved && (
           <Animated.View
-            entering={FadeIn.duration(300)}
+             entering={FadeIn.duration(300).reduceMotion(ReduceMotion.System)}
             style={[
               styles.savedCard,
               {
@@ -240,7 +242,7 @@ export default function DoctorSettingsScreen() {
               icon={<User size={16} color={StitchColors.primaryContainer} />}
               title="Edit Profile"
               subtitle="Name, specialty, photo"
-              onPress={() => {}}
+               onPress={() => router.push('/(doctor)/(tabs)/profile')}
             />
             <SettingsRow
               icon={<CreditCard size={16} color={StitchColors.secondary} />}
@@ -253,7 +255,7 @@ export default function DoctorSettingsScreen() {
               icon={<ShieldCheck size={16} color="#9D174D" />}
               iconBg={isDark ? 'rgba(157,23,77,0.18)' : '#FCE7F3'}
               title="Medical License"
-              subtitle={user?.licenseNumber || 'Verified Medical License'}
+              subtitle={user?.licenseNumber || 'Registration pending review'}
               onPress={() => router.push('/(doctor)/(tabs)/profile')}
             />
           </View>
@@ -273,6 +275,7 @@ export default function DoctorSettingsScreen() {
                 <Switch
                   value={pushNotifs}
                   onValueChange={() => handleToggle(setPushNotifs, pushNotifs)}
+                  accessibilityLabel="Push notifications"
                   trackColor={{ true: StitchColors.primaryContainer, false: colors.border }}
                   thumbColor={Platform.OS === 'android' ? '#fff' : undefined}
                 />
@@ -286,6 +289,7 @@ export default function DoctorSettingsScreen() {
                 <Switch
                   value={emailNotifs}
                   onValueChange={() => handleToggle(setEmailNotifs, emailNotifs)}
+                  accessibilityLabel="Email notifications"
                   trackColor={{ true: StitchColors.primaryContainer, false: colors.border }}
                   thumbColor={Platform.OS === 'android' ? '#fff' : undefined}
                 />
@@ -300,6 +304,7 @@ export default function DoctorSettingsScreen() {
                 <Switch
                   value={autoApprove}
                   onValueChange={() => handleToggle(setAutoApprove, autoApprove)}
+                  accessibilityLabel="Auto-approve bookings"
                   trackColor={{ true: StitchColors.secondary, false: colors.border }}
                   thumbColor={Platform.OS === 'android' ? '#fff' : undefined}
                 />
@@ -318,7 +323,6 @@ export default function DoctorSettingsScreen() {
               icon={<FileText size={16} color={StitchColors.primaryContainer} />}
               title="Data & Privacy"
               subtitle="Manage your data"
-              onPress={() => {}}
             />
           </View>
         </View>
@@ -334,14 +338,12 @@ export default function DoctorSettingsScreen() {
               iconBg={isDark ? 'rgba(255,255,255,0.06)' : Palette.surfaceTrack}
               title="Help & Support"
               subtitle="FAQ, contact us"
-              onPress={() => {}}
             />
             <SettingsRow
               icon={<Star size={16} color="#F59E0B" />}
               iconBg={isDark ? 'rgba(245,158,11,0.18)' : '#FEF3C7'}
               title="Rate FiYDoc"
               subtitle="Help us improve"
-              onPress={() => {}}
             />
             <SettingsRow
               icon={<Info size={16} color={colors.textSecondary} />}

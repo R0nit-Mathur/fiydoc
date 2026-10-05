@@ -1,4 +1,5 @@
 import React, { useState, useMemo } from 'react';
+import { platformShadow } from '@/utils/platformStyles';
 import { View, Text, Pressable, ScrollView, StyleSheet, KeyboardAvoidingView, Platform } from 'react-native';
 import { useRouter } from 'expo-router';
 import { SafeAreaView } from 'react-native-safe-area-context';
@@ -395,13 +396,13 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
   },
-  genderOptionActive: {
+  genderOptionActive: platformShadow({
     shadowColor: '#000',
     shadowOffset: { width: 0, height: 1 },
     shadowOpacity: 0.12,
     shadowRadius: 2,
     elevation: 2,
-  },
+  }),
   genderOptionText: {
     fontSize: 13,
     fontWeight: '600',

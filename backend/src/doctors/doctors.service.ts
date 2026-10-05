@@ -1,4 +1,4 @@
-import { ForbiddenException, Injectable, NotFoundException, UnauthorizedException, Logger } from '@nestjs/common';
+import { BadRequestException, ForbiddenException, Injectable, NotFoundException, UnauthorizedException, Logger } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
 import { VerificationStatus, Role, AppointmentStatus } from '@prisma/client';
 import { NotificationsService } from '../notifications/notifications.service';
@@ -58,7 +58,7 @@ export class DoctorsService {
       delayMinutes: override?.delayMinutes || 0,
       delayReason: override?.reason || null,
       isOnLeave: Boolean(override?.isOnLeave),
-      leaveReason: override?.isOnLeave ? (override?.reason || 'Doctor on leave') : null,
+      leaveReason: override?.isOnLeave ? (override?.reason || null) : null,
       clinic: doc.clinic
         ? {
             id: doc.clinic.id,
@@ -73,7 +73,7 @@ export class DoctorsService {
       rating: null,
       reviewCount: 0,
       experienceYears: doc.experienceYears || 0,
-      verificationStatus: (doc.verification?.status || VerificationStatus.REGISTERED).toLowerCase(),
+      verificationStatus: (doc.verification?.status || VerificationStatus.PENDING).toLowerCase(),
       modes,
       isInPersonAvailable: modes.includes('clinic'),
       isOnlineAvailable: modes.includes('video') || modes.includes('chat'),
@@ -280,34 +280,24 @@ export class DoctorsService {
     if (!doctor && currentUser.role === Role.DOCTOR) {
       const doctorName = (currentUser.email ? currentUser.email.split('@')[0] : 'Doctor');
       const cleanName = doctorName.startsWith('Dr.') ? doctorName : `Dr. ${doctorName}`;
-      const defaultAvailabilities: { dayOfWeek: number; startTime: string; endTime: string; slotDurationMinutes: number }[] = [];
-      for (let day = 1; day <= 6; day++) {
-        defaultAvailabilities.push(
-          { dayOfWeek: day, startTime: '09:00', endTime: '13:00', slotDurationMinutes: 30 },
-          { dayOfWeek: day, startTime: '17:00', endTime: '20:00', slotDurationMinutes: 30 },
-        );
-      }
       try {
         doctor = await this.prisma.doctor.create({
           data: {
             userId: currentUser.id,
             fullName: cleanName,
-            specialization: 'General Medicine',
-            consultationFee: 500,
+            specialization: 'Specialty not provided',
+            consultationFee: 0,
             clinic: {
               create: {
-                name: `${cleanName}'s Clinic`,
-                address: 'Clinical Practice Address Pending',
-                timings: '09:00 - 13:00, 17:00 - 20:00',
+                name: 'Practice location pending',
+                address: 'Address pending',
+                timings: null,
               },
-            },
-            availabilities: {
-              create: defaultAvailabilities,
             },
             verification: {
               create: {
-                registrationNumber: `NMC-${Date.now().toString().slice(-6)}`,
-                registrationAuthority: 'National Medical Commission / State Council',
+                registrationNumber: 'PENDING',
+                registrationAuthority: 'PENDING',
                 status: VerificationStatus.PENDING,
               },
             },
@@ -685,6 +675,10 @@ export class DoctorsService {
   async updateDoctorProfile(userId: string, dto: {
     fullName?: string;
     specialization?: string;
+    qualifications?: string[] | string;
+    qualificationDetails?: Array<{ degree: string; institution?: string; year?: number }>;
+    licenseNumber?: string;
+    registrationAuthority?: string;
     profilePhoto?: string | null;
     consultationFee?: number;
     patientsPerSlot?: number;
@@ -697,7 +691,7 @@ export class DoctorsService {
   }) {
     let doctor = await this.prisma.doctor.findUnique({
       where: { userId },
-      include: { verification: true, availabilities: true },
+      include: { verification: true, availabilities: true, qualifications: true, clinic: true },
     });
 
     if (!doctor) {
@@ -705,39 +699,29 @@ export class DoctorsService {
       if (user && user.role === Role.DOCTOR) {
         const doctorName = (user.email ? user.email.split('@')[0] : 'Doctor');
         const cleanName = dto.fullName?.trim() || (doctorName.startsWith('Dr.') ? doctorName : `Dr. ${doctorName}`);
-        const defaultAvailabilities: { dayOfWeek: number; startTime: string; endTime: string; slotDurationMinutes: number }[] = [];
-        for (let day = 1; day <= 6; day++) {
-          defaultAvailabilities.push(
-            { dayOfWeek: day, startTime: '09:00', endTime: '13:00', slotDurationMinutes: 30 },
-            { dayOfWeek: day, startTime: '17:00', endTime: '20:00', slotDurationMinutes: 30 },
-          );
-        }
         try {
           doctor = await this.prisma.doctor.create({
             data: {
               userId: user.id,
               fullName: cleanName,
-              specialization: dto.specialization?.trim() || 'General Medicine',
-              consultationFee: dto.consultationFee && dto.consultationFee > 0 ? dto.consultationFee : 500,
+              specialization: dto.specialization?.trim() || 'Specialty not provided',
+              consultationFee: dto.consultationFee != null && dto.consultationFee >= 0 ? dto.consultationFee : 0,
               clinic: {
                 create: {
-                  name: dto.clinicName?.trim() || `${cleanName}'s Clinic`,
-                  address: dto.clinicAddress?.trim() || 'Clinical Practice Address Pending',
-                  timings: dto.clinicTimings?.trim() || '09:00 - 13:00, 17:00 - 20:00',
+                  name: dto.clinicName?.trim() || 'Practice location pending',
+                  address: dto.clinicAddress?.trim() || 'Address pending',
+                  timings: dto.clinicTimings?.trim() || null,
                 },
-              },
-              availabilities: {
-                create: defaultAvailabilities,
               },
               verification: {
                 create: {
-                  registrationNumber: `NMC-${Date.now().toString().slice(-6)}`,
-                  registrationAuthority: 'National Medical Commission / State Council',
+                  registrationNumber: dto.licenseNumber?.trim() || 'PENDING',
+                  registrationAuthority: dto.registrationAuthority?.trim() || 'PENDING',
                   status: VerificationStatus.PENDING,
                 },
               },
             },
-            include: { verification: true, availabilities: true },
+            include: { verification: true, availabilities: true, qualifications: true, clinic: true },
           });
         } catch (err: any) {
           console.warn('[doctors] updateDoctorProfile auto-heal failed:', err?.message);
@@ -749,10 +733,51 @@ export class DoctorsService {
 
     const nameChanged = dto.fullName?.trim() && dto.fullName.trim() !== doctor.fullName;
     const specChanged = dto.specialization?.trim() && dto.specialization.trim() !== doctor.specialization;
+    const timingsChanged = Boolean(dto.clinicTimings?.trim() && dto.clinicTimings.trim() !== doctor.clinic?.timings);
+    const registrationChanged =
+      (dto.licenseNumber?.trim() && dto.licenseNumber.trim() !== doctor.verification?.registrationNumber) ||
+      (dto.registrationAuthority?.trim() && dto.registrationAuthority.trim() !== doctor.verification?.registrationAuthority);
+    let qualificationValues: Array<{ degree: string; institution: string | null; year: number | null }> | undefined;
+    if (dto.qualificationDetails !== undefined || dto.qualifications !== undefined) {
+      if (dto.qualificationDetails !== undefined && !Array.isArray(dto.qualificationDetails)) {
+        throw new BadRequestException('Qualification details must be an array.');
+      }
+      if (dto.qualificationDetails === undefined && typeof dto.qualifications !== 'string' && !Array.isArray(dto.qualifications)) {
+        throw new BadRequestException('Qualifications must be text or an array.');
+      }
+      const submitted = dto.qualificationDetails ?? (Array.isArray(dto.qualifications) ? dto.qualifications : dto.qualifications!.split(','))
+        .map((degree) => ({ degree }));
+      qualificationValues = submitted.map((qualification: { degree: string; institution?: string; year?: number }) => {
+        if (!qualification || typeof qualification.degree !== 'string' || !qualification.degree.trim()) {
+          throw new BadRequestException('Each qualification needs a degree.');
+        }
+        if (qualification.institution !== undefined && typeof qualification.institution !== 'string') {
+          throw new BadRequestException('Qualification institution must be text.');
+        }
+        if (qualification.year !== undefined && (!Number.isInteger(qualification.year) || qualification.year < 1900 || qualification.year > new Date().getFullYear())) {
+          throw new BadRequestException('Qualification year must be a valid completed year.');
+        }
+        const degree = qualification.degree.trim();
+        const existing = doctor!.qualifications.find((q) => q.degree.toLowerCase() === degree.toLowerCase());
+        return {
+          degree,
+          // Legacy text-only edits must not erase already-recorded institution/year.
+          institution: qualification.institution === undefined ? existing?.institution ?? null : qualification.institution.trim() || null,
+          year: qualification.year === undefined ? existing?.year ?? null : qualification.year,
+        };
+      });
+    }
+    const qualificationsChanged = qualificationValues !== undefined && (
+      qualificationValues.length !== doctor.qualifications.length || qualificationValues.some((value) =>
+        !doctor!.qualifications.some((existing) => existing.degree === value.degree && existing.institution === value.institution && existing.year === value.year)
+      )
+    );
 
     // Rule: Clinical identity (name & specialty) are credential-backed.
     // If a verified doctor alters their clinical name or specialty, require re-verification.
-    const shouldResetVerification = (nameChanged || specChanged) && doctor.verification?.status === VerificationStatus.VERIFIED;
+    const shouldResetVerification =
+      (nameChanged || specChanged || registrationChanged || qualificationsChanged) &&
+      doctor.verification?.status === VerificationStatus.VERIFIED;
 
     // Resolve slot duration: use DTO value, or existing availability's value, or default 30
     const resolvedSlotDuration =
@@ -760,13 +785,14 @@ export class DoctorsService {
       doctor.availabilities?.[0]?.slotDurationMinutes ||
       30;
 
-    const updated: any = await this.prisma.doctor.update({
+    const saved: any = await this.prisma.$transaction(async (tx) => {
+    const updated: any = await tx.doctor.update({
       where: { userId },
       data: {
         fullName: dto.fullName?.trim() || undefined,
         specialization: dto.specialization?.trim() || undefined,
         profilePhoto: dto.profilePhoto === null ? null : dto.profilePhoto?.trim() || undefined,
-        consultationFee: dto.consultationFee && dto.consultationFee > 0 ? dto.consultationFee : undefined,
+        consultationFee: dto.consultationFee != null && dto.consultationFee >= 0 ? dto.consultationFee : undefined,
         experienceYears: dto.experienceYears != null && dto.experienceYears >= 0 ? dto.experienceYears : undefined,
         patientsPerSlot: dto.patientsPerSlot && dto.patientsPerSlot > 0 ? dto.patientsPerSlot : undefined,
         ...(shouldResetVerification
@@ -784,9 +810,9 @@ export class DoctorsService {
               clinic: {
                 upsert: {
                   create: {
-                    name: dto.clinicName?.trim() || `${doctor.fullName}'s Clinic`,
-                    address: dto.clinicAddress?.trim() || 'Clinical Practice Address Pending',
-                    timings: dto.clinicTimings?.trim() || '09:00 - 13:00, 17:00 - 20:00',
+                    name: dto.clinicName?.trim() || 'Practice location pending',
+                    address: dto.clinicAddress?.trim() || 'Address pending',
+                    timings: dto.clinicTimings?.trim() || null,
                   },
                   update: {
                     name: dto.clinicName?.trim() || undefined,
@@ -801,11 +827,40 @@ export class DoctorsService {
       include: { qualifications: true, clinic: true, verification: true, availabilities: true },
     });
 
-    // If clinicTimings OR slotDurationMinutes was provided, rebuild availabilities for Mon-Sat
-    if (dto.clinicTimings?.trim() || dto.slotDurationMinutes) {
-      try {
-        const timingStr = dto.clinicTimings?.trim() || updated.clinic?.timings || '09:00 - 13:00, 17:00 - 20:00';
+    if (qualificationsChanged && qualificationValues) {
+        await tx.doctorQualification.deleteMany({ where: { doctorId: doctor!.id } });
+        if (qualificationValues.length > 0) {
+          await tx.doctorQualification.createMany({
+            data: qualificationValues.map((qualification) => ({ doctorId: doctor!.id, ...qualification })),
+          });
+        }
+    }
+
+    if (dto.licenseNumber?.trim() || dto.registrationAuthority?.trim()) {
+      await tx.doctorVerification.upsert({
+        where: { doctorId: doctor.id },
+        create: {
+          doctorId: doctor.id,
+          registrationNumber: dto.licenseNumber?.trim() || 'PENDING',
+          registrationAuthority: dto.registrationAuthority?.trim() || 'PENDING',
+          status: VerificationStatus.PENDING,
+        },
+        update: {
+          registrationNumber: dto.licenseNumber?.trim() || undefined,
+          registrationAuthority: dto.registrationAuthority?.trim() || undefined,
+          ...(shouldResetVerification ? { status: VerificationStatus.PENDING } : {}),
+        },
+      });
+    }
+
+    // Only an explicit timing edit replaces shifts. Duration-only edits preserve
+    // existing days and intervals, including Sunday/custom weekly schedules.
+    if (timingsChanged || dto.slotDurationMinutes) {
+        const timingStr = timingsChanged ? dto.clinicTimings!.trim() : '';
         const parsedIntervals = this.parseTimingsToIntervals(timingStr);
+        if (timingStr && parsedIntervals.length === 0) {
+          throw new BadRequestException('Provide valid clinic time intervals.');
+        }
         if (parsedIntervals.length > 0) {
           const newAvailabilities: { doctorId: string; dayOfWeek: number; startTime: string; endTime: string; slotDurationMinutes: number }[] = [];
           for (let day = 1; day <= 6; day++) {
@@ -819,31 +874,28 @@ export class DoctorsService {
               });
             }
           }
-          await this.prisma.$transaction(async (tx) => {
-            await tx.availability.deleteMany({ where: { doctorId: doctor.id } });
-            await tx.availability.createMany({ data: newAvailabilities });
-          }, { maxWait: 5000, timeout: 10000 });
+           await tx.availability.deleteMany({ where: { doctorId: doctor.id } });
+           await tx.availability.createMany({ data: newAvailabilities });
         } else if (dto.slotDurationMinutes && dto.slotDurationMinutes > 0) {
           // No new timing string but slot duration changed — update existing availabilities in-place
-          await this.prisma.availability.updateMany({
+           await tx.availability.updateMany({
             where: { doctorId: doctor.id },
             data: { slotDurationMinutes: resolvedSlotDuration },
           });
         }
 
-        if (dto.slotDurationMinutes && dto.slotDurationMinutes > 0) {
-          await this.recalculateBookedAppointmentsForDoctor(
-            doctor.id,
-            Number(dto.slotDurationMinutes),
-            Number(dto.bufferMinutes) || 0
-          );
-        }
-      } catch (err) {
-        // Continue if sync encounters an error
-      }
     }
 
-    return this.formatDoctor(updated);
+    return await tx.doctor.findUnique({
+      where: { id: doctor.id },
+      include: { qualifications: true, clinic: true, verification: true, availabilities: true },
+    }) || updated;
+    }, { maxWait: 5000, timeout: 10000 });
+
+    if (dto.slotDurationMinutes && dto.slotDurationMinutes > 0) {
+      await this.recalculateBookedAppointmentsForDoctor(doctor.id, dto.slotDurationMinutes, Number(dto.bufferMinutes) || 0);
+    }
+    return this.formatDoctor(saved);
   }
 
   async updateAvailability(userId: string, dto: {
@@ -1976,9 +2028,46 @@ export class DoctorsService {
 
     const cleanDate = dto.date ? String(dto.date).split('T')[0].trim() : null;
 
+    if (doctor.userId !== currentUser?.id && currentUser?.role !== Role.ADMIN) {
+      throw new ForbiddenException('Only the owning doctor can change this schedule.');
+    }
+    for (const field of ['slotDurationMinutes', 'patientsPerSlot'] as const) {
+      const value = dto[field];
+      if (value !== undefined && (!Number.isInteger(value) || value <= 0)) {
+        throw new BadRequestException(`${field} must be a positive integer.`);
+      }
+    }
+    const slotDuration = dto.slotDurationMinutes || doctor.availabilities?.[0]?.slotDurationMinutes || 15;
+    const to24 = (t: string) => {
+      const m = t.trim().match(/^(\d{1,2}):(\d{2})\s*(AM|PM)?$/i);
+      if (!m) throw new BadRequestException('Use HH:mm or h:mm AM/PM for shift times.');
+      let h = Number(m[1]);
+      const min = Number(m[2]);
+      const meri = m[3]?.toUpperCase();
+      if (min > 59 || (meri ? h < 1 || h > 12 : h > 23)) throw new BadRequestException('Invalid shift time.');
+      if (meri === 'PM' && h !== 12) h += 12;
+      if (meri === 'AM' && h === 12) h = 0;
+      return `${String(h).padStart(2, '0')}:${String(min).padStart(2, '0')}`;
+    };
+    const intervals: Array<{ startTime: string; endTime: string; period: 'morning' | 'evening' }> = [];
+    for (const period of ['morning', 'evening'] as const) {
+      const start = dto[`${period}Start`];
+      const end = dto[`${period}End`];
+      if (start === undefined && end === undefined) continue;
+      if (!start || !end) throw new BadRequestException('Provide both start and end of a shift.');
+      const startTime = to24(start);
+      const endTime = to24(end);
+      if (endTime <= startTime) throw new BadRequestException('Shift end must be after its start.');
+      intervals.push({ startTime, endTime, period });
+    }
+    const existingDays = [...new Set(doctor.availabilities.map((availability) => availability.dayOfWeek))];
+    const days = existingDays.length ? existingDays : [1, 2, 3, 4, 5, 6];
+
+    await this.prisma.$transaction(async (tx) => {
+
     // 1. If date provided, update or create override for that date
     if (cleanDate) {
-      await this.prisma.doctorScheduleOverride.upsert({
+      await tx.doctorScheduleOverride.upsert({
         where: {
           doctorId_date: {
             doctorId: doctor.id,
@@ -1999,40 +2088,33 @@ export class DoctorsService {
     }
 
     // 2. Also update doctor default patientsPerSlot if provided
-    if (dto.patientsPerSlot && dto.patientsPerSlot > 0) {
-      await this.prisma.doctor.update({
+    if (!cleanDate && dto.patientsPerSlot && dto.patientsPerSlot > 0) {
+      await tx.doctor.update({
         where: { id: doctor.id },
         data: { patientsPerSlot: dto.patientsPerSlot },
       });
     }
 
-    // 3. Update shift availabilities (Mon-Sat, 1-6)
-    const slotDuration = dto.slotDurationMinutes || 15;
-    const to24 = (t?: string) => {
-      if (!t) return null;
-      const m = t.trim().match(/^(\d{1,2}):(\d{2})\s*(AM|PM)?$/i);
-      if (!m) return t.trim();
-      let h = Number(m[1]);
-      const min = Number(m[2]);
-      const meri = m[3]?.toUpperCase();
-      if (meri === 'PM' && h !== 12) h += 12;
-      if (meri === 'AM' && h === 12) h = 0;
-      return `${String(h).padStart(2, '0')}:${String(min).padStart(2, '0')}`;
-    };
-
-    const mStart = to24(dto.morningStart) || '10:30';
-    const mEnd = to24(dto.morningEnd) || '13:30';
-    const eStart = to24(dto.eveningStart) || '17:00';
-    const eEnd = to24(dto.eveningEnd) || '20:00';
-
-    if (dto.morningStart || dto.eveningStart || dto.slotDurationMinutes) {
-      await this.prisma.availability.deleteMany({ where: { doctorId: doctor.id } });
-      const newAvails = [1, 2, 3, 4, 5, 6].flatMap((dayOfWeek) => [
-        { doctorId: doctor.id, dayOfWeek, startTime: mStart, endTime: mEnd, slotDurationMinutes: slotDuration },
-        { doctorId: doctor.id, dayOfWeek, startTime: eStart, endTime: eEnd, slotDurationMinutes: slotDuration },
-      ]);
-      await this.prisma.availability.createMany({ data: newAvails });
+    // 3. Preserve existing operating days and shifts not explicitly edited.
+    if (intervals.length > 0) {
+      const removedIds = doctor.availabilities.filter((availability) => intervals.some((interval) =>
+        interval.period === (availability.startTime < '14:00' ? 'morning' : 'evening')
+      )).map((availability) => availability.id);
+      await tx.availability.deleteMany({ where: { doctorId: doctor.id, id: { in: removedIds } } });
+      const newAvails = days.flatMap((dayOfWeek) =>
+        intervals.map((interval) => ({
+          doctorId: doctor.id,
+          dayOfWeek,
+          startTime: interval.startTime,
+          endTime: interval.endTime,
+          slotDurationMinutes: slotDuration,
+        }))
+      );
+      await tx.availability.createMany({ data: newAvails });
+    } else if (!cleanDate && dto.slotDurationMinutes !== undefined) {
+      await tx.availability.updateMany({ where: { doctorId: doctor.id }, data: { slotDurationMinutes: slotDuration } });
     }
+    }, { maxWait: 5000, timeout: 10000 });
 
     // Audit log
     if (currentUser?.id) {
@@ -2067,4 +2149,3 @@ export class DoctorsService {
     };
   }
 }
-

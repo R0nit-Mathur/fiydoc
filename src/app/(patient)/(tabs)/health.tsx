@@ -38,30 +38,16 @@ export default function HealthHubScreen() {
   const router = useRouter();
   const { user } = useAuthStore();
   const { records, prescriptions: storePrescriptions } = useHealthStore();
-  const { data: serverPrescriptions = [], isLoading: isLoadingPrescriptions, refetch: refetchPrescriptions } = usePrescriptionsQuery();
+  const { data: serverPrescriptions, isLoading: isLoadingPrescriptions, isError: isPrescriptionsError, refetch: refetchPrescriptions } = usePrescriptionsQuery();
   const { colors } = useAppTheme();
   const queryClient = useQueryClient();
 
-  const allPrescriptions = useMemo(() => {
-    const map = new Map();
-    [...serverPrescriptions, ...storePrescriptions].forEach((p) => {
-      if (p?.id && !map.has(p.id)) {
-        map.set(p.id, p);
-      }
-    });
-    return Array.from(map.values());
-  }, [serverPrescriptions, storePrescriptions]);
-
   const patientPrescriptions = useMemo(() => {
-    return allPrescriptions.filter((p) => {
-      if (!user) return true;
-      if (user.role === 'patient') {
-        return !p.patientId || p.patientId === user.id ||
-          (p.patientName && user.name && p.patientName.toLowerCase() === user.name.toLowerCase());
-      }
-      return true;
-    });
-  }, [allPrescriptions, user]);
+    if (!user?.id) return [];
+    // A successful authorized response, including an empty list, is authoritative.
+    // Names and missing IDs are never evidence of ownership of cached records.
+    return serverPrescriptions ?? storePrescriptions.filter((p) => p.patientId === user.id);
+  }, [serverPrescriptions, storePrescriptions, user?.id]);
 
   const [activeTab, setActiveTab] = useState<'PRESCRIPTIONS' | 'HISTORY'>('PRESCRIPTIONS');
   const [uploadModalVisible, setUploadModalVisible] = useState(false);
@@ -73,12 +59,10 @@ export default function HealthHubScreen() {
     setRefreshing(true);
     try {
       await Promise.all([
-        queryClient.invalidateQueries({ queryKey: ['prescriptions'] }),
         queryClient.invalidateQueries({ queryKey: ['health-records'] }),
         queryClient.invalidateQueries({ queryKey: ['appointments'] }),
         refetchPrescriptions(),
       ]);
-      await new Promise((r) => setTimeout(r, 400));
     } finally {
       setRefreshing(false);
     }
@@ -180,7 +164,7 @@ export default function HealthHubScreen() {
         }
       >
         {activeTab === 'PRESCRIPTIONS' ? (
-          <PrescriptionsTab prescriptions={patientPrescriptions} isLoading={isLoadingPrescriptions} />
+          <PrescriptionsTab prescriptions={patientPrescriptions} isLoading={isLoadingPrescriptions} isError={isPrescriptionsError} onRetry={() => refetchPrescriptions()} />
         ) : (
           <HealthHistoryTab records={records} prescriptions={patientPrescriptions} />
         )}

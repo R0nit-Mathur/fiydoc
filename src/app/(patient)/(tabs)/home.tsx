@@ -16,6 +16,7 @@
  */
 
 import React, { useState, useEffect, useMemo, useRef } from 'react';
+import { platformShadow } from '@/utils/platformStyles';
 import {
   View,
   Text,
@@ -27,12 +28,11 @@ import {
   StatusBar,
   Modal,
   RefreshControl,
-  ActivityIndicator,
 } from 'react-native';
 import { useRouter } from 'expo-router';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { BlurView } from 'expo-blur';
-import Animated, { FadeInDown, FadeInUp } from 'react-native-reanimated';
+import Animated, { FadeInDown, FadeInUp, ReduceMotion } from 'react-native-reanimated';
 import * as Haptics from 'expo-haptics';
 
 import { useQueryClient } from '@tanstack/react-query';
@@ -78,7 +78,8 @@ import {
 } from 'lucide-react-native';
 import { SPECIALTIES, ALL_SPECIALTIES } from '@/constants/specialties';
 import { AllSpecialtiesModal } from '@/components/patient/AllSpecialtiesModal';
-import { DoctorCardSkeleton } from '@/components/ui/Skeleton';
+import { DoctorCardSkeleton, VisitCardSkeleton } from '@/components/ui/Skeleton';
+import { EmptyState } from '@/components/ui/EmptyState';
 import { Doctor } from '@/types/index';
 import { FiYLogo } from '@/components/ui/FiYLogo';
 import { AppUpdateModal } from '@/components/ui/AppUpdateModal';
@@ -100,8 +101,18 @@ export default function PatientHomeScreen() {
   const hasPromptedGuideRef = useRef(false);
 
   const { formattedAddress, city, area, permissionStatus } = useLocationStore();
-  const { data: doctors = [], isLoading: isLoadingDoctors, refetch: refetchDoctors } = useDoctorsQuery();
-  const { data: serverAppointments = [], isLoading: isLoadingAppointments, refetch: refetchAppointments } = useAppointmentsQuery();
+  const {
+    data: doctors = [],
+    isLoading: isLoadingDoctors,
+    isError: isDoctorsError,
+    refetch: refetchDoctors,
+  } = useDoctorsQuery();
+  const {
+    data: serverAppointments = [],
+    isLoading: isLoadingAppointments,
+    isError: isAppointmentsError,
+    refetch: refetchAppointments,
+  } = useAppointmentsQuery();
   const user = useAuthStore((s) => s.user);
   const appointments = useAppointmentStore((s) => s.appointments);
   const records = useHealthStore((s) => s.records);
@@ -112,13 +123,12 @@ export default function PatientHomeScreen() {
       Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
     }
     try {
-      await Promise.all([
-        queryClient.invalidateQueries({ queryKey: ['doctors'] }),
-        queryClient.invalidateQueries({ queryKey: ['appointments'] }),
-        queryClient.invalidateQueries({ queryKey: ['notifications'] }),
-        refetchDoctors(),
-        refetchAppointments(),
-      ]);
+      // Refetch the two visible resources exactly once. Invalidating them and
+      // then refetching would issue duplicate requests for active queries.
+      await Promise.all([refetchDoctors(), refetchAppointments()]);
+      // Keep notification queries stale for their own screen without fetching
+      // an unseen screen as a side effect of refreshing Home.
+      await queryClient.invalidateQueries({ queryKey: ['notifications'], refetchType: 'none' });
       setRefreshKey((k) => k + 1);
     } finally {
       setRefreshing(false);
@@ -268,7 +278,7 @@ export default function PatientHomeScreen() {
         }
       >
         {/* 1. Greeting & Location Header */}
-        <Animated.View key={`greeting-${refreshKey}`} entering={FadeInDown.duration(300)} style={styles.greetingSection}>
+        <Animated.View key={`greeting-${refreshKey}`} entering={FadeInDown.duration(300).reduceMotion(ReduceMotion.System)} style={styles.greetingSection}>
           <View style={styles.locationRow}>
             <Pressable
               onPress={() => {
@@ -322,11 +332,21 @@ export default function PatientHomeScreen() {
         {/* 2. Upcoming Clinic Visit Card (Dynamic from Appointments Store) */}
         {isLoadingAppointments ? (
           <View style={styles.sectionSpacer}>
-            <View style={[styles.upcomingCard, { opacity: 0.85, minHeight: 110, justifyContent: 'center', alignItems: 'center' }]}>
-              <ActivityIndicator size="small" color="#5eead4" />
-              <Text style={{ marginTop: 8, color: '#e0e7ff', fontSize: 13, fontWeight: '600' }}>
-                Checking upcoming appointments...
-              </Text>
+            <VisitCardSkeleton />
+          </View>
+        ) : isAppointmentsError && combinedAppointments.length === 0 ? (
+          <View style={styles.sectionSpacer}>
+            <View style={styles.inlineErrorCard}>
+              <Text style={styles.inlineErrorTitle}>Appointments unavailable</Text>
+              <Text style={styles.inlineErrorText}>We couldn't load your upcoming visits.</Text>
+              <Pressable
+                onPress={() => refetchAppointments()}
+                style={({ pressed }) => [styles.inlineRetryButton, pressed && { opacity: 0.8 }]}
+                accessibilityRole="button"
+                accessibilityLabel="Retry loading appointments"
+              >
+                <Text style={styles.inlineRetryText}>Try again</Text>
+              </Pressable>
             </View>
           </View>
         ) : upcomingAppointment ? (
@@ -335,7 +355,7 @@ export default function PatientHomeScreen() {
               onPress={() => router.push('/(patient)/(tabs)/appointments')}
               style={({ pressed }) => pressed && { transform: [{ scale: 0.99 }] }}
             >
-              <Animated.View key={`upcoming-${refreshKey}`} entering={FadeInDown.delay(60).duration(380)} style={styles.upcomingCard}>
+              <Animated.View key={`upcoming-${refreshKey}`} entering={FadeInDown.delay(60).duration(380).reduceMotion(ReduceMotion.System)} style={styles.upcomingCard}>
                 <View style={styles.upcomingHeader}>
                   <View style={styles.upcomingHeaderLeft}>
                     <View style={styles.upcomingPulse} />
@@ -367,7 +387,6 @@ export default function PatientHomeScreen() {
                   <View style={styles.flex1}>
                     <View style={styles.doctorNameRow}>
                       <Text style={styles.doctorName}>{upcomingAppointment.doctorName}</Text>
-                      <Verified size={15} color="#5eead4" fill="#5eead4" />
                     </View>
                     <Text style={styles.doctorSpecialty}>
                       {upcomingAppointment.doctorSpecialty} • {upcomingAppointment.hospital || 'OPD Clinic'}
@@ -415,7 +434,7 @@ export default function PatientHomeScreen() {
               onPress={() => router.push(`/(patient)/doctor/${doctors[0].id}`)}
               style={({ pressed }) => pressed && { transform: [{ scale: 0.99 }] }}
             >
-              <Animated.View key={`featured-${refreshKey}`} entering={FadeInDown.delay(60).duration(380)} style={styles.upcomingCard}>
+              <Animated.View key={`featured-${refreshKey}`} entering={FadeInDown.delay(60).duration(380).reduceMotion(ReduceMotion.System)} style={styles.upcomingCard}>
                 <View style={styles.upcomingHeader}>
                   <View style={styles.upcomingHeaderLeft}>
                     <View style={styles.upcomingPulse} />
@@ -447,7 +466,6 @@ export default function PatientHomeScreen() {
                   <View style={styles.flex1}>
                     <View style={styles.doctorNameRow}>
                       <Text style={styles.doctorName}>{doctors[0].name}</Text>
-                      <Verified size={15} color="#5eead4" fill="#5eead4" />
                     </View>
                     <Text style={styles.doctorSpecialty}>
                       {doctors[0].specialty} • {doctors[0].hospital || null}
@@ -455,7 +473,7 @@ export default function PatientHomeScreen() {
                     <View style={styles.tokenRow}>
                       <View style={styles.tokenPill}>
                         <Text style={styles.tokenText}>
-                          Fee: ₹{doctors[0].consultationFee || 800}
+                          Fee: {Number(doctors[0].consultationFee) > 0 ? `₹${doctors[0].consultationFee}` : 'Fee unavailable'}
                         </Text>
                       </View>
                       <Text style={styles.tokenLocation}>Instant OPD Booking</Text>
@@ -489,7 +507,7 @@ export default function PatientHomeScreen() {
         ) : null}
 
         {/* 3. Find by Specialty Section */}
-        <Animated.View key={`specialties-${refreshKey}`} entering={FadeInUp.delay(100).duration(380)} style={styles.sectionSpacer}>
+        <Animated.View key={`specialties-${refreshKey}`} entering={FadeInUp.delay(100).duration(380).reduceMotion(ReduceMotion.System)} style={styles.sectionSpacer}>
           <View style={styles.specialtiesHeader}>
             <View>
               <Text style={styles.specialtiesTitle}>Find by Specialty</Text>
@@ -558,7 +576,7 @@ export default function PatientHomeScreen() {
         </Animated.View>
 
         {/* 4. Top Rated Doctors Available Today Section */}
-        <Animated.View key={`topdocs-${refreshKey}`} entering={FadeInUp.delay(140).duration(380)} style={styles.sectionSpacer}>
+        <Animated.View key={`topdocs-${refreshKey}`} entering={FadeInUp.delay(140).duration(380).reduceMotion(ReduceMotion.System)} style={styles.sectionSpacer}>
           <View style={styles.specialtiesHeader}>
             <View>
               <Text style={styles.specialtiesTitle}>Top Doctors Available Today</Text>
@@ -587,6 +605,27 @@ export default function PatientHomeScreen() {
                 <DoctorCardSkeleton />
                 <DoctorCardSkeleton />
               </>
+            ) : isDoctorsError && doctors.length === 0 ? (
+              <View style={styles.inlineErrorCard}>
+                <Text style={styles.inlineErrorTitle}>Doctors unavailable</Text>
+                <Text style={styles.inlineErrorText}>Check your connection and try again.</Text>
+                <Pressable
+                  onPress={() => refetchDoctors()}
+                  style={({ pressed }) => [styles.inlineRetryButton, pressed && { opacity: 0.8 }]}
+                  accessibilityRole="button"
+                  accessibilityLabel="Retry loading doctors"
+                >
+                  <Text style={styles.inlineRetryText}>Try again</Text>
+                </Pressable>
+              </View>
+            ) : doctors.length === 0 ? (
+              <EmptyState
+                title="No doctors available yet"
+                description="Try again later or browse all specialties to find another clinic."
+                actionTitle="Browse specialties"
+                onAction={() => router.push('/(patient)/(tabs)/discovery')}
+                illustration="doctor-search"
+              />
             ) : (
               doctors.slice(0, 3).map((doc) => (
                 <DoctorCard
@@ -618,7 +657,7 @@ export default function PatientHomeScreen() {
             accessibilityLabel="Close drawer"
           />
           <Animated.View
-            entering={FadeInUp.duration(300)}
+            entering={FadeInUp.duration(300).reduceMotion(ReduceMotion.System)}
             style={styles.drawerPanel}
           >
             <View style={styles.drawerHeader}>
@@ -629,6 +668,8 @@ export default function PatientHomeScreen() {
                 onPress={() => setDrawerOpen(false)}
                 hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
                 style={styles.drawerClose}
+                accessibilityRole="button"
+                accessibilityLabel="Close menu"
               >
                 <X size={18} color={StitchColors.onSurfaceVariant} />
               </Pressable>
@@ -751,13 +792,16 @@ export default function PatientHomeScreen() {
                   if (Platform.OS !== 'web') {
                     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
                   }
-                  await signOutAll();
-                  router.replace('/(auth)/welcome');
+                  await signOutAll('USER_ACTION');
+                  router.replace('/(auth)/login');
                 }}
                 style={({ pressed }) => [
                   styles.logoutButton,
                   pressed && { opacity: 0.7 },
                 ]}
+                accessibilityRole="button"
+                accessibilityLabel="Log out"
+                accessibilityHint="Sign out of this device"
               >
                 <LogOut size={17} color="#e11d48" />
                 <Text style={styles.logoutText}>Log Out</Text>
@@ -986,11 +1030,13 @@ const styles = StyleSheet.create({
     overflow: 'hidden',
     borderWidth: 1,
     borderColor: 'rgba(255, 255, 255, 0.2)',
-    shadowColor: '#0d3b82',
-    shadowOffset: { width: 0, height: 12 },
-    shadowOpacity: 0.35,
-    shadowRadius: 28,
-    elevation: 8,
+    ...platformShadow({
+      shadowColor: '#0d3b82',
+      shadowOffset: { width: 0, height: 12 },
+      shadowOpacity: 0.35,
+      shadowRadius: 28,
+      elevation: 8,
+    }),
   },
   upcomingHeader: {
     flexDirection: 'row',
@@ -1202,6 +1248,38 @@ const styles = StyleSheet.create({
   /* Doctors List Container */
   doctorsListContainer: {
     paddingTop: 2,
+  },
+  inlineErrorCard: {
+    width: '100%',
+    borderRadius: 16,
+    borderWidth: 1,
+    borderColor: '#fecdd3',
+    backgroundColor: '#fff1f2',
+    padding: 16,
+    alignItems: 'center',
+  },
+  inlineErrorTitle: {
+    color: '#9f1239',
+    fontSize: 14,
+    fontWeight: '700',
+  },
+  inlineErrorText: {
+    color: '#be123c',
+    fontSize: 12,
+    marginTop: 4,
+    textAlign: 'center',
+  },
+  inlineRetryButton: {
+    marginTop: 12,
+    paddingHorizontal: 14,
+    paddingVertical: 8,
+    borderRadius: 999,
+    backgroundColor: '#9f1239',
+  },
+  inlineRetryText: {
+    color: '#fff',
+    fontSize: 12,
+    fontWeight: '700',
   },
 
   /* Emergency Helpline */

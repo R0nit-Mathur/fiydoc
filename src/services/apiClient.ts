@@ -1,8 +1,8 @@
-import Constants from 'expo-constants';
 import { useAuthStore } from '@/store/useAuthStore';
 import { tokenStorage } from '@/utils/tokenStorage';
 
 const PRODUCTION_API_URL = 'https://fiydoc.onrender.com';
+const DEFAULT_TIMEOUT_MS = 12_000;
 
 function getBaseUrl(): string {
   const envUrl = process.env.EXPO_PUBLIC_API_URL?.trim();
@@ -17,47 +17,109 @@ function getBaseUrl(): string {
 }
 
 export async function apiClient<T>(endpoint: string, options: RequestInit = {}): Promise<T> {
-  const token =
-    tokenStorage.getCachedToken() ||
-    useAuthStore.getState().user?.accessToken ||
-    (await tokenStorage.getToken());
-  const baseUrl = getBaseUrl();
+  // Track identity changes, not profile edits. A logout/login round trip also
+  // invalidates the request, even if it ends with the same account and token.
+  const session = useAuthStore.getState();
+  const userId = session.user?.id;
+  const sessionToken = session.user?.accessToken;
+  let sessionChanged = false;
+  const unsubscribe = useAuthStore.subscribe((state) => {
+    if (
+      state.user?.id !== userId ||
+      state.user?.accessToken !== sessionToken ||
+      state.isAuthenticated !== session.isAuthenticated
+    ) {
+      sessionChanged = true;
+    }
+  });
+  const controller = new AbortController();
+  const callerSignal = options.signal;
+  const abortFromCaller = () => controller.abort(callerSignal?.reason);
+  if (callerSignal?.aborted) {
+    abortFromCaller();
+  } else {
+    callerSignal?.addEventListener('abort', abortFromCaller, { once: true });
+  }
+  let timedOut = false;
+  const timeoutId = setTimeout(() => {
+    if (!controller.signal.aborted) {
+      timedOut = true;
+      controller.abort();
+    }
+  }, DEFAULT_TIMEOUT_MS);
 
-  const headers: Record<string, string> = {
-    'Content-Type': 'application/json',
-    ...(options.headers as Record<string, string>),
+  const assertNotAborted = () => {
+    if (controller.signal.aborted) {
+      throw controller.signal.reason || Object.assign(new Error('Request cancelled.'), { name: 'AbortError' });
+    }
   };
 
-  if (token) {
-    headers['Authorization'] = `Bearer ${token}`;
-  }
-
-  const url = `${baseUrl}${endpoint}`;
-  console.log(`[apiClient] --> ${options.method || 'GET'} ${url}`);
   try {
+    assertNotAborted();
+    const token =
+      tokenStorage.getCachedToken() ||
+      sessionToken ||
+      (await tokenStorage.getToken());
+    const cachedToken = tokenStorage.getCachedToken();
+    const assertRequestCurrent = () => {
+      assertNotAborted();
+      if (token && (
+        sessionChanged ||
+        (cachedToken && cachedToken !== token) ||
+        tokenStorage.getCachedToken() !== cachedToken
+      )) {
+        throw new Error('[Session Changed] The session changed while this request was in progress. Please try again.');
+      }
+    };
+    assertRequestCurrent();
+
+    const headers: Record<string, string> = {
+      'Content-Type': 'application/json',
+      ...(options.headers as Record<string, string>),
+    };
+    if (token) {
+      headers['Authorization'] = `Bearer ${token}`;
+    }
+
+    const url = `${getBaseUrl()}${endpoint}`;
     const response = await fetch(url, {
       ...options,
       headers,
+      signal: controller.signal,
     });
+    assertRequestCurrent();
 
     if (!response.ok) {
-      if (response.status === 401 && !endpoint.includes('/auth/login') && !endpoint.includes('/auth/register')) {
+      if (token && response.status === 401 && !endpoint.includes('/auth/login') && !endpoint.includes('/auth/register')) {
         console.warn(`[apiClient] 401 Unauthorized on authenticated endpoint "${endpoint}". Triggering session expiration.`);
-        useAuthStore.getState().signOutAll?.('SESSION_EXPIRED');
+        await useAuthStore.getState().signOutAll?.('SESSION_EXPIRED');
         throw new Error('[Session Expired] Your session has expired for security. Please sign in again.');
       }
 
       const errorData = await response.json().catch(() => ({ message: 'API request failed' }));
+      assertRequestCurrent();
       const msg = Array.isArray(errorData.message)
         ? errorData.message.join('. ')
         : errorData.message || `HTTP error ${response.status}`;
       throw new Error(msg);
     }
 
-    return response.json();
-  } catch (err: any) {
-    console.warn(`[apiClient] Request to ${url} failed:`, err.message);
+    if (response.status === 204) {
+      return undefined as T;
+    }
+
+    const data = await response.json();
+    assertRequestCurrent();
+    return data;
+  } catch (err: unknown) {
+    if (timedOut) {
+      throw new Error('The request took too long. Please check your connection and try again.');
+    }
     throw err;
+  } finally {
+    clearTimeout(timeoutId);
+    callerSignal?.removeEventListener('abort', abortFromCaller);
+    unsubscribe();
   }
 }
 
@@ -80,4 +142,3 @@ apiClient.patch = <T>(endpoint: string, body?: any, options?: RequestInit): Prom
 
 apiClient.delete = <T>(endpoint: string, options?: RequestInit): Promise<T> =>
   apiClient<T>(endpoint, { ...options, method: 'DELETE' });
-

@@ -10,6 +10,7 @@
 import React from 'react';
 import { View, Text, StyleSheet } from 'react-native';
 import Animated, {
+  ReduceMotion,
   useAnimatedStyle,
   withSpring,
   useSharedValue,
@@ -45,6 +46,7 @@ export function EmptyState({
     scale.value = withSpring(1, {
       damping: 12,
       stiffness: 100,
+      reduceMotion: ReduceMotion.System,
     });
   }, [scale]);
 
@@ -106,10 +108,10 @@ export function EmptyState({
       </View>
 
       {/* Text Content */}
-      <Text style={[styles.title, { color: colors.text }]}>{title}</Text>
+      <Text selectable style={[styles.title, { color: colors.text }]}>{title}</Text>
 
       {description && (
-        <Text style={[styles.description, { color: colors.textSecondary }]}>
+        <Text selectable style={[styles.description, { color: colors.textSecondary }]}>
           {description}
         </Text>
       )}

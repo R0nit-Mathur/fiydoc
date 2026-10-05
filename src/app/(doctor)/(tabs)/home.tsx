@@ -29,7 +29,7 @@ import { useRouter } from 'expo-router';
 import { useQueryClient } from '@tanstack/react-query';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { BlurView } from 'expo-blur';
-import Animated, { FadeInDown, FadeInUp } from 'react-native-reanimated';
+import Animated, { FadeInDown, FadeInUp, ReduceMotion } from 'react-native-reanimated';
 import * as Haptics from 'expo-haptics';
 import {
   Menu,
@@ -71,7 +71,13 @@ export default function DoctorHomeScreen() {
   const { colors, isDark } = useAppTheme();
   const { user, updateUser, setVerificationStatus } = useAuthStore();
   const { appointments: storeAppointments } = useAppointmentStore();
-  const { data: serverAppointments = [], isLoading: isLoadingAppointments, refetch: refetchAppointments } = useAppointmentsQuery(undefined, user?.id);
+  const {
+    data: serverAppointments = [],
+    isLoading: isLoadingAppointments,
+    isError: isAppointmentsError,
+    isFetching: isFetchingAppointments,
+    refetch: refetchAppointments,
+  } = useAppointmentsQuery(undefined, user?.id);
   const queryClient = useQueryClient();
   const [drawerOpen, setDrawerOpen] = useState(false);
   const [updateModalVisible, setUpdateModalVisible] = useState(false);
@@ -91,12 +97,12 @@ export default function DoctorHomeScreen() {
         updateUser({ verificationStatus: status });
         setVerificationStatus(status);
         if (status === 'verified') {
-          setVerificationCheckMsg('Credentials verified! Welcome to FiYDoc.');
+          setVerificationCheckMsg('Your credentials are marked as verified in FiYDoc.');
         } else {
-          setVerificationCheckMsg('Your profile is currently queued under review by the medical board.');
+          setVerificationCheckMsg('Your profile remains queued for review.');
         }
       } else {
-        setVerificationCheckMsg('Your application remains queued under review.');
+        setVerificationCheckMsg('Your application remains queued for review.');
       }
     } catch {
       setVerificationCheckMsg('Unable to refresh verification status right now. Please try again.');
@@ -111,12 +117,10 @@ export default function DoctorHomeScreen() {
       Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
     }
     try {
-      await Promise.all([
-        queryClient.invalidateQueries({ queryKey: ['appointments'] }),
-        queryClient.invalidateQueries({ queryKey: ['notifications'] }),
-        refetchAppointments(),
-      ]);
-      await new Promise((r) => setTimeout(r, 400));
+      // The active appointment query is explicitly refetched once. Invalidating
+      // it first would trigger another request on this screen.
+      await refetchAppointments();
+      await queryClient.invalidateQueries({ queryKey: ['notifications'], refetchType: 'none' });
     } finally {
       setRefreshing(false);
     }
@@ -198,10 +202,13 @@ export default function DoctorHomeScreen() {
           <Pressable
             onPress={async () => {
               await signOutAll('USER_ACTION');
-              router.replace('/(auth)/welcome');
+              router.replace('/(auth)/login');
             }}
-            style={[styles.pendingLogoutBtn, { backgroundColor: isDark ? 'rgba(239, 68, 68, 0.15)' : '#FEF2F2' }]}
+            style={({ pressed }) => [styles.pendingLogoutBtn, { backgroundColor: isDark ? 'rgba(239, 68, 68, 0.15)' : '#FEF2F2' }, pressed && { opacity: 0.75 }]}
             hitSlop={8}
+            accessibilityRole="button"
+            accessibilityLabel="Sign out"
+            accessibilityHint="Sign out of this device"
           >
             <LogOut size={15} color={StitchColors.error} />
             <Text style={styles.pendingLogoutText}>Sign Out</Text>
@@ -228,7 +235,7 @@ export default function DoctorHomeScreen() {
           }
         >
           <Animated.View
-            entering={FadeInDown.duration(400)}
+            entering={FadeInDown.duration(400).reduceMotion(ReduceMotion.System)}
             style={[styles.pendingCard, { backgroundColor: colors.card, borderColor: colors.border }]}
           >
             <View style={styles.pendingIconCircle}>
@@ -250,7 +257,7 @@ export default function DoctorHomeScreen() {
             </Text>
 
             <Text style={[styles.pendingBodyText, { color: colors.textSecondary }]}>
-              Your registration details have been submitted. Council and identity credentials are currently being verified for clinical practice authorization.
+              Your registration details have been submitted and are being reviewed before patient consultations are enabled.
             </Text>
 
             {verificationCheckMsg && (
@@ -281,7 +288,7 @@ export default function DoctorHomeScreen() {
                 </View>
                 <View style={styles.stageTextWrap}>
                   <Text style={[styles.stageTitle, { color: colors.text }]}>Authority Review</Text>
-                  <Text style={[styles.stageSub, { color: colors.textSecondary }]}>Medical council license cross-referencing</Text>
+                   <Text style={[styles.stageSub, { color: colors.textSecondary }]}>Submitted registration details are under review</Text>
                 </View>
               </View>
 
@@ -293,7 +300,7 @@ export default function DoctorHomeScreen() {
                 </View>
                 <View style={styles.stageTextWrap}>
                   <Text style={[styles.stageTitle, { color: '#94A3B8' }]}>OPD Activation</Text>
-                  <Text style={[styles.stageSub, { color: colors.textSecondary }]}>Immediate queue access upon approval</Text>
+                   <Text style={[styles.stageSub, { color: colors.textSecondary }]}>Queue access may become available after approval</Text>
                 </View>
               </View>
             </View>
@@ -315,7 +322,7 @@ export default function DoctorHomeScreen() {
               <View style={styles.snapshotRow}>
                 <Text style={[styles.snapshotLabel, { color: colors.textSecondary }]}>Specialty</Text>
                 <Text style={[styles.snapshotValue, { color: colors.text }]} numberOfLines={1}>
-                  {user?.specialization || user?.specialty || 'General Medicine'}
+                  {user?.specialization || user?.specialty || 'Specialty not provided'}
                 </Text>
               </View>
               <View style={styles.snapshotRow}>
@@ -330,9 +337,12 @@ export default function DoctorHomeScreen() {
             <Pressable
               onPress={handleCheckStatus}
               disabled={checkingVerification}
+              accessibilityRole="button"
+              accessibilityLabel="Check verification status"
+              accessibilityState={{ disabled: checkingVerification, busy: checkingVerification }}
               style={({ pressed }) => [
                 styles.refreshStatusBtn,
-                pressed && { opacity: 0.85 },
+                (pressed || checkingVerification) && { opacity: 0.75 },
               ]}
             >
               {checkingVerification ? (
@@ -364,7 +374,7 @@ export default function DoctorHomeScreen() {
         <Pressable
           onPress={() => setDrawerOpen(true)}
           hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
-          style={[styles.iconButton, { backgroundColor: colors.backgroundElement, borderColor: colors.border }]}
+          style={({ pressed }) => [styles.iconButton, { backgroundColor: colors.backgroundElement, borderColor: colors.border }, pressed && { opacity: 0.75 }]}
           accessibilityLabel="Open Navigation Menu"
         >
           <Menu size={20} color={colors.text} />
@@ -374,16 +384,16 @@ export default function DoctorHomeScreen() {
           <Pressable
             onPress={() => router.push('/(doctor)/notifications' as any)}
             hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
-            style={[styles.iconButton, { backgroundColor: colors.backgroundElement, borderColor: colors.border }]}
+            style={({ pressed }) => [styles.iconButton, { backgroundColor: colors.backgroundElement, borderColor: colors.border }, pressed && { opacity: 0.75 }]}
             accessibilityLabel="Notifications"
           >
             <Bell size={20} color={colors.text} />
             <View style={styles.notifDot} />
           </Pressable>
 
-          <Pressable
-            onPress={() => router.push('/(doctor)/(tabs)/profile')}
-            style={styles.avatarButton}
+            <Pressable
+              onPress={() => router.push('/(doctor)/(tabs)/profile')}
+              style={({ pressed }) => [styles.avatarButton, pressed && { opacity: 0.75 }]}
             accessibilityLabel="Profile"
           >
             <Avatar uri={user?.avatar || null} name={user?.name || 'Doctor'} size="sm" />
@@ -417,9 +427,33 @@ export default function DoctorHomeScreen() {
           </View>
         </View>
 
+        {isAppointmentsError && (
+          <View style={[styles.queueFeedback, { backgroundColor: colors.card, borderColor: colors.border }]}>
+            <View style={styles.queueFeedbackCopy}>
+              <Text style={[styles.queueFeedbackTitle, { color: colors.text }]} accessibilityLiveRegion="polite">
+                Unable to refresh today's queue
+              </Text>
+              <Text style={[styles.queueFeedbackBody, { color: colors.textSecondary }]}>
+                {combinedAppointments.length > 0 ? 'Showing saved appointments. Try again for the latest queue.' : 'Check your connection and try again.'}
+              </Text>
+            </View>
+            <Pressable
+              onPress={() => refetchAppointments()}
+              disabled={isFetchingAppointments}
+              accessibilityRole="button"
+              accessibilityLabel="Retry loading today's queue"
+              accessibilityState={{ disabled: isFetchingAppointments, busy: isFetchingAppointments }}
+              style={({ pressed }) => [styles.retryButton, (pressed || isFetchingAppointments) && { opacity: 0.7 }]}
+            >
+              {isFetchingAppointments && <ActivityIndicator size="small" color={StitchColors.onPrimary} />}
+              <Text style={styles.retryButtonText}>{isFetchingAppointments ? 'Retrying…' : 'Try again'}</Text>
+            </Pressable>
+          </View>
+        )}
+
         {/* 3. Today's Clinic Card */}
         <Animated.View
-          entering={FadeInUp.delay(60).duration(350)}
+          entering={FadeInUp.delay(60).duration(350).reduceMotion(ReduceMotion.System)}
           style={[styles.todayCard, { backgroundColor: colors.card, borderColor: colors.border }]}
         >
           <View style={styles.todayCardHeader}>
@@ -427,10 +461,17 @@ export default function DoctorHomeScreen() {
               <Calendar size={16} color={StitchColors.primaryContainer} />
               <Text style={styles.todayHeaderTitle}>TODAY'S CLINIC</Text>
             </View>
-            <Text style={styles.todayApptCount}>{todayApts.length} Appointment{todayApts.length !== 1 ? 's' : ''}</Text>
+            <Text style={styles.todayApptCount}>
+              {combinedAppointments.length === 0 && isLoadingAppointments ? 'Updating queue…' : combinedAppointments.length === 0 && isAppointmentsError ? 'Queue unavailable' : `${todayApts.length} Appointment${todayApts.length !== 1 ? 's' : ''}`}
+            </Text>
           </View>
 
-          {nextPatient ? (
+          {isLoadingAppointments && combinedAppointments.length === 0 ? (
+            <View style={[styles.nextPatientCard, styles.queueLoading, { backgroundColor: colors.backgroundElement }]} accessibilityLiveRegion="polite" accessibilityState={{ busy: true }}>
+              <ActivityIndicator size="small" color={StitchColors.primaryContainer} />
+              <Text style={[styles.patientMetaText, { color: colors.textSecondary }]}>Loading today's queue…</Text>
+            </View>
+          ) : nextPatient ? (
             /* Next Patient Sub-Card */
             <Pressable
               onPress={() => handleStartConsultation(nextPatient.id)}
@@ -466,7 +507,7 @@ export default function DoctorHomeScreen() {
           ) : (
             <View style={[styles.nextPatientCard, { backgroundColor: colors.backgroundElement }]}>
               <Text style={[styles.patientMetaText, { color: colors.textSecondary, textAlign: 'center', flex: 1 }]}>
-                No more patients in queue for today
+                {isAppointmentsError && combinedAppointments.length === 0 ? 'Your queue could not be loaded' : 'No more patients in queue for today'}
               </Text>
             </View>
           )}
@@ -474,7 +515,7 @@ export default function DoctorHomeScreen() {
           {/* Card Footer */}
           <View style={styles.todayCardFooter}>
             <Text style={[styles.timingNoticeText, { color: colors.textSecondary }]}>
-              {nextPatient ? `Next patient waiting` : 'Queue complete'}
+              {nextPatient ? 'Next patient waiting' : isLoadingAppointments ? 'Updating queue' : isAppointmentsError ? 'Queue unavailable' : 'Queue complete'}
             </Text>
 
             {nextPatient && (
@@ -490,7 +531,7 @@ export default function DoctorHomeScreen() {
         </Animated.View>
 
         {/* 4. Two Metrics Cards (Grid of 2) */}
-        <Animated.View entering={FadeInUp.delay(100).duration(350)} style={styles.metricsGrid}>
+        <Animated.View entering={FadeInUp.delay(100).duration(350).reduceMotion(ReduceMotion.System)} style={styles.metricsGrid}>
           {/* Completed Card */}
           <View style={[styles.metricCard, { backgroundColor: colors.card, borderColor: colors.border }]}>
             <View style={styles.metricHeaderRow}>
@@ -518,10 +559,12 @@ export default function DoctorHomeScreen() {
         </Animated.View>
 
         {/* 5. Quick Action Buttons (Grid of 3) */}
-        <Animated.View entering={FadeInUp.delay(140).duration(350)} style={styles.actionsGrid}>
+        <Animated.View entering={FadeInUp.delay(140).duration(350).reduceMotion(ReduceMotion.System)} style={styles.actionsGrid}>
           <Pressable
             onPress={() => router.push('/(doctor)/(tabs)/schedule')}
-            style={[styles.actionBtn, { backgroundColor: colors.card, borderColor: colors.border }]}
+            style={({ pressed }) => [styles.actionBtn, { backgroundColor: colors.card, borderColor: colors.border }, pressed && { opacity: 0.78 }]}
+            accessibilityRole="button"
+            accessibilityLabel="Open schedule"
           >
             <View style={[styles.actionIconBox, { backgroundColor: '#EFF6FF' }]}>
               <CalendarDays size={20} color={StitchColors.primaryContainer} />
@@ -531,7 +574,9 @@ export default function DoctorHomeScreen() {
 
           <Pressable
             onPress={() => router.push('/(doctor)/(tabs)/directory')}
-            style={[styles.actionBtn, { backgroundColor: colors.card, borderColor: colors.border }]}
+            style={({ pressed }) => [styles.actionBtn, { backgroundColor: colors.card, borderColor: colors.border }, pressed && { opacity: 0.78 }]}
+            accessibilityRole="button"
+            accessibilityLabel="Open patient roster"
           >
             <View style={[styles.actionIconBox, { backgroundColor: '#EFF6FF' }]}>
               <Users size={20} color={StitchColors.primaryContainer} />
@@ -541,7 +586,9 @@ export default function DoctorHomeScreen() {
 
           <Pressable
             onPress={() => router.push('/(doctor)/(tabs)/appointments')}
-            style={[styles.actionBtn, { backgroundColor: colors.card, borderColor: colors.border }]}
+            style={({ pressed }) => [styles.actionBtn, { backgroundColor: colors.card, borderColor: colors.border }, pressed && { opacity: 0.78 }]}
+            accessibilityRole="button"
+            accessibilityLabel="Open appointment queue"
           >
             <View style={[styles.actionIconBox, { backgroundColor: '#EFF6FF' }]}>
               <FileText size={20} color={StitchColors.primaryContainer} />
@@ -551,7 +598,9 @@ export default function DoctorHomeScreen() {
 
           <Pressable
             onPress={() => router.push('/(doctor)/(tabs)/schedule')}
-            style={[styles.actionBtn, { backgroundColor: colors.card, borderColor: colors.border }]}
+            style={({ pressed }) => [styles.actionBtn, { backgroundColor: colors.card, borderColor: colors.border }, pressed && { opacity: 0.78 }]}
+            accessibilityRole="button"
+            accessibilityLabel="Open leave and schedule options"
           >
             <View style={[styles.actionIconBox, { backgroundColor: '#EFF6FF' }]}>
               <CalendarX size={20} color={StitchColors.primaryContainer} />
@@ -561,12 +610,14 @@ export default function DoctorHomeScreen() {
         </Animated.View>
 
         {/* 6. Upcoming Today Section */}
-        <Animated.View entering={FadeInUp.delay(180).duration(350)} style={styles.upcomingSection}>
+        <Animated.View entering={FadeInUp.delay(180).duration(350).reduceMotion(ReduceMotion.System)} style={styles.upcomingSection}>
           <View style={styles.upcomingHeaderRow}>
             <Text style={[styles.upcomingSectionTitle, { color: colors.text }]}>Upcoming Today</Text>
             <Pressable
               onPress={() => router.push('/(doctor)/(tabs)/schedule')}
-              style={{ flexDirection: 'row', alignItems: 'center', gap: 2 }}
+              style={({ pressed }) => [{ flexDirection: 'row', alignItems: 'center', gap: 2 }, pressed && { opacity: 0.7 }]}
+              accessibilityRole="button"
+              accessibilityLabel="View all appointments"
             >
               <Text style={styles.viewAllText}>View All</Text>
               <ChevronRight size={14} color={StitchColors.primaryContainer} />
@@ -580,6 +631,10 @@ export default function DoctorHomeScreen() {
                 <Text style={[styles.patientRowReason, { color: colors.textSecondary }]}>
                   Loading today's queue...
                 </Text>
+              </View>
+            ) : isAppointmentsError && combinedAppointments.length === 0 ? (
+              <View style={{ padding: 20, alignItems: 'center' }}>
+                <Text style={[styles.patientRowReason, { color: colors.textSecondary, textAlign: 'center' }]}>Unable to load today's queue.</Text>
               </View>
             ) : upcomingPatients.length === 0 ? (
               <View style={{ padding: 20, alignItems: 'center' }}>
@@ -648,7 +703,7 @@ export default function DoctorHomeScreen() {
               <View style={{ flex: 1, marginLeft: 12 }}>
                 <Text style={[styles.drawerDoctorName, { color: colors.text }]}>{user?.name || 'Doctor'}</Text>
                 <Text style={[styles.drawerDoctorSpec, { color: StitchColors.primaryContainer }]}>
-                  {(user as any)?.specialty || 'Medical Specialist'}
+                  {(user as any)?.specialty || 'Specialty not provided'}
                 </Text>
               </View>
             </View>
@@ -708,10 +763,13 @@ export default function DoctorHomeScreen() {
                   if (Platform.OS !== 'web') {
                     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
                   }
-                  await signOutAll();
-                  router.replace('/(auth)/welcome');
+                  await signOutAll('USER_ACTION');
+                  router.replace('/(auth)/login');
                 }}
-                style={styles.logoutRow}
+                style={({ pressed }) => [styles.logoutRow, pressed && { opacity: 0.7 }]}
+                accessibilityRole="button"
+                accessibilityLabel="Log out"
+                accessibilityHint="Sign out of this device"
               >
                 <LogOut size={16} color={StitchColors.error} />
                 <Text style={styles.logoutText}>Log Out</Text>
@@ -731,7 +789,7 @@ export default function DoctorHomeScreen() {
       <LoadingDialog
         visible={checkingVerification}
         title="Checking Verification"
-        message="Verifying credentials with medical registry..."
+        message="Checking the latest review status..."
       />
     </SafeAreaView>
   );
@@ -1052,6 +1110,44 @@ const styles = StyleSheet.create({
   patientRowReason: {
     fontSize: 11,
     marginTop: 2,
+  },
+  retryButton: {
+    minHeight: 44,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: Spacing.sm,
+    paddingHorizontal: 14,
+    paddingVertical: 8,
+    borderRadius: BorderRadius.full,
+    backgroundColor: StitchColors.primaryContainer,
+  },
+  retryButtonText: {
+    color: '#ffffff',
+    fontSize: 12,
+    fontWeight: '700',
+  },
+  queueLoading: {
+    justifyContent: 'flex-start',
+    gap: Spacing.sm,
+  },
+  queueFeedback: {
+    padding: Spacing.md,
+    borderRadius: BorderRadius.xl,
+    borderWidth: 1,
+    gap: Spacing.sm,
+    alignItems: 'flex-start',
+  },
+  queueFeedbackCopy: {
+    gap: Spacing.xs,
+  },
+  queueFeedbackTitle: {
+    fontSize: 13,
+    fontWeight: '600',
+  },
+  queueFeedbackBody: {
+    fontSize: 12,
+    lineHeight: 18,
   },
 
   /* Drawer Modal */

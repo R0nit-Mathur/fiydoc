@@ -292,6 +292,16 @@ export function LocationPermissionModal({
               </TouchableOpacity>
             )}
 
+            <TouchableOpacity
+              onPress={onClose}
+              activeOpacity={0.75}
+              style={styles.continueWithoutLocationButton}
+              accessibilityRole="button"
+              accessibilityLabel="Continue without precise location"
+            >
+              <Text style={styles.continueWithoutLocationText}>Continue without precise location</Text>
+            </TouchableOpacity>
+
 
           </View>
         </View>
@@ -401,6 +411,17 @@ const styles = StyleSheet.create({
   actionGroup: {
     width: '100%',
     gap: Spacing.sm,
+  },
+  continueWithoutLocationButton: {
+    minHeight: 44,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginTop: Spacing.xs,
+  },
+  continueWithoutLocationText: {
+    color: Palette.textSecondary,
+    fontSize: 13,
+    fontWeight: '600',
   },
   primaryButton: {
     width: '100%',

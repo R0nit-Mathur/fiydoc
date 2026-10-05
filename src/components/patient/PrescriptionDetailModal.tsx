@@ -1,11 +1,11 @@
-import React, { useState } from 'react';
-import { View, Text, ScrollView, TouchableOpacity, Share, StyleSheet } from 'react-native';
+import React from 'react';
+import { View, Text, ScrollView, TouchableOpacity, Share, StyleSheet, Alert } from 'react-native';
 import { Modal as UIModal } from '@/components/ui/Modal';
 import { Badge } from '@/components/ui/Badge';
 import { Prescription } from '@/types/index';
 import { Palette, Typography, Spacing, BorderRadius, Shadows } from '@/constants/theme';
 import { useAppTheme } from '@/hooks/useAppTheme';
-import { Building2, Pill, Activity, CheckCircle2, Download, Share2 } from 'lucide-react-native';
+import { Building2, Pill, Activity, FileText, Share2 } from 'lucide-react-native';
 import { useAuthStore } from '@/store/useAuthStore';
 
 interface PrescriptionDetailModalProps {
@@ -18,22 +18,21 @@ export function PrescriptionDetailModal({ visible, onClose, prescription }: Pres
   const { user } = useAuthStore();
   const { colors } = useAppTheme();
   const styles = useStyles(colors);
-  const [downloadToast, setDownloadToast] = useState(false);
 
   if (!prescription) return null;
 
   const buildPrescriptionSummary = (rx: Prescription) => {
     return [
-      `FiYDoc Official Medical Prescription`,
-      `Verification Code: ${rx.verificationCode}`,
-      `Date: ${rx.createdAt}`,
-      `Doctor: ${rx.doctorName} (${rx.doctorSpecialty})`,
-      `Clinic: ${rx.clinicName || 'FiYDoc Clinic'}`,
+      'FiYDoc Digital Prescription',
+      rx.verificationCode ? `Record Code: ${rx.verificationCode}` : '',
+      `Date: ${rx.createdAt || 'Date unavailable'}`,
+      `Doctor: ${rx.doctorName || 'Not recorded'} (${rx.doctorSpecialty || 'Specialty not recorded'})`,
+      `Clinic: ${rx.clinicName || 'Clinic details unavailable'}`,
       `Patient: ${rx.patientName || user?.name || 'Patient'}`,
       rx.diagnosis ? `Diagnosis: ${rx.diagnosis}` : '',
       `\nPrescribed Medications:`,
       ...(rx.medicines || []).map(
-        (m, i) => `${i + 1}. ${m.name} - ${m.dosage} (${m.frequency}) for ${m.durationDays} days. Instructions: ${m.instructions || 'As directed'}`
+        (m, i) => `${i + 1}. ${m.name} - ${m.dosage || 'Dosage not recorded'} (${m.frequency || 'Frequency not recorded'}). Duration: ${m.durationDays != null && m.durationDays > 0 ? `${m.durationDays} days` : 'not recorded'}${m.instructions ? `. Instructions: ${m.instructions}` : ''}`
       ),
       rx.followUpInstructions ? `\nFollow-up Advice: ${rx.followUpInstructions}` : '',
     ]
@@ -44,25 +43,11 @@ export function PrescriptionDetailModal({ visible, onClose, prescription }: Pres
   const handleShareRx = async () => {
     try {
       await Share.share({
-        title: `Digital Prescription • ${prescription.verificationCode}`,
+        title: `Digital Prescription • ${prescription.id}`,
         message: buildPrescriptionSummary(prescription),
       });
     } catch (e) {
-      console.error(e);
-    }
-  };
-
-  const handleDownloadRx = async () => {
-    try {
-      await Share.share({
-        title: `Prescription_${prescription.verificationCode}.txt`,
-        message: buildPrescriptionSummary(prescription),
-      });
-      setDownloadToast(true);
-      setTimeout(() => setDownloadToast(false), 2500);
-    } catch {
-      setDownloadToast(true);
-      setTimeout(() => setDownloadToast(false), 2500);
+      Alert.alert('Unable to share', 'Please try again.');
     }
   };
 
@@ -74,23 +59,16 @@ export function PrescriptionDetailModal({ visible, onClose, prescription }: Pres
     >
       <ScrollView style={{ maxHeight: 500 }} showsVerticalScrollIndicator={false}>
         <View style={{ gap: Spacing.md, paddingVertical: Spacing.xs }}>
-          {downloadToast && (
-            <View style={styles.toastBox}>
-              <CheckCircle2 size={16} color={Palette.success} />
-              <Text style={styles.toastText}>Prescription Shared Successfully</Text>
-            </View>
-          )}
-
           {/* Clinic Letterhead Header */}
           <View style={styles.letterheadBox}>
             <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }}>
               <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, flex: 1 }}>
                 <Building2 size={16} color={Palette.healthcareTeal} />
                 <Text style={styles.letterheadClinic} numberOfLines={1}>
-                  {prescription.clinicName || 'FiYDoc Healthcare Clinic'}
+                  {prescription.clinicName || 'Clinic details unavailable'}
                 </Text>
               </View>
-              <Badge label="VERIFIED" variant="teal" size="sm" />
+              <Badge label="RECORD" variant="blue" size="sm" />
             </View>
 
             <Text style={styles.letterheadDoctor}>{prescription.doctorName}</Text>
@@ -98,7 +76,7 @@ export function PrescriptionDetailModal({ visible, onClose, prescription }: Pres
               {prescription.doctorSpecialty}
             </Text>
             <Text style={styles.letterheadAddress}>
-              {prescription.clinicAddress || 'Healthcare Enclave, Clinical OPD Block'}
+              {prescription.clinicAddress || 'Address not recorded'}
             </Text>
           </View>
 
@@ -110,12 +88,12 @@ export function PrescriptionDetailModal({ visible, onClose, prescription }: Pres
                 {prescription.patientName || user?.name || 'Patient'}
               </Text>
               <Text style={styles.metaDetails}>
-                Age: {prescription.patientAge || 32} • {prescription.patientGender || 'Male'}
+                Age: {prescription.patientAge != null ? prescription.patientAge : 'Not recorded'} • {prescription.patientGender || 'Gender not recorded'}
               </Text>
             </View>
             <View style={{ alignItems: 'flex-end' }}>
               <Text style={styles.metaLabel}>Date of Issue</Text>
-              <Text style={styles.metaDate}>{prescription.createdAt}</Text>
+              <Text style={styles.metaDate}>{prescription.createdAt || 'Date unavailable'}</Text>
             </View>
           </View>
 
@@ -140,16 +118,16 @@ export function PrescriptionDetailModal({ visible, onClose, prescription }: Pres
               <View key={idx} style={styles.medicineItemCard}>
                 <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-start' }}>
                   <Text style={styles.medItemName}>{m.name}</Text>
-                  <Badge label={m.frequency} variant="teal" size="sm" />
+                  <Badge label={m.frequency || 'Frequency not recorded'} variant="teal" size="sm" />
                 </View>
                 <View style={styles.medSpecsRow}>
                   <View style={styles.medSpecBlock}>
                     <Text style={styles.medSpecLabel}>Dosage</Text>
-                    <Text style={styles.medSpecVal}>{m.dosage}</Text>
+                    <Text style={styles.medSpecVal}>{m.dosage || 'Not recorded — confirm with your clinician'}</Text>
                   </View>
                   <View style={styles.medSpecBlock}>
                     <Text style={styles.medSpecLabel}>Duration</Text>
-                    <Text style={styles.medSpecVal}>{m.durationDays} days</Text>
+                    <Text style={styles.medSpecVal}>{m.durationDays != null && m.durationDays > 0 ? `${m.durationDays} days` : 'Not recorded'}</Text>
                   </View>
                 </View>
                 {m.instructions ? (
@@ -173,7 +151,7 @@ export function PrescriptionDetailModal({ visible, onClose, prescription }: Pres
                 <View key={idx} style={styles.testItemCard}>
                   <Text style={styles.testItemName}>{t.name}</Text>
                   <Text style={styles.testItemFast}>
-                    {t.fastingRequired ? 'Fasting Required' : 'Routine'}
+                    {t.fastingRequired === true ? 'Fasting required — confirm instructions' : t.fastingRequired === false ? 'Fasting not required' : 'Preparation not recorded'}
                   </Text>
                 </View>
               ))}
@@ -190,12 +168,13 @@ export function PrescriptionDetailModal({ visible, onClose, prescription }: Pres
             </View>
           )}
 
-          {/* Authenticated Seal */}
+          {/* Recorded metadata is not proof of clinician verification. */}
           <View style={styles.rxVerification}>
-            <CheckCircle2 size={13} color={Palette.success} style={{ marginTop: 1 }} />
+            <FileText size={13} color={colors.textSecondary} style={{ marginTop: 1 }} />
             <View style={{ flex: 1 }}>
               <Text style={styles.rxVerifiedText}>
-                Verified Prescription by {prescription.doctorName}
+                {prescription.verificationCode ? 'Prescription record with verification code' : 'Prescription record'}
+                {prescription.doctorName ? ` • ${prescription.doctorName}` : ''}
               </Text>
             </View>
           </View>
@@ -203,21 +182,14 @@ export function PrescriptionDetailModal({ visible, onClose, prescription }: Pres
           {/* Actions */}
           <View style={{ flexDirection: 'row', gap: Spacing.sm, paddingTop: Spacing.xs }}>
             <TouchableOpacity
-              onPress={handleDownloadRx}
-              activeOpacity={0.8}
-              style={styles.actionBtnOutline}
-            >
-              <Download size={16} color={colors.text} />
-              <Text style={styles.actionBtnOutlineText}>Share as Text</Text>
-            </TouchableOpacity>
-
-            <TouchableOpacity
               onPress={handleShareRx}
+              accessibilityRole="button"
+              accessibilityLabel="Share prescription text"
               activeOpacity={0.8}
               style={styles.actionBtnTeal}
             >
               <Share2 size={16} color="#FFFFFF" />
-              <Text style={styles.actionBtnTealText}>Share Rx</Text>
+              <Text style={styles.actionBtnTealText}>Share Prescription Text</Text>
             </TouchableOpacity>
           </View>
         </View>

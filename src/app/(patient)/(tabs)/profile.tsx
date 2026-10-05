@@ -23,11 +23,12 @@ import {
 } from 'react-native';
 import { useRouter } from 'expo-router';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import Animated, { FadeIn, FadeInDown } from 'react-native-reanimated';
+import Animated, { FadeIn, FadeInDown, ReduceMotion } from 'react-native-reanimated';
 import { useQueryClient } from '@tanstack/react-query';
 import * as Haptics from 'expo-haptics';
 import Svg, { Circle } from 'react-native-svg';
 import { useAuthStore } from '@/store/useAuthStore';
+import { signOutAll } from '@/services/authService';
 import { useNotificationStore } from '@/store/useNotificationStore';
 import { usePatientProfileQuery } from '@/hooks/queries/usePatientQuery';
 import { Avatar } from '@/components/ui/Avatar';
@@ -74,7 +75,7 @@ export default function PatientProfileScreen() {
   const router = useRouter();
   const queryClient = useQueryClient();
   const { colors, isDark } = useAppTheme();
-  const { user, logout, updateUser } = useAuthStore();
+  const { user, updateUser } = useAuthStore();
 
   const { data: patientProfile, isLoading: profileLoading } = usePatientProfileQuery(user?.id);
 
@@ -233,9 +234,9 @@ export default function PatientProfileScreen() {
     }
   }, [queryClient, user?.id]);
 
-  const handleConfirmLogout = () => {
+  const handleConfirmLogout = async () => {
     setLogoutDialogVisible(false);
-    logout();
+    await signOutAll('USER_ACTION');
     router.replace('/(auth)/login');
   };
 
@@ -301,14 +302,14 @@ export default function PatientProfileScreen() {
         }
       >
         {saveToast && (
-          <Animated.View entering={FadeIn.duration(300)} style={[styles.toastBox, { backgroundColor: isDark ? 'rgba(52,199,89,0.15)' : '#E8F5E9', borderColor: isDark ? 'rgba(52,199,89,0.3)' : '#C8E6C9' }]}>
+          <Animated.View entering={FadeIn.duration(300).reduceMotion(ReduceMotion.System)} style={[styles.toastBox, { backgroundColor: isDark ? 'rgba(52,199,89,0.15)' : '#E8F5E9', borderColor: isDark ? 'rgba(52,199,89,0.3)' : '#C8E6C9' }]}>
             <CheckCircle2 size={16} color={StitchColors.secondaryContainer} />
             <Text style={[styles.toastText, { color: StitchColors.secondary }]}>Profile updated successfully</Text>
           </Animated.View>
         )}
 
         {/* User Card */}
-        <Animated.View entering={FadeIn.duration(380)}>
+        <Animated.View entering={FadeIn.duration(380).reduceMotion(ReduceMotion.System)}>
           <View style={[styles.userCard, { backgroundColor: colors.card, borderColor: colors.border }]}>
             <View style={styles.avatarWrapper}>
               {/* Profile Completion Circular Progress Ring */}
@@ -364,7 +365,7 @@ export default function PatientProfileScreen() {
                 {user?.name || 'Patient User'}
               </Text>
               <Text style={[styles.userEmail, { color: colors.textSecondary }]} numberOfLines={1}>
-                {user?.email || (user?.phone ? `+91 ${user.phone}` : 'patient@fiydoc.app')}
+                {user?.email || (user?.phone ? `+91 ${user.phone}` : 'Contact details not set')}
               </Text>
 
               <View style={styles.demographicMiniRow}>
@@ -384,7 +385,7 @@ export default function PatientProfileScreen() {
               ) : null}
 
               <View style={styles.roleTagWrap}>
-                <Badge label="VERIFIED PATIENT" variant="blue" size="sm" />
+                <Badge label="PATIENT PROFILE" variant="blue" size="sm" />
               </View>
             </View>
 
@@ -402,7 +403,7 @@ export default function PatientProfileScreen() {
         </Animated.View>
 
         {/* Quick Stats: Age (Calculated from DOB), Blood Group, Allergies, Profile Completion */}
-        <Animated.View entering={FadeInDown.delay(80).duration(380)} style={styles.statsGrid}>
+        <Animated.View entering={FadeInDown.delay(80).duration(380).reduceMotion(ReduceMotion.System)} style={styles.statsGrid}>
           <View style={[styles.statItem, { backgroundColor: colors.card, borderColor: colors.border }]}>
             <Calendar size={18} color={StitchColors.primaryContainer} />
             <Text style={[styles.statValue, { color: colors.text }]}>
@@ -434,7 +435,7 @@ export default function PatientProfileScreen() {
         </Animated.View>
 
         {/* Demographics & Address Info Card */}
-        <Animated.View entering={FadeInDown.delay(120).duration(380)}>
+        <Animated.View entering={FadeInDown.delay(120).duration(380).reduceMotion(ReduceMotion.System)}>
           <View style={[styles.detailsCard, { backgroundColor: colors.card, borderColor: colors.border }]}>
             <View style={styles.detailsCardHeader}>
               <Text style={[styles.cardHeader, { color: colors.textMuted, paddingHorizontal: 0, paddingTop: 0, paddingBottom: 0 }]}>
@@ -491,7 +492,7 @@ export default function PatientProfileScreen() {
         </Animated.View>
 
         {/* Settings List */}
-        <Animated.View entering={FadeInDown.delay(160).duration(380)}>
+        <Animated.View entering={FadeInDown.delay(160).duration(380).reduceMotion(ReduceMotion.System)}>
           <View style={[styles.settingsCard, { backgroundColor: colors.card, borderColor: colors.border }]}>
             <Text style={[styles.cardHeader, { color: colors.textMuted }]}>SETTINGS</Text>
             {settingsItems.map((item, i) => {
@@ -500,6 +501,7 @@ export default function PatientProfileScreen() {
                 <TouchableOpacity
                   key={item.label}
                   onPress={item.onPress}
+                  activeOpacity={0.75}
                   style={[
                     styles.settingsRow,
                     i < settingsItems.length - 1 && { borderBottomWidth: StyleSheet.hairlineWidth, borderBottomColor: colors.border },
@@ -522,12 +524,14 @@ export default function PatientProfileScreen() {
         </Animated.View>
 
         {/* Sign Out */}
-        <Animated.View entering={FadeInDown.delay(220).duration(380)}>
+        <Animated.View entering={FadeInDown.delay(220).duration(380).reduceMotion(ReduceMotion.System)}>
           <TouchableOpacity
             onPress={() => setLogoutDialogVisible(true)}
+            activeOpacity={0.75}
             style={[styles.signOutRow, { backgroundColor: colors.card, borderColor: colors.border }]}
             accessibilityRole="button"
             accessibilityLabel="Sign out"
+            accessibilityHint="Sign out of this device"
           >
             <View style={[styles.signOutIcon, { backgroundColor: Palette.dangerBg, borderColor: Palette.dangerBorder }]}>
               <LogOut size={17} color={StitchColors.error} />
@@ -843,21 +847,21 @@ export default function PatientProfileScreen() {
           <View style={{ flexDirection: 'row', gap: 12, alignItems: 'center', backgroundColor: '#F3E8FF', padding: 12, borderRadius: BorderRadius.lg }}>
             <ShieldCheck size={28} color="#7C3AED" />
             <View style={{ flex: 1 }}>
-              <Text style={{ fontSize: 14, fontWeight: '700', color: '#5B21B6' }}>HIPAA & ABDM Compliant</Text>
-              <Text style={{ fontSize: 12, color: '#6D28D9', marginTop: 2 }}>256-bit encrypted healthcare vault</Text>
+              <Text style={{ fontSize: 14, fontWeight: '700', color: '#5B21B6' }}>Privacy & data controls</Text>
+              <Text style={{ fontSize: 12, color: '#6D28D9', marginTop: 2 }}>Review how FiYDoc handles your information</Text>
             </View>
           </View>
 
-          <Text style={{ fontSize: 13, lineHeight: 20, color: colors.textSecondary }}>
-            • <Text style={{ fontWeight: '700', color: colors.text }}>Local-First Media Storage:</Text> Your custom profile picture and local documents remain securely on your physical device.
+          <Text selectable style={{ fontSize: 13, lineHeight: 20, color: colors.textSecondary }}>
+            • <Text style={{ fontWeight: '700', color: colors.text }}>Profile media:</Text> Review your saved profile picture and documents in the app before sharing them.
           </Text>
 
-          <Text style={{ fontSize: 13, lineHeight: 20, color: colors.textSecondary }}>
-            • <Text style={{ fontWeight: '700', color: colors.text }}>Zero Third-Party Tracking:</Text> FiYDoc does not sell or share your clinical diagnostic telemetry or appointment logs.
+          <Text selectable style={{ fontSize: 13, lineHeight: 20, color: colors.textSecondary }}>
+            • <Text style={{ fontWeight: '700', color: colors.text }}>Data choices:</Text> Review FiYDoc's privacy notice for details about account data.
           </Text>
 
-          <Text style={{ fontSize: 13, lineHeight: 20, color: colors.textSecondary }}>
-            • <Text style={{ fontWeight: '700', color: colors.text }}>Encrypted Consultations:</Text> Real-time queue tokens and prescriptions are securely signed with verified doctor credentials.
+          <Text selectable style={{ fontSize: 13, lineHeight: 20, color: colors.textSecondary }}>
+            • <Text style={{ fontWeight: '700', color: colors.text }}>Clinical information:</Text> Confirm important details with your care provider; this app does not replace medical advice.
           </Text>
 
           <TouchableOpacity

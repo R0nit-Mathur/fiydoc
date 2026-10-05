@@ -145,14 +145,14 @@ export default function BookingConfirmScreen() {
   const doctorDisplayName = doctor.name || doctor.fullName || params.doctorName || 'Doctor';
   const hospitalName = (doctor.hospital || doctor.clinicName || doctor.clinic?.name || doctor.clinicAddress || 'In-Clinic OPD Consultation');
 
-  const date = params.date || bookingDraft.date || new Date().toISOString().slice(0, 10);
-  const slot = params.slot || params.slotTime || bookingDraft.timeSlot || '04:15 PM';
-  const tokenNumber = params.token || (params.tokenNumber ? (params.tokenNumber.startsWith('Token') ? params.tokenNumber : `Token #${params.tokenNumber}`) : 'Token #12');
+  const date = params.date || bookingDraft.date || '';
+  const slot = params.slot || params.slotTime || bookingDraft.timeSlot || '';
+  const tokenNumber = params.token || (params.tokenNumber ? (params.tokenNumber.startsWith('Token') ? params.tokenNumber : `Token #${params.tokenNumber}`) : 'Token assigned after booking');
   const activeSymptoms = params.reason ? [params.reason] : (bookingDraft.symptoms.length > 0 ? bookingDraft.symptoms : []);
 
   // Coupon state
-  const [couponCode, setCouponCode] = useState('HEALTH150');
-  const [couponApplied, setCouponApplied] = useState(true);
+  const [couponCode, setCouponCode] = useState('');
+  const [couponApplied, setCouponApplied] = useState(false);
 
   // Patient info state with solid defaults so booking is never blocked
   const isFamily = Boolean(params.patientRelation && params.patientRelation.toLowerCase() !== 'self');
@@ -160,7 +160,7 @@ export default function BookingConfirmScreen() {
     params.patientName || user?.name || (user?.email ? user.email.split('@')[0] : '') || 'Patient'
   );
   const [patientPhone, setPatientPhone] = useState(
-    params.patientPhone || user?.phone || '9876543210'
+    params.patientPhone || user?.phone || ''
   );
   const [patientRelation, setPatientRelation] = useState(
     isFamily ? params.patientRelation! : 'Self'
@@ -172,7 +172,7 @@ export default function BookingConfirmScreen() {
   const [errorMessage, setErrorMessage] = useState('');
 
   // Cost calculation
-  const baseFee = doctor.consultationFee || 800;
+  const baseFee = Number(doctor.consultationFee) > 0 ? Number(doctor.consultationFee) : 0;
   const discount = couponApplied ? 150 : 0;
   const totalPayable = Math.max(0, baseFee - discount);
 
@@ -185,6 +185,11 @@ export default function BookingConfirmScreen() {
 
   const handleReserveOPDToken = async () => {
     if (isProcessing) return;
+
+    if (!date || !slot || baseFee <= 0) {
+      setErrorMessage('Booking details are incomplete. Please return to the doctor profile and choose a live slot.');
+      return;
+    }
 
     if (Platform.OS !== 'web') {
       Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
@@ -205,7 +210,7 @@ export default function BookingConfirmScreen() {
       patientPhone.trim() ||
       params.patientPhone ||
       user?.phone ||
-      '9876543210'
+      ''
     ).trim();
 
     let parsedAllergies: string[] = [];
@@ -281,7 +286,7 @@ export default function BookingConfirmScreen() {
           notes: patientInfoNotes,
           patientName: effectivePatientName,
           doctorName: doctorDisplayName,
-          doctorSpecialty: doctor.specialty || doctor.specialization || 'General Physician',
+          doctorSpecialty: doctor.specialty || doctor.specialization || 'Specialty not provided',
           doctorAvatar: doctor.avatar || doctor.profilePhoto,
           hospital: hospitalName,
           attachmentUrl: uploadedUrl,
@@ -357,7 +362,7 @@ export default function BookingConfirmScreen() {
 
         <View style={styles.verifiedBadge}>
           <ShieldCheck size={14} color={StitchColors.primaryContainer} />
-          <Text style={styles.verifiedBadgeText}>100% Verified</Text>
+          <Text style={styles.verifiedBadgeText}>Secure booking</Text>
         </View>
       </View>
 
@@ -401,7 +406,10 @@ export default function BookingConfirmScreen() {
             />
             <View style={{ flex: 1, marginLeft: 14 }}>
               <Text style={[styles.doctorName, { color: colors.text }]}>{doctorDisplayName}</Text>
-              <Text style={styles.doctorSpecialty}>{(doctor.specialty || doctor.specialization || 'Specialist')} • {doctor.experienceYears || 10} yrs exp</Text>
+               <Text style={styles.doctorSpecialty}>
+                 {doctor.specialty || doctor.specialization || 'Specialty not provided'}
+                 {doctor.experienceYears > 0 ? ` • ${doctor.experienceYears} yrs exp` : ''}
+               </Text>
               <View style={styles.hospitalRow}>
                 <Building2 size={13} color={colors.textSecondary} />
                 <Text style={[styles.hospitalText, { color: colors.textSecondary }]} numberOfLines={1}>

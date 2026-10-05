@@ -3,6 +3,7 @@
  * Apple HIG-style with Stitch Clinical Clarity colors
  */
 import React, { useState } from 'react';
+import { platformShadow } from '@/utils/platformStyles';
 import {
   Pressable,
   Text,
@@ -13,6 +14,7 @@ import {
   Platform,
 } from 'react-native';
 import Animated, {
+  ReduceMotion,
   useAnimatedStyle,
   useSharedValue,
   withSpring,
@@ -30,6 +32,7 @@ export interface ButtonProps {
   icon?: React.ReactNode;
   fullWidth?: boolean;
   style?: ViewStyle;
+  accessibilityHint?: string;
 }
 
 export function Button({
@@ -42,6 +45,7 @@ export function Button({
   icon,
   fullWidth = true,
   style,
+  accessibilityHint,
 }: ButtonProps) {
   const scale = useSharedValue(1);
   const [pressed, setPressed] = useState(false);
@@ -53,7 +57,11 @@ export function Button({
   const handlePressIn = () => {
     if (!disabled && !loading) {
       setPressed(true);
-      scale.value = withSpring(0.97, { damping: 15, stiffness: 220 });
+      scale.value = withSpring(0.97, {
+        damping: 15,
+        stiffness: 220,
+        reduceMotion: ReduceMotion.System,
+      });
       if (Platform.OS !== 'web') {
         Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
       }
@@ -63,7 +71,11 @@ export function Button({
   const handlePressOut = () => {
     if (!disabled && !loading) {
       setPressed(false);
-      scale.value = withSpring(1, { damping: 15, stiffness: 220 });
+      scale.value = withSpring(1, {
+        damping: 15,
+        stiffness: 220,
+        reduceMotion: ReduceMotion.System,
+      });
     }
   };
 
@@ -139,6 +151,8 @@ export function Button({
         disabled={disabled || loading}
         accessibilityRole="button"
         accessibilityLabel={title}
+        accessibilityHint={accessibilityHint}
+        accessibilityState={{ disabled: disabled || loading, busy: loading }}
         hitSlop={{ top: 6, bottom: 6, left: 6, right: 6 }}
         style={[
           styles.base,
@@ -184,11 +198,13 @@ const styles = StyleSheet.create({
   disabled: { opacity: 0.45 },
   iconWrap: { flexShrink: 0, marginRight: 8 },
   shadows: {
-    shadowColor: '#1450a3',
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.25,
-    shadowRadius: 8,
-    elevation: 3,
+    ...platformShadow({
+      shadowColor: '#1450a3',
+      shadowOffset: { width: 0, height: 4 },
+      shadowOpacity: 0.25,
+      shadowRadius: 8,
+      elevation: 3,
+    }),
   },
 });
 

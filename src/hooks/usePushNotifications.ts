@@ -97,7 +97,8 @@ export function usePushNotifications() {
       // Listen for incoming notifications when app is foregrounded
       notificationListener.current = Notifications.addNotificationReceivedListener((notification) => {
         const { title, body, data } = notification.request.content;
-        console.log('[PushNotifications] Notification received in foreground:', title, body);
+        const currentUser = useAuthStore.getState().user;
+        if (!currentUser?.id) return;
 
         // Mirror into local notification store so user sees it in notification center
         useNotificationStore.getState().addNotification({
@@ -105,14 +106,16 @@ export function usePushNotifications() {
           message: body || '',
           type: (data?.type as string) || 'appointment',
           link: (data?.link as string) || (data?.appointmentId ? `/appointments/${data.appointmentId}` : undefined),
-          recipientId: user?.id,
+          recipientId: currentUser.id,
+          recipientRole: currentUser.role === 'doctor' ? 'doctor' : 'patient',
+          silent: true,
         });
       });
 
       // Listen for user interactions / taps on the phone notification panel
       responseListener.current = Notifications.addNotificationResponseReceivedListener((response) => {
+        if (!useAuthStore.getState().isAuthenticated) return;
         const data = response.notification.request.content.data;
-        console.log('[PushNotifications] Notification response tapped:', data);
 
         if (data?.link && typeof data.link === 'string') {
           try {

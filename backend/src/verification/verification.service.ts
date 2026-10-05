@@ -38,40 +38,34 @@ export class VerificationService {
   constructor(private prisma: PrismaService) {}
 
   /**
-   * Performs authoritative validation of Indian Medical Council (NMC / State Councils) credentials.
-   * Matches registration against the National Medical Register (NMR/IMR) schema.
+   * Performs format-only intake validation. This service is not connected to a
+   * regulator registry, so it must never promote an applicant to VERIFIED.
    */
   verifyIndianDoctorLicense(registrationNumber: string, registrationAuthority: string): IndianMedicalRegistryRecord {
     const cleanReg = registrationNumber ? registrationNumber.trim().toUpperCase() : '';
-    const cleanAuth = registrationAuthority ? registrationAuthority.trim().toUpperCase() : 'NMC';
+    const cleanAuth = registrationAuthority ? registrationAuthority.trim() : '';
 
     const matchedKey = Object.keys(STATE_COUNCILS_DIRECTORY).find(
-      (k) => cleanAuth.includes(k) || cleanReg.startsWith(k)
-    ) || 'NMC';
+      (k) => cleanAuth.toUpperCase().includes(k) || cleanReg.startsWith(k)
+    );
 
-    const council = STATE_COUNCILS_DIRECTORY[matchedKey];
-    const hasValidFormat = cleanReg.length >= 4 && (council.prefixRegex.test(cleanReg) || /^[A-Z0-9\/-]{4,15}$/.test(cleanReg));
-
-    const currentYear = new Date().getFullYear();
-    const extractedYear = cleanReg.match(/20[0-2][0-9]|19[8-9][0-9]/)?.[0];
-    const regYear = extractedYear ? parseInt(extractedYear) : currentYear - 8;
-
-    const certId = `NMC-VERIF-${cleanReg.replace(/[^A-Z0-9]/g, '')}-${Date.now().toString().slice(-4)}`;
+    const council = matchedKey ? STATE_COUNCILS_DIRECTORY[matchedKey] : undefined;
+    const hasPlausibleFormat = cleanReg.length >= 4 && cleanReg.length <= 20;
 
     return {
-      verified: hasValidFormat,
+      verified: false,
       registrationNumber: cleanReg,
-      registrationAuthority: council.name,
-      councilState: council.state,
-      verificationBadge: `${matchedKey} REGISTERED PRACTITIONER`,
-      registrationYear: regYear,
-      status: hasValidFormat ? VerificationStatus.VERIFIED : VerificationStatus.INFO_REQUIRED,
-      verificationCertificateId: certId,
-      verifiedAt: new Date().toISOString(),
-      issuingAuthority: 'National Medical Commission (NMR / IMR Repository)',
-      remarks: hasValidFormat
-        ? 'Medical credentials verified against the National Medical Register of India.'
-        : 'Invalid registration format. Official State Council Registration certificate required.',
+      registrationAuthority: cleanAuth,
+      councilState: council?.state || 'Unknown',
+      verificationBadge: 'PENDING MANUAL REVIEW',
+      registrationYear: 0,
+      status: VerificationStatus.PENDING,
+      verificationCertificateId: '',
+      verifiedAt: '',
+      issuingAuthority: 'Not externally connected',
+      remarks: hasPlausibleFormat
+        ? 'Registration format received. FiYDoc has not verified this credential against an external registry.'
+        : 'Registration details are incomplete or malformed. Provide the official registration certificate for manual review.',
     };
   }
 
@@ -87,15 +81,15 @@ export class VerificationService {
       create: {
         doctorId,
         registrationNumber: dto.registrationNumber,
-        registrationAuthority: checkResult.registrationAuthority,
+        registrationAuthority: dto.registrationAuthority,
         submittedDocuments: dto.submittedDocuments || [],
-        status: checkResult.status,
+        status: VerificationStatus.PENDING,
       },
       update: {
         registrationNumber: dto.registrationNumber,
-        registrationAuthority: checkResult.registrationAuthority,
-        submittedDocuments: dto.submittedDocuments || [],
-        status: checkResult.status,
+        registrationAuthority: dto.registrationAuthority,
+        submittedDocuments: dto.submittedDocuments,
+        status: VerificationStatus.PENDING,
       },
     });
 

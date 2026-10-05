@@ -26,6 +26,7 @@ export const doctorService = {
   updateMyProfile: async (profile: {
     fullName?: string;
     specialization?: string;
+    qualifications?: string[] | string;
     profilePhoto?: string | null;
     consultationFee?: number;
     clinicName?: string;
@@ -183,5 +184,4 @@ export const doctorService = {
     });
   },
 };
-
 

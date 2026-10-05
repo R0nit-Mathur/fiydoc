@@ -132,12 +132,12 @@ export function MedicalIllustration({
             style={[
               styles.glassOverlay,
               {
+                pointerEvents: 'none',
                 backgroundColor: isDark
                   ? 'rgba(255, 255, 255, 0.03)'
                   : 'rgba(255, 255, 255, 0.3)',
               },
             ]}
-            pointerEvents="none"
           />
         )}
       </Animated.View>

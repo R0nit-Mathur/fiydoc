@@ -2,13 +2,13 @@
  * FiYDOC - Patient Medical Intake (Carousel Cards)
  * Pixel-perfect 1:1 implementation of Stitch HTML:
  * - Top Fixed Header with step subtitle & help button
- * - Doctor Summary Mini-Banner with Token #12
+ * - Doctor summary with server-assigned booking details
  * - Stepper Carousel Progress Indicators: 1. Reason, 2. History, 3. Vitals
  * - 3-Card Carousel Deck:
  *   - Card 1: Visit For (Myself vs Family), Profile Snapshot, Reason Chips (+ Custom), Symptoms Notes
  *   - Card 2: Medical Background (Allergies with add/remove, Chronic Conditions with toggle/add)
  *   - Card 3: Physical Triage notice, Vitals Grid, Past ECG/Test Records Uploader Dropzone
- * - "Short on time?" Notice & ABDM Encryption reassurance
+ * - "Short on time?" Notice & privacy guidance
  * - Sticky Bottom Navigation with Back, Continue, and Skip & Continue actions
  */
 import React, { useState } from 'react';
@@ -89,10 +89,10 @@ export default function MedicalIntakeScreen() {
 
   const bookingDoctor = useAppointmentStore((state) => state.bookingDraft?.doctor);
   const doctorName = params.doctorName || bookingDoctor?.name || 'Doctor';
-  const slotTime = params.slotTime || '10:30 AM';
+  const slotTime = params.slotTime || (bookingDoctor as any)?.timeSlot || '';
   const tokenNumber = params.tokenNumber || null;
   const dateLabel = params.dateLabel || 'Today';
-  const fee = params.fee || '800';
+  const fee = params.fee || (bookingDoctor?.consultationFee ? String(bookingDoctor.consultationFee) : '');
 
   const userFirstName = user?.name ? user.name.split(' ')[0] : 'Me';
   const userInitials = (user?.name
@@ -247,6 +247,13 @@ export default function MedicalIntakeScreen() {
       return;
     }
 
+    if (!params.date || !slotTime || Number(fee.replace(/[^0-9.]/g, '')) <= 0) {
+      setSlotRequiredAlert(true);
+      setCurrentStep(0);
+      setTimeout(() => setSlotRequiredAlert(false), 3000);
+      return;
+    }
+
     let finalPatientName = '';
     if (patientType === 'self') {
       finalPatientName = user?.name?.trim() || user?.email?.split('@')[0] || 'Patient';
@@ -257,18 +264,18 @@ export default function MedicalIntakeScreen() {
     if (Platform.OS !== 'web') {
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
     }
-    const cleanFee = parseInt(fee.replace(/[^0-9]/g, ''), 10) || 800;
+    const cleanFee = Number(fee.replace(/[^0-9.]/g, ''));
     useAppointmentStore.getState().setBookingDoctor({
       id: params.doctorId || '',
       fullName: doctorName,
       name: doctorName,
-      specialization: params.doctorSpecialty || 'Specialist',
-      specialty: params.doctorSpecialty || 'Specialist',
+      specialization: params.doctorSpecialty || 'Specialty not provided',
+      specialty: params.doctorSpecialty || 'Specialty not provided',
       consultationFee: cleanFee,
-      clinicAddress: 'In-Clinic OPD',
-      hospital: `${doctorName}'s Clinic`,
+      clinicAddress: (bookingDoctor as any)?.clinicAddress || (bookingDoctor as any)?.clinic?.address || '',
+      hospital: bookingDoctor?.hospital || '',
     } as any);
-    useAppointmentStore.getState().setBookingSlot(params.date || new Date().toISOString().slice(0, 10), slotTime);
+    useAppointmentStore.getState().setBookingSlot(params.date, slotTime);
     if (selectedReason) {
       useAppointmentStore.getState().setBookingSymptoms([selectedReason], symptomNotes);
     }
@@ -298,7 +305,7 @@ export default function MedicalIntakeScreen() {
       params: {
         doctorId: params.doctorId || '',
         doctorName,
-        doctorSpecialty: params.doctorSpecialty || 'Specialist',
+        doctorSpecialty: params.doctorSpecialty || 'Specialty not provided',
         doctorAvatar: resolvedDoctorAvatar,
         slotTime,
         date: params.date || new Date().toISOString().slice(0, 10),
@@ -771,7 +778,7 @@ export default function MedicalIntakeScreen() {
               <View style={styles.tipBox}>
                 <ShieldCheck size={16} color={StitchColors.secondary} />
                 <Text style={styles.tipText}>
-                  Saved permanently in your Ayushman ABDM Health Locker.
+                  Your visit details are saved with this booking for care-team review.
                 </Text>
               </View>
             </View>
@@ -917,11 +924,11 @@ export default function MedicalIntakeScreen() {
             </View>
           </View>
 
-          {/* Privacy Reassurance ABDM Badge */}
+          {/* Privacy guidance */}
           <View style={styles.abdmBadgeRow}>
             <Shield size={14} color={StitchColors.secondary} />
             <Text style={styles.abdmBadgeText}>
-              End-to-end encrypted medical data under ABDM compliant guidelines
+              Review privacy and data settings in your profile before sharing medical documents.
             </Text>
           </View>
         </View>

@@ -56,7 +56,7 @@ export function SegmentedRoleSelector({
   return (
     <View style={[styles.container, style]} onLayout={onLayout}>
       {/* Animated Sliding Pill Backdrop */}
-      <Animated.View style={[styles.activePill, pillAnimatedStyle]} pointerEvents="none" />
+      <Animated.View style={[styles.activePill, pillAnimatedStyle, { pointerEvents: 'none' }]} />
 
       {/* Patient Tab */}
       <Pressable

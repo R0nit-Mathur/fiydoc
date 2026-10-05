@@ -14,15 +14,13 @@ export function useAppointmentsQuery(patientId?: string, doctorId?: string) {
     queryKey: ['appointments', effectivePatientId || 'all', effectiveDoctorId || 'all'],
     staleTime: 30_000,
     queryFn: async () => {
+      // Let React Query own the error state. Swallowing this error made a failed
+      // first load look exactly like a legitimate empty appointment list.
       let fetched: any[] = [];
-      try {
-        if (effectiveDoctorId) {
-          fetched = await appointmentService.getDoctorQueue(effectiveDoctorId);
-        } else if (effectivePatientId) {
-          fetched = await appointmentService.getPatientAppointments(effectivePatientId);
-        }
-      } catch (err) {
-        console.warn('[useAppointmentsQuery] Failed to fetch server appointments, using local state:', err);
+      if (effectiveDoctorId) {
+        fetched = await appointmentService.getDoctorQueue(effectiveDoctorId);
+      } else if (effectivePatientId) {
+        fetched = await appointmentService.getPatientAppointments(effectivePatientId);
       }
 
       // Combine store appointments with fetched appointments, filtering by effective user
@@ -86,14 +84,10 @@ export function useAppointmentDetailQuery(id: string) {
   return useQuery({
     queryKey: ['appointment', id],
     queryFn: async () => {
-      try {
-        const serverApt = await appointmentService.getAppointmentById(id);
-        if (serverApt) return serverApt;
-      } catch (err) {
-        console.warn('[useAppointmentDetailQuery] Server fetch failed, falling back to store:', err);
-      }
-      return storeAppointments.find((a) => a.id === id);
+      return appointmentService.getAppointmentById(id);
     },
+    initialData: () => storeAppointments.find((a) => a.id === id),
+    initialDataUpdatedAt: 0,
     enabled: Boolean(id),
   });
 }
@@ -226,5 +220,3 @@ export function useRescheduleAppointmentMutation() {
     },
   });
 }
-
-

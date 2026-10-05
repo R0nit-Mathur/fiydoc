@@ -543,7 +543,7 @@ export default function DoctorConsultationScreen() {
         doctorId: consultation.doctorId,
         doctorName,
         doctorAvatar: user?.avatar || (user as any)?.profilePhoto || null,
-        doctorSpecialty: user?.specialization || 'General Medicine',
+        doctorSpecialty: user?.specialization || 'Specialty not provided',
         doctorMciNumber: (user as any)?.licenseNumber || undefined,
         doctorQualifications: user?.qualification || (user as any)?.qualifications || [],
         clinicName: clinicName ?? undefined,

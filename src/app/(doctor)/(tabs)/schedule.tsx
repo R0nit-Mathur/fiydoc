@@ -333,8 +333,8 @@ export default function DoctorScheduleScreen() {
       return doctorService.getAvailableSlotsDetailed(docId, selectedDay).catch(() => null);
     },
     enabled: Boolean(docId && selectedDay),
-    staleTime: 0,
-    refetchOnMount: 'always',
+    staleTime: 30_000,
+    refetchOnMount: true,
   });
 
   const [slotDuration, setSlotDuration] = useState('15');
@@ -602,10 +602,10 @@ export default function DoctorScheduleScreen() {
   };
 
   // Shift Timings State (Editable)
-  const [morningStart, setMorningStart] = useState('10:30 AM');
-  const [morningEnd, setMorningEnd] = useState('01:30 PM');
-  const [eveningStart, setEveningStart] = useState('05:00 PM');
-  const [eveningEnd, setEveningEnd] = useState('08:00 PM');
+  const [morningStart, setMorningStart] = useState('');
+  const [morningEnd, setMorningEnd] = useState('');
+  const [eveningStart, setEveningStart] = useState('');
+  const [eveningEnd, setEveningEnd] = useState('');
 
   useEffect(() => {
     if (user?.clinicTimings) {
@@ -1917,6 +1917,12 @@ export default function DoctorScheduleScreen() {
 
             <Pressable
               onPress={async () => {
+                const hasMorning = Boolean(morningStart.trim() && morningEnd.trim());
+                const hasEvening = Boolean(eveningStart.trim() && eveningEnd.trim());
+                if (!hasMorning && !hasEvening) {
+                  Alert.alert('Add a shift first', 'Enter at least one start and end time before applying the schedule.');
+                  return;
+                }
                 const totalMins = (parseInt(slotDurationHours, 10) || 0) * 60 + (parseInt(slotDurationMins, 10) || 15);
                 setSlotDuration(totalMins.toString());
                 setCapacityModalVisible(false);
@@ -1958,8 +1964,8 @@ export default function DoctorScheduleScreen() {
                   });
 
                   const availabilities = [1, 2, 3, 4, 5, 6].flatMap((dayOfWeek) => [
-                    { dayOfWeek, startTime: morningStart24, endTime: morningEnd24, slotDurationMinutes: totalMins },
-                    { dayOfWeek, startTime: eveningStart24, endTime: eveningEnd24, slotDurationMinutes: totalMins },
+                    ...(hasMorning ? [{ dayOfWeek, startTime: morningStart24, endTime: morningEnd24, slotDurationMinutes: totalMins }] : []),
+                    ...(hasEvening ? [{ dayOfWeek, startTime: eveningStart24, endTime: eveningEnd24, slotDurationMinutes: totalMins }] : []),
                   ]);
 
                   await doctorService.updateMyAvailability(availabilities);

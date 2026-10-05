@@ -110,10 +110,9 @@ function PillTabBar({ state, navigation }: any) {
 
   return (
     <View
-      pointerEvents="box-none"
       style={[
         styles.tabBarWrap,
-        { paddingBottom: bottomInset },
+        { paddingBottom: bottomInset, pointerEvents: 'box-none' },
       ]}
     >
       <Animated.View
@@ -138,10 +137,10 @@ function PillTabBar({ state, navigation }: any) {
 
         {/* Animated background pill */}
         <Animated.View
-          pointerEvents="none"
           style={[
             styles.activePill,
             animatedPillStyle,
+            { pointerEvents: 'none' },
           ]}
         />
 

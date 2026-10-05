@@ -5,6 +5,7 @@
  * Based on Stitch Project 6559997197545880152
  */
 import { Platform } from 'react-native';
+import { platformShadow } from '@/utils/platformStyles';
 
 // ============================================
 // STITCH CLINICAL CLARITY EXACT COLORS
@@ -314,34 +315,34 @@ export const BorderRadius = {
 // SHADOWS (Apple HIG style)
 // ============================================
 export const Shadows = {
-  subtle: {
+  subtle: platformShadow({
     shadowColor: '#0f172a',
     shadowOffset: { width: 0, height: 1 },
     shadowOpacity: 0.04,
     shadowRadius: 2,
     elevation: 1,
-  },
-  card: {
+  }),
+  card: platformShadow({
     shadowColor: '#1450a3',
     shadowOffset: { width: 0, height: 4 },
     shadowOpacity: 0.03,
     shadowRadius: 12,
     elevation: 2,
-  },
-  modal: {
+  }),
+  modal: platformShadow({
     shadowColor: '#0f172a',
     shadowOffset: { width: 0, height: 12 },
     shadowOpacity: 0.08,
     shadowRadius: 32,
     elevation: 8,
-  },
-  focus: {
+  }),
+  focus: platformShadow({
     shadowColor: '#007aff',
     shadowOffset: { width: 0, height: 0 },
     shadowOpacity: 0.15,
     shadowRadius: 8,
     elevation: 0,
-  },
+  }),
 } as const;
 
 // ============================================

@@ -13,6 +13,7 @@ import Animated, {
   Easing,
   FadeIn,
   FadeOut,
+  ReduceMotion,
   SlideInDown,
   SlideInUp,
   SlideInLeft,
@@ -34,7 +35,7 @@ export interface FadeInViewProps {
 export function FadeInView({ children, duration = 400, delay = 0, style }: FadeInViewProps) {
   return (
     <Animated.View
-      entering={FadeIn.delay(delay).duration(duration)}
+      entering={FadeIn.delay(delay).duration(duration).reduceMotion(ReduceMotion.System)}
       style={style}
     >
       {children}
@@ -62,7 +63,7 @@ export function StaggeredFadeIn({
     <>
       {React.Children.map(children, (child, index) => (
         <Animated.View
-          entering={FadeIn.delay(initialDelay + index * delayInterval).duration(duration)}
+          entering={FadeIn.delay(initialDelay + index * delayInterval).duration(duration).reduceMotion(ReduceMotion.System)}
         >
           {child}
         </Animated.View>
@@ -84,7 +85,7 @@ export interface SlideInCardProps {
 export function SlideInCard({ children, delay = 0, duration = 400, style }: SlideInCardProps) {
   return (
     <Animated.View
-      entering={SlideInDown.delay(delay).springify().damping(15).stiffness(100)}
+      entering={SlideInDown.delay(delay).springify().damping(15).stiffness(100).reduceMotion(ReduceMotion.System)}
       style={style}
     >
       {children}
@@ -98,7 +99,7 @@ export function SlideInCard({ children, delay = 0, duration = 400, style }: Slid
 export function SlideInHeader({ children, delay = 0, style }: { children: React.ReactNode; delay?: number; style?: ViewStyle }) {
   return (
     <Animated.View
-      entering={SlideInUp.delay(delay).duration(350)}
+      entering={SlideInUp.delay(delay).duration(350).reduceMotion(ReduceMotion.System)}
       style={style}
     >
       {children}
@@ -126,7 +127,7 @@ export function ScaleIn({
 }: ScaleInProps) {
   return (
     <Animated.View
-      entering={FadeIn.delay(delay).duration(duration)}
+      entering={FadeIn.delay(delay).duration(duration).reduceMotion(ReduceMotion.System)}
       style={[{ opacity: 0, transform: [{ scale: initialScale }] }, style]}
     >
       <Animated.View style={{ flex: 1 }}>
@@ -222,11 +223,11 @@ export function SkeletonScreen({ type = 'list' }: SkeletonScreenProps) {
 export const animations = {
   // Quick fade for lists
   listItem: {
-    entering: FadeIn.delay(50).duration(200),
+    entering: FadeIn.delay(50).duration(200).reduceMotion(ReduceMotion.System),
   },
   // Smooth slide for cards
   card: {
-    entering: SlideInDown.springify().damping(15).stiffness(100),
+    entering: SlideInDown.springify().damping(15).stiffness(100).reduceMotion(ReduceMotion.System),
   },
   // Fast press feedback
   press: {
@@ -235,16 +236,16 @@ export const animations = {
   },
   // Screen transition
   screen: {
-    entering: FadeIn.duration(300),
+    entering: FadeIn.duration(300).reduceMotion(ReduceMotion.System),
   },
 };
 
 // Animation helpers for use with Animated.View
 export const slideInCard = (delay = 0, index = 0) =>
-  SlideInDown.delay(delay + index * 60).springify().damping(15).stiffness(100);
+  SlideInDown.delay(delay + index * 60).springify().damping(15).stiffness(100).reduceMotion(ReduceMotion.System);
 
 export const fadeInItem = (delay = 0, index = 0) =>
-  FadeIn.delay(delay + index * 50).duration(200);
+  FadeIn.delay(delay + index * 50).duration(200).reduceMotion(ReduceMotion.System);
 
 // Helper to create stagger delay
 export function staggerDelay(index: number, baseDelay = 50): number {

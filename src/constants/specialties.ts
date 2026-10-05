@@ -236,12 +236,21 @@ export const ALL_SPECIALTIES: SpecialtyConfig[] = [
   },
 ];
 
+const UNKNOWN_SPECIALTY: SpecialtyConfig = {
+  id: 'unknown_specialty',
+  name: 'Specialty not provided',
+  desc: 'Provider specialty details are pending',
+  icon: Stethoscope,
+  color: '#64748B',
+  lightBg: '#F8FAFC',
+};
+
 // Curated top 8 specialties for quick home feed carousel
 export const SPECIALTIES: SpecialtyConfig[] = ALL_SPECIALTIES.slice(0, 8);
 
 export function getSpecialtyConfig(specialtyName?: string): SpecialtyConfig {
   if (!specialtyName) {
-    return ALL_SPECIALTIES[0];
+    return UNKNOWN_SPECIALTY;
   }
 
   const s = specialtyName.toLowerCase().trim();
@@ -279,5 +288,5 @@ export function getSpecialtyConfig(specialtyName?: string): SpecialtyConfig {
   if (s.includes('homeo')) return ALL_SPECIALTIES[22];
   if (s.includes('radio') || s.includes('scan') || s.includes('xray')) return ALL_SPECIALTIES[23];
 
-  return ALL_SPECIALTIES[0];
+  return UNKNOWN_SPECIALTY;
 }

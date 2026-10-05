@@ -5,6 +5,7 @@
 import React, { useCallback } from 'react';
 import { Pressable, StyleSheet, ViewStyle, Platform } from 'react-native';
 import Animated, {
+  ReduceMotion,
   useAnimatedStyle,
   useSharedValue,
   withSpring,
@@ -27,6 +28,7 @@ export interface AnimatedPressableProps {
   hitSlop?: number | { top?: number; bottom?: number; left?: number; right?: number };
   accessibilityRole?: 'button' | 'link' | 'none';
   accessibilityLabel?: string;
+  accessibilityHint?: string;
 }
 
 const AnimatedPressableComponent = Animated.createAnimatedComponent(Pressable);
@@ -44,6 +46,7 @@ export function AnimatedPressable({
   hitSlop,
   accessibilityRole = 'button',
   accessibilityLabel,
+  accessibilityHint,
 }: AnimatedPressableProps) {
   const scale = useSharedValue(1);
   const opacity = useSharedValue(1);
@@ -72,10 +75,12 @@ export function AnimatedPressable({
       damping: 15,
       stiffness: 300,
       mass: 0.8,
+      reduceMotion: ReduceMotion.System,
     });
     opacity.value = withSpring(0.85, {
       damping: 15,
       stiffness: 300,
+      reduceMotion: ReduceMotion.System,
     });
     triggerHaptic();
     onPressIn?.();
@@ -87,10 +92,12 @@ export function AnimatedPressable({
       damping: 12,
       stiffness: 280,
       mass: 0.8,
+      reduceMotion: ReduceMotion.System,
     });
     opacity.value = withSpring(1, {
       damping: 12,
       stiffness: 280,
+      reduceMotion: ReduceMotion.System,
     });
     onPressOut?.();
   }, [disabled, onPressOut, scale, opacity]);
@@ -114,7 +121,9 @@ export function AnimatedPressable({
       hitSlop={hitSlop}
       accessibilityRole={accessibilityRole}
       accessibilityLabel={accessibilityLabel}
+      accessibilityHint={accessibilityHint}
       accessibilityState={{ disabled }}
+      pressRetentionOffset={12}
       style={[animatedStyle, style]}
     >
       {children}

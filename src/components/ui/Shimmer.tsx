@@ -11,7 +11,10 @@ import Animated, {
   withTiming,
   Easing,
   interpolate,
+  cancelAnimation,
+  useReducedMotion,
 } from 'react-native-reanimated';
+import { useAppTheme } from '@/hooks/useAppTheme';
 
 export interface ShimmerProps {
   width?: number | string;
@@ -29,28 +32,37 @@ export function Shimmer({
   duration = 1400,
 }: ShimmerProps) {
   const progress = useSharedValue(0);
+  const reducedMotion = useReducedMotion();
+  const { colors } = useAppTheme();
 
   useEffect(() => {
-    progress.value = withRepeat(
+    if (reducedMotion) {
+      progress.set(0.5);
+      return;
+    }
+    progress.set(withRepeat(
       withTiming(1, {
         duration,
         easing: Easing.bezier(0.3, 0.1, 0.3, 1),
       }),
       -1, // Infinite repeat
       false
-    );
-  }, [duration, progress]);
+    ));
+    return () => cancelAnimation(progress);
+  }, [duration, progress, reducedMotion]);
 
   const animatedStyle = useAnimatedStyle(() => {
-    const opacity = interpolate(progress.value, [0, 0.5, 1], [0.5, 0.8, 0.5]);
+    const opacity = interpolate(progress.get(), [0, 0.5, 1], [0.5, 0.8, 0.5]);
     return { opacity };
   });
 
   // Light mode shimmer colors (Clinical Clarity design)
-  const baseColor = '#E8E8ED';
+  const baseColor = colors.backgroundElement;
 
   return (
     <Animated.View
+      accessible={false}
+      importantForAccessibility="no-hide-descendants"
       style={[
         styles.shimmer,
         {

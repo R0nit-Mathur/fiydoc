@@ -17,6 +17,7 @@ import {
 import { useRouter } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useAuthStore } from '@/store/useAuthStore';
+import { signOutAll } from '@/services/authService';
 import { useLocationStore } from '@/store/useLocationStore';
 import { Avatar } from '@/components/ui/Avatar';
 import { Badge } from '@/components/ui/Badge';
@@ -46,7 +47,7 @@ export function SidebarDrawer({ visible, onClose, onOpenLocationPicker }: Sideba
   const insets = useSafeAreaInsets();
   const { width: screenWidth } = useWindowDimensions();
   const drawerWidth = Math.min(screenWidth * 0.82, 340);
-  const { user, logout } = useAuthStore();
+  const { user } = useAuthStore();
   const { city, formattedAddress } = useLocationStore();
   const [logoutConfirmVisible, setLogoutConfirmVisible] = useState(false);
   const [updateModalVisible, setUpdateModalVisible] = useState(false);
@@ -54,37 +55,41 @@ export function SidebarDrawer({ visible, onClose, onOpenLocationPicker }: Sideba
   // Animation values: slide from right (drawerWidth -> 0) & backdrop opacity (0 -> 1)
   const slideAnim = useRef(new Animated.Value(drawerWidth)).current;
   const fadeAnim = useRef(new Animated.Value(0)).current;
+  const animationRef = useRef<Animated.CompositeAnimation | null>(null);
 
   useEffect(() => {
+    animationRef.current?.stop();
     if (visible) {
-      Animated.parallel([
+      animationRef.current = Animated.parallel([
         Animated.timing(fadeAnim, {
           toValue: 1,
           duration: 220,
-          useNativeDriver: true,
+          useNativeDriver: Platform.OS !== 'web',
         }),
         Animated.spring(slideAnim, {
           toValue: 0,
           bounciness: 4,
           speed: 14,
-          useNativeDriver: true,
+          useNativeDriver: Platform.OS !== 'web',
         }),
-      ]).start();
+      ]);
     } else {
-      Animated.parallel([
+      animationRef.current = Animated.parallel([
         Animated.timing(fadeAnim, {
           toValue: 0,
           duration: 180,
-          useNativeDriver: true,
+          useNativeDriver: Platform.OS !== 'web',
         }),
         Animated.timing(slideAnim, {
           toValue: drawerWidth,
           duration: 200,
-          useNativeDriver: true,
+          useNativeDriver: Platform.OS !== 'web',
         }),
-      ]).start();
+      ]);
     }
-  }, [visible, drawerWidth]);
+    animationRef.current.start();
+    return () => animationRef.current?.stop();
+  }, [visible, drawerWidth, fadeAnim, slideAnim]);
 
   // Handle hardware back button on Android
   useEffect(() => {
@@ -98,28 +103,31 @@ export function SidebarDrawer({ visible, onClose, onOpenLocationPicker }: Sideba
   }, [visible]);
 
   const handleClose = () => {
-    Animated.parallel([
+    animationRef.current?.stop();
+    animationRef.current = Animated.parallel([
       Animated.timing(fadeAnim, {
         toValue: 0,
         duration: 180,
-        useNativeDriver: true,
+        useNativeDriver: Platform.OS !== 'web',
       }),
       Animated.timing(slideAnim, {
         toValue: drawerWidth,
         duration: 200,
-        useNativeDriver: true,
+        useNativeDriver: Platform.OS !== 'web',
       }),
-    ]).start(() => {
-      onClose();
+    ]);
+    animationRef.current.start(({ finished }) => {
+      if (finished) onClose();
     });
   };
 
-  const handleConfirmLogout = () => {
+  const handleConfirmLogout = async () => {
     setLogoutConfirmVisible(false);
     handleClose();
     setTimeout(() => {
-      logout();
-      router.replace('/(auth)/login');
+      void signOutAll('USER_ACTION').then(() => {
+        router.replace('/(auth)/login');
+      });
     }, 250);
   };
 
@@ -170,6 +178,8 @@ export function SidebarDrawer({ visible, onClose, onOpenLocationPicker }: Sideba
               activeOpacity={0.7}
               style={styles.closeBtn}
               hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+              accessibilityRole="button"
+              accessibilityLabel="Close menu"
             >
               <X size={18} color={Palette.textPrimary} />
             </TouchableOpacity>
@@ -180,14 +190,14 @@ export function SidebarDrawer({ visible, onClose, onOpenLocationPicker }: Sideba
             <Avatar uri={user?.avatar} name={user?.name || 'Patient'} size="lg" />
             <View style={{ flex: 1, minWidth: 0 }}>
               <Text style={styles.userName} numberOfLines={1}>
-                {user?.name || (user?.role === 'doctor' ? 'Dr. Specialist' : 'Verified Patient')}
+                {user?.name || (user?.role === 'doctor' ? 'Doctor profile' : 'Patient profile')}
               </Text>
               <Text style={styles.userEmail} numberOfLines={1}>
-                {user?.email || (user?.role === 'doctor' ? 'doctor@fiydoc.app' : 'patient@fiydoc.app')}
+                {user?.email || 'Account details not set'}
               </Text>
               <View style={{ marginTop: 6, alignSelf: 'flex-start' }}>
                 <Badge
-                  label={user?.role === 'doctor' ? 'DOCTOR PORTAL' : 'VERIFIED PATIENT'}
+                  label={user?.role === 'doctor' ? 'DOCTOR PORTAL' : 'PATIENT ACCOUNT'}
                   variant={user?.role === 'doctor' ? 'blue' : 'teal'}
                   size="sm"
                 />
@@ -208,6 +218,8 @@ export function SidebarDrawer({ visible, onClose, onOpenLocationPicker }: Sideba
               }}
               style={styles.menuItem}
               activeOpacity={0.7}
+              accessibilityRole="button"
+              accessibilityLabel="Choose current locality"
             >
               <View style={[styles.menuIconBox, { backgroundColor: Palette.healthcareTealLight }]}>
                 <MapPin size={18} color={Palette.healthcareTeal} />
@@ -233,6 +245,8 @@ export function SidebarDrawer({ visible, onClose, onOpenLocationPicker }: Sideba
               }}
               style={styles.menuItem}
               activeOpacity={0.7}
+              accessibilityRole="button"
+              accessibilityLabel="Open prescriptions and records"
             >
               <View style={[styles.menuIconBox, { backgroundColor: Palette.primaryBlueLight }]}>
                 <FileText size={18} color={Palette.primaryBlue} />
@@ -256,6 +270,8 @@ export function SidebarDrawer({ visible, onClose, onOpenLocationPicker }: Sideba
               }}
               style={styles.menuItem}
               activeOpacity={0.7}
+              accessibilityRole="button"
+              accessibilityLabel="Open personal profile"
             >
               <View style={[styles.menuIconBox, { backgroundColor: '#F1F5F9' }]}>
                 <User size={18} color={Palette.textSecondary} />
@@ -274,6 +290,8 @@ export function SidebarDrawer({ visible, onClose, onOpenLocationPicker }: Sideba
               }}
               style={styles.menuItem}
               activeOpacity={0.7}
+              accessibilityRole="button"
+              accessibilityLabel="Check for app updates"
             >
               <View style={[styles.menuIconBox, { backgroundColor: '#F0FDFA' }]}>
                 <RefreshCw size={18} color={Palette.healthcareTeal} />
@@ -292,6 +310,9 @@ export function SidebarDrawer({ visible, onClose, onOpenLocationPicker }: Sideba
               onPress={() => setLogoutConfirmVisible(true)}
               style={styles.logoutBtn}
               activeOpacity={0.85}
+              accessibilityRole="button"
+              accessibilityLabel="Sign out"
+              accessibilityHint="Sign out of this device"
             >
               <LogOut size={18} color={Palette.danger} />
               <Text style={styles.logoutText}>Sign Out</Text>

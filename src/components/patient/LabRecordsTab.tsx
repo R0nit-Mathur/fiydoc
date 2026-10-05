@@ -113,7 +113,7 @@ export function LabRecordsTab({ patientId, patientName }: LabRecordsTabProps) {
       patientName: patientName || 'Patient',
       testName: newTestName.trim(),
       category: newCategory,
-      labName: newLabName.trim() || 'Verified Diagnostic Lab',
+      labName: newLabName.trim() || 'Diagnostic lab pending',
       collectedDate: new Date().toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' }),
       reportedDate: new Date().toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' }),
       status: 'Normal',
@@ -369,7 +369,7 @@ export function LabRecordsTab({ patientId, patientName }: LabRecordsTabProps) {
                       {selectedReport.fileName || 'Diagnostic_Report.pdf'}
                     </Text>
                     <Text style={[styles.fileSize, { color: colors.textSecondary }]}>
-                      {selectedReport.fileSize || '1.2 MB'} • Digital Lab Signature Verified
+                      {selectedReport.fileSize || 'File size unavailable'} • Signature status pending review
                     </Text>
                   </View>
                   <Pressable

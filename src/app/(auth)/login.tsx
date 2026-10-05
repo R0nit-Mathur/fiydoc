@@ -39,6 +39,7 @@ export default function LoginScreen() {
   const [googleLoading, setGoogleLoading] = useState(false);
   const [error, setError] = useState('');
   const passwordInputRef = useRef<TextInput>(null);
+  const authInFlightRef = useRef(false);
 
   const toggleAuthMode = () => {
     if (Platform.OS !== 'web') {
@@ -48,6 +49,7 @@ export default function LoginScreen() {
   };
 
   const handleAuth = async () => {
+    if (authInFlightRef.current) return;
     setError('');
     if (!identity.trim() || !password.trim()) {
       setError('Please enter both identity and password.');
@@ -55,6 +57,7 @@ export default function LoginScreen() {
     }
 
     try {
+      authInFlightRef.current = true;
       setLoading(true);
       if (Platform.OS !== 'web') {
         Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
@@ -74,11 +77,14 @@ export default function LoginScreen() {
       setError(err.message || 'Authentication failed. Please check your credentials.');
     } finally {
       setLoading(false);
+      authInFlightRef.current = false;
     }
   };
 
   const handleGoogleAuth = async () => {
+    if (authInFlightRef.current) return;
     setError('');
+    authInFlightRef.current = true;
     setGoogleLoading(true);
     try {
       if (Platform.OS !== 'web') {
@@ -97,6 +103,7 @@ export default function LoginScreen() {
       setError(err.message || 'Google Sign-In failed.');
     } finally {
       setGoogleLoading(false);
+      authInFlightRef.current = false;
     }
   };
 
@@ -242,7 +249,7 @@ export default function LoginScreen() {
               <Text style={styles.bulletDot}>•</Text>
               <Text style={styles.legalLinkText}>Terms of Care</Text>
               <Text style={styles.bulletDot}>•</Text>
-              <Text style={styles.legalLinkText}>HIPAA Compliance</Text>
+              <Text style={styles.legalLinkText}>Privacy notice</Text>
             </View>
           </View>
         </View>

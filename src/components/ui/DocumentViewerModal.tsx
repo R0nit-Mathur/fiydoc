@@ -1,4 +1,5 @@
 import React, { useState } from 'react';
+import { platformShadow } from '@/utils/platformStyles';
 import {
   Modal,
   View,
@@ -292,11 +293,13 @@ const styles = StyleSheet.create({
     borderRadius: 20,
     padding: 24,
     alignItems: 'center',
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 8 },
-    shadowOpacity: 0.15,
-    shadowRadius: 16,
-    elevation: 8,
+    ...platformShadow({
+      shadowColor: '#000',
+      shadowOffset: { width: 0, height: 8 },
+      shadowOpacity: 0.15,
+      shadowRadius: 16,
+      elevation: 8,
+    }),
   },
   pdfIconContainer: {
     width: 80,
