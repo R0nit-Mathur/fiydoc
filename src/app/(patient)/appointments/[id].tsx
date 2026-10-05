@@ -7,7 +7,7 @@
  * - Clinic address, symptoms, fee
  * - Action buttons: Get Directions, Cancel
  */
-import React, { useState } from 'react';
+import React, { useState, useRef } from 'react';
 import {
   View,
   Text,
@@ -18,10 +18,11 @@ import {
   Linking,
   Pressable,
   RefreshControl,
+  Alert,
 } from 'react-native';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import Animated, { FadeIn, FadeInDown } from 'react-native-reanimated';
+import Animated, { FadeIn, ReduceMotion } from 'react-native-reanimated';
 import * as Haptics from 'expo-haptics';
 import { useAppointmentDetailQuery } from '@/hooks/queries/useAppointmentsQuery';
 import { useQueryClient } from '@tanstack/react-query';
@@ -33,6 +34,7 @@ import { Button } from '@/components/ui/Button';
 import { Badge } from '@/components/ui/Badge';
 import { ConfirmationDialog } from '@/components/ui/ConfirmationDialog';
 import { AppointmentSkeleton } from '@/components/ui/Skeleton';
+import { EmptyState } from '@/components/ui/EmptyState';
 import { StitchColors, Palette, BorderRadius, Shadows, Spacing } from '@/constants/theme';
 import { useAppTheme } from '@/hooks/useAppTheme';
 import { formatHumanDate, formatTimeSlot, formatCurrency } from '@/utils/formatters';
@@ -50,11 +52,13 @@ import {
 export default function AppointmentDetailScreen() {
   const router = useRouter();
   const { id } = useLocalSearchParams<{ id: string }>();
-  const { data: apt, isLoading, refetch } = useAppointmentDetailQuery(id as string);
+  const { data: apt, isLoading, isError, refetch } = useAppointmentDetailQuery(id as string);
   const queryClient = useQueryClient();
   const cancelAppointment = useAppointmentStore((s) => s.cancelAppointment);
   const [cancelDialogVisible, setCancelDialogVisible] = useState(false);
   const [refreshing, setRefreshing] = useState(false);
+  const [isCancelling, setIsCancelling] = useState(false);
+  const cancellationInFlight = useRef(false);
   const { colors, isDark } = useAppTheme();
 
   const handleRefresh = async () => {
@@ -62,11 +66,11 @@ export default function AppointmentDetailScreen() {
     if (Platform.OS !== 'web') {
       Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
     }
-    await Promise.all([
-      refetch(),
-      queryClient.invalidateQueries({ queryKey: ['appointment', id] }),
-    ]);
-    setRefreshing(false);
+    try {
+      await refetch();
+    } finally {
+      setRefreshing(false);
+    }
   };
 
   const handleSafeBack = () => {
@@ -89,7 +93,9 @@ export default function AppointmentDetailScreen() {
           <View style={{ width: 44 }} />
         </View>
         <ScrollView contentContainerStyle={styles.scrollContent}>
-          <AppointmentSkeleton />
+          {isLoading ? <AppointmentSkeleton /> : (
+            <EmptyState title={isError ? 'Appointment unavailable' : 'Appointment not found'} description="The requested appointment could not be loaded." actionTitle="Try again" onAction={() => void refetch()} />
+          )}
         </ScrollView>
       </SafeAreaView>
     );
@@ -105,17 +111,27 @@ export default function AppointmentDetailScreen() {
     : 'blue';
 
   const handleConfirmCancel = async () => {
-    setCancelDialogVisible(false);
+    if (cancellationInFlight.current) return;
+    cancellationInFlight.current = true;
+    setIsCancelling(true);
     if (Platform.OS !== 'web') {
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Warning);
     }
-    cancelAppointment(apt.id);
     try {
       await appointmentService.cancelAppointment(apt.id);
-      queryClient.invalidateQueries({ queryKey: ['appointments'] });
-      queryClient.invalidateQueries({ queryKey: ['appointment', apt.id] });
+      cancelAppointment(apt.id);
+      queryClient.setQueryData(['appointment', apt.id], { ...apt, status: 'cancelled' });
+      await Promise.all([
+        queryClient.invalidateQueries({ queryKey: ['appointments'] }),
+        queryClient.invalidateQueries({ queryKey: ['appointment', apt.id] }),
+      ]);
+      setCancelDialogVisible(false);
     } catch (err: any) {
-      console.warn('[AppointmentDetail] Server cancellation warning:', err?.message);
+      Alert.alert('Cancellation not confirmed', err?.message || 'Please try again.');
+      return;
+    } finally {
+      cancellationInFlight.current = false;
+      setIsCancelling(false);
     }
 
     useNotificationStore.getState().addNotification({
@@ -137,8 +153,12 @@ export default function AppointmentDetailScreen() {
   };
 
   const handleDirections = () => {
-    const address = encodeURIComponent(apt.hospital || 'FiYDoc Healthcare Clinic');
-    Linking.openURL(`https://www.google.com/maps/search/?api=1&query=${address}`);
+    if (!apt.hospital) {
+      Alert.alert('Clinic location unavailable', 'Ask the clinic for its address before travelling.');
+      return;
+    }
+    const address = encodeURIComponent(apt.hospital);
+    Linking.openURL(`https://www.google.com/maps/search/?api=1&query=${address}`).catch(() => Alert.alert('Unable to open maps', 'Please try again.'));
   };
 
   return (
@@ -172,6 +192,12 @@ export default function AppointmentDetailScreen() {
           />
         }
       >
+        {isError && (
+          <View style={{ gap: Spacing.sm, marginBottom: Spacing.md }}>
+            <Text style={{ color: colors.textSecondary }}>Unable to refresh. Showing saved appointment details; status may have changed.</Text>
+            <Button title="Retry status" variant="secondary" onPress={() => void refetch()} />
+          </View>
+        )}
         {/* Delay Notice Banner */}
         {Boolean(apt.delayMinutes && apt.delayMinutes > 0 && apt.status !== 'cancelled') && (
           <View style={{ backgroundColor: '#FEF3C7', borderColor: '#FCD34D', borderWidth: 1, padding: 14, borderRadius: 14, marginBottom: 14, flexDirection: 'row', alignItems: 'flex-start', gap: 10 }}>
@@ -196,13 +222,13 @@ export default function AppointmentDetailScreen() {
               Cancelled: Doctor On Leave
             </Text>
             <Text style={{ fontSize: 12.5, color: '#7F1D1D', lineHeight: 18 }}>
-              {apt.cancelReason || `${doctorDisplayName} is on leave on this date. Your appointment has been cancelled and a full refund has been initiated.`}
+              {apt.cancelReason || `${doctorDisplayName} is on leave on this date. Contact the clinic for rescheduling and any payment questions.`}
             </Text>
           </View>
         )}
 
         {/* Doctor Card */}
-        <Animated.View entering={FadeIn.duration(380)}>
+        <Animated.View entering={FadeIn.duration(150).reduceMotion(ReduceMotion.System)}>
           <View style={[styles.doctorCard, { backgroundColor: colors.card, borderColor: colors.border }]}>
             <Avatar
               uri={apt.doctorAvatar || (apt as any).doctor?.profilePhoto || (apt as any).doctor?.avatar || (apt as any).profilePhoto}
@@ -228,7 +254,7 @@ export default function AppointmentDetailScreen() {
         </Animated.View>
 
         {/* Schedule Grid */}
-        <Animated.View entering={FadeInDown.delay(60).duration(380)}>
+        <Animated.View entering={FadeIn.duration(150).reduceMotion(ReduceMotion.System)}>
           <View style={[styles.scheduleStrip, { backgroundColor: colors.card, borderColor: colors.border }]}>
             <View style={styles.scheduleItem}>
               <Calendar size={18} color={StitchColors.primaryContainer} />
@@ -261,7 +287,7 @@ export default function AppointmentDetailScreen() {
         </Animated.View>
 
         {/* Clinic Address */}
-        <Animated.View entering={FadeInDown.delay(100).duration(380)}>
+        <Animated.View entering={FadeIn.duration(150).reduceMotion(ReduceMotion.System)}>
           <View style={[styles.infoCard, { backgroundColor: colors.card, borderColor: colors.border }]}>
             <View style={styles.infoHeader}>
               <MapPin size={18} color={StitchColors.primaryContainer} />
@@ -276,7 +302,7 @@ export default function AppointmentDetailScreen() {
 
         {/* Symptoms */}
         {apt.symptoms && apt.symptoms.length > 0 && (
-          <Animated.View entering={FadeInDown.delay(140).duration(380)}>
+          <Animated.View entering={FadeIn.duration(150).reduceMotion(ReduceMotion.System)}>
             <View style={styles.sectionWrap}>
               <Text style={[styles.sectionHeading, { color: colors.text }]}>Reported Symptoms</Text>
               <View style={styles.symptomsRow}>
@@ -300,7 +326,7 @@ export default function AppointmentDetailScreen() {
         )}
 
         {/* Digital Rx Card */}
-        <Animated.View entering={FadeInDown.delay(180).duration(380)}>
+        <Animated.View entering={FadeIn.duration(150).reduceMotion(ReduceMotion.System)}>
           <View style={[styles.rxCard, { backgroundColor: colors.card, borderColor: colors.border }]}>
             <View style={styles.rxHeader}>
               <View style={[styles.rxIconBox, { backgroundColor: StitchColors.secondaryContainer }]}>
@@ -326,7 +352,7 @@ export default function AppointmentDetailScreen() {
         </Animated.View>
 
         {/* Fee */}
-        <Animated.View entering={FadeInDown.delay(220).duration(380)}>
+        <Animated.View entering={FadeIn.duration(150).reduceMotion(ReduceMotion.System)}>
           <View style={[styles.paymentRow, { backgroundColor: colors.card, borderColor: colors.border }]}>
             <Text style={[styles.paymentLabel, { color: colors.text }]}>Consultation Fee</Text>
             <View style={styles.paymentRight}>
@@ -340,7 +366,7 @@ export default function AppointmentDetailScreen() {
 
         {/* Action Buttons */}
         {!isCancelled && (
-          <Animated.View entering={FadeInDown.delay(260).duration(380)} style={styles.actionSection}>
+          <Animated.View entering={FadeIn.duration(150).reduceMotion(ReduceMotion.System)} style={styles.actionSection}>
             <TouchableOpacity
               onPress={handleDirections}
               style={[styles.directionsBtn, { backgroundColor: Palette.primaryBlueLight, borderColor: Palette.primaryBlueBorder }]}
@@ -359,6 +385,7 @@ export default function AppointmentDetailScreen() {
         <View style={[styles.bottomBar, { backgroundColor: colors.card, borderTopColor: colors.border }]}>
           <Button
             title="Cancel Appointment"
+            loading={isCancelling}
             onPress={() => setCancelDialogVisible(true)}
             variant="danger"
             size="lg"
@@ -375,6 +402,7 @@ export default function AppointmentDetailScreen() {
         cancelText="Keep appointment"
         confirmVariant="danger"
         iconVariant="danger"
+        loading={isCancelling}
         onConfirm={handleConfirmCancel}
         onCancel={() => setCancelDialogVisible(false)}
       />

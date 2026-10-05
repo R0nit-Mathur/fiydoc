@@ -61,10 +61,12 @@ export function DoctorCard({
       {/* Top Meta Row: Verified & Distance */}
       <View style={styles.metaRow}>
         <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
-          <View style={styles.verifiedBadge}>
-            <ShieldCheck size={14} color="#2563eb" />
-            <Text style={styles.verifiedText}>Verified</Text>
-          </View>
+          {doctor.verificationStatus === 'verified' ? (
+            <View style={styles.verifiedBadge}>
+              <ShieldCheck size={14} color="#2563eb" />
+              <Text style={styles.verifiedText}>Verified</Text>
+            </View>
+          ) : null}
 
           {doctor.isOnLeave ? (
             <View style={[styles.verifiedBadge, { backgroundColor: '#FEE2E2', borderColor: '#FCA5A5', borderWidth: 1 }]}>
@@ -114,16 +116,17 @@ export function DoctorCard({
             </Pressable>
           </View>
 
-          {(() => {
-            const specialtyConfig = getSpecialtyConfig(doctor.specialty);
-            const SpecialtyIcon = specialtyConfig.icon;
-            return (
+           {(() => {
+             const specialtyConfig = getSpecialtyConfig(doctor.specialty);
+             const SpecialtyIcon = specialtyConfig.icon;
+             return (
               <View style={styles.specialtyRow}>
                 <View style={[styles.specialtyIconBadge, { backgroundColor: specialtyConfig.lightBg }]}>
                   <SpecialtyIcon size={12} color={specialtyConfig.color} strokeWidth={2.2} />
                 </View>
                 <Text style={styles.specialtyText} numberOfLines={1}>
-                  {doctor.specialty} • {doctor.experienceYears || 1} yrs exp
+                  {doctor.specialty}
+                  {doctor.experienceYears > 0 ? ` • ${doctor.experienceYears} yrs exp` : ''}
                 </Text>
               </View>
             );
@@ -135,12 +138,17 @@ export function DoctorCard({
             </Text>
           ) : null}
 
-          <View style={styles.ratingRow}>
-            <View style={styles.ratingPill}>
-              <Star size={11} color="#64748b" fill="#64748b" />
-              <Text style={styles.ratingText}>0.0</Text>
-            </View>
-          </View>
+           {doctor.rating > 0 ? (
+             <View style={styles.ratingRow}>
+               <View style={styles.ratingPill}>
+                 <Star size={11} color="#64748b" fill="#64748b" />
+                 <Text style={styles.ratingText}>{doctor.rating.toFixed(1)}</Text>
+               </View>
+               {doctor.reviewCount > 0 ? (
+                 <Text style={styles.reviewCountText}>({doctor.reviewCount})</Text>
+               ) : null}
+             </View>
+           ) : null}
         </View>
       </View>
 
@@ -155,7 +163,7 @@ export function DoctorCard({
           <Text style={styles.slotTimeText}>{nextSlot}</Text>
         </View>
         <Text style={styles.feeText}>
-          {formatCurrency(doctor.consultationFee || 0)}
+          {Number(doctor.consultationFee) > 0 ? formatCurrency(doctor.consultationFee) : 'Fee unavailable'}
         </Text>
       </View>
 

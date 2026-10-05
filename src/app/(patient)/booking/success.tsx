@@ -8,11 +8,15 @@
  * - Action buttons: View Appointment, Get Directions, Cancel
  * - Return to Home button
  */
-import React, { useState } from 'react';
-import { View, Text, ScrollView, TouchableOpacity, Share, StyleSheet, Linking } from 'react-native';
+import React, { useState, useRef } from 'react';
+import { platformShadow } from '@/utils/platformStyles';
+import { View, Text, ScrollView, TouchableOpacity, Share, StyleSheet, Linking, Alert } from 'react-native';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import Animated, { FadeIn, FadeInUp } from 'react-native-reanimated';
+import Animated, { FadeIn, FadeInUp, ReduceMotion } from 'react-native-reanimated';
+import { useQueryClient } from '@tanstack/react-query';
+import { AppointmentSkeleton } from '@/components/ui/Skeleton';
+import { EmptyState } from '@/components/ui/EmptyState';
 import { useAppointmentDetailQuery } from '@/hooks/queries/useAppointmentsQuery';
 import { useAppointmentStore } from '@/store/useAppointmentStore';
 import { Button } from '@/components/ui/Button';
@@ -35,7 +39,7 @@ import { formatHumanDate, formatTimeSlot, formatCurrency } from '@/utils/formatt
 import {
   Calendar,
   Clock,
-  QrCode,
+  FileText,
   Building2,
   Share2,
   MapPin,
@@ -48,20 +52,24 @@ export default function BookingSuccessScreen() {
   const params = useLocalSearchParams<{ appointmentId?: string; tokenNumber?: string }>();
 
   const { appointments, cancelAppointment } = useAppointmentStore();
-  const targetId = params.appointmentId || 'apt_101';
-  const { data: remoteApt } = useAppointmentDetailQuery(targetId);
+  const targetId = params.appointmentId || '';
+  const { data: remoteApt, isLoading, isError, refetch } = useAppointmentDetailQuery(targetId);
+  const queryClient = useQueryClient();
   const localApt = appointments.find((a) => a.id === targetId);
-  const apt = localApt || remoteApt;
+  const apt = remoteApt || localApt;
 
   const [cancelDialogVisible, setCancelDialogVisible] = useState(false);
-  const tokenNumber = params.tokenNumber || 'Token #04';
+  const [isCancelling, setIsCancelling] = useState(false);
+  const cancellationInFlight = useRef(false);
+  const tokenNumber = apt?.tokenNumber || 'Not assigned';
   const isPending = apt?.status === 'pending';
+  const isConfirmed = apt?.status === 'confirmed' || apt?.status === 'upcoming';
 
   const handleSharePass = async () => {
     try {
       await Share.share({
         title: `FiYDoc Clinic Pass • ${tokenNumber}`,
-        message: `FiYDoc ${isPending ? 'Queued Appointment Request' : 'Confirmed Appointment Pass'}\nDoctor: ${apt?.doctorName || 'Dr. Specialist'}\nSpecialty: ${apt?.doctorSpecialty || 'Specialist'}\nDate: ${apt?.date || 'Today'} at ${apt?.time || '10:00 AM'}\nClinic: ${apt?.hospital || 'FiYDoc Healthcare Clinic'}\nQueue Token: ${tokenNumber}\nStatus: ${isPending ? 'Awaiting Doctor Approval' : 'Confirmed'}`,
+        message: `FiYDoc Appointment Details\nDoctor: ${apt?.doctorName || 'Doctor details unavailable'}\nSpecialty: ${apt?.doctorSpecialty || 'Specialty not provided'}\nDate: ${apt?.date || 'Date unavailable'} at ${apt?.time || 'Time unavailable'}\nClinic: ${apt?.hospital || 'Clinic details unavailable'}\nQueue Token: ${tokenNumber}\nStatus: ${apt?.status || 'Unavailable'}`,
       });
     } catch (e) {
       console.error(e);
@@ -69,22 +77,49 @@ export default function BookingSuccessScreen() {
   };
 
   const handleGetDirections = () => {
-    const address = encodeURIComponent(apt?.hospital || 'FiYDoc Healthcare Clinic');
-    Linking.openURL(`https://www.google.com/maps/search/?api=1&query=${address}`);
+    if (!apt?.hospital) {
+      Alert.alert('Clinic location unavailable', 'Ask your clinic for its address before travelling.');
+      return;
+    }
+    const address = encodeURIComponent(apt.hospital);
+    Linking.openURL(`https://www.google.com/maps/search/?api=1&query=${address}`).catch(() => {
+      Alert.alert('Unable to open maps', 'Please try again.');
+    });
   };
 
   const handleConfirmCancel = async () => {
-    setCancelDialogVisible(false);
-    if (apt?.id) {
+    if (!apt?.id || cancellationInFlight.current) return;
+    cancellationInFlight.current = true;
+    setIsCancelling(true);
+    try {
+      await appointmentService.cancelAppointment(apt.id);
       cancelAppointment(apt.id);
-      try {
-        await appointmentService.cancelAppointment(apt.id);
-      } catch (e: any) {
-        console.warn('[BookingSuccess] Server cancellation notice:', e?.message);
-      }
+      queryClient.setQueryData(['appointment', apt.id], { ...apt, status: 'cancelled' });
+      await Promise.all([
+        queryClient.invalidateQueries({ queryKey: ['appointments'] }),
+        queryClient.invalidateQueries({ queryKey: ['appointment', apt.id] }),
+      ]);
+      setCancelDialogVisible(false);
+      router.replace('/(patient)/(tabs)/home');
+    } catch (e: any) {
+      Alert.alert('Cancellation not confirmed', e?.message || 'Please try again. Your appointment has not been marked cancelled.');
+    } finally {
+      cancellationInFlight.current = false;
+      setIsCancelling(false);
     }
-    router.replace('/(patient)/(tabs)/home');
   };
+
+  if (!apt) {
+    return (
+      <SafeAreaView style={[styles.container, { backgroundColor: colors.background }]} edges={['top', 'bottom']}>
+        <ScrollView contentContainerStyle={styles.scrollContent}>
+          {isLoading ? <AppointmentSkeleton /> : (
+            <EmptyState title={isError ? 'Booking details unavailable' : 'No booking selected'} description="We cannot confirm a booking without its appointment record." actionTitle={targetId ? 'Try again' : 'Return home'} onAction={() => targetId ? void refetch() : router.replace('/(patient)/(tabs)/home')} />
+          )}
+        </ScrollView>
+      </SafeAreaView>
+    );
+  }
 
   return (
     <SafeAreaView style={[styles.container, { backgroundColor: colors.background }]} edges={['top', 'bottom']}>
@@ -92,25 +127,32 @@ export default function BookingSuccessScreen() {
         contentContainerStyle={styles.scrollContent}
         showsVerticalScrollIndicator={false}
       >
+        {isError && (
+          <View style={{ gap: Spacing.sm }}>
+            <Text style={{ color: colors.textSecondary }}>Unable to refresh. Showing saved appointment details; status may have changed.</Text>
+            <Button title="Retry status" variant="secondary" onPress={() => void refetch()} />
+          </View>
+        )}
         {/* Animated Confirmation */}
-        <Animated.View entering={FadeIn.duration(400)} style={styles.animationContainer}>
+        <Animated.View entering={FadeIn.duration(250).reduceMotion(ReduceMotion.System)} style={styles.animationContainer}>
           <ConfirmationAnimation
-            title="Booking Confirmed!"
-            subtitle="Your clinic consultation pass has been generated. Show your token at the OPD reception."
+            variant={isPending || isConfirmed ? 'success' : 'record'}
+            title={isPending ? 'Request submitted' : isConfirmed ? 'Booking confirmed' : 'Appointment details'}
+            subtitle={isPending ? 'The clinic will review this request before a token is activated.' : 'Review the current appointment status below.'}
             color={StitchColors.secondaryContainer}
             size={72}
           />
         </Animated.View>
 
         {/* Clinic Token Pass Card */}
-        <Animated.View entering={FadeInUp.delay(120).duration(400)}>
+        <Animated.View entering={FadeInUp.duration(250).reduceMotion(ReduceMotion.System)}>
           <View style={[styles.ticketCard, { backgroundColor: colors.card, borderColor: colors.border }]}>
             {/* Letterhead */}
             <View style={styles.ticketLetterhead}>
               <FiYLogo size="sm" />
               <Badge
-                label={isPending ? 'QUEUED FOR APPROVAL' : 'CONFIRMED PASS'}
-                variant={isPending ? 'warning' : 'teal'}
+                label={isPending ? 'QUEUED FOR APPROVAL' : isConfirmed ? 'CONFIRMED' : apt.status.toUpperCase()}
+                variant={isPending ? 'warning' : isConfirmed ? 'teal' : 'blue'}
                 size="sm"
               />
             </View>
@@ -129,7 +171,7 @@ export default function BookingSuccessScreen() {
               </View>
               <View style={styles.priorityPill}>
                 <Text style={styles.priorityPillText}>
-                  {isPending ? 'OPD Queue' : 'Priority OPD'}
+                  Appointment
                 </Text>
               </View>
             </View>
@@ -143,15 +185,15 @@ export default function BookingSuccessScreen() {
               />
               <View style={{ flex: 1, gap: 2 }}>
                 <Text style={[styles.doctorName, { color: colors.text }]}>
-                  {apt?.doctorName || 'Dr. Specialist'}
+                  {apt?.doctorName || 'Doctor details unavailable'}
                 </Text>
                 <Text style={[styles.doctorSpecialty, { color: StitchColors.secondaryContainer }]}>
-                  {apt?.doctorSpecialty || 'Specialist Consultant'}
+                  {apt?.doctorSpecialty || 'Specialty not provided'}
                 </Text>
                 <View style={styles.clinicRow}>
                   <Building2 size={13} color={colors.textMuted} />
                   <Text style={[styles.clinicName, { color: colors.textSecondary }]} numberOfLines={1}>
-                    {apt?.hospital || 'FiYDoc Healthcare Clinic'}
+                    {apt?.hospital || 'Clinic details unavailable'}
                   </Text>
                 </View>
               </View>
@@ -167,13 +209,13 @@ export default function BookingSuccessScreen() {
               <View style={styles.dateTimeItem}>
                 <Calendar size={15} color={StitchColors.primaryContainer} />
                 <Text style={[styles.dateTimeVal, { color: colors.text }]}>
-                  {formatHumanDate(apt?.date)}
+                  {apt.date ? formatHumanDate(apt.date) : 'Date unavailable'}
                 </Text>
               </View>
               <View style={styles.dateTimeItem}>
                 <Clock size={15} color={StitchColors.primaryContainer} />
                 <Text style={[styles.dateTimeVal, { color: colors.text }]}>
-                  {formatTimeSlot(apt?.time)}
+                  {apt.time ? formatTimeSlot(apt.time) : 'Time unavailable'}
                 </Text>
               </View>
             </View>
@@ -205,7 +247,7 @@ export default function BookingSuccessScreen() {
                 Consultation Fee (Pay at Clinic)
               </Text>
               <Text style={[styles.feeVal, { color: colors.text }]}>
-                {formatCurrency(apt?.fee || 750)}
+                {Number(apt?.fee) > 0 ? formatCurrency(apt?.fee || 0) : 'Fee unavailable'}
               </Text>
             </View>
 
@@ -217,16 +259,16 @@ export default function BookingSuccessScreen() {
                   <Text style={styles.queueInfoTitle}>Awaiting Doctor Slot Review</Text>
                 </View>
                 <Text style={styles.queueInfoText}>
-                  Dr. {apt?.doctorName || 'Doctor'} has been notified in their OPD Queue. Once confirmed, this pass activates with your verified QR code.
+                  Your appointment request is awaiting clinic approval. Check appointment details for the latest status.
                 </Text>
               </View>
             ) : (
               <View style={styles.qrContainer}>
                 <View style={[styles.qrBox, { backgroundColor: colors.card }]}>
-                  <QrCode size={90} color={StitchColors.primary} />
+                  <FileText size={48} color={StitchColors.primary} />
                 </View>
                 <Text style={[styles.qrInstruction, { color: colors.textMuted }]}>
-                  Show this QR or {tokenNumber} at the clinic reception desk
+                  Show your appointment details at the clinic reception desk.
                 </Text>
               </View>
             )}
@@ -239,14 +281,14 @@ export default function BookingSuccessScreen() {
             >
               <Share2 size={15} color={StitchColors.secondary} />
               <Text style={styles.shareBtnText}>
-                {isPending ? 'Share Request Details' : 'Share Clinic Pass'}
+                Share Appointment Details
               </Text>
             </TouchableOpacity>
           </View>
         </Animated.View>
 
         {/* Action Buttons */}
-        <Animated.View entering={FadeInUp.delay(240).duration(400)} style={styles.actionsContainer}>
+        <Animated.View entering={FadeInUp.duration(250).reduceMotion(ReduceMotion.System)} style={styles.actionsContainer}>
           <TouchableOpacity
             onPress={() => router.replace(`/(patient)/appointments/${targetId}`)}
             activeOpacity={0.85}
@@ -264,14 +306,15 @@ export default function BookingSuccessScreen() {
             <Text style={styles.secondaryActionBtnText}>Get Directions to Clinic</Text>
           </TouchableOpacity>
 
-          <TouchableOpacity
+          {(isPending || isConfirmed) && <TouchableOpacity
             onPress={() => setCancelDialogVisible(true)}
+            disabled={isCancelling}
             activeOpacity={0.8}
             style={styles.cancelLinkBtn}
           >
             <XCircle size={15} color={StitchColors.error} />
-            <Text style={styles.cancelLinkText}>Cancel Appointment</Text>
-          </TouchableOpacity>
+            <Text style={styles.cancelLinkText}>{isCancelling ? 'Cancelling...' : 'Cancel Appointment'}</Text>
+          </TouchableOpacity>}
         </Animated.View>
       </ScrollView>
 
@@ -294,6 +337,7 @@ export default function BookingSuccessScreen() {
         cancelText="Keep appointment"
         confirmVariant="danger"
         iconVariant="danger"
+        loading={isCancelling}
         onConfirm={handleConfirmCancel}
         onCancel={() => setCancelDialogVisible(false)}
       />
@@ -329,13 +373,13 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'space-between',
   },
-  tokenBannerConfirmed: {
+  tokenBannerConfirmed: platformShadow({
     shadowColor: StitchColors.primary,
     shadowOffset: { width: 0, height: 4 },
     shadowOpacity: 0.2,
     shadowRadius: 10,
     elevation: 3,
-  },
+  }),
   tokenLabel: {
     fontSize: 10,
     fontWeight: '700',

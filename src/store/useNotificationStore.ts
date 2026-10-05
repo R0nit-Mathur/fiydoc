@@ -1,5 +1,5 @@
 import { Platform } from 'react-native';
-import * as Notifications from 'expo-notifications';
+import { scheduleLocalNotification } from '@/services/localNotifications';
 import { create } from 'zustand';
 import { createJSONStorage, persist } from 'zustand/middleware';
 import AsyncStorage from '@react-native-async-storage/async-storage';
@@ -58,14 +58,10 @@ export const useNotificationStore = create<NotificationState>()(
           (notif.isAlert === true || CRITICAL_NOTIFICATION_TYPES.has(typeNorm));
 
         if (Platform.OS !== 'web' && shouldShowBanner) {
-          Notifications.scheduleNotificationAsync({
-            content: {
-              title: notif.title,
-              body: notif.message,
-              sound: 'default',
-              data: { type: notif.type, link: notif.link, recipientId: notif.recipientId },
-            },
-            trigger: null,
+          scheduleLocalNotification({
+            title: notif.title,
+            body: notif.message,
+            data: { type: notif.type, link: notif.link, recipientId: notif.recipientId },
           }).catch((err) => {
             console.warn('[useNotificationStore] Local push banner notice:', err?.message);
           });
@@ -147,4 +143,3 @@ export const useNotificationStore = create<NotificationState>()(
     }
   )
 );
-

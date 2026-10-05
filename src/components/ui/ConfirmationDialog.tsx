@@ -65,10 +65,10 @@ export function ConfirmationDialog({
       transparent
       visible={visible}
       animationType="fade"
-      onRequestClose={onCancel}
+      onRequestClose={() => { if (!loading) onCancel(); }}
     >
-      <Pressable style={styles.backdrop} onPress={onCancel}>
-        <Pressable style={styles.dialogContainer} onPress={(e) => e.stopPropagation()}>
+      <Pressable style={styles.backdrop} onPress={() => { if (!loading) onCancel(); }}>
+        <Pressable style={styles.dialogContainer} accessibilityViewIsModal onPress={(e) => e.stopPropagation()}>
           {/* Header Icon */}
           <View style={[styles.iconContainer, { backgroundColor: iconBg }]}>
             <IconComp size={24} color={iconColor} />
@@ -84,6 +84,9 @@ export function ConfirmationDialog({
           <View style={[styles.buttonRow, shouldStack && styles.buttonColumn]}>
             <TouchableOpacity
               onPress={onConfirm}
+              accessibilityRole="button"
+              accessibilityLabel={confirmText}
+              accessibilityState={{ busy: loading, disabled: loading }}
               disabled={loading}
               activeOpacity={0.8}
               style={[styles.confirmButton, { backgroundColor: confirmBtnBg }, shouldStack && styles.fullWidthBtn]}
@@ -104,6 +107,9 @@ export function ConfirmationDialog({
 
             <TouchableOpacity
               onPress={onCancel}
+              accessibilityRole="button"
+              accessibilityLabel={cancelText}
+              accessibilityState={{ disabled: loading }}
               disabled={loading}
               activeOpacity={0.8}
               style={[styles.cancelButton, shouldStack && styles.fullWidthBtn]}

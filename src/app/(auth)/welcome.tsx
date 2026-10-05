@@ -57,7 +57,7 @@ export default function WelcomeScreen() {
   return (
     <View style={styles.container}>
       {/* 3D Medical Illustration Wallpaper Layer */}
-      <View style={styles.wallpaperLayer} pointerEvents="none">
+      <View style={[styles.wallpaperLayer, { pointerEvents: 'none' }]}>
         <Image
           source={WALLPAPER_IMAGE}
           style={styles.wallpaper}

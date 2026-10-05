@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useLayoutEffect, useCallback, useRef } from 'react';
 import {
   View,
   Text,
@@ -7,6 +7,8 @@ import {
   Share,
   StyleSheet,
   RefreshControl,
+  Alert,
+  Linking,
 } from 'react-native';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { SafeAreaView } from 'react-native-safe-area-context';
@@ -14,7 +16,8 @@ import { useHealthStore } from '@/store/useHealthStore';
 import { useAuthStore } from '@/store/useAuthStore';
 import { apiClient } from '@/services/apiClient';
 import { Prescription } from '@/types/index';
-import { LoadingDialog } from '@/components/ui/LoadingDialog';
+import { mapPrescription } from '@/utils/prescriptionMapper';
+import { CardSkeleton, TextBlockSkeleton } from '@/components/ui/Skeleton';
 import { Avatar } from '@/components/ui/Avatar';
 import { BorderRadius, Shadows, Spacing, StitchColors, Palette } from '@/constants/theme';
 import { useAppTheme } from '@/hooks/useAppTheme';
@@ -24,11 +27,9 @@ import {
   Calendar,
   Download,
   Share2,
-  CheckCircle2,
   Clock,
   Activity,
   FileText,
-  ShieldCheck,
   Stethoscope,
   Sparkles,
   AlertCircle,
@@ -39,115 +40,89 @@ export default function DedicatedPrescriptionScreen() {
   const router = useRouter();
   const { colors, isDark } = useAppTheme();
   const styles = useStyles(colors, isDark);
-  const { id } = useLocalSearchParams<{ id: string }>();
+  const { id: routeId } = useLocalSearchParams<{ id: string | string[] }>();
+  const id = typeof routeId === 'string' ? routeId : undefined;
   const { prescriptions } = useHealthStore();
   const { user } = useAuthStore();
-  const [downloadToast, setDownloadToast] = useState(false);
-  const [remoteRx, setRemoteRx] = useState<Prescription | null>(null);
-  const [loading, setLoading] = useState(false);
+  const userId = user?.id;
+  const userRole = user?.role;
+  const accessToken = user?.accessToken;
+  const [remoteRx, setRemoteRx] = useState<{ accountId: string; prescription: Prescription } | null>(null);
+  const [loading, setLoading] = useState(Boolean(id && userId));
   const [refreshing, setRefreshing] = useState(false);
+  const [loadError, setLoadError] = useState('');
+  const activeRequest = useRef<{ controller: AbortController; id: string; accountId: string } | null>(null);
+  const currentScope = useRef({ id, userId, userRole, accessToken });
+  currentScope.current = { id, userId, userRole, accessToken };
 
   const fetchPrescription = useCallback(
-    async (showLoader = true) => {
-      if (!id) return;
+    async (showLoader = true, isRefresh = false) => {
+      if (!id || !userId) { setLoading(false); setRefreshing(false); return; }
+      const previous = activeRequest.current;
+      if (previous?.id === id && previous.accountId === userId && !previous.controller.signal.aborted) return;
+      previous?.controller.abort();
+      const request = { controller: new AbortController(), id, accountId: userId };
+      activeRequest.current = request;
+      const isCurrent = () => {
+        const currentUser = useAuthStore.getState().user;
+        const scope = currentScope.current;
+        return activeRequest.current === request && !request.controller.signal.aborted
+          && scope.id === id && scope.userId === userId && scope.userRole === userRole && scope.accessToken === accessToken
+          && currentUser?.id === userId && currentUser.role === userRole && currentUser.accessToken === accessToken;
+      };
+      setLoadError('');
       if (showLoader) setLoading(true);
+      if (isRefresh) setRefreshing(true);
       try {
-        const data = await apiClient<any>(`/prescriptions/${id}`);
-        if (data && data.id) {
-          const mapped: Prescription = {
-            id: data.id,
-            consultationId: data.consultationId,
-            patientId: data.patientId,
-            doctorId: data.doctorId,
-            doctorName: data.doctor?.fullName
-              ? data.doctor.fullName.startsWith('Dr.')
-                ? data.doctor.fullName
-                : `Dr. ${data.doctor.fullName}`
-              : 'Licensed Doctor',
-            doctorSpecialty: data.doctor?.specialization || 'Consultant Specialist',
-            doctorAvatar: data.doctor?.profilePhoto || data.doctor?.avatar || (data.doctor as any)?.user?.profilePhoto || data.doctorAvatar || null,
-            doctorQualifications: data.doctor?.qualifications || data.doctorQualifications || undefined,
-            doctorMciNumber:
-              data.doctor?.verification?.registrationNumber ||
-              data.doctor?.registrationNumber ||
-              data.doctorMciNumber ||
-              undefined,
-            clinicName: data.doctor?.clinic?.name || 'FiYDoc Partner Clinic',
-            clinicAddress: data.doctor?.clinic?.address || data.clinicAddress || undefined,
-            patientName: data.patient?.fullName || user?.name || 'Patient',
-            patientAge: data.patient?.age || data.consultation?.patientAge || undefined,
-            patientGender: data.patient?.gender || data.consultation?.patientGender || undefined,
-            chiefComplaint: data.chiefComplaint || data.consultation?.chiefComplaint || undefined,
-            symptoms: data.symptoms || data.consultation?.symptoms || undefined,
-            observations: data.observations || data.consultation?.observations || undefined,
-            emergencyWarning: data.emergencyWarning || data.consultation?.emergencyWarning || undefined,
-            doctorNotes: data.doctorNotes || 'Follow prescribed regimen strictly. In case of worsening symptoms, visit emergency care.',
-            followUpInstructions: data.followUpInstructions || 'Review in clinic as advised.',
-            verificationCode: data.verificationCode || `RX-${data.id.slice(0, 8).toUpperCase()}`,
-            pdfUrl: data.pdfUrl || undefined,
-            signedAt: data.issuedAt || data.signedAt || data.createdAt,
-            createdAt: data.createdAt
-              ? new Date(data.createdAt).toLocaleDateString('en-IN', {
-                  day: '2-digit',
-                  month: 'short',
-                  year: 'numeric',
-                })
-              : 'Today',
-            diagnosis:
-              data.diagnosis ||
-              (data.doctorNotes?.startsWith('Diagnosis:') ? data.doctorNotes.split('.')[0] : undefined),
-            tests:
-              Array.isArray(data.labTests) && data.labTests.length > 0
-                ? data.labTests.map((t: any, idx: number) => ({
-                    id: t.id || `${data.id}-test-${idx}`,
-                    name: typeof t === 'string' ? t : t.name || t.testName || 'Diagnostic Test',
-                    category: t.category || 'Clinical Pathology',
-                    fastingRequired: Boolean(t.fastingRequired),
-                    instructions: t.instructions || undefined,
-                  }))
-                : Array.isArray(data.tests)
-                ? data.tests
-                : undefined,
-            vitals: data.vitals || data.consultation?.vitals || undefined,
-            lifestyleInstructions: data.lifestyleInstructions || undefined,
-            medicines: (data.medicines || []).map((m: any) => ({
-              id: m.id || `${data.id}-${m.name}`,
-              name: m.name,
-              dosage: m.dosage || 'As directed',
-              frequency: m.frequency || '1-0-1',
-              durationDays: m.durationDays || 5,
-              instructions: m.instructions || '',
-            })),
-          };
-          setRemoteRx(mapped);
-          useHealthStore.getState().addPrescription(mapped);
-        }
+        const data = await apiClient<unknown>(`/prescriptions/${encodeURIComponent(id)}`, { signal: request.controller.signal });
+        if (!isCurrent()) return;
+        const mapped = mapPrescription(data);
+        if (mapped.id !== id) throw new Error('The requested prescription was not returned.');
+        setRemoteRx({ accountId: userId, prescription: mapped });
+        useHealthStore.getState().addPrescription(mapped);
       } catch (err: any) {
-        console.warn('[prescription/[id]] Failed to fetch prescription:', err?.message);
+        if (isCurrent()) setLoadError(err?.message || 'Unable to load this prescription.');
       } finally {
-        setLoading(false);
-        setRefreshing(false);
+        if (isCurrent()) {
+          setLoading(false);
+          setRefreshing(false);
+        }
+        if (activeRequest.current === request) activeRequest.current = null;
       }
     },
-    [id, user]
+    [id, userId, userRole, accessToken]
   );
 
-  useEffect(() => {
-    const existing = prescriptions.find((p) => p.id === id);
-    if (!existing && id) {
-      fetchPrescription(true);
-    } else if (existing && id) {
-      // Background silent refresh for full consultation details
-      fetchPrescription(false);
-    }
+  useLayoutEffect(() => {
+    setRemoteRx(null);
+    setLoadError('');
+    setRefreshing(false);
+    const existing = useHealthStore.getState().prescriptions.find((p) => p.id === id && p.patientId === userId);
+    setLoading(Boolean(id && userId && !existing));
+    void fetchPrescription(!existing);
+    return () => {
+      activeRequest.current?.controller.abort();
+      activeRequest.current = null;
+    };
   }, [id, fetchPrescription]);
 
-  // Find prescription in store, remote fetch, or fallback
-  const rx = prescriptions.find((p) => p.id === id) || remoteRx || prescriptions[0];
+  // Stored records are usable only with an exact patient ID match. Canonical
+  // patient UUIDs that differ from the account UUID need a fresh authorized fetch.
+  const rx = userId ? (remoteRx?.accountId === userId && remoteRx.prescription.id === id ? remoteRx.prescription : null)
+    || prescriptions.find((p) => p.id === id && p.patientId === userId) : undefined;
 
-  const handleDownloadPDF = () => {
-    setDownloadToast(true);
-    setTimeout(() => setDownloadToast(false), 3500);
+  const handleDownloadPDF = async () => {
+    if (!rx?.pdfUrl) {
+      Alert.alert('PDF unavailable', 'A downloadable PDF has not been provided for this prescription.');
+      return;
+    }
+    try {
+      const url = new URL(rx.pdfUrl);
+      if (!['https:', 'http:'].includes(url.protocol)) throw new Error('Invalid PDF link.');
+      await Linking.openURL(url.toString());
+    } catch {
+      Alert.alert('Unable to open PDF', 'Please try again or ask your clinic for a copy.');
+    }
   };
 
   const handleShare = async () => {
@@ -155,7 +130,7 @@ export default function DedicatedPrescriptionScreen() {
     try {
       await Share.share({
         title: `FiYDoc Digital Prescription - ${rx.id}`,
-        message: `FiYDoc Verified Digital Prescription\nDoctor: ${rx.doctorName || 'Doctor'}\nSpecialty: ${rx.doctorSpecialty || 'Specialist'}\nDiagnosis: ${rx.diagnosis || 'Clinical Consultation'}\nMedications: ${rx.medicines?.map((m) => `${m.name} (${m.dosage})`).join(', ') || 'None'}\nVerification Code: ${rx.verificationCode}`,
+        message: `FiYDoc Digital Prescription\nDoctor: ${rx.doctorName || 'Doctor details unavailable'}\nSpecialty: ${rx.doctorSpecialty || 'Specialty not provided'}\nDiagnosis: ${rx.diagnosis || 'Not recorded'}\nMedications: ${rx.medicines?.map((m) => `${m.name} (${m.dosage})`).join(', ') || 'None recorded'}${rx.verificationCode ? `\nVerification Code: ${rx.verificationCode}` : ''}`,
       });
     } catch (e) {
       console.error(e);
@@ -185,8 +160,8 @@ export default function DedicatedPrescriptionScreen() {
         </View>
         <View style={styles.emptyContainer}>
           <FileText size={48} color={colors.textMuted} />
-          <Text style={styles.emptyTitle}>Prescription Not Found</Text>
-          <Text style={styles.emptySubtitle}>The requested prescription could not be located.</Text>
+          <Text style={styles.emptyTitle}>{loadError ? 'Prescription unavailable' : 'Prescription not found'}</Text>
+          <Text selectable style={styles.emptySubtitle}>{loadError || 'The requested prescription could not be located.'}</Text>
           <TouchableOpacity
             onPress={() => fetchPrescription(true)}
             style={[styles.downloadBtn, { paddingHorizontal: 24, height: 44, marginTop: 12 }]}
@@ -198,14 +173,19 @@ export default function DedicatedPrescriptionScreen() {
     );
   }
 
+  if (!rx && loading) {
+    return (
+      <SafeAreaView style={styles.safeArea} edges={['top', 'bottom']}>
+        <ScrollView contentContainerStyle={styles.scrollContent} accessibilityLabel="Loading prescription" accessibilityState={{ busy: true }}>
+          <CardSkeleton />
+          <TextBlockSkeleton lines={5} />
+        </ScrollView>
+      </SafeAreaView>
+    );
+  }
+
   return (
     <SafeAreaView style={styles.safeArea} edges={['top', 'bottom']}>
-      {/* Universal Loading Dialog */}
-      <LoadingDialog
-        visible={loading && !rx}
-        title="Loading Prescription..."
-        message="Fetching verified digital clinical record from secure server..."
-      />
 
       {/* Top Bar */}
       <View style={styles.header}>
@@ -222,7 +202,7 @@ export default function DedicatedPrescriptionScreen() {
           <Text style={styles.headerTitle} numberOfLines={1}>
             Digital Prescription
           </Text>
-          <Text style={styles.headerSub}>Code: {rx?.verificationCode || 'VERIFIED'}</Text>
+          <Text style={styles.headerSub}>{rx?.verificationCode ? `Code: ${rx.verificationCode}` : 'Prescription record'}</Text>
         </View>
         <TouchableOpacity
           onPress={handleShare}
@@ -241,37 +221,34 @@ export default function DedicatedPrescriptionScreen() {
         refreshControl={
           <RefreshControl
             refreshing={refreshing}
-            onRefresh={() => {
-              setRefreshing(true);
-              fetchPrescription(false);
-            }}
+            onRefresh={() => { void fetchPrescription(false, true); }}
             colors={[StitchColors.primaryContainer, colors.teal]}
             tintColor={StitchColors.primaryContainer}
           />
         }
       >
-        {downloadToast && (
+        {loadError && (
           <View style={styles.toastBox}>
-            <CheckCircle2 size={16} color={StitchColors.secondaryContainer} />
-            <Text style={styles.toastText}>Official Prescription PDF saved to device</Text>
+            <AlertCircle size={16} color={StitchColors.secondaryContainer} />
+            <Text selectable style={styles.toastText}>Couldn't refresh. Showing saved record. Pull down to retry.</Text>
           </View>
         )}
 
-        {/* 1. Official Clinic Letterhead */}
+        {/* 1. Recorded clinic details */}
         <View style={styles.letterhead}>
           <View style={styles.letterheadTop}>
             <Avatar
               uri={rx?.doctorAvatar}
-              name={rx?.doctorName || 'Dr. Specialist'}
+              name={rx?.doctorName || 'Doctor details unavailable'}
               size="lg"
             />
             <View style={{ flex: 1, minWidth: 0, marginLeft: 12 }}>
               <Text style={styles.clinicName} numberOfLines={1}>
-                {rx?.clinicName || 'FiYDoc Healthcare Clinic'}
+                {rx?.clinicName || 'Clinic details unavailable'}
               </Text>
-              <Text style={styles.doctorName}>{rx?.doctorName || 'Dr. Specialist'}</Text>
+              <Text style={styles.doctorName}>{rx?.doctorName || 'Doctor details unavailable'}</Text>
               <Text style={styles.doctorSpecialty}>
-                {rx?.doctorSpecialty || 'Consultant Specialist'}
+                {rx?.doctorSpecialty || 'Specialty not provided'}
               </Text>
               {rx?.doctorQualifications ? (
                 <Text style={styles.doctorQualifications}>{rx.doctorQualifications}</Text>
@@ -288,7 +265,7 @@ export default function DedicatedPrescriptionScreen() {
             </View>
           </View>
           <Text style={styles.clinicAddress}>
-            {rx?.clinicAddress || 'Healthcare Enclave, Clinical OPD Block'}
+            {rx?.clinicAddress || 'Clinic address not recorded'}
           </Text>
         </View>
 
@@ -298,12 +275,12 @@ export default function DedicatedPrescriptionScreen() {
             <View style={{ flex: 1 }}>
               <Text style={styles.metaLabel}>PATIENT NAME</Text>
               <Text style={styles.metaValue}>
-                {rx?.patientName || user?.name || 'Patient'}
+                {rx?.patientName || 'Patient name not recorded'}
               </Text>
             </View>
             <View style={{ alignItems: 'flex-end' }}>
-              <Text style={styles.metaLabel}>DATE OF CONSULTATION</Text>
-              <Text style={styles.metaValue}>{rx?.createdAt || 'Today'}</Text>
+              <Text style={styles.metaLabel}>RECORD DATE</Text>
+              <Text style={styles.metaValue}>{rx?.createdAt || 'Date unavailable'}</Text>
             </View>
           </View>
 
@@ -311,12 +288,12 @@ export default function DedicatedPrescriptionScreen() {
             <View>
               <Text style={styles.metaLabel}>AGE / GENDER</Text>
               <Text style={styles.metaValueSub}>
-                {rx?.patientAge ? `${rx.patientAge} Yrs` : 'Adult'} • {rx?.patientGender || 'Unspecified'}
+                {rx?.patientAge !== undefined ? `${rx.patientAge} Yrs` : 'Age not recorded'} • {rx?.patientGender || 'Gender not recorded'}
               </Text>
             </View>
             <View style={{ alignItems: 'flex-end' }}>
               <Text style={styles.metaLabel}>VERIFICATION CODE</Text>
-              <Text style={styles.verifiedCodeText}>{rx?.verificationCode || 'VERIFIED'}</Text>
+              <Text style={styles.verifiedCodeText}>{rx?.verificationCode || 'Code not provided'}</Text>
             </View>
           </View>
         </View>
@@ -434,17 +411,17 @@ export default function DedicatedPrescriptionScreen() {
                   <View style={styles.medTopRow}>
                     <View style={{ flex: 1, minWidth: 0 }}>
                       <Text style={styles.medName}>{med.name}</Text>
-                      <Text style={styles.medDosage}>Dosage: {med.dosage}</Text>
+                      <Text style={styles.medDosage}>Dosage: {med.dosage || 'Not recorded'}</Text>
                     </View>
                     <View style={styles.frequencyPill}>
-                      <Text style={styles.frequencyText}>{med.frequency}</Text>
+                      <Text style={styles.frequencyText}>{med.frequency || 'Frequency not recorded'}</Text>
                     </View>
                   </View>
 
                   <View style={styles.medBottomRow}>
                     <View style={styles.detailBadge}>
                       <Clock size={12} color={colors.textSecondary} />
-                      <Text style={styles.detailBadgeText}>{med.durationDays} Days Duration</Text>
+                      <Text style={styles.detailBadgeText}>{med.durationDays !== undefined && med.durationDays > 0 ? `${med.durationDays} Days Duration` : 'Duration not recorded'}</Text>
                     </View>
                   </View>
 
@@ -458,7 +435,7 @@ export default function DedicatedPrescriptionScreen() {
               ))
             ) : (
               <View style={styles.medicineCard}>
-                <Text style={styles.bodyText}>No oral medications prescribed during this visit.</Text>
+                <Text style={styles.bodyText}>No medications recorded.</Text>
               </View>
             )}
           </View>
@@ -481,7 +458,7 @@ export default function DedicatedPrescriptionScreen() {
                     <Text style={styles.testName}>{test.name}</Text>
                     <Text style={styles.testCategory}>{test.category || 'Diagnostic Investigation'}</Text>
                   </View>
-                  <View
+                  {test.fastingRequired !== undefined && <View
                     style={[
                       styles.fastingPill,
                       test.fastingRequired
@@ -495,9 +472,9 @@ export default function DedicatedPrescriptionScreen() {
                         test.fastingRequired ? { color: '#B91C1C' } : { color: '#047857' },
                       ]}
                     >
-                      {test.fastingRequired ? 'Fasting Required (8-12h)' : 'Standard Sample'}
+                      {test.fastingRequired ? 'Fasting required' : 'Fasting not required'}
                     </Text>
-                  </View>
+                  </View>}
                 </View>
               ))}
             </View>
@@ -547,26 +524,25 @@ export default function DedicatedPrescriptionScreen() {
         <View style={styles.adviceBox}>
           <Text style={styles.adviceTitle}>Doctor's Advice & Care Plan</Text>
           <Text style={styles.adviceText}>
-            {rx?.doctorNotes ||
-              'Maintain prescribed hydration and rest. Avoid self-medication and adhere strictly to dosage.'}
+            {rx?.doctorNotes || 'Doctor advice not recorded.'}
           </Text>
           <View style={styles.followUpRow}>
             <Calendar size={14} color={colors.primary} />
             <Text style={styles.followUpText}>
-              Next visit: {rx?.followUpInstructions || '5 days or if symptoms persist'}
+              Follow-up: {rx?.followUpInstructions || 'Not recorded'}
             </Text>
           </View>
         </View>
 
-        {/* 12. Digital Signature & Verification Seal */}
+        {/* 12. Record reference (not a signature or verification claim) */}
         <View style={styles.sealCard}>
-          <ShieldCheck size={22} color="#0D9488" />
+          <FileText size={22} color={colors.teal} />
           <View style={{ flex: 1 }}>
-            <Text style={styles.sealTitle}>Digitally Signed by Registered Medical Practitioner</Text>
+            <Text style={styles.sealTitle}>Prescription record</Text>
             <Text style={styles.sealSub}>
-              Consultation ID: {rx?.consultationId || rx?.id} • Security Hash: {rx?.verificationCode}
+              {rx?.consultationId ? `Consultation ID: ${rx.consultationId}` : `Prescription ID: ${rx?.id}`}{rx?.verificationCode ? ` • Record code: ${rx.verificationCode}` : ''}
             </Text>
-            <Text style={styles.sealSub}>Issued on {rx?.createdAt}</Text>
+            <Text style={styles.sealSub}>Record date: {rx?.createdAt || 'Not recorded'}</Text>
           </View>
         </View>
 
@@ -578,7 +554,7 @@ export default function DedicatedPrescriptionScreen() {
             style={styles.downloadBtn}
           >
             <Download size={18} color="#FFFFFF" />
-            <Text style={styles.downloadBtnText}>Download Official PDF</Text>
+            <Text style={styles.downloadBtnText}>Open Prescription PDF</Text>
           </TouchableOpacity>
 
           <TouchableOpacity

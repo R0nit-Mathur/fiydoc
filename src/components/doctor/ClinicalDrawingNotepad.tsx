@@ -344,7 +344,7 @@ export default function ClinicalDrawingNotepad({
               </Svg>
 
               {paths.length === 0 && !currentPath && (
-                <View style={styles.canvasEmptyHint} pointerEvents="none">
+                <View style={[styles.canvasEmptyHint, { pointerEvents: 'none' }]}>
                   <Edit2 size={32} color={colors.textMuted} />
                   <Text style={[styles.canvasEmptyTitle, { color: colors.textSecondary }]}>
                     Freehand Clinical Drawing

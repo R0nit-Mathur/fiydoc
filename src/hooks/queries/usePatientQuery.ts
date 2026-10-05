@@ -7,11 +7,9 @@ export function usePatientProfileQuery(patientId: string | undefined) {
     queryKey: ['patient-profile', patientId],
     queryFn: async () => {
       if (!patientId) return null;
-      try {
-        return await patientService.getProfile(patientId);
-      } catch {
-        return null;
-      }
+      // Preserve a real error so the profile can distinguish unavailable data
+      // from a successfully loaded profile with no optional fields.
+      return patientService.getProfile(patientId);
     },
     enabled: Boolean(patientId),
     staleTime: 5 * 60 * 1000,

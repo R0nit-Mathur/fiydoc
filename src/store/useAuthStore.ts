@@ -23,13 +23,14 @@ interface AuthState {
   setVerificationStatus: (status: 'registered' | 'pending' | 'verified' | 'rejected' | 'info_required') => void;
   setHasHydrated: (hydrated: boolean) => void;
   updateUser: (fields: Partial<UserSession>) => void;
-  logout: () => void;
+  /** Clears the persisted session before callers continue with navigation. */
+  logout: () => Promise<void>;
   signOutAll: (reason?: 'USER_ACTION' | 'SESSION_EXPIRED') => Promise<void>;
 }
 
 export const useAuthStore = create<AuthState>()(
   persist(
-    (set) => ({
+    (set, get) => ({
       user: null,
       role: 'patient',
       isAuthenticated: false,
@@ -54,6 +55,7 @@ export const useAuthStore = create<AuthState>()(
       updateUser: (fields) =>
         set((state) => ({
           user: state.user ? { ...state.user, ...fields } : null,
+          ...(state.user && fields.verificationStatus ? { verificationStatus: fields.verificationStatus } : {}),
         })),
 
       setRole: (role) =>
@@ -76,24 +78,8 @@ export const useAuthStore = create<AuthState>()(
 
       setHasHydrated: (hasHydrated) => set({ hasHydrated }),
 
-      logout: () => {
-        tokenStorage.removeToken().catch((e) => console.warn('[useAuthStore] removeToken error:', e));
-        set({
-          user: null,
-          role: 'patient',
-          isAuthenticated: false,
-          onboardingCompleted: false,
-          verificationStatus: 'registered',
-        });
-        useAppointmentStore.getState().reset();
-        useHealthStore.getState().reset();
-        useNotificationStore.getState().reset();
-        AsyncStorage.multiRemove([
-          'fiydoc-auth-storage',
-          'fiydoc-appointment-storage-v2',
-          'fiydoc-health-storage-v5',
-          'fiydoc-notifications-storage-v2',
-        ]).catch((err) => console.warn('[useAuthStore] multiRemove error:', err));
+      logout: async () => {
+        await get().signOutAll('USER_ACTION');
       },
 
       signOutAll: async (reason?: 'USER_ACTION' | 'SESSION_EXPIRED') => {

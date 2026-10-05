@@ -1,7 +1,7 @@
 import React from 'react';
 import { View, Text, TouchableOpacity, StyleSheet, ActivityIndicator } from 'react-native';
 import { useRouter } from 'expo-router';
-import { Pill, CheckCircle2 } from 'lucide-react-native';
+import { Pill } from 'lucide-react-native';
 import { Badge } from '@/components/ui/Badge';
 import { Avatar } from '@/components/ui/Avatar';
 import { Prescription } from '@/types/index';
@@ -11,9 +11,11 @@ import { useAppTheme } from '@/hooks/useAppTheme';
 interface PrescriptionsTabProps {
   prescriptions: Prescription[];
   isLoading?: boolean;
+  isError?: boolean;
+  onRetry?: () => void;
 }
 
-export function PrescriptionsTab({ prescriptions, isLoading }: PrescriptionsTabProps) {
+export function PrescriptionsTab({ prescriptions, isLoading, isError, onRetry }: PrescriptionsTabProps) {
   const router = useRouter();
   const { colors } = useAppTheme();
   const styles = useStyles(colors);
@@ -28,6 +30,17 @@ export function PrescriptionsTab({ prescriptions, isLoading }: PrescriptionsTabP
         <View style={[styles.emptyCard, { paddingVertical: 40, alignItems: 'center', justifyContent: 'center' }]}>
           <ActivityIndicator size="small" color={Palette.healthcareTeal} />
           <Text style={[styles.emptySubtitle, { marginTop: 10 }]}>Loading prescriptions from server...</Text>
+        </View>
+      ) : isError && prescriptions.length === 0 ? (
+        <View style={styles.emptyCard}>
+          <Pill size={32} color={colors.textMuted} />
+          <Text style={styles.emptyTitle}>Prescriptions unavailable</Text>
+          <Text style={styles.emptySubtitle}>We couldn't load your prescription records.</Text>
+          {onRetry ? (
+            <TouchableOpacity onPress={onRetry} activeOpacity={0.75} style={styles.retryButton} accessibilityRole="button" accessibilityLabel="Retry loading prescriptions">
+              <Text style={styles.retryButtonText}>Try again</Text>
+            </TouchableOpacity>
+          ) : null}
         </View>
       ) : prescriptions.length === 0 ? (
         <View style={styles.emptyCard}>
@@ -55,19 +68,18 @@ export function PrescriptionsTab({ prescriptions, isLoading }: PrescriptionsTabP
                 <View style={{ flex: 1 }}>
                   <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
                     <Text style={styles.rxDoctorName} numberOfLines={1}>
-                      {rx.doctorName || 'Dr. Specialist'}
+                      {rx.doctorName || 'Doctor details unavailable'}
                     </Text>
-                    <CheckCircle2 size={15} color={Palette.healthcareTeal} fill={Palette.healthcareTealLight} />
                   </View>
                   <Text style={styles.rxSpecialty} numberOfLines={1}>
-                    {rx.doctorSpecialty || 'Specialist Consultant'}
+                    {rx.doctorSpecialty || 'Specialty not provided'}
                   </Text>
                   <Text style={styles.rxClinic} numberOfLines={1}>
-                    {rx.clinicName || 'FiYDoc Healthcare Clinic'}
+                    {rx.clinicName || 'Clinic details unavailable'}
                   </Text>
                 </View>
               </View>
-              <Badge label={rx.createdAt || 'Today'} variant="blue" size="sm" />
+              <Badge label={rx.createdAt || 'Date unavailable'} variant="blue" size="sm" />
             </View>
 
             {/* Diagnosis Tag */}
@@ -118,6 +130,18 @@ const useStyles = (colors: any) => StyleSheet.create({
     color: colors.textMuted,
     textAlign: 'center',
     maxWidth: 280,
+  },
+  retryButton: {
+    marginTop: 12,
+    paddingHorizontal: 14,
+    paddingVertical: 8,
+    borderRadius: 999,
+    backgroundColor: Palette.healthcareTeal,
+  },
+  retryButtonText: {
+    color: '#FFFFFF',
+    fontSize: 12,
+    fontWeight: '700',
   },
   prescriptionCard: {
     backgroundColor: colors.card,

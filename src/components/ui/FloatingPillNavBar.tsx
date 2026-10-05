@@ -64,18 +64,18 @@ export function FloatingPillNavBar({
 
   return (
     <View
-      pointerEvents="box-none"
       style={[
         styles.wrapper,
         {
           bottom: Math.max(insets.bottom, 12) + 4,
         },
         style,
+        { pointerEvents: 'box-none' },
       ]}
     >
       <View style={styles.navContainer} onLayout={onLayout}>
         {/* Animated Sliding Pill Backdrop */}
-        <Animated.View style={[styles.activePillIndicator, pillAnimatedStyle]} pointerEvents="none" />
+        <Animated.View style={[styles.activePillIndicator, pillAnimatedStyle, { pointerEvents: 'none' }]} />
 
         {/* Tab Items */}
         {tabs.map((tab) => {

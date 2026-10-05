@@ -67,7 +67,7 @@ function DoctorFloatingDock({ state, navigation }: any) {
   };
 
   return (
-    <View pointerEvents="box-none" style={[styles.dockWrapper, { paddingBottom: bottomPadding }]}>
+    <View style={[styles.dockWrapper, { paddingBottom: bottomPadding, pointerEvents: 'box-none' }]}>
       <View style={styles.dockContainer}>
         {Platform.OS === 'ios' ? (
           <BlurView

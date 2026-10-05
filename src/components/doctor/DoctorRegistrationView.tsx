@@ -1,4 +1,5 @@
 import React, { useState } from 'react';
+import { platformShadow } from '@/utils/platformStyles';
 import {
   View,
   Text,
@@ -91,6 +92,53 @@ const MORNING_END_TIMES = ['10:30 AM', '11:00 AM', '11:30 AM', '12:00 PM', '12:3
 const EVENING_START_TIMES = ['04:00 PM', '04:30 PM', '05:00 PM', '05:30 PM', '06:00 PM', '06:30 PM', '07:00 PM'];
 const EVENING_END_TIMES = ['06:30 PM', '07:00 PM', '07:30 PM', '08:00 PM', '08:30 PM', '09:00 PM', '09:30 PM', '10:00 PM'];
 
+type ProfessionalType = 'medical_doctor' | 'dentist' | 'ayurvedic_practitioner' | 'homeopathic_practitioner' | 'other_practitioner';
+type UndergraduateDegree = string;
+
+const PROFESSIONAL_TYPES: Record<ProfessionalType, {
+  label: string;
+  degrees: UndergraduateDegree[];
+  regulatorLabel: string;
+  specialtyLabel: string;
+  specialtyPlaceholder: string;
+}> = {
+  medical_doctor: {
+    label: 'Medical Doctor',
+    degrees: ['MBBS'],
+    regulatorLabel: 'Medical Council / National Medical Commission',
+    specialtyLabel: 'Medical Specialty / Department',
+    specialtyPlaceholder: 'e.g. General Medicine, Cardiology, Pediatrics',
+  },
+  dentist: {
+    label: 'Dentist',
+    degrees: ['BDS'],
+    regulatorLabel: 'Dental Council / State Dental Council',
+    specialtyLabel: 'Dental Specialty / Department',
+    specialtyPlaceholder: 'e.g. General Dentistry, Orthodontics, Prosthodontics',
+  },
+  ayurvedic_practitioner: {
+    label: 'Ayurvedic Practitioner',
+    degrees: ['BAMS'],
+    regulatorLabel: 'Indian System of Medicine Regulator',
+    specialtyLabel: 'Ayurvedic Specialty / Department',
+    specialtyPlaceholder: 'e.g. Kayachikitsa, Panchakarma, General Ayurveda',
+  },
+  homeopathic_practitioner: {
+    label: 'Homeopathic Practitioner',
+    degrees: ['BHMS'],
+    regulatorLabel: 'Homoeopathy Regulator / State Board',
+    specialtyLabel: 'Homeopathic Specialty / Department',
+    specialtyPlaceholder: 'e.g. General Homoeopathy, Pediatrics, Dermatology',
+  },
+  other_practitioner: {
+    label: 'Other Licensed Practitioner',
+    degrees: ['Other regulated degree'],
+    regulatorLabel: 'Applicable professional council / board',
+    specialtyLabel: 'Professional Specialty / Department',
+    specialtyPlaceholder: 'Enter your regulated specialty or department',
+  },
+};
+
 
 export interface DoctorRegistrationViewProps {
   onSwitchToPatient?: () => void;
@@ -147,7 +195,7 @@ export function DoctorRegistrationView({
   const [contactEmail, setContactEmail] = useState(user?.email || '');
   const [password, setPassword] = useState('');
   const [showPassword, setShowPassword] = useState(false);
-  const [experienceYears, setExperienceYears] = useState('5');
+  const [experienceYears, setExperienceYears] = useState('');
   const [profilePhoto, setProfilePhoto] = useState<string | null>(null);
   const [uploadingPhoto, setUploadingPhoto] = useState(false);
   const [step1Loading, setStep1Loading] = useState(false);
@@ -174,13 +222,16 @@ export function DoctorRegistrationView({
   // Step 2: 4-Card Flow State
   const [cardIndex, setCardIndex] = useState(0); // 0 = UG, 1 = Council, 2 = PG, 3 = ID Proof
   // Card 1: UG
-  const [ugDegree, setUgDegree] = useState<'MBBS' | 'BDS' | 'BAMS' | 'BHMS'>('MBBS');
+  const [professionalType, setProfessionalType] = useState<ProfessionalType>('medical_doctor');
+  const professionalTypeConfig = PROFESSIONAL_TYPES[professionalType];
+  const [ugDegree, setUgDegree] = useState<UndergraduateDegree>('MBBS');
+  const [customDegree, setCustomDegree] = useState('');
   const [ugCollege, setUgCollege] = useState('');
   const [ugState, setUgState] = useState('');
   const [ugYear, setUgYear] = useState('');
   const [ugFileUploaded, setUgFileUploaded] = useState(false);
-  const [ugFileName, setUgFileName] = useState('MBBS_Degree_Certificate.pdf');
-  const [ugFileSize, setUgFileSize] = useState('2.1 MB');
+  const [ugFileName, setUgFileName] = useState('');
+  const [ugFileSize, setUgFileSize] = useState('');
   const [ugFileUri, setUgFileUri] = useState<string | null>(null);
 
   // Card 2: Council
@@ -194,23 +245,23 @@ export function DoctorRegistrationView({
 
   // Card 3: PG & Specialization
   const [hasPg, setHasPg] = useState(false);
-  const [pgCategory, setPgCategory] = useState('MD / MS (Doctor of Medicine / Surgery)');
-  const [specialization, setSpecialization] = useState('General Medicine');
+  const [pgCategory, setPgCategory] = useState('');
+  const [specialization, setSpecialization] = useState('');
   const [pgCollege, setPgCollege] = useState('');
   const [pgState, setPgState] = useState('');
   const [pgYear, setPgYear] = useState('');
   const [pgAqNumber, setPgAqNumber] = useState('');
   const [pgFileUploaded, setPgFileUploaded] = useState(false);
-  const [pgFileName, setPgFileName] = useState('PG_Degree_Certificate.pdf');
-  const [pgFileSize, setPgFileSize] = useState('3.2 MB');
+  const [pgFileName, setPgFileName] = useState('');
+  const [pgFileSize, setPgFileSize] = useState('');
   const [pgFileUri, setPgFileUri] = useState<string | null>(null);
 
   // Card 4: ID Proof
   const [idVerified, setIdVerified] = useState(false);
   const [idLoading, setIdLoading] = useState(false);
   const [idFileUploaded, setIdFileUploaded] = useState(false);
-  const [idFileName, setIdFileName] = useState('Govt_ID_Proof.pdf');
-  const [idFileSize, setIdFileSize] = useState('1.5 MB');
+  const [idFileName, setIdFileName] = useState('');
+  const [idFileSize, setIdFileSize] = useState('');
   const [idFileUri, setIdFileUri] = useState<string | null>(null);
 
   // Step 3: 3-Slide Flow State
@@ -222,8 +273,8 @@ export function DoctorRegistrationView({
   const [clinicCity, setClinicCity] = useState('');
   const [clinicPin, setClinicPin] = useState('');
   const [clinicFileUploaded, setClinicFileUploaded] = useState(false);
-  const [clinicFileName, setClinicFileName] = useState('Clinic_Establishment_Reg.pdf');
-  const [clinicFileSize, setClinicFileSize] = useState('1.8 MB');
+  const [clinicFileName, setClinicFileName] = useState('');
+  const [clinicFileSize, setClinicFileSize] = useState('');
   const [clinicFileUri, setClinicFileUri] = useState<string | null>(null);
 
   // Slide 2: Hospital Affiliations
@@ -232,8 +283,8 @@ export function DoctorRegistrationView({
   const [hospitalDesignation, setHospitalDesignation] = useState('');
   const [affiliationNature, setAffiliationNature] = useState<'Visiting' | 'Full-Time'>('Visiting');
   const [hospitalFileUploaded, setHospitalFileUploaded] = useState(false);
-  const [hospitalFileName, setHospitalFileName] = useState('Hospital_Empanelment_Letter.pdf');
-  const [hospitalFileSize, setHospitalFileSize] = useState('1.4 MB');
+  const [hospitalFileName, setHospitalFileName] = useState('');
+  const [hospitalFileSize, setHospitalFileSize] = useState('');
   const [hospitalFileUri, setHospitalFileUri] = useState<string | null>(null);
 
   // Universal Document Viewer State
@@ -252,29 +303,29 @@ export function DoctorRegistrationView({
   const [practiceScope, setPracticeScope] = useState<'both' | 'clinic_only' | 'hospital_only'>('both');
 
   // Slide 3: OPD Timings & Consultation Fee
-  const [consultationFee, setConsultationFee] = useState('800');
+  const [consultationFee, setConsultationFee] = useState('');
   const [slotDurationMins, setSlotDurationMins] = useState('15');
-  const [selectedDays, setSelectedDays] = useState<string[]>(['M', 'T', 'W', 'T2', 'F', 'S']);
-  const [morningEnabled, setMorningEnabled] = useState(true);
-  const [eveningEnabled, setEveningEnabled] = useState(true);
-  const [morningStart, setMorningStart] = useState('10:30 AM');
-  const [morningEnd, setMorningEnd] = useState('01:30 PM');
-  const [eveningStart, setEveningStart] = useState('05:00 PM');
-  const [eveningEnd, setEveningEnd] = useState('08:00 PM');
-  const [morningShiftTime, setMorningShiftTime] = useState('10:30 AM – 01:30 PM');
-  const [eveningShiftTime, setEveningShiftTime] = useState('05:00 PM – 08:00 PM');
-  const [morningTokens, setMorningTokens] = useState('12');
-  const [eveningTokens, setEveningTokens] = useState('12');
+  const [selectedDays, setSelectedDays] = useState<string[]>([]);
+  const [morningEnabled, setMorningEnabled] = useState(false);
+  const [eveningEnabled, setEveningEnabled] = useState(false);
+  const [morningStart, setMorningStart] = useState('');
+  const [morningEnd, setMorningEnd] = useState('');
+  const [eveningStart, setEveningStart] = useState('');
+  const [eveningEnd, setEveningEnd] = useState('');
+  const [morningShiftTime, setMorningShiftTime] = useState('');
+  const [eveningShiftTime, setEveningShiftTime] = useState('');
+  const [morningTokens, setMorningTokens] = useState('');
+  const [eveningTokens, setEveningTokens] = useState('');
   const [showTimingModal, setShowTimingModal] = useState(false);
-  const [tempMorningEnabled, setTempMorningEnabled] = useState(true);
-  const [tempEveningEnabled, setTempEveningEnabled] = useState(true);
-  const [tempMorningStart, setTempMorningStart] = useState('10:30 AM');
-  const [tempMorningEnd, setTempMorningEnd] = useState('01:30 PM');
-  const [tempEveningStart, setTempEveningStart] = useState('05:00 PM');
-  const [tempEveningEnd, setTempEveningEnd] = useState('08:00 PM');
+  const [tempMorningEnabled, setTempMorningEnabled] = useState(false);
+  const [tempEveningEnabled, setTempEveningEnabled] = useState(false);
+  const [tempMorningStart, setTempMorningStart] = useState('');
+  const [tempMorningEnd, setTempMorningEnd] = useState('');
+  const [tempEveningStart, setTempEveningStart] = useState('');
+  const [tempEveningEnd, setTempEveningEnd] = useState('');
   const [tempSlotDuration, setTempSlotDuration] = useState('15');
-  const [tempMorningTokens, setTempMorningTokens] = useState('12');
-  const [tempEveningTokens, setTempEveningTokens] = useState('12');
+  const [tempMorningTokens, setTempMorningTokens] = useState('');
+  const [tempEveningTokens, setTempEveningTokens] = useState('');
 
   // Autocomplete Dropdown State
   const [activeDropdown, setActiveDropdown] = useState<'city' | 'college' | 'hospital' | 'ugState' | 'pgState' | 'pgCollege' | 'primaryCouncil' | 'department' | 'designation' | null>(null);
@@ -347,8 +398,9 @@ export function DoctorRegistrationView({
             cleanName,
             cleanPhone,
             {
-              specialization: specialization.trim() || 'General Medicine',
-              consultationFee: Number(consultationFee) || 500,
+              professionalType,
+              specialization: specialization.trim() || undefined,
+              ...(Number(consultationFee) > 0 ? { consultationFee: Number(consultationFee) } : {}),
               profilePhoto: resolvedPhoto || undefined,
               experienceYears: Number(experienceYears) || 0,
             }
@@ -404,6 +456,10 @@ export function DoctorRegistrationView({
     }
     if (!ugYear.trim()) {
       setError('Graduation Year is required.');
+      return;
+    }
+    if (professionalType === 'other_practitioner' && !customDegree.trim()) {
+      setError('Enter the primary regulated degree or qualification.');
       return;
     }
     setCardIndex(1);
@@ -493,6 +549,11 @@ export function DoctorRegistrationView({
   };
 
   const handleCard4Verification = () => {
+    setError('');
+    if (!idFileUploaded || !idFileUri) {
+      setError('Please upload an official identity document before submitting for review.');
+      return;
+    }
     setIdLoading(true);
     if (Platform.OS !== 'web') {
       Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
@@ -523,6 +584,10 @@ export function DoctorRegistrationView({
       setError('Please select at least one available practice day.');
       return;
     }
+    if (!morningShiftTime && !eveningShiftTime) {
+      setError('Please configure at least one live practice time range.');
+      return;
+    }
     setFinalSubmitting(true);
     if (Platform.OS !== 'web') {
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
@@ -534,25 +599,43 @@ export function DoctorRegistrationView({
       const cleanPhone = contactPhone.trim();
       const cleanPassword = password.trim() || 'FiYDoc@Doctor' + Math.random().toString(36).slice(-4) + '!';
 
-      const qualificationList: string[] = [ugDegree];
-      if (hasPg && pgCategory) {
-        qualificationList.push(pgCategory.split(' ')[0]);
+      const primaryDegree = professionalType === 'other_practitioner' ? customDegree.trim() : ugDegree;
+      const qualificationDetails = [
+        {
+          degree: primaryDegree,
+          institution: ugCollege.trim() || undefined,
+          year: ugYear.trim() ? Number(ugYear) : undefined,
+        },
+        ...(hasPg && pgCategory.trim()
+          ? [{
+              degree: pgCategory.trim(),
+              institution: pgCollege.trim() || undefined,
+              year: pgYear.trim() ? Number(pgYear) : undefined,
+            }]
+          : []),
+      ];
+      const qualificationList = qualificationDetails.map((qualification) => qualification.degree);
+
+      if (practiceScope === 'hospital_only' && !hospitalName.trim()) {
+        setError('Hospital name is required for hospital-only practice.');
+        setFinalSubmitting(false);
+        return;
       }
 
       const fullClinicAddress = clinicAddress.trim()
-        ? `${clinicAddress.trim()}, ${clinicCity.trim()} ${clinicPin.trim()}`
-        : 'Clinical Practice Address Pending';
+        ? `${clinicAddress.trim()}, ${clinicCity.trim()} ${clinicPin.trim()}`.trim()
+        : '';
 
       const timingParts: string[] = [];
       if (morningEnabled && morningShiftTime && morningShiftTime !== 'Not Scheduled') timingParts.push(morningShiftTime);
       if (eveningEnabled && eveningShiftTime && eveningShiftTime !== 'Not Scheduled') timingParts.push(eveningShiftTime);
-      const resolvedTimings = timingParts.join(', ') || '10:30 AM – 01:30 PM, 05:00 PM – 08:00 PM';
+      const resolvedTimings = timingParts.join(', ');
 
       const clinicNameResolved = practiceScope === 'hospital_only'
-        ? (hospitalName.trim() || `${cleanName}'s Hospital OPD`)
-        : (clinicName.trim() || hospitalName.trim() || `${cleanName}'s Clinic`);
+        ? hospitalName.trim()
+        : (clinicName.trim() || hospitalName.trim());
       const clinicAddressResolved = practiceScope === 'hospital_only'
-        ? (clinicCity.trim() ? `${hospitalName.trim()}, ${clinicCity.trim()}` : hospitalName.trim() || 'Hospital Practice')
+        ? `${hospitalName.trim()}${clinicCity.trim() ? `, ${clinicCity.trim()}` : ''}`
         : fullClinicAddress;
 
       let resolvedFinalPhoto = profilePhoto;
@@ -576,14 +659,16 @@ export function DoctorRegistrationView({
       }
 
       const doctorFields = {
-        licenseNumber: councilRegNumber.trim() || 'Pending',
-        registrationAuthority: primaryCouncil.trim() || 'National Medical Commission / State Council',
-        specialization: specialization.trim() || 'General Medicine',
+        professionalType,
+        licenseNumber: councilRegNumber.trim() || 'PENDING',
+        registrationAuthority: primaryCouncil.trim() || 'PENDING',
+        specialization: specialization.trim() || 'PENDING',
         qualifications: qualificationList,
+        qualificationDetails,
         clinicName: clinicNameResolved,
         clinicAddress: clinicAddressResolved,
         clinicTimings: resolvedTimings,
-        consultationFee: Number(consultationFee) || 800,
+        consultationFee: Number(consultationFee),
         profilePhoto: resolvedFinalPhoto || undefined,
         slotDurationMinutes: Number(slotDurationMins) || 15,
         experienceYears: Number(experienceYears) || 0,
@@ -616,24 +701,38 @@ export function DoctorRegistrationView({
               clinicAddress: doctorFields.clinicAddress,
               clinicTimings: doctorFields.clinicTimings,
               qualifications: doctorFields.qualifications,
+              qualificationDetails: doctorFields.qualificationDetails,
               licenseNumber: doctorFields.licenseNumber,
               registrationAuthority: doctorFields.registrationAuthority,
               profilePhoto: resolvedFinalPhoto || undefined,
             }),
           });
         } catch (updateErr: any) {
-          console.warn('[DoctorRegistrationView] Profile update notice:', updateErr?.message);
+          throw new Error(updateErr?.message || 'Profile was not saved. Your draft has been kept; please retry.');
         }
       }
 
       // Authoritative verification documents submission
       try {
         const docsToSubmit = [
-          ugFileUploaded && ugFileUri ? { type: 'UG_DEGREE', name: ugFileName, url: ugFileUri } : null,
-          pgFileUploaded && pgFileUri ? { type: 'PG_DEGREE', name: pgFileName, url: pgFileUri } : null,
-          idFileUploaded && idFileUri ? { type: 'GOVT_ID', name: idFileName, url: idFileUri } : null,
-          clinicFileUploaded && clinicFileUri ? { type: 'CLINIC_ESTABLISHMENT', name: clinicFileName, url: clinicFileUri } : null,
-          hospitalFileUploaded && hospitalFileUri ? { type: 'HOSPITAL_EMPANELMENT', name: hospitalFileName, url: hospitalFileUri } : null,
+          {
+            type: 'QUALIFICATION_DATA',
+            professionalType,
+            qualifications: qualificationDetails,
+            status: 'PENDING_REVIEW',
+          },
+          {
+            type: 'REGISTRATION_DATA',
+            registrationNumber: councilRegNumber.trim() || null,
+            registrationAuthority: primaryCouncil.trim() || null,
+            registrationYear: councilRegYear.trim() || null,
+            status: 'PENDING_REVIEW',
+          },
+          ugFileUploaded && ugFileUri ? { type: 'UG_DEGREE', name: ugFileName, url: ugFileUri, status: 'PENDING_REVIEW' } : null,
+          pgFileUploaded && pgFileUri ? { type: 'PG_DEGREE', name: pgFileName, url: pgFileUri, status: 'PENDING_REVIEW' } : null,
+          idFileUploaded && idFileUri ? { type: 'GOVT_ID', name: idFileName, url: idFileUri, status: 'PENDING_REVIEW' } : null,
+          clinicFileUploaded && clinicFileUri ? { type: 'CLINIC_ESTABLISHMENT', name: clinicFileName, url: clinicFileUri, status: 'PENDING_REVIEW' } : null,
+          hospitalFileUploaded && hospitalFileUri ? { type: 'HOSPITAL_EMPANELMENT', name: hospitalFileName, url: hospitalFileUri, status: 'PENDING_REVIEW' } : null,
         ].filter(Boolean);
 
         const docProfile = await apiClient<any>('/doctors/me');
@@ -641,19 +740,22 @@ export function DoctorRegistrationView({
           await apiClient(`/verification/${docProfile.id}/submit`, {
             method: 'POST',
             body: JSON.stringify({
+              // Actual credentials are retained; backend submission stays pending manual review.
               registrationNumber: doctorFields.licenseNumber,
               registrationAuthority: doctorFields.registrationAuthority,
               submittedDocuments: docsToSubmit,
             }),
           });
+        } else {
+          throw new Error('Doctor profile could not be loaded for credential submission. Please retry.');
         }
       } catch (verifErr: any) {
-        console.warn('[DoctorRegistrationView] Verification document submission notice:', verifErr?.message);
+        throw new Error(verifErr?.message || 'Credential documents were not submitted. Your profile is saved; please retry submission.');
       }
 
       useNotificationStore.getState().addNotification({
-        title: 'Doctor Profile Created & Submitted',
-        message: `Welcome Dr. ${cleanName}! Your doctor profile and medical credentials have been registered and sent for admin verification.`,
+         title: 'Doctor Profile Saved',
+         message: `Welcome ${cleanName}! Your profile and credentials are saved and pending admin verification.`,
         type: 'profile_created',
         recipientRole: 'doctor',
         recipientId: currentSession?.id,
@@ -781,11 +883,13 @@ export function DoctorRegistrationView({
                       padding: 5,
                       borderWidth: 2,
                       borderColor: '#FFFFFF',
-                      shadowColor: '#000',
-                      shadowOffset: { width: 0, height: 1 },
-                      shadowOpacity: 0.2,
-                      shadowRadius: 2,
-                      elevation: 3,
+                      ...platformShadow({
+                        shadowColor: '#000',
+                        shadowOffset: { width: 0, height: 1 },
+                        shadowOpacity: 0.2,
+                        shadowRadius: 2,
+                        elevation: 3,
+                      }),
                       zIndex: 10,
                     }}
                   >
@@ -858,7 +962,7 @@ export function DoctorRegistrationView({
 
             {/* Mobile Number */}
             <View style={styles.inputGroup}>
-              <Text style={styles.inputLabel}>Mobile Number (for OTP & NMC Linkage)</Text>
+               <Text style={styles.inputLabel}>Mobile Number (for account & verification updates)</Text>
               <View style={styles.inputWrapper}>
                 <Smartphone size={18} color="#737783" style={styles.inputIcon} />
                 <TextInput
@@ -953,12 +1057,12 @@ export function DoctorRegistrationView({
               {step1Loading ? (
                 <View style={styles.loadingRow}>
                   <ActivityIndicator size="small" color="#ffffff" />
-                  <Text style={styles.primaryPillButtonText}>Verifying license credentials...</Text>
+                  <Text style={styles.primaryPillButtonText}>Saving your account...</Text>
                 </View>
               ) : step1Success ? (
                 <View style={styles.loadingRow}>
                   <CheckCircle2 size={18} color="#ffffff" />
-                  <Text style={styles.primaryPillButtonText}>License Confirmed!</Text>
+                  <Text style={styles.primaryPillButtonText}>Account saved</Text>
                 </View>
               ) : (
                 <View style={styles.loadingRow}>
@@ -1024,19 +1128,60 @@ export function DoctorRegistrationView({
             <View style={styles.formCard}>
               <View style={styles.cardHeaderRow}>
                 <View style={{ flex: 1, paddingRight: 8 }}>
-                  <Text style={styles.cardHeaderTitle}>1. PRIMARY MEDICAL DEGREE (UG)</Text>
-                  <Text style={styles.cardHeaderSubtitle}>Recognized under NMC / MCI Schedule</Text>
+                  <Text style={styles.cardHeaderTitle}>1. PRIMARY PROFESSIONAL QUALIFICATION</Text>
+              <Text style={styles.cardHeaderSubtitle}>Enter the primary qualification used for your professional registration.</Text>
                 </View>
                 <View style={styles.mandatoryBadge}>
                   <Text style={styles.mandatoryBadgeText}>Mandatory</Text>
                 </View>
               </View>
 
+              {/* Professional Type */}
+              <View style={styles.inputGroup}>
+                <Text style={styles.inputLabel}>Professional Type</Text>
+                <View style={styles.radioChipsGrid}>
+                  {(Object.keys(PROFESSIONAL_TYPES) as ProfessionalType[]).map((type) => (
+                    <Pressable
+                      key={type}
+                      onPress={() => {
+                        setProfessionalType(type);
+                        setUgDegree(PROFESSIONAL_TYPES[type].degrees[0]);
+                        setCustomDegree('');
+                        setPrimaryCouncil('');
+                      }}
+                      style={[
+                        styles.radioChip,
+                        professionalType === type ? styles.radioChipActive : styles.radioChipInactive,
+                      ]}
+                    >
+                      <Text style={[styles.radioChipText, professionalType === type && styles.radioChipTextActive]}>
+                        {PROFESSIONAL_TYPES[type].label}
+                      </Text>
+                    </Pressable>
+                  ))}
+                </View>
+              </View>
+
+              {professionalType === 'other_practitioner' ? (
+                <View style={styles.inputGroup}>
+                  <Text style={styles.inputLabel}>Primary regulated degree / qualification</Text>
+                  <View style={styles.inputWrapper}>
+                    <TextInput
+                      value={customDegree}
+                      onChangeText={setCustomDegree}
+                      placeholder="e.g. BPT, BNYS, BASLP"
+                      placeholderTextColor="#94A3B8"
+                      style={styles.textInput}
+                    />
+                  </View>
+                </View>
+              ) : null}
+
               {/* Degree Type Radio Chips */}
               <View style={styles.inputGroup}>
-                <Text style={styles.inputLabel}>Degree Type</Text>
+                <Text style={styles.inputLabel}>{professionalTypeConfig.label} Degree</Text>
                 <View style={styles.radioChipsGrid}>
-                  {(['MBBS', 'BDS', 'BAMS', 'BHMS'] as const).map((deg) => (
+                  {professionalTypeConfig.degrees.map((deg) => (
                     <Pressable
                       key={deg}
                       onPress={() => setUgDegree(deg)}
@@ -1060,7 +1205,7 @@ export function DoctorRegistrationView({
 
               <View style={styles.inputGroup}>
                 <View style={styles.dropdownHeaderRow}>
-                  <Text style={styles.inputLabel}>Medical College / Institution</Text>
+                  <Text style={styles.inputLabel}>College / Institution</Text>
                   <Pressable
                     onPress={() => setActiveDropdown(activeDropdown === 'college' ? null : 'college')}
                     hitSlop={8}
@@ -1175,13 +1320,12 @@ export function DoctorRegistrationView({
                 </View>
               </View>
 
-              {/* MBBS Degree Certificate Upload */}
               <FileUploadCard
                 label="Degree Certificate / Diploma"
                 isUploaded={ugFileUploaded}
                 fileName={ugFileName}
                 fileSize={ugFileSize}
-                subtitle="Verified File"
+                 subtitle="Pending admin review"
                 uploadPrompt="Tap to select & upload certificate"
                 uploadSubtitle="PDF, JPG, PNG (Max 15MB)"
                 onRemove={() => {
@@ -1232,18 +1376,18 @@ export function DoctorRegistrationView({
               <View style={styles.cardHeaderRow}>
                 <View style={{ flex: 1, paddingRight: 8 }}>
                   <Text style={styles.cardHeaderTitle}>2. COUNCIL REGISTRATION & LICENSE</Text>
-                  <Text style={styles.cardHeaderSubtitle}>Primary registration & cross-state licenses</Text>
+                   <Text style={styles.cardHeaderSubtitle}>Submit the registration issued by your selected professional regulator.</Text>
                 </View>
                 <View style={styles.verifiedGreenBadge}>
                   <CheckCircle2 size={11} color="#047857" />
-                  <Text style={styles.verifiedGreenBadgeText}>Active in NMR</Text>
+                   <Text style={styles.verifiedGreenBadgeText}>Pending review</Text>
                 </View>
               </View>
 
               {/* Primary State Medical Council */}
               <View style={styles.inputGroup}>
                 <View style={styles.dropdownHeaderRow}>
-                  <Text style={styles.inputLabel}>Primary State Medical Council</Text>
+                  <Text style={styles.inputLabel}>Primary {professionalTypeConfig.regulatorLabel}</Text>
                   <Pressable
                     onPress={() => setActiveDropdown(activeDropdown === 'primaryCouncil' ? null : 'primaryCouncil')}
                     hitSlop={8}
@@ -1261,7 +1405,7 @@ export function DoctorRegistrationView({
                       if (val.trim().length > 0) setActiveDropdown('primaryCouncil');
                     }}
                     onFocus={() => setActiveDropdown('primaryCouncil')}
-                    placeholder="e.g. Delhi Medical Council, MMC, KMC"
+                     placeholder={`Enter your ${professionalTypeConfig.regulatorLabel.toLowerCase()}`}
                     placeholderTextColor="#94A3B8"
                     style={styles.textInput}
                   />
@@ -1290,7 +1434,7 @@ export function DoctorRegistrationView({
                                 {council.name}
                               </Text>
                               <Text style={{ fontSize: 11, color: '#64748B', marginTop: 1 }}>
-                                {council.state} • Sample: {council.sampleFormat}
+                                 {council.state}
                               </Text>
                             </View>
                           </Pressable>
@@ -1335,7 +1479,7 @@ export function DoctorRegistrationView({
                 <View style={styles.dualLicenseToggleRow}>
                   <View style={{ flex: 1 }}>
                     <Text style={styles.dualLicenseTitle}>Practice in another State / Dual License?</Text>
-                    <Text style={styles.dualLicenseDesc}>For multi-state clinics or reciprocal NMC registration</Text>
+                   <Text style={styles.dualLicenseDesc}>For an additional registration issued by another regulator or state.</Text>
                   </View>
                   <Pressable
                     onPress={() => setDualLicenseActive(!dualLicenseActive)}
@@ -1406,7 +1550,7 @@ export function DoctorRegistrationView({
               <View style={styles.cardHeaderRow}>
                 <View style={{ flex: 1, paddingRight: 8 }}>
                   <Text style={styles.cardHeaderTitle}>3. POST-GRADUATE & SPECIALIZATION</Text>
-                  <Text style={styles.cardHeaderSubtitle}>MD, MS, DNB, DM, MCh & Fellowships</Text>
+               <Text style={styles.cardHeaderSubtitle}>Add optional postgraduate or advanced qualifications for this professional type.</Text>
                 </View>
                 <View style={styles.optionalBadge}>
                   <Text style={styles.optionalBadgeText}>Optional</Text>
@@ -1446,7 +1590,7 @@ export function DoctorRegistrationView({
                         !hasPg && styles.pillToggleBtnTextActive,
                       ]}
                     >
-                      No, General (MBBS)
+                       No additional qualification
                     </Text>
                   </Pressable>
                 </View>
@@ -1470,12 +1614,12 @@ export function DoctorRegistrationView({
 
                   {/* Clinical Specialization */}
                   <View style={styles.inputGroup}>
-                    <Text style={styles.inputLabel}>Clinical Specialization / Department</Text>
+                     <Text style={styles.inputLabel}>{professionalTypeConfig.specialtyLabel}</Text>
                     <View style={styles.inputWrapper}>
                       <TextInput
                         value={specialization}
                         onChangeText={setSpecialization}
-                        placeholder="e.g. Cardiology, Orthopedics, Pediatrics"
+                         placeholder={professionalTypeConfig.specialtyPlaceholder}
                         placeholderTextColor="#94A3B8"
                         style={styles.textInput}
                       />
@@ -1659,7 +1803,7 @@ export function DoctorRegistrationView({
               <View style={styles.cardHeaderRow}>
                 <View style={{ flex: 1, paddingRight: 8 }}>
                   <Text style={styles.cardHeaderTitle}>4. GOVERNMENT IDENTITY PROOF</Text>
-                  <Text style={styles.cardHeaderSubtitle}>UIDAI e-KYC or Official Photo ID Verification</Text>
+                  <Text style={styles.cardHeaderSubtitle}>Official photo identity document for admin review</Text>
                 </View>
                 <View style={styles.actionRequiredBadge}>
                   <Text style={styles.actionRequiredBadgeText}>Action Required</Text>
@@ -1674,17 +1818,17 @@ export function DoctorRegistrationView({
                   </View>
                   <View style={{ flex: 1 }}>
                     <Text style={styles.verificationTitle}>Aadhaar / Passport / Voter ID</Text>
-                    <Text style={styles.verificationDesc}>Instant DigiLocker OTP or PDF Upload</Text>
+                     <Text style={styles.verificationDesc}>Upload an official photo ID for admin review.</Text>
                   </View>
                   <View style={styles.verifiedTag}>
-                    <Text style={styles.verifiedTagText}>Linked</Text>
+                     <Text style={styles.verifiedTagText}>{idVerified ? 'Submitted' : 'Required'}</Text>
                   </View>
                 </View>
                 <View style={styles.encryptionNoteRow}>
                   <Shield size={14} color="#059669" />
-                  <Text style={styles.encryptionNoteText}>
-                    Direct 256-bit encrypted integration with UIDAI / DigiLocker
-                  </Text>
+                   <Text style={styles.encryptionNoteText}>
+                     Documents are stored as pending until a FiYDoc administrator reviews them.
+                   </Text>
                 </View>
               </View>
 
@@ -1693,25 +1837,31 @@ export function DoctorRegistrationView({
                 <Text style={styles.summaryTitle}>VERIFICATION SUMMARY</Text>
                 <View style={styles.summaryRow}>
                   <View style={styles.summaryItemLeft}>
-                    <CheckCircle2 size={15} color="#059669" />
-                    <Text style={styles.summaryLabel}>MBBS Degree File</Text>
-                  </View>
-                  <Text style={styles.summaryValueVerified}>Verified</Text>
-                </View>
-                <View style={styles.summaryRow}>
+                     <CheckCircle2 size={15} color={ugFileUploaded ? '#059669' : '#94A3B8'} />
+                     <Text style={styles.summaryLabel}>{ugDegree} Degree File</Text>
+                   </View>
+                   <Text style={ugFileUploaded ? styles.summaryValuePending : styles.summaryValueMono}>
+                     {ugFileUploaded ? 'Submitted for review' : 'Not uploaded'}
+                   </Text>
+                 </View>
+                 <View style={styles.summaryRow}>
                   <View style={styles.summaryItemLeft}>
-                    <CheckCircle2 size={15} color="#059669" />
-                    <Text style={styles.summaryLabel}>NMC / State Council</Text>
-                  </View>
-                  <Text style={styles.summaryValueMono}>MMC-2015</Text>
-                </View>
-                <View style={styles.summaryRow}>
-                  <View style={styles.summaryItemLeft}>
-                    <CheckCircle2 size={15} color="#059669" />
-                    <Text style={styles.summaryLabel}>Post-Graduate MD</Text>
-                  </View>
-                  <Text style={styles.summaryValueVerified}>Completed</Text>
-                </View>
+                     <CheckCircle2 size={15} color={councilRegNumber.trim() ? '#059669' : '#94A3B8'} />
+                     <Text style={styles.summaryLabel}>{professionalTypeConfig.regulatorLabel}</Text>
+                   </View>
+                   <Text style={styles.summaryValueMono}>{councilRegNumber.trim() || 'Pending submission'}</Text>
+                 </View>
+                 {hasPg ? (
+                   <View style={styles.summaryRow}>
+                     <View style={styles.summaryItemLeft}>
+                       <CheckCircle2 size={15} color={pgFileUploaded ? '#059669' : '#94A3B8'} />
+                       <Text style={styles.summaryLabel}>{pgCategory.trim() || 'Postgraduate qualification'}</Text>
+                     </View>
+                     <Text style={pgFileUploaded ? styles.summaryValuePending : styles.summaryValueMono}>
+                       {pgFileUploaded ? 'Submitted for review' : 'Not uploaded'}
+                     </Text>
+                   </View>
+                 ) : null}
               </View>
 
               {/* Government ID Document Upload */}
@@ -1740,8 +1890,7 @@ export function DoctorRegistrationView({
                     setIdFileName(name);
                     setIdFileSize(size);
                     setIdFileUri(uri);
-                    setIdFileUploaded(true);
-                    setIdVerified(true);
+                     setIdFileUploaded(true);
                   }, 'doctors');
                 }}
               />
@@ -1904,11 +2053,13 @@ export function DoctorRegistrationView({
                           borderWidth: isSelected ? 2 : 1,
                           borderColor: isSelected ? StitchColors.primary : '#E2E8F0',
                           backgroundColor: isSelected ? '#F8FAFC' : '#FFFFFF',
-                          shadowColor: '#000',
-                          shadowOffset: { width: 0, height: 1 },
-                          shadowOpacity: isSelected ? 0.08 : 0.03,
-                          shadowRadius: 2,
-                          elevation: isSelected ? 2 : 1,
+                          ...platformShadow({
+                            shadowColor: '#000',
+                            shadowOffset: { width: 0, height: 1 },
+                            shadowOpacity: isSelected ? 0.08 : 0.03,
+                            shadowRadius: 2,
+                            elevation: isSelected ? 2 : 1,
+                          }),
                         }}
                       >
                         <View
@@ -3309,6 +3460,13 @@ const styles = StyleSheet.create({
     fontSize: 11,
     color: '#059669',
     fontWeight: '600',
+  },
+  summaryValuePending: {
+    fontSize: 11,
+    color: '#B45309',
+    fontWeight: '600',
+    textAlign: 'right',
+    maxWidth: 120,
   },
   summaryValueMono: {
     fontSize: 11,

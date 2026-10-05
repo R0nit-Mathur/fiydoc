@@ -10,7 +10,7 @@
  * - App preferences & Log out
  */
 
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import {
   View,
   Text,
@@ -28,7 +28,7 @@ import {
 } from 'react-native';
 import { useRouter } from 'expo-router';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import Animated, { FadeInUp } from 'react-native-reanimated';
+import Animated, { FadeInUp, ReduceMotion } from 'react-native-reanimated';
 import * as Haptics from 'expo-haptics';
 import {
   ShieldCheck,
@@ -58,7 +58,7 @@ import { useAuthStore } from '@/store/useAuthStore';
 import { useNotificationStore } from '@/store/useNotificationStore';
 import { signOutAll } from '@/services/authService';
 import { useAppTheme } from '@/hooks/useAppTheme';
-import { BorderRadius, Shadows, StitchColors, Palette } from '@/constants/theme';
+import { BorderRadius, Shadows, Spacing, StitchColors, Palette } from '@/constants/theme';
 import { AppUpdateModal } from '@/components/ui/AppUpdateModal';
 import { DocumentViewerModal } from '@/components/ui/DocumentViewerModal';
 import { fileUploadService } from '@/services/fileUploadService';
@@ -79,7 +79,7 @@ export default function DoctorProfileScreen() {
   // Profile data state bound to user — no fabricated defaults
   const initialName = user?.name || '';
   const initialSpec = user?.specialization || user?.specialty || '';
-  const initialFee = user?.consultationFee ? String(user.consultationFee) : '';
+  const initialFee = user?.consultationFee != null ? String(user.consultationFee) : '';
   const initialReg = user?.licenseNumber || user?.registrationNumber || '';
 
   const [docName, setDocName] = useState(initialName);
@@ -113,26 +113,45 @@ export default function DoctorProfileScreen() {
   const [tempQual, setTempQual] = useState(user?.qualification || '');
   const [tempClinicName, setTempClinicName] = useState(user?.clinicName || '');
   const [tempClinicAddress, setTempClinicAddress] = useState(user?.clinicAddress || '');
-  const [tempClinicTimings, setTempClinicTimings] = useState(user?.clinicTimings || '10:30 AM – 1:30 PM • 5:00 PM – 8:00 PM');
+  const [tempClinicTimings, setTempClinicTimings] = useState(user?.clinicTimings || '');
   const [viewerAvatarVisible, setViewerAvatarVisible] = useState(false);
 
   const [savingDocFee, setSavingDocFee] = useState(false);
   const [savingDocProfile, setSavingDocProfile] = useState(false);
   const [refreshing, setRefreshing] = useState(false);
+  const [profileLoading, setProfileLoading] = useState(true);
+  const [profileLoadError, setProfileLoadError] = useState(false);
+  const profileRequestInFlight = useRef(false);
+  const profileEditRevision = useRef(0);
+  const avatarUpdating = useRef(false);
+  const mounted = useRef(true);
+  const hasProfileEdits = useRef(false);
+  hasProfileEdits.current = showEditProfileModal || showFeeModal || savingDocProfile || savingDocFee;
 
   const fetchDocProfile = async () => {
+    if (profileRequestInFlight.current) return;
+    profileRequestInFlight.current = true;
+    const editRevision = profileEditRevision.current;
+    const requestUserId = user?.id;
+    setProfileLoading(true);
     try {
       const data = await doctorService.getMyProfile();
-      if (!data) return;
-      const resolvedName = data.user?.fullName || data.fullName || data.name || user?.name || '';
-      const resolvedSpec = data.specialization || data.specialty || user?.specialization || '';
-      const resolvedFee = data.consultationFee != null ? String(data.consultationFee) : (user?.consultationFee ? String(user.consultationFee) : '');
-      const resolvedAvatar = data.user?.profilePhoto || data.profilePhoto || user?.avatar || undefined;
-      const cName = data.clinic?.name || data.clinicName || user?.clinicName || '';
-      const cAddr = data.clinic?.address || data.clinicAddress || user?.clinicAddress || '';
-      const cTimings = data.clinicTimings || user?.clinicTimings || '10:30 AM – 1:30 PM • 5:00 PM – 8:00 PM';
-      const qual = data.qualification || user?.qualification || '';
-      const resolvedExp = data.experienceYears != null ? String(data.experienceYears) : (user?.experienceYears != null ? String(user.experienceYears) : '');
+      const currentUser = useAuthStore.getState().user;
+      if (!mounted.current || currentUser?.id !== requestUserId) return;
+      if (!data) throw new Error('Profile unavailable');
+      setProfileLoadError(false);
+      // A late read must never replace an open draft or a save/photo change
+      // made after this request began. Retry can still recover while editing.
+      if (profileEditRevision.current !== editRevision || hasProfileEdits.current || avatarUpdating.current) return;
+      const resolvedName = data.user?.fullName || data.fullName || data.name || currentUser?.name || '';
+      const resolvedSpec = data.specialization || data.specialty || currentUser?.specialization || currentUser?.specialty || '';
+      const resolvedFee = data.consultationFee != null ? String(data.consultationFee) : (currentUser?.consultationFee != null ? String(currentUser.consultationFee) : '');
+      const resolvedAvatar = data.user?.profilePhoto || data.profilePhoto || currentUser?.avatar || undefined;
+      const cName = data.clinic?.name || data.clinicName || currentUser?.clinicName || '';
+      const cAddr = data.clinic?.address || data.clinicAddress || currentUser?.clinicAddress || '';
+      const cTimings = data.clinicTimings || currentUser?.clinicTimings || '';
+      const qual = data.qualification || currentUser?.qualification || '';
+      const resolvedExp = data.experienceYears != null ? String(data.experienceYears) : (currentUser?.experienceYears != null ? String(currentUser.experienceYears) : '');
 
       setDocName(resolvedName);
       setDocSpec(resolvedSpec);
@@ -161,8 +180,13 @@ export default function DoctorProfileScreen() {
         clinicTimings: cTimings,
         experienceYears: resolvedExp ? Number(resolvedExp) : undefined,
       });
-    } catch (err) {
-      console.warn('[DoctorProfile] Failed to load server profile:', err);
+    } catch {
+      if (mounted.current && useAuthStore.getState().user?.id === requestUserId) {
+        setProfileLoadError(true);
+      }
+    } finally {
+      profileRequestInFlight.current = false;
+      if (mounted.current) setProfileLoading(false);
     }
   };
 
@@ -171,56 +195,71 @@ export default function DoctorProfileScreen() {
     if (Platform.OS !== 'web') {
       Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
     }
-    await fetchDocProfile();
-    setRefreshing(false);
+    try {
+      await fetchDocProfile();
+    } finally {
+      if (mounted.current) setRefreshing(false);
+    }
   };
 
   const handlePickDoctorAvatarDirect = async () => {
+    profileEditRevision.current += 1;
+    avatarUpdating.current = true;
     try {
       const uri = await pickImageFromGallery();
       if (!uri) return;
       if (Platform.OS !== 'web') Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-      setDocAvatar(uri);
-      setTempAvatar(uri);
-      updateUser({ avatar: uri });
-
       // Upload to storage and sync to server
       const uploadRes = await fileUploadService.uploadFile(
         { uri, name: `doctor_${user?.id || 'avatar'}_${Date.now()}.jpg` },
         'doctors'
       );
       if (uploadRes?.url) {
+        await doctorService.updateMyProfile({ profilePhoto: uploadRes.url });
         setDocAvatar(uploadRes.url);
         setTempAvatar(uploadRes.url);
         updateUser({ avatar: uploadRes.url });
-        await doctorService.updateMyProfile({ profilePhoto: uploadRes.url });
         await queryClient.invalidateQueries({ queryKey: ['doctors'] });
         await queryClient.invalidateQueries({ queryKey: ['doctor'] });
         await queryClient.invalidateQueries({ queryKey: ['appointments'] });
         await queryClient.invalidateQueries({ queryKey: ['auth-me'] });
         if (Platform.OS !== 'web') Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
         Alert.alert('Profile Photo Updated', 'Your new profile picture has been saved.');
+      } else {
+        Alert.alert('Photo not saved', 'Upload did not complete. Your existing photo has been kept.');
       }
     } catch (err: any) {
-      console.warn('[DoctorProfile] Direct avatar upload error:', err?.message);
+      Alert.alert('Photo not saved', err?.message || 'Your existing photo has been kept. Please try again.');
+    } finally {
+      avatarUpdating.current = false;
+      profileEditRevision.current += 1;
     }
   };
 
   // Sync profile data from server on mount
   useEffect(() => {
+    mounted.current = true;
     fetchDocProfile();
+    return () => { mounted.current = false; };
   }, []);
 
   const handleSaveFee = async () => {
+    if (savingDocFee) return;
+    if (!tempFee.trim() || !Number.isFinite(Number(tempFee)) || Number(tempFee) < 0) {
+      Alert.alert('Invalid fee', 'Enter a valid non-negative consultation fee.');
+      return;
+    }
+    profileEditRevision.current += 1;
     setSavingDocFee(true);
     try {
-      setOpdFee(tempFee);
-      updateUser({ consultationFee: tempFee });
       try {
         await doctorService.updateMyProfile({ consultationFee: Number(tempFee) });
+        setOpdFee(tempFee);
+        updateUser({ consultationFee: tempFee });
         Alert.alert('Success', 'Consultation fee updated.');
       } catch (err: any) {
-        Alert.alert('Notice', err?.message || 'Failed to update fee on server. Saved locally.');
+        Alert.alert('Fee not saved', err?.message || 'Your existing fee has been kept. Please try again.');
+        return;
       }
       setShowFeeModal(false);
       useNotificationStore.getState().addNotification({
@@ -245,13 +284,15 @@ export default function DoctorProfileScreen() {
 
 
   const handleSaveProfile = async () => {
+    if (savingDocProfile) return;
+    profileEditRevision.current += 1;
     setSavingDocProfile(true);
     try {
-      const cleanName = tempName.trim() || docName || 'Dr. Doctor';
-      const cleanSpec = tempSpec.trim() || docSpec || 'General Medicine';
-      const cleanClinicName = tempClinicName.trim() || user?.clinicName || `${cleanName}'s Clinic`;
-      const cleanClinicAddress = tempClinicAddress.trim() || user?.clinicAddress || 'Clinical Practice Address Pending';
-      const cleanClinicTimings = tempClinicTimings.trim() || user?.clinicTimings || '10:30 AM – 1:30 PM • 5:00 PM – 8:00 PM';
+      const cleanName = tempName.trim() || docName;
+      const cleanSpec = tempSpec.trim() || docSpec;
+      const cleanClinicName = tempClinicName.trim() || user?.clinicName || '';
+      const cleanClinicAddress = tempClinicAddress.trim() || user?.clinicAddress || '';
+      const cleanClinicTimings = tempClinicTimings.trim() || user?.clinicTimings || '';
 
       let finalAvatarUrl = tempAvatar;
       if (tempAvatar && (tempAvatar.startsWith('file:') || tempAvatar.startsWith('data:'))) {
@@ -262,29 +303,36 @@ export default function DoctorProfileScreen() {
           );
           if (uploadRes?.url) {
             finalAvatarUrl = uploadRes.url;
+          } else {
+            throw new Error('Photo upload did not complete. Please retry.');
           }
         } catch (uploadErr: any) {
-          console.warn('[DoctorProfile] Avatar cloud upload notice:', uploadErr?.message);
+          Alert.alert('Photo not saved', uploadErr?.message || 'Please try uploading the photo again.');
+          return;
         }
       }
 
+      let savedVerification = user?.verificationStatus;
       try {
-        await doctorService.updateMyProfile({
+        const saved = await doctorService.updateMyProfile({
           fullName: cleanName,
           specialization: cleanSpec,
           profilePhoto: finalAvatarUrl || null,
           clinicName: cleanClinicName,
           clinicAddress: cleanClinicAddress,
           clinicTimings: cleanClinicTimings,
-          experienceYears: tempExperience ? Number(tempExperience) : 0,
+          experienceYears: tempExperience ? Number(tempExperience) : undefined,
+          qualifications: tempQual.trim() !== (user?.qualification || '').trim() ? tempQual.trim() : undefined,
         });
+        savedVerification = saved?.verificationStatus || savedVerification;
         await queryClient.invalidateQueries({ queryKey: ['doctors'] });
         await queryClient.invalidateQueries({ queryKey: ['doctor'] });
         await queryClient.invalidateQueries({ queryKey: ['appointments'] });
         await queryClient.invalidateQueries({ queryKey: ['auth-me'] });
         Alert.alert('Success', 'Profile updated successfully.');
       } catch (err: any) {
-        Alert.alert('Update Notice', err?.message || 'Could not sync updates to server immediately. Changes saved locally.');
+        Alert.alert('Profile not saved', err?.message || 'Your saved profile has not been changed. Keep your draft and try again.');
+        return;
       }
       setDocName(cleanName);
       setDocSpec(cleanSpec);
@@ -299,7 +347,8 @@ export default function DoctorProfileScreen() {
         clinicName: cleanClinicName,
         clinicAddress: cleanClinicAddress,
         clinicTimings: cleanClinicTimings,
-        experienceYears: tempExperience ? Number(tempExperience) : 0,
+        experienceYears: tempExperience ? Number(tempExperience) : user?.experienceYears,
+        verificationStatus: savedVerification,
       });
       setShowEditProfileModal(false);
       useNotificationStore.getState().addNotification({
@@ -323,17 +372,20 @@ export default function DoctorProfileScreen() {
 
         <Pressable
           onPress={() => {
+            profileEditRevision.current += 1;
             setTempName(docName);
             setTempSpec(docSpec);
             setTempAvatar(docAvatar);
             setTempQual(user?.qualification || '');
             setTempClinicName(user?.clinicName || '');
             setTempClinicAddress(user?.clinicAddress || '');
-            setTempClinicTimings(user?.clinicTimings || '10:30 AM – 1:30 PM • 5:00 PM – 8:00 PM');
+            setTempClinicTimings(user?.clinicTimings || '');
             setTempExperience(docExperience);
             setShowEditProfileModal(true);
           }}
-          style={[styles.editIconBtn, { backgroundColor: colors.backgroundElement }]}
+          style={({ pressed }) => [styles.editIconBtn, { backgroundColor: colors.backgroundElement }, pressed && { opacity: 0.75 }]}
+          accessibilityRole="button"
+          accessibilityLabel="Edit clinician profile"
         >
           <Edit2 size={16} color={StitchColors.primaryContainer} />
         </Pressable>
@@ -351,9 +403,35 @@ export default function DoctorProfileScreen() {
           />
         }
       >
+        {(profileLoading || profileLoadError) && (
+          <View style={[styles.profileFeedback, { backgroundColor: colors.card, borderColor: colors.border }]}>
+            <View style={styles.profileFeedbackHeading}>
+              {profileLoading && <ActivityIndicator size="small" color={StitchColors.primaryContainer} />}
+              <Text style={[styles.profileFeedbackTitle, { color: colors.text }]} accessibilityLiveRegion="polite">
+                {profileLoadError ? 'Unable to refresh your profile' : 'Refreshing your profile…'}
+              </Text>
+            </View>
+            <Text style={[styles.profileFeedbackBody, { color: colors.textSecondary }]}>
+              {profileLoadError ? 'Your saved details and any open edits are kept. Check your connection and try again.' : 'You can keep using your saved details while we check for updates.'}
+            </Text>
+            {profileLoadError && (
+              <Pressable
+                onPress={fetchDocProfile}
+                disabled={profileLoading}
+                accessibilityRole="button"
+                accessibilityLabel="Retry loading your profile"
+                accessibilityState={{ disabled: profileLoading, busy: profileLoading }}
+                style={({ pressed }) => [styles.profileRetryButton, (pressed || profileLoading) && { opacity: 0.7 }]}
+              >
+                <Text style={styles.profileRetryText}>{profileLoading ? 'Retrying…' : 'Try again'}</Text>
+              </Pressable>
+            )}
+          </View>
+        )}
+
         {/* 2. Doctor Identity Card */}
         <Animated.View
-          entering={FadeInUp.delay(50).duration(300)}
+          entering={FadeInUp.delay(50).duration(300).reduceMotion(ReduceMotion.System)}
           style={[styles.identityCard, { backgroundColor: colors.card, borderColor: colors.border }]}
         >
           <View style={styles.identityTopRow}>
@@ -363,12 +441,15 @@ export default function DoctorProfileScreen() {
                   if (docAvatar) setViewerAvatarVisible(true);
                   else handlePickDoctorAvatarDirect();
                 }}
+                accessibilityRole="button"
                 accessibilityLabel="View profile photo"
               >
                 <Avatar uri={docAvatar || null} name={docName || 'Doctor'} size="xl" />
-                <View style={styles.verifiedMiniBadge}>
-                  <ShieldCheck size={12} color="#FFFFFF" />
-                </View>
+                {user?.verificationStatus === 'verified' && (
+                  <View style={styles.verifiedMiniBadge}>
+                    <ShieldCheck size={12} color="#FFFFFF" />
+                  </View>
+                )}
               </Pressable>
 
               {/* Direct Camera Edit Button */}
@@ -398,14 +479,16 @@ export default function DoctorProfileScreen() {
             <View style={{ flex: 1, marginLeft: 14 }}>
               <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
                 <Text style={[styles.docName, { color: colors.text }]}>{docName}</Text>
-                <View style={[styles.mdPill, { backgroundColor: '#DBEAFE' }]}>
-                  <Text style={styles.mdPillText}>MD</Text>
-                </View>
+                {user?.qualification ? (
+                  <View style={[styles.mdPill, { backgroundColor: '#DBEAFE' }]}>
+                    <Text style={styles.mdPillText} numberOfLines={1}>{user.qualification}</Text>
+                  </View>
+                ) : null}
               </View>
               <Text style={[styles.docSpec, { color: colors.textSecondary }]}>{docSpec}</Text>
               {user?.licenseNumber ? (
                 <Text style={[styles.docLicense, { color: colors.textMuted }]}>
-                  {user.licenseNumber} • Verified Council
+                  {user.licenseNumber || 'Registration pending review'}
                 </Text>
               ) : null}
 
@@ -436,16 +519,17 @@ export default function DoctorProfileScreen() {
                 <View style={styles.liveDot} />
               </View>
               <View>
-                <Text style={[styles.toggleTitle, { color: colors.text }]}>Active for Online OPD</Text>
-                <Text style={[styles.toggleSub, { color: colors.textSecondary }]}>
-                  Slots accepting instant patient tokens
-                </Text>
+                 <Text style={[styles.toggleTitle, { color: colors.text }]}>Online OPD availability</Text>
+                 <Text style={[styles.toggleSub, { color: colors.textSecondary }]}>
+                   {activeForOpd ? 'New patient slots are enabled' : 'New patient slots are paused'}
+                 </Text>
               </View>
             </View>
 
             <Switch
-              value={activeForOpd}
-              onValueChange={setActiveForOpd}
+               value={activeForOpd}
+               onValueChange={setActiveForOpd}
+               accessibilityLabel="Online OPD availability"
               trackColor={{ false: colors.border, true: StitchColors.secondaryContainer }}
               thumbColor="#FFFFFF"
             />
@@ -453,7 +537,7 @@ export default function DoctorProfileScreen() {
         </Animated.View>
 
         {/* 3. Financial Metrics (2-column tile) */}
-        <Animated.View entering={FadeInUp.delay(100).duration(300)} style={styles.metricsRow}>
+        <Animated.View entering={FadeInUp.delay(100).duration(300).reduceMotion(ReduceMotion.System)} style={styles.metricsRow}>
           {/* Current Fee */}
           <View style={[styles.metricTile, { backgroundColor: colors.card, borderColor: colors.border }]}>
             <View style={styles.metricTileHeader}>
@@ -464,7 +548,7 @@ export default function DoctorProfileScreen() {
               <Text style={[styles.metricTileAmt, { color: StitchColors.primaryContainer }]}>₹{opdFee}</Text>
               <Text style={[styles.metricTileSub, { color: colors.textSecondary }]}>per in-person slot</Text>
             </View>
-            <Pressable onPress={() => { setTempFee(opdFee); setShowFeeModal(true); }}>
+            <Pressable onPress={() => { profileEditRevision.current += 1; setTempFee(opdFee); setShowFeeModal(true); }}>
               <Text style={styles.editFeeText}>Edit Fee →</Text>
             </Pressable>
           </View>
@@ -486,11 +570,11 @@ export default function DoctorProfileScreen() {
         </Animated.View>
 
         {/* 4. Payout Management */}
-        <Animated.View entering={FadeInUp.delay(140).duration(300)} style={styles.sectionBlock}>
+        <Animated.View entering={FadeInUp.delay(140).duration(300).reduceMotion(ReduceMotion.System)} style={styles.sectionBlock}>
           <View style={styles.sectionTitleRow}>
             <Text style={[styles.sectionTitle, { color: colors.text }]}>Payout Management</Text>
             <View style={[styles.instantBadge, { backgroundColor: '#CCFBF1' }]}>
-              <Text style={styles.instantBadgeText}>T+0 Auto Payout</Text>
+              <Text style={styles.instantBadgeText}>Payout settings</Text>
             </View>
           </View>
 
@@ -539,7 +623,7 @@ export default function DoctorProfileScreen() {
             <View style={[styles.autoNoticePill, { backgroundColor: colors.backgroundElement }]}>
               <ShieldCheck size={14} color={StitchColors.secondaryContainer} />
               <Text style={[styles.autoNoticeText, { color: colors.textSecondary }]}>
-                {upiId ? 'Automated instant payout after consultation conclusion' : 'Direct credit to your verified Indian bank account / UPI VPA'}
+                {upiId ? 'Payout account saved for consultation settlements' : 'Add a bank account or UPI VPA for settlements'}
               </Text>
             </View>
 
@@ -585,22 +669,25 @@ export default function DoctorProfileScreen() {
         </Animated.View>
 
         {/* 5. Practice & Clinic Settings */}
-        <Animated.View entering={FadeInUp.delay(180).duration(300)} style={styles.sectionBlock}>
+        <Animated.View entering={FadeInUp.delay(180).duration(300).reduceMotion(ReduceMotion.System)} style={styles.sectionBlock}>
           <View style={styles.sectionTitleRow}>
             <Text style={[styles.sectionTitle, { color: colors.text }]}>Practice & Clinic Settings</Text>
-            <Text style={[styles.clusterTag, { color: StitchColors.primaryContainer }]}>Verified Practice</Text>
+            <Text style={[styles.clusterTag, { color: StitchColors.primaryContainer }]}>
+              {user?.verificationStatus === 'verified' ? 'Verified Practice' : 'Credential review pending'}
+            </Text>
           </View>
 
           <View style={[styles.groupedListCard, { backgroundColor: colors.card, borderColor: colors.border }]}>
             <Pressable
               onPress={() => {
+                profileEditRevision.current += 1;
                 setTempName(docName);
                 setTempSpec(docSpec);
                 setTempAvatar(docAvatar);
                 setTempQual(user?.qualification || '');
                 setTempClinicName(user?.clinicName || '');
                 setTempClinicAddress(user?.clinicAddress || '');
-                setTempClinicTimings(user?.clinicTimings || '10:30 AM – 1:30 PM • 5:00 PM – 8:00 PM');
+                setTempClinicTimings(user?.clinicTimings || '');
                 setShowEditProfileModal(true);
               }}
               style={styles.groupItem}
@@ -609,7 +696,7 @@ export default function DoctorProfileScreen() {
               <View style={{ flex: 1, marginLeft: 12 }}>
                 <Text style={[styles.groupItemSub, { color: colors.textSecondary }]}>Primary Hospital / Clinic</Text>
                 <Text style={[styles.groupItemMain, { color: colors.text }]}>
-                  {user?.clinicName ? `${user.clinicName}${user.clinicAddress ? `, ${user.clinicAddress}` : ''}` : 'Apollo Hospitals, Bannerghatta Rd'}
+                  {user?.clinicName ? `${user.clinicName}${user.clinicAddress ? `, ${user.clinicAddress}` : ''}` : 'Clinic details not set'}
                 </Text>
               </View>
               <ChevronRight size={16} color={colors.textMuted} />
@@ -620,8 +707,8 @@ export default function DoctorProfileScreen() {
             <View style={[styles.groupItem, { borderTopColor: colors.border, borderTopWidth: StyleSheet.hairlineWidth }]}>
               <FileSignature size={18} color={StitchColors.secondary} />
               <View style={{ flex: 1, marginLeft: 12 }}>
-                <Text style={[styles.groupItemSub, { color: colors.textSecondary }]}>Digital Prescription Seal & Sign</Text>
-                <Text style={[styles.groupItemMain, { color: StitchColors.secondary }]}>Active on e-Rx ✓</Text>
+                <Text style={[styles.groupItemSub, { color: colors.textSecondary }]}>Prescription signature settings</Text>
+                <Text style={[styles.groupItemMain, { color: StitchColors.secondary }]}>Available for review</Text>
               </View>
               <Pressable
                 onPress={() => setShowSealModal(true)}
@@ -634,7 +721,7 @@ export default function DoctorProfileScreen() {
         </Animated.View>
 
         {/* 7. App & Security Preferences */}
-        <Animated.View entering={FadeInUp.delay(220).duration(300)} style={styles.sectionBlock}>
+        <Animated.View entering={FadeInUp.delay(220).duration(300).reduceMotion(ReduceMotion.System)} style={styles.sectionBlock}>
           <Text style={[styles.sectionTitle, { color: colors.text }]}>App & Security Preferences</Text>
 
           <View style={[styles.groupedListCard, { backgroundColor: colors.card, borderColor: colors.border }]}>
@@ -644,10 +731,11 @@ export default function DoctorProfileScreen() {
                 <Text style={[styles.groupItemMain, { color: colors.text }]}>WhatsApp & SMS Booking Alerts</Text>
                 <Text style={[styles.groupItemSub, { color: colors.textMuted }]}>Instant alerts for walk-ins & rescheduling</Text>
               </View>
-              <Switch
-                value={whatsappAlerts}
-                onValueChange={setWhatsappAlerts}
-                trackColor={{ false: colors.border, true: StitchColors.primaryContainer }}
+                <Switch
+                  value={whatsappAlerts}
+                  onValueChange={setWhatsappAlerts}
+                  accessibilityLabel="WhatsApp and SMS booking alerts"
+                  trackColor={{ false: colors.border, true: StitchColors.primaryContainer }}
                 thumbColor="#FFFFFF"
               />
             </View>
@@ -672,17 +760,20 @@ export default function DoctorProfileScreen() {
             if (Platform.OS !== 'web') {
               Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
             }
-            await signOutAll();
-            router.replace('/(auth)/welcome');
+            await signOutAll('USER_ACTION');
+            router.replace('/(auth)/login');
           }}
-          style={[styles.logoutBtn, { borderColor: '#FCA5A5', backgroundColor: colors.card }]}
+          style={({ pressed }) => [styles.logoutBtn, { borderColor: '#FCA5A5', backgroundColor: colors.card }, pressed && { opacity: 0.75 }]}
+          accessibilityRole="button"
+          accessibilityLabel="Log out of clinician portal"
+          accessibilityHint="Sign out of this device"
         >
           <LogOut size={16} color={StitchColors.error} />
           <Text style={styles.logoutBtnText}>Log Out of Clinician Portal</Text>
         </Pressable>
 
         <Text style={[styles.buildVersionNotice, { color: colors.textMuted }]}>
-          FiYDOC Clinical OS v2.1.0 (Build 8901) • Encrypted Session
+          FiYDOC Clinical OS v2.1.0 (Build 8901)
         </Text>
       </ScrollView>
 
@@ -711,7 +802,10 @@ export default function DoctorProfileScreen() {
             <Pressable
               onPress={handleSaveFee}
               disabled={savingDocFee}
-              style={[styles.modalSaveBtn, { backgroundColor: StitchColors.primaryContainer }]}
+              accessibilityRole="button"
+              accessibilityLabel="Save consultation fee"
+              accessibilityState={{ disabled: savingDocFee, busy: savingDocFee }}
+              style={({ pressed }) => [styles.modalSaveBtn, { backgroundColor: StitchColors.primaryContainer }, (pressed || savingDocFee) && { opacity: 0.75 }]}
             >
               {savingDocFee ? (
                 <ActivityIndicator size="small" color="#FFFFFF" />
@@ -759,7 +853,7 @@ export default function DoctorProfileScreen() {
         <View style={styles.modalBackdrop}>
           <View style={[styles.modalCard, { backgroundColor: colors.card, borderColor: colors.border }]}>
             <View style={styles.modalHeader}>
-              <Text style={[styles.modalTitle, { color: colors.text }]}>Digital Medical Council Seal</Text>
+              <Text style={[styles.modalTitle, { color: colors.text }]}>Digital Prescription Preview</Text>
               <Pressable onPress={() => setShowSealModal(false)}>
                 <X size={18} color={colors.text} />
               </Pressable>
@@ -768,15 +862,17 @@ export default function DoctorProfileScreen() {
               <ShieldCheck size={36} color={StitchColors.secondary} />
               <Text style={[styles.sealDocName, { color: colors.text }]}>{docName}</Text>
               <Text style={[styles.sealDegree, { color: StitchColors.primaryContainer }]}>
-                {user?.qualification || 'MD (Medicine), MBBS'}
+                {user?.qualification || 'Qualification pending review'}
               </Text>
               <Text style={[styles.sealReg, { color: colors.textMuted }]}>
-                Registration: {user?.licenseNumber || 'MMC/2014/08/3821'}
+                Registration: {user?.licenseNumber || 'Registration pending review'}
               </Text>
-              <Text style={styles.sealValid}>Verified Active • National Medical Commission</Text>
+              <Text style={styles.sealValid}>
+                {user?.verificationStatus === 'verified' ? 'Verification status: Verified' : 'Verification status: Pending review'}
+              </Text>
             </View>
             <Pressable onPress={() => setShowSealModal(false)} style={[styles.modalSaveBtn, { backgroundColor: StitchColors.primaryContainer }]}>
-              <Text style={styles.modalSaveBtnText}>Close Certificate</Text>
+              <Text style={styles.modalSaveBtnText}>Close Preview</Text>
             </Pressable>
           </View>
         </View>
@@ -927,10 +1023,10 @@ export default function DoctorProfileScreen() {
               {/* Locked Council Credentials Notice */}
               <View style={{ backgroundColor: colors.backgroundElement, borderRadius: BorderRadius.md, padding: 10, borderWidth: 1, borderColor: colors.border }}>
                 <Text style={{ fontSize: 11, fontWeight: '700', color: colors.textSecondary, marginBottom: 2 }}>
-                  VERIFIED COUNCIL REGISTRATION (LOCKED)
+                  {user?.verificationStatus === 'verified' ? 'COUNCIL REGISTRATION (READ-ONLY)' : 'COUNCIL REGISTRATION (PENDING REVIEW)'}
                 </Text>
                 <Text style={{ fontSize: 13, color: colors.text, fontWeight: '600' }}>
-                  {user?.licenseNumber || '—'}
+                  {user?.licenseNumber || 'Not provided'}
                 </Text>
                 <Text style={{ fontSize: 11, color: colors.textMuted, marginTop: 2 }}>
                   Medical Council license numbers cannot be edited after initial onboarding. You may add additional qualifications or update clinic details above.
@@ -941,7 +1037,10 @@ export default function DoctorProfileScreen() {
             <Pressable
               onPress={handleSaveProfile}
               disabled={savingDocProfile}
-              style={[styles.modalSaveBtn, { backgroundColor: StitchColors.primaryContainer, marginTop: 8 }]}
+              accessibilityRole="button"
+              accessibilityLabel="Save clinician profile"
+              accessibilityState={{ disabled: savingDocProfile, busy: savingDocProfile }}
+              style={({ pressed }) => [styles.modalSaveBtn, { backgroundColor: StitchColors.primaryContainer, marginTop: 8 }, (pressed || savingDocProfile) && { opacity: 0.75 }]}
             >
               {savingDocProfile ? (
                 <ActivityIndicator size="small" color="#FFFFFF" />
@@ -974,6 +1073,40 @@ export default function DoctorProfileScreen() {
 }
 
 const styles = StyleSheet.create({
+  profileFeedback: {
+    padding: Spacing.md,
+    borderRadius: BorderRadius.xl,
+    borderWidth: 1,
+    gap: Spacing.sm,
+    alignItems: 'flex-start',
+  },
+  profileFeedbackHeading: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: Spacing.sm,
+  },
+  profileFeedbackTitle: {
+    fontSize: 13,
+    fontWeight: '600',
+    flexShrink: 1,
+  },
+  profileFeedbackBody: {
+    fontSize: 12,
+    lineHeight: 18,
+  },
+  profileRetryButton: {
+    minHeight: 44,
+    paddingHorizontal: Spacing.md,
+    paddingVertical: Spacing.sm,
+    borderRadius: BorderRadius.full,
+    justifyContent: 'center',
+    backgroundColor: StitchColors.primaryContainer,
+  },
+  profileRetryText: {
+    color: StitchColors.onPrimary,
+    fontSize: 12,
+    fontWeight: '600',
+  },
   safeArea: {
     flex: 1,
   },
@@ -990,8 +1123,8 @@ const styles = StyleSheet.create({
     fontWeight: '700',
   },
   editIconBtn: {
-    width: 36,
-    height: 36,
+    width: 44,
+    height: 44,
     borderRadius: BorderRadius.full,
     alignItems: 'center',
     justifyContent: 'center',

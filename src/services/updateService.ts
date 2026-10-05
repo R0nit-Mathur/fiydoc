@@ -19,12 +19,12 @@ export interface CheckUpdateResult {
 
 export const updateService = {
   isEnabled(): boolean {
-    return Updates.isEnabled;
+    return !__DEV__ && Platform.OS !== 'web' && Updates.isEnabled;
   },
 
   getMetadata(): UpdateMetadata {
     return {
-      isEnabled: Updates.isEnabled,
+      isEnabled: this.isEnabled(),
       channel: Updates.channel || (Updates.isEnabled ? 'production' : 'local-dev'),
       runtimeVersion: Updates.runtimeVersion || '1.0.0',
       updateId: Updates.updateId || 'embedded-bundle',
@@ -35,7 +35,7 @@ export const updateService = {
   },
 
   async checkForUpdate(): Promise<CheckUpdateResult> {
-    if (!Updates.isEnabled) {
+    if (!this.isEnabled()) {
       return {
         isAvailable: false,
         message: Platform.OS === 'web'
@@ -67,7 +67,7 @@ export const updateService = {
   },
 
   async fetchAndApplyUpdate(): Promise<{ success: boolean; message: string }> {
-    if (!Updates.isEnabled) {
+    if (!this.isEnabled()) {
       return {
         success: false,
         message: 'OTA updates are only applicable to standalone native iOS/Android builds.',

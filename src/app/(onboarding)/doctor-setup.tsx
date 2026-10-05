@@ -12,7 +12,7 @@ export default function DoctorSetupScreen() {
   return (
     <SafeAreaView style={styles.safeArea} edges={['bottom']}>
       {/* Soft Ambient Medical Glow Header Background */}
-      <View style={styles.ambientGlowContainer} pointerEvents="none">
+      <View style={[styles.ambientGlowContainer, { pointerEvents: 'none' }]}>
         <View style={styles.glow1} />
         <View style={styles.glow2} />
         <View style={styles.glow3} />

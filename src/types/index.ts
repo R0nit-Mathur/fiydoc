@@ -141,7 +141,7 @@ export interface PrescriptionMedicine {
   name: string;
   dosage: string;
   frequency: string;
-  durationDays: number;
+  durationDays?: number;
   instructions?: string;
 }
 

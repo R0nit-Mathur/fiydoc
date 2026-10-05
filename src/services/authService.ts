@@ -26,6 +26,8 @@ export interface UserSession {
   clinicTimings?: string;
   registrationNumber?: string;
   licenseNumber?: string;
+  registrationAuthority?: string;
+  professionalType?: string;
   specialty?: string;
   specialization?: string;
   qualification?: string;
@@ -98,6 +100,10 @@ export const authService = {
         clinicTimings: doc?.clinic?.timings,
         licenseNumber: doc?.verification?.registrationNumber,
         registrationNumber: doc?.verification?.registrationNumber,
+        registrationAuthority: doc?.verification?.registrationAuthority,
+        professionalType: doc?.professionalType || inferProfessionalType(doc?.qualifications),
+        qualification: formatQualifications(doc?.qualifications),
+        experienceYears: doc?.experienceYears,
         consultationFee: doc?.consultationFee,
         accessToken: token,
       };
@@ -120,6 +126,8 @@ export const authService = {
       registrationAuthority?: string;
       specialization?: string;
       qualifications?: string[] | string;
+      qualificationDetails?: Array<{ degree: string; institution?: string; year?: number }>;
+      professionalType?: string;
       experienceYears?: number;
       clinicName?: string;
       clinicAddress?: string;
@@ -171,9 +179,13 @@ export const authService = {
         clinicName: doc?.clinic?.name || extraDoctorFields?.clinicName,
         clinicAddress: doc?.clinic?.address || extraDoctorFields?.clinicAddress,
         clinicTimings: doc?.clinic?.timings,
-        licenseNumber: doc?.verification?.registrationNumber || extraDoctorFields?.licenseNumber,
-        registrationNumber: doc?.verification?.registrationNumber || extraDoctorFields?.licenseNumber,
-        consultationFee: doc?.consultationFee || extraDoctorFields?.consultationFee,
+         licenseNumber: doc?.verification?.registrationNumber || extraDoctorFields?.licenseNumber,
+         registrationNumber: doc?.verification?.registrationNumber || extraDoctorFields?.licenseNumber,
+         registrationAuthority: doc?.verification?.registrationAuthority || extraDoctorFields?.registrationAuthority,
+         professionalType: doc?.professionalType || extraDoctorFields?.professionalType || inferProfessionalType(doc?.qualifications),
+         qualification: formatQualifications(doc?.qualifications) || formatQualifications(extraDoctorFields?.qualificationDetails) || formatQualifications(extraDoctorFields?.qualifications),
+         experienceYears: doc?.experienceYears ?? extraDoctorFields?.experienceYears,
+        consultationFee: doc?.consultationFee ?? extraDoctorFields?.consultationFee,
         accessToken: token,
       };
     } catch (err: any) {
@@ -228,7 +240,7 @@ export const authService = {
       return {
         id: response.user.id,
         doctorId: doc?.id,
-        name: pat?.fullName || doc?.fullName || name,
+        name: pat?.fullName || doc?.fullName || customName,
         email: response.user.email,
         role: userRole,
         authProvider: 'google',
@@ -249,6 +261,10 @@ export const authService = {
         clinicAddress: doc?.clinic?.address,
         licenseNumber: doc?.verification?.registrationNumber,
         registrationNumber: doc?.verification?.registrationNumber,
+        registrationAuthority: doc?.verification?.registrationAuthority,
+        professionalType: doc?.professionalType || inferProfessionalType(doc?.qualifications),
+        qualification: formatQualifications(doc?.qualifications),
+        experienceYears: doc?.experienceYears,
         consultationFee: doc?.consultationFee,
         accessToken: token,
       };
@@ -260,3 +276,22 @@ export const authService = {
     }
   },
 };
+
+function formatQualifications(qualifications: any): string | undefined {
+  if (Array.isArray(qualifications)) {
+    const values = qualifications
+      .map((qualification) => typeof qualification === 'string' ? qualification : qualification?.degree)
+      .filter((value): value is string => Boolean(value && String(value).trim()));
+    return values.length > 0 ? values.join(', ') : undefined;
+  }
+  return qualifications ? String(qualifications) : undefined;
+}
+
+function inferProfessionalType(qualifications: any): string | undefined {
+  const text = formatQualifications(qualifications)?.toUpperCase() || '';
+  if (text.includes('BDS')) return 'dentist';
+  if (text.includes('BAMS')) return 'ayurvedic_practitioner';
+  if (text.includes('BHMS')) return 'homeopathic_practitioner';
+  if (text.includes('MBBS')) return 'medical_doctor';
+  return undefined;
+}

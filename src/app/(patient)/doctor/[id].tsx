@@ -6,7 +6,7 @@
  * - OPD Location Card with image banner, distance, hours, View Route action
  * - Choose Consultation Slot: Date Selector, Morning/Evening tabs, Slot Pills with Token #s
  * - Zero cancellation charge reassurance
- * - Sticky Bottom Checkout Action Card: Fee ₹800, "Book 04:15 PM • Token #12"
+ * - Sticky bottom checkout action card using server-provided fee and slot data
  */
 import React, { useState, useMemo, useEffect, useCallback } from 'react';
 import {
@@ -211,34 +211,8 @@ export default function DoctorProfileScreen() {
 
   const formattedServerSlots = (serverSlots || []).map(formatDisplaySlot);
 
-  // Standard fallback slots if server slot table is empty for this date, UNLESS doctor is on leave
-  const fallbackMorning = ['09:30 AM', '10:00 AM', '10:30 AM', '11:00 AM', '11:30 AM', '12:00 PM', '12:30 PM', '01:00 PM'];
-  const fallbackEvening = ['05:00 PM', '05:30 PM', '06:00 PM', '06:30 PM', '07:00 PM', '07:30 PM', '08:00 PM'];
-
-  const shiftTimeString = (timeStr: string, shiftMins: number): string => {
-    const match = timeStr.trim().match(/^(\d{1,2}):(\d{2})\s*(AM|PM)?$/i);
-    if (!match) return timeStr;
-    let h = parseInt(match[1], 10);
-    const m = match[2];
-    const meridiem = match[3]?.toUpperCase();
-    if (meridiem === 'PM' && h !== 12) h += 12;
-    if (meridiem === 'AM' && h === 12) h = 0;
-    const total = (h * 60 + parseInt(m, 10) + shiftMins) % 1440;
-    let newH = Math.floor(total / 60);
-    const newM = total % 60;
-    const newMeridiem = newH >= 12 ? 'PM' : 'AM';
-    if (newH > 12) newH -= 12;
-    if (newH === 0) newH = 12;
-    return `${String(newH).padStart(2, '0')}:${String(newM).padStart(2, '0')} ${newMeridiem}`;
-  };
-
-  const rawCandidateSlots = isOnLeave
-    ? []
-    : formattedServerSlots.length > 0
-    ? formattedServerSlots
-    : delayMinutes > 0
-    ? [...fallbackMorning, ...fallbackEvening].map((s) => shiftTimeString(s, delayMinutes))
-    : [...fallbackMorning, ...fallbackEvening];
+  // Availability is server-authoritative. Never invent slots when the API returns none.
+  const rawCandidateSlots = isOnLeave ? [] : formattedServerSlots;
 
   const dynamicDates = useMemo(() => {
     return DATES.map((item) => {
@@ -474,7 +448,9 @@ export default function DoctorProfileScreen() {
                   })()}
                   <View style={styles.availableStatusRow}>
                     <View style={styles.availableDot} />
-                    <Text style={styles.availableStatusText}>Available</Text>
+                   <Text style={styles.availableStatusText}>
+                     {isOnLeave ? 'On leave' : allAvailableSlots.length > 0 ? 'Available' : 'No live slots'}
+                   </Text>
                   </View>
                 </View>
 
@@ -497,15 +473,17 @@ export default function DoctorProfileScreen() {
                 </View>
               ) : null}
 
-              <View style={styles.statBox}>
-                <View style={styles.ratingValRow}>
-                  <Star size={14} color="#64748b" fill="#64748b" />
-                  <Text style={[styles.statValue, { color: '#64748b' }]}>
-                    0.0
-                  </Text>
-                </View>
-                <Text style={styles.statLabel}>Rating</Text>
-              </View>
+               {doctor.rating > 0 ? (
+                 <View style={styles.statBox}>
+                   <View style={styles.ratingValRow}>
+                     <Star size={14} color="#64748b" fill="#64748b" />
+                     <Text style={[styles.statValue, { color: '#64748b' }]}>
+                       {doctor.rating.toFixed(1)}
+                     </Text>
+                   </View>
+                   <Text style={styles.statLabel}>Rating</Text>
+                 </View>
+               ) : null}
             </View>
           </View>
 
@@ -830,8 +808,10 @@ export default function DoctorProfileScreen() {
           <View style={styles.feeBlock}>
             <Text style={styles.feeLabel}>TOTAL FEE</Text>
             <View style={styles.feeAmountRow}>
-              <Text style={styles.feeAmount}>₹{doctor.consultationFee || 800}</Text>
-              <Text style={styles.feeTaxNotice}>incl. tax</Text>
+             <Text style={styles.feeAmount}>
+               {doctor.consultationFee > 0 ? `₹${doctor.consultationFee}` : 'Fee unavailable'}
+             </Text>
+               {doctor.consultationFee > 0 ? <Text style={styles.feeTaxNotice}>configured fee</Text> : null}
             </View>
           </View>
 

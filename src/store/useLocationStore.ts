@@ -150,6 +150,7 @@ interface LocationState {
   area: string;
   city: string;
   formattedAddress: string;
+  locationSource: 'gps' | 'manual' | 'unknown';
   permissionStatus: 'undetermined' | 'granted' | 'denied';
   isGenuineDeviceLocation: boolean;
   isLoading: boolean;
@@ -169,6 +170,7 @@ export const useLocationStore = create<LocationState>()(
       area: '',
       city: '',
       formattedAddress: '',
+      locationSource: 'unknown',
       permissionStatus: 'undetermined',
       isGenuineDeviceLocation: false,
       isLoading: false,
@@ -186,7 +188,7 @@ export const useLocationStore = create<LocationState>()(
             set({
               permissionStatus: 'denied',
               isLoading: false,
-              error: 'Location permission denied. Showing default city hub.',
+              error: 'Location permission denied. You can continue with nationwide search or choose a city manually.',
             });
             return false;
           }
@@ -215,28 +217,28 @@ export const useLocationStore = create<LocationState>()(
           }
 
           if (!loc || !loc.coords) {
-            console.warn('[useLocationStore] No GPS fix available, defaulting to primary hub to keep app functional.');
-            const defaultHub = INDIAN_LOCATION_HUBS[0];
             set({
-              latitude: defaultHub.latitude,
-              longitude: defaultHub.longitude,
-              area: defaultHub.name.split(',')[0].trim(),
-              city: defaultHub.city,
-              formattedAddress: defaultHub.name,
-              permissionStatus: 'granted',
-              isGenuineDeviceLocation: true,
+              latitude: null,
+              longitude: null,
+              area: '',
+              city: '',
+              formattedAddress: '',
+              locationSource: 'unknown',
+              permissionStatus: status === 'granted' ? 'granted' : 'denied',
+              isGenuineDeviceLocation: false,
               isLoading: false,
-              error: null,
+              error: 'Location unavailable. Choose a city manually or browse nationwide.',
             });
-            return true;
+            return false;
           }
 
           const { latitude, longitude } = loc.coords;
 
-          // Reverse geocode to exact locality name like Zomato / Blinkit / Rapido
-          let cityName = 'New Delhi';
-          let areaName = 'Connaught Place';
-          let localityName = 'Connaught Place, New Delhi';
+          // Reverse geocode is optional metadata; never substitute a nearby hub
+          // or a hardcoded city when the provider cannot resolve the coordinates.
+          let cityName = '';
+          let areaName = '';
+          let localityName = '';
 
           try {
             if (Platform.OS === 'web') {
@@ -247,9 +249,9 @@ export const useLocationStore = create<LocationState>()(
                 if (res.ok) {
                   const data = await res.json();
                   const addr = data.address || {};
-                  cityName = addr.city || addr.town || addr.municipality || addr.state_district || 'New Delhi';
-                  areaName = addr.suburb || addr.neighbourhood || addr.residential || addr.road || cityName;
-                  localityName = `${areaName}, ${cityName}`;
+                  cityName = addr.city || addr.town || addr.municipality || addr.state_district || '';
+                  areaName = addr.suburb || addr.neighbourhood || addr.residential || addr.road || '';
+                  localityName = [areaName, cityName].filter(Boolean).join(', ');
                 }
               } catch {
                 // fall through to closest hub
@@ -258,7 +260,7 @@ export const useLocationStore = create<LocationState>()(
               const geocoded = await Location.reverseGeocodeAsync({ latitude, longitude });
               if (geocoded && geocoded.length > 0) {
                 const place = geocoded[0];
-                cityName = place.city || place.subregion || place.district || 'City Center';
+                cityName = place.city || place.subregion || place.district || '';
 
                 const candidateArea = [
                   place.street,
@@ -271,23 +273,12 @@ export const useLocationStore = create<LocationState>()(
                   return trimmed.length > 2 && !/^\d+$/.test(trimmed) && trimmed.toLowerCase() !== cityName.toLowerCase();
                 });
 
-                areaName = candidateArea || place.subregion || place.name || cityName;
-                localityName = `${areaName}, ${cityName}`;
+                areaName = candidateArea || place.subregion || place.name || '';
+                localityName = [areaName, cityName].filter(Boolean).join(', ');
               }
             }
-          } catch (e) {
-            let closestHub = INDIAN_LOCATION_HUBS[0];
-            let minDiff = Infinity;
-            for (const hub of INDIAN_LOCATION_HUBS) {
-              const diff = Math.hypot(hub.latitude - latitude, hub.longitude - longitude);
-              if (diff < minDiff) {
-                minDiff = diff;
-                closestHub = hub;
-              }
-            }
-            cityName = closestHub.city;
-            areaName = closestHub.name.split(',')[0].trim();
-            localityName = closestHub.name;
+          } catch {
+            // Coordinates remain usable for distance queries even without a label.
           }
 
           set({
@@ -296,6 +287,7 @@ export const useLocationStore = create<LocationState>()(
             area: areaName,
             city: cityName,
             formattedAddress: localityName,
+            locationSource: 'gps',
             permissionStatus: 'granted',
             isGenuineDeviceLocation: true,
             isLoading: false,
@@ -320,8 +312,9 @@ export const useLocationStore = create<LocationState>()(
           area: hub.name.split(',')[0].trim(),
           city: hub.city,
           formattedAddress: hub.name,
+          locationSource: 'manual',
           permissionStatus: 'granted',
-          isGenuineDeviceLocation: true,
+          isGenuineDeviceLocation: false,
           error: null,
         });
       },
@@ -333,8 +326,9 @@ export const useLocationStore = create<LocationState>()(
           area: area || formattedAddress.split(',')[0].trim() || city,
           city,
           formattedAddress,
+          locationSource: 'manual',
           permissionStatus: 'granted',
-          isGenuineDeviceLocation: true,
+          isGenuineDeviceLocation: false,
           error: null,
         });
       },

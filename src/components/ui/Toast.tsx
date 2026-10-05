@@ -26,7 +26,7 @@ export function Toast({ toast }: ToastProps) {
   };
 
   return (
-    <View style={styles.outerContainer} pointerEvents="box-none">
+    <View style={[styles.outerContainer, { pointerEvents: 'box-none' }]}>
       <View style={[styles.card, cardVariantStyles[toast.type], Shadows.modal]}>
         {icons[toast.type]}
         <View style={styles.textContainer}>

@@ -1,68 +1,34 @@
 import { useQuery } from '@tanstack/react-query';
-import { healthService } from '@/services/healthService';
+import { apiClient } from '@/services/apiClient';
 import { useHealthStore } from '@/store/useHealthStore';
 import { useAuthStore } from '@/store/useAuthStore';
 import { Prescription } from '@/types/index';
+import { mapPrescription } from '@/utils/prescriptionMapper';
 
 export function usePrescriptionsQuery(patientId?: string) {
   const { user } = useAuthStore();
   const setPrescriptions = useHealthStore((s) => s.setPrescriptions);
-  const storePrescriptions = useHealthStore((s) => s.prescriptions);
 
   const effectivePatientId = patientId || (user?.role === 'patient' ? user.id : 'me');
 
   return useQuery<Prescription[]>({
-    queryKey: ['prescriptions', effectivePatientId],
+    queryKey: ['prescriptions', user?.id, user?.role, effectivePatientId],
     enabled: Boolean(user?.id),
-    queryFn: async () => {
-      try {
-        const rawList = await healthService.getPrescriptions(effectivePatientId);
-        if (!Array.isArray(rawList)) return storePrescriptions;
-
-        const mapped: Prescription[] = rawList.map((rx: any) => ({
-          id: rx.id,
-          consultationId: rx.consultationId,
-          patientId: rx.patientId,
-          doctorId: rx.doctorId,
-          doctorName: rx.doctor?.fullName
-            ? rx.doctor.fullName.startsWith('Dr.')
-              ? rx.doctor.fullName
-              : `Dr. ${rx.doctor.fullName}`
-            : 'Licensed Doctor',
-          doctorSpecialty: rx.doctor?.specialization || 'Specialist',
-          doctorAvatar: rx.doctor?.profilePhoto || rx.doctor?.avatar || rx.doctor?.user?.profilePhoto || null,
-          doctorMciNumber: rx.doctor?.verification?.registrationNumber || undefined,
-          clinicName: rx.doctor?.clinic?.name || 'FiYDoc Partner Clinic',
-          clinicAddress: rx.doctor?.clinic?.address || undefined,
-          patientName: rx.patient?.fullName || user?.name || 'Patient',
-          doctorNotes: rx.doctorNotes || 'Follow prescribed regimen.',
-          followUpInstructions: rx.followUpInstructions || 'Review in clinic as advised.',
-          verificationCode: rx.verificationCode,
-          pdfUrl: rx.pdfUrl || undefined,
-          signedAt: rx.issuedAt || rx.signedAt || rx.createdAt,
-          createdAt: rx.createdAt
-            ? new Date(rx.createdAt).toLocaleDateString('en-IN', {
-                day: '2-digit',
-                month: 'short',
-                year: 'numeric',
-              })
-            : '',
-          medicines: (rx.medicines || []).map((m: any) => ({
-            id: m.id || `${rx.id}-${m.name}`,
-            name: m.name,
-            dosage: m.dosage,
-            frequency: m.frequency,
-            durationDays: m.durationDays,
-            instructions: m.instructions || '',
-          })),
-        }));
-
-        setPrescriptions(mapped);
-        return mapped;
-      } catch (err) {
-        console.warn('[usePrescriptionsQuery] Server fetch failed, falling back to store:', err);
-        return storePrescriptions;
-      }
+    queryFn: async ({ signal }) => {
+      const isCurrentAccount = () => {
+        const currentUser = useAuthStore.getState().user;
+        return !signal.aborted && Boolean(user?.id) && currentUser?.id === user?.id
+          && currentUser?.role === user?.role && currentUser?.accessToken === user?.accessToken;
+      };
+      if (!isCurrentAccount()) throw new Error('Prescription request cancelled.');
+      // Consume React Query's cancellation signal so old account/target requests
+      // cannot repopulate the shared store after their observer is removed.
+      const rawList = await apiClient<unknown>(`/prescriptions/patient/${encodeURIComponent(effectivePatientId)}`, { signal });
+      if (!isCurrentAccount()) throw new Error('Prescription request cancelled.');
+      if (!Array.isArray(rawList)) throw new Error('Invalid prescription list response.');
+      const mapped = rawList.map(mapPrescription);
+      setPrescriptions(mapped);
+      return mapped;
     },
     staleTime: 1000 * 30, // 30 seconds
   });

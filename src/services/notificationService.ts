@@ -1,5 +1,5 @@
 import { Platform } from 'react-native';
-import * as Notifications from 'expo-notifications';
+import { scheduleLocalNotification } from './localNotifications';
 import { apiClient } from './apiClient';
 import { NotificationItem } from '@/types/index';
 
@@ -41,14 +41,10 @@ export const notificationService = {
   }): Promise<void> => {
     if (Platform.OS === 'web') return;
     try {
-      await Notifications.scheduleNotificationAsync({
-        content: {
-          title: params.title,
-          body: params.message,
-          sound: 'default',
-          data: { type: params.type || 'alert', link: params.link, ...params.payload },
-        },
-        trigger: null,
+      await scheduleLocalNotification({
+        title: params.title,
+        body: params.message,
+        data: { type: params.type || 'alert', link: params.link, ...params.payload },
       });
     } catch (err: any) {
       console.warn('[notificationService] Failed to schedule local notification:', err?.message);

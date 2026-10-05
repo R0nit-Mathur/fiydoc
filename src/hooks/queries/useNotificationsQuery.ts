@@ -6,18 +6,16 @@ import { NotificationItem } from '@/types/index';
 
 export function useNotificationsQuery() {
   const user = useAuthStore((s) => s.user);
-  const storeNotifications = useNotificationStore((s) => s.notifications);
 
   return useQuery({
     queryKey: ['notifications', user?.id],
     queryFn: async () => {
       if (!user?.id) return [];
-      try {
-        const serverItems = await notificationService.getMyNotifications();
-        if (Array.isArray(serverItems) && serverItems.length > 0) {
-          const isDoctor = user?.role === 'doctor';
-          // Normalize server notification to NotificationItem
-          const normalized: NotificationItem[] = serverItems.map((n: any) => {
+      const serverItems = await notificationService.getMyNotifications();
+      if (Array.isArray(serverItems) && serverItems.length > 0) {
+        const isDoctor = user?.role === 'doctor';
+        // Normalize server notification to NotificationItem
+        const normalized: NotificationItem[] = serverItems.map((n: any) => {
             const aptId = n.payload?.appointmentId || n.payload?.consultationId;
             const rxId = n.payload?.prescriptionId;
             let link: string | undefined;
@@ -52,17 +50,14 @@ export function useNotificationsQuery() {
               recipientId: n.userId || user.id,
               recipientRole: isDoctor ? 'doctor' : 'patient',
             };
-          });
+        });
 
-          // Silently sync server notifications into store without triggering push banners
-          useNotificationStore.getState().syncServerNotifications(normalized);
+        // Silently sync server notifications into store without triggering push banners
+        useNotificationStore.getState().syncServerNotifications(normalized);
 
-          return normalized;
-        }
-      } catch (err) {
-        console.warn('[useNotificationsQuery] Failed to fetch server notifications:', err);
+        return normalized;
       }
-      return storeNotifications;
+      return [];
     },
     enabled: Boolean(user?.id),
     staleTime: 30_000,

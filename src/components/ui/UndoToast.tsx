@@ -1,4 +1,4 @@
-import React, { useEffect, useState, useRef } from 'react';
+import React, { useCallback, useEffect, useState, useRef } from 'react';
 import { Text, TouchableOpacity, StyleSheet, Animated, Platform } from 'react-native';
 import { RotateCcw, X } from 'lucide-react-native';
 import { StitchColors, BorderRadius, Shadows } from '@/constants/theme';
@@ -26,35 +26,51 @@ export const UndoToast: React.FC<UndoToastProps> = ({
   const [show, setShow] = useState(visible);
   const opacity = useRef(new Animated.Value(0)).current;
   const translateY = useRef(new Animated.Value(20)).current;
+  const animationRef = useRef<Animated.CompositeAnimation | null>(null);
+  const timerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const onDismissRef = useRef(onDismiss);
 
   useEffect(() => {
+    onDismissRef.current = onDismiss;
+  }, [onDismiss]);
+
+  const hideToast = useCallback(() => {
+    if (timerRef.current) clearTimeout(timerRef.current);
+    timerRef.current = null;
+    animationRef.current?.stop();
+    animationRef.current = Animated.parallel([
+      Animated.timing(opacity, { toValue: 0, duration: 200, useNativeDriver: Platform.OS !== 'web' }),
+      Animated.timing(translateY, { toValue: 20, duration: 200, useNativeDriver: Platform.OS !== 'web' }),
+    ]);
+    animationRef.current.start(({ finished }) => {
+      if (!finished) return;
+      setShow(false);
+      onDismissRef.current?.();
+    });
+  }, [opacity, translateY]);
+
+  useEffect(() => {
+    animationRef.current?.stop();
     if (visible) {
       setShow(true);
-      Animated.parallel([
-        Animated.timing(opacity, { toValue: 1, duration: 250, useNativeDriver: true }),
-        Animated.spring(translateY, { toValue: 0, tension: 60, friction: 8, useNativeDriver: true }),
-      ]).start();
+      animationRef.current = Animated.parallel([
+        Animated.timing(opacity, { toValue: 1, duration: 250, useNativeDriver: Platform.OS !== 'web' }),
+        Animated.spring(translateY, { toValue: 0, tension: 60, friction: 8, useNativeDriver: Platform.OS !== 'web' }),
+      ]);
+      animationRef.current.start();
 
       if (durationMs > 0) {
-        const timer = setTimeout(() => {
-          hideToast();
-        }, durationMs);
-        return () => clearTimeout(timer);
+        timerRef.current = setTimeout(hideToast, durationMs);
       }
     } else {
       hideToast();
     }
-  }, [visible, durationMs]);
-
-  const hideToast = () => {
-    Animated.parallel([
-      Animated.timing(opacity, { toValue: 0, duration: 200, useNativeDriver: true }),
-      Animated.timing(translateY, { toValue: 20, duration: 200, useNativeDriver: true }),
-    ]).start(() => {
-      setShow(false);
-      onDismiss?.();
-    });
-  };
+    return () => {
+      if (timerRef.current) clearTimeout(timerRef.current);
+      timerRef.current = null;
+      animationRef.current?.stop();
+    };
+  }, [visible, durationMs, hideToast, opacity, translateY]);
 
   if (!show) return null;
 
