@@ -6,12 +6,29 @@ import {
   IsString,
   MinLength,
   IsNumber,
+  IsArray,
+  ValidateNested,
 } from 'class-validator';
 import { Type } from 'class-transformer';
 
 export enum PublicRegisterRole {
   PATIENT = 'PATIENT',
   DOCTOR = 'DOCTOR',
+}
+
+export class QualificationDto {
+  @IsNotEmpty()
+  @IsString()
+  degree: string;
+
+  @IsOptional()
+  @IsString()
+  institution?: string;
+
+  @IsOptional()
+  @Type(() => Number)
+  @IsNumber()
+  year?: number;
 }
 
 export class RegisterDto {
@@ -51,6 +68,10 @@ export class RegisterDto {
 
   @IsOptional()
   @IsString()
+  professionalType?: string;
+
+  @IsOptional()
+  @IsString()
   clinicName?: string;
 
   @IsOptional()
@@ -84,6 +105,12 @@ export class RegisterDto {
 
   @IsOptional()
   qualifications?: string[] | string;
+
+  @IsOptional()
+  @IsArray()
+  @ValidateNested({ each: true })
+  @Type(() => QualificationDto)
+  qualificationDetails?: QualificationDto[];
 
   @IsOptional()
   @IsString()

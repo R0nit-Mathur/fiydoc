@@ -128,8 +128,8 @@ export class AdminService {
         existing = await this.prisma.doctorVerification.create({
           data: {
             doctorId: doc.id,
-            registrationNumber: `NMC-${Date.now().toString().slice(-6)}`,
-            registrationAuthority: 'National Medical Commission / State Council',
+            registrationNumber: 'PENDING',
+            registrationAuthority: 'PENDING',
             status: VerificationStatus.PENDING,
           },
           include: { doctor: { include: { user: true } } },

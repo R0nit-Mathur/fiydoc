@@ -4,7 +4,9 @@ services:
     runtime: node
     plan: free
     region: singapore
-    buildCommand: "pnpm install && npx prisma db push --skip-generate && pnpm run build"
+    # Builds must not mutate the production schema. Future migrations require a
+    # reviewed migration, database backup and an explicit deployment step.
+    buildCommand: "pnpm install --frozen-lockfile && pnpm run build"
     startCommand: "pnpm run start:prod"
     healthCheckPath: "/health"
     envVars:

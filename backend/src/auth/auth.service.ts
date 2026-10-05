@@ -61,27 +61,23 @@ export class AuthService {
 
       if (isDoctor) {
         const cleanName = dto.fullName?.trim() || 'Dr. Doctor';
-        const randomSuffix = require('crypto').randomBytes(3).toString('hex').toUpperCase();
-        const registrationNumber = dto.licenseNumber?.trim() || `NMC-${randomSuffix}`;
-        const registrationAuthority = dto.registrationAuthority?.trim() || 'National Medical Commission / State Council';
-        if (!dto.specialization?.trim()) {
-          throw new BadRequestException('Specialization is required for doctor registration.');
-        }
+        const registrationNumber = dto.licenseNumber?.trim() || 'PENDING';
+        const registrationAuthority = dto.registrationAuthority?.trim() || 'PENDING';
         if (dto.consultationFee !== undefined && dto.consultationFee !== null && Number(dto.consultationFee) < 0) {
           throw new BadRequestException('Consultation fee cannot be negative.');
         }
-        const specialization = dto.specialization.trim();
+        const specialization = dto.specialization?.trim() || 'PENDING';
         const fee = dto.consultationFee !== undefined && dto.consultationFee !== null
           ? Number(dto.consultationFee)
-          : 500;
-        const clinicName = dto.clinicName?.trim() || `${cleanName}'s Clinic`;
-        const clinicAddress = dto.clinicAddress?.trim() || 'Clinical Practice Address Pending';
-        const clinicTimings = dto.clinicTimings?.trim() || '09:00 - 13:00, 17:00 - 20:00';
+          : 0;
+        const clinicName = dto.clinicName?.trim() || 'Practice location pending';
+        const clinicAddress = dto.clinicAddress?.trim() || 'Address pending';
+        const clinicTimings = dto.clinicTimings?.trim() || null;
         const clinicLatitude = dto.clinicLatitude !== undefined && dto.clinicLatitude !== null ? Number(dto.clinicLatitude) : null;
         const clinicLongitude = dto.clinicLongitude !== undefined && dto.clinicLongitude !== null ? Number(dto.clinicLongitude) : null;
 
         const resolvedDuration = dto.slotDurationMinutes && dto.slotDurationMinutes > 0 ? Number(dto.slotDurationMinutes) : 15;
-        const parsedIntervals = this.parseTimingsToIntervals(clinicTimings);
+        const parsedIntervals = clinicTimings ? this.parseTimingsToIntervals(clinicTimings) : [];
 
         if (parsedIntervals.length > 0) {
           for (let day = 1; day <= 6; day++) {
@@ -94,18 +90,21 @@ export class AuthService {
               });
             }
           }
-        } else {
-          for (let day = 1; day <= 6; day++) {
-            defaultAvailabilities.push(
-              { dayOfWeek: day, startTime: '09:00', endTime: '13:00', slotDurationMinutes: resolvedDuration },
-              { dayOfWeek: day, startTime: '17:00', endTime: '20:00', slotDurationMinutes: resolvedDuration },
-            );
-          }
         }
 
         const qualString = dto.qualifications
           ? (Array.isArray(dto.qualifications) ? dto.qualifications.join(', ') : String(dto.qualifications).trim())
           : null;
+        const qualificationDetails = (dto.qualificationDetails || []).filter((qualification) => qualification.degree?.trim());
+        const qualificationRecords = qualificationDetails.length > 0
+          ? qualificationDetails.map((qualification) => ({
+              degree: qualification.degree.trim(),
+              institution: qualification.institution?.trim() || null,
+              year: qualification.year || null,
+            }))
+          : qualString
+            ? [{ degree: qualString, institution: null, year: null }]
+            : [];
 
         let strippedName = cleanName;
         while (/^(dr\.?|doctor)\s+/i.test(strippedName)) {
@@ -129,15 +128,9 @@ export class AuthService {
               timings: clinicTimings,
             },
           },
-          qualifications: qualString
-            ? {
-                create: {
-                  degree: qualString,
-                  institution: null,
-                  year: null,
-                },
-              }
-            : undefined,
+           qualifications: qualificationRecords.length > 0
+             ? { create: qualificationRecords }
+             : undefined,
           verification: {
             create: {
               registrationNumber,
@@ -273,49 +266,30 @@ export class AuthService {
 
     const doctorName = (user.email ? user.email.split('@')[0] : 'Doctor');
     const cleanName = doctorName.startsWith('Dr.') ? doctorName : `Dr. ${doctorName}`;
-    const defaultAvailabilities: { dayOfWeek: number; startTime: string; endTime: string; slotDurationMinutes: number }[] = [];
-    for (let day = 1; day <= 6; day++) {
-      defaultAvailabilities.push(
-        { dayOfWeek: day, startTime: '09:00', endTime: '13:00', slotDurationMinutes: 30 },
-        { dayOfWeek: day, startTime: '17:00', endTime: '20:00', slotDurationMinutes: 30 },
-      );
-    }
-
     try {
       const createdDoc = await this.prisma.doctor.create({
         data: {
           userId: user.id,
           fullName: cleanName,
-          specialization: 'General Medicine',
-          consultationFee: 500,
+          specialization: 'Specialty not provided',
+          consultationFee: 0,
           clinic: {
             create: {
               name: `${cleanName}'s Clinic`,
-              address: 'Clinical Practice Address Pending',
-              timings: '09:00 - 13:00, 17:00 - 20:00',
+              address: 'Address pending',
+              timings: null,
             },
           },
           verification: {
             create: {
-              registrationNumber: `NMC-${Date.now().toString().slice(-6)}`,
-              registrationAuthority: 'National Medical Commission / State Council',
+              registrationNumber: 'PENDING',
+              registrationAuthority: 'PENDING',
               status: VerificationStatus.PENDING,
             },
           },
         },
       });
 
-      if (defaultAvailabilities.length > 0) {
-        await this.prisma.availability.createMany({
-          data: defaultAvailabilities.map((a) => ({
-            doctorId: createdDoc.id,
-            dayOfWeek: a.dayOfWeek,
-            startTime: a.startTime,
-            endTime: a.endTime,
-            slotDurationMinutes: a.slotDurationMinutes,
-          })),
-        });
-      }
     } catch (err: any) {
       this.logger.warn(`⚠️ [ensureDoctorRecordForUser] Warning: ${err?.message}`);
     }
